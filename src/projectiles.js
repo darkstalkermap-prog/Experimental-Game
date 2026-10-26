@@ -1,25 +1,42 @@
 // Arrows and catapult boulders with ballistic flight, hit detection and sticking.
 import * as THREE from 'three';
 import { SPELLS } from './config.js';
+import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 
 const ARROW_SPEED = 52;
 const G_ARROW = 9.8;
 const G_ROCK = 9.8;
-const MAX_STUCK = 140;
+const MAX_STUCK = 240;
 
 export class Projectiles {
   constructor(game) {
     this.game = game;
     this.list = [];
     this.stuck = [];
+    // one merged, vertex-coloured arrow (shaft + fletching) so each arrow is a single draw
+    const colored = (g, hex) => {
+      g = g.index ? g.toNonIndexed() : g;
+      const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+      return g;
+    };
     const shaft = new THREE.CylinderGeometry(0.012, 0.012, 0.85, 4);
     shaft.rotateX(Math.PI / 2);
-    this.arrowGeo = shaft;
-    this.arrowMat = new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.8 });
-    const fl = new THREE.BoxGeometry(0.08, 0.002, 0.14);
+    const fl = new THREE.BoxGeometry(0.08, 0.004, 0.14);
     fl.translate(0, 0, -0.36);
-    this.fletchGeo = fl;
-    this.fletchMat = new THREE.MeshStandardMaterial({ color: 0xe8e0d0, roughness: 1, side: THREE.DoubleSide });
+    this.arrowGeo = mergeGeometries([colored(shaft, 0x8a6a40), colored(fl, 0xe8e0d0)]);
+    this.arrowMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+    // every arrow that has landed lives in one instanced mesh (a ring buffer)
+    this.stuckMesh = new THREE.InstancedMesh(this.arrowGeo, this.arrowMat, MAX_STUCK);
+    this.stuckMesh.count = 0;
+    this.stuckMesh.frustumCulled = false;
+    this.stuckNext = 0;
+    game.scene.add(this.stuckMesh);
+    this.m4 = new THREE.Matrix4();
+    this.q = new THREE.Quaternion();
+    this.one = new THREE.Vector3(1, 1, 1);
+    this.fwd = new THREE.Vector3(0, 0, 1);
     this.rockGeo = new THREE.DodecahedronGeometry(0.65, 1);
     this.rockMat = new THREE.MeshStandardMaterial({ color: 0x77726a, roughness: 1, flatShading: true });
     this.fireGeo = new THREE.SphereGeometry(0.32, 12, 8);
@@ -41,8 +58,6 @@ export class Projectiles {
 
   makeArrowMesh() {
     const m = new THREE.Mesh(this.arrowGeo, this.arrowMat);
-    const f = new THREE.Mesh(this.fletchGeo, this.fletchMat);
-    m.add(f);
     this.game.scene.add(m);
     return m;
   }
@@ -175,11 +190,15 @@ export class Projectiles {
   }
 
   stick(i, p, at) {
-    p.mesh.position.copy(at);
-    p.mesh.lookAt(at.clone().add(p.vel));
+    // move the arrow into the instanced ring buffer and drop its own mesh
+    this.q.setFromUnitVectors(this.fwd, p.vel.clone().normalize());
+    this.m4.compose(at, this.q, this.one);
+    this.stuckMesh.setMatrixAt(this.stuckNext, this.m4);
+    this.stuckNext = (this.stuckNext + 1) % MAX_STUCK;
+    this.stuckMesh.count = Math.min(MAX_STUCK, this.stuckMesh.count + 1);
+    this.stuckMesh.instanceMatrix.needsUpdate = true;
+    this.game.scene.remove(p.mesh);
     this.list.splice(i, 1);
-    this.stuck.push(p.mesh);
-    if (this.stuck.length > MAX_STUCK) this.game.scene.remove(this.stuck.shift());
     this.game.audio.play('arrowHit', at);
   }
 

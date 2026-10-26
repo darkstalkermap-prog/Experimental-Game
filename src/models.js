@@ -41,14 +41,14 @@ function prims() {
   if (P) return P;
   P = {
     box: new THREE.BoxGeometry(1, 1, 1),
-    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 12),
+    cyl: new THREE.CylinderGeometry(0.5, 0.5, 1, 10),
     cyl8: new THREE.CylinderGeometry(0.5, 0.5, 1, 8),
-    taper: new THREE.CylinderGeometry(0.5, 0.4, 1, 10),       // limb that narrows downward
-    cone: new THREE.ConeGeometry(0.5, 1, 12),
-    sphere: new THREE.SphereGeometry(0.5, 14, 10),
-    lowSphere: new THREE.SphereGeometry(0.5, 8, 6),
-    hemi: new THREE.SphereGeometry(0.5, 14, 7, 0, Math.PI * 2, 0, Math.PI / 2),
-    skirt: new THREE.CylinderGeometry(0.5, 0.62, 1, 12, 1, true),
+    taper: new THREE.CylinderGeometry(0.5, 0.4, 1, 8),        // limb that narrows downward
+    cone: new THREE.ConeGeometry(0.5, 1, 8),
+    sphere: new THREE.SphereGeometry(0.5, 10, 7),
+    lowSphere: new THREE.SphereGeometry(0.5, 7, 5),
+    hemi: new THREE.SphereGeometry(0.5, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2),
+    skirt: new THREE.CylinderGeometry(0.5, 0.62, 1, 10, 1, true),
   };
   const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, -0.27, 0.64), new THREE.Vector3(0, -0.68, 0), new THREE.Vector3(0, -0.27, -0.64));
   P.bow = new THREE.TubeGeometry(curve, 12, 0.022, 5, false);
@@ -508,4 +508,42 @@ export function poseHorse(h, speed, dt) {
   h.body.rotation.x = gallop ? Math.sin(f) * 0.05 : 0;
 }
 
-export const SADDLE_Y = 1.0; // how far a rider's root is raised to sit in the saddle
+export const SADDLE_Y = 1.0;
+
+// Build (and cache) everything a soldier of this look needs, without adding it to a scene.
+export function prewarmSoldier(type, team, variant) {
+  const t = UNIT_TYPES[type];
+  const m = buildSoldier(type, team, variant);
+  let root = m.root;
+  if (t.mounted) {
+    const h = buildHorse(team, variant, team !== RAIDER_TEAM);
+    root = new THREE.Group();
+    root.add(h.root);
+    m.root.position.set(0, SADDLE_Y, -0.05);
+    root.add(m.root);
+    poseHorse(h, 0, 0);
+  }
+  poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: !!t.mounted });
+  bakedMesh(`${type}:${team}:${variant}:${t.mounted ? 1 : 0}`, root);
+}
+
+// ---------------------------------------------------------------- distant soldiers
+// Far away, a soldier is drawn as one static mesh baked from its resting pose (1 draw call instead of 9+).
+const bakeCache = new Map();
+export function bakedMesh(key, root) {
+  if (!bakeCache.has(key)) {
+    root.updateMatrixWorld(true);
+    const inv = root.matrixWorld.clone().invert();
+    const geos = [];
+    const m = new THREE.Matrix4();
+    root.traverse((o) => {
+      if (!o.isMesh || o.material !== unitMaterial()) return;
+      m.multiplyMatrices(inv, o.matrixWorld);
+      geos.push(o.geometry.clone().applyMatrix4(m));
+    });
+    bakeCache.set(key, mergeGeometries(geos));
+  }
+  const mesh = new THREE.Mesh(bakeCache.get(key), unitMaterial());
+  mesh.visible = false;
+  return mesh;
+} // how far a rider's root is raised to sit in the saddle

@@ -123,6 +123,8 @@ export class UI {
     this.shopOpen = open;
     $('shop').classList.toggle('hidden', !open);
     if (open) {
+      this.showPause(false); // the shop always sits on top and takes the clicks
+      g.paused = false;
       this.renderShop();
       g.input.unlock();
     } else {
@@ -130,14 +132,15 @@ export class UI {
     }
   }
 
+  // Build the shop cards once per tab; afterwards only their text and state change, so a button is
+  // never replaced under the cursor and every click lands.
   renderShop() {
     const g = this.game;
-    const f = g.localFaction;
     document.querySelectorAll('#shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
-    $('shopGold').textContent = Math.floor(f.gold);
-    $('shopTroops').textContent = `${g.troopCount(g.localTeam)}/${f.troopCap}`;
     const grid = $('shopGrid');
     grid.innerHTML = '';
+    this.shopCards = [];
+    this.targetBtns = [];
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
@@ -145,31 +148,70 @@ export class UI {
       for (const c of g.castles) {
         if (c.team === g.localTeam) continue;
         const b = document.createElement('button');
-        const fac = g.factions[c.team];
-        const chosen = g.siegeTarget(f) === c;
-        b.textContent = (chosen ? '✓ ' : '') + fac.name + (c.fallen ? ' (fallen)' : '');
-        b.disabled = c.fallen;
         b.style.borderColor = TEAM_CSS[c.team];
-        if (chosen) b.classList.add('active');
-        b.addEventListener('click', () => { g.setSiegeTarget(c); this.renderShop(); });
+        b.addEventListener('click', () => { if (!c.fallen) { g.setSiegeTarget(c); g.audio.play('order'); this.refreshShop(); } });
         sel.appendChild(b);
+        this.targetBtns.push({ b, c });
       }
       grid.appendChild(sel);
     }
     for (const item of SHOP) {
       if (item.tab !== this.tab) continue;
-      const can = item.can(g, f);
-      const cost = Math.round(item.cost(g, f));
       const card = document.createElement('div');
       card.className = 'card';
-      const afford = f.gold >= cost;
-      card.innerHTML = `<h4>${esc(item.name)}</h4><p>${esc(item.desc(g, f))}</p>`;
+      const h = document.createElement('h4');
+      h.textContent = item.name;
+      const p = document.createElement('p');
       const btn = document.createElement('button');
-      if (can !== true) { btn.textContent = can; btn.disabled = true; }
-      else { btn.innerHTML = `Buy · <b>${cost}</b> <span class="coin">●</span>`; btn.disabled = !afford; }
-      btn.addEventListener('click', () => { g.buyForPlayer(item.id); this.renderShop(); });
-      card.appendChild(btn);
+      btn.addEventListener('click', () => this.clickItem(item, card));
+      card.append(h, p, btn);
       grid.appendChild(card);
+      this.shopCards.push({ item, card, p, btn, last: '' });
+    }
+    this.refreshShop();
+  }
+
+  clickItem(item, card) {
+    const g = this.game;
+    const f = g.localFaction;
+    const can = item.can(g, f);
+    const cost = Math.round(item.cost(g, f));
+    let msg = null;
+    if (can !== true) msg = can;
+    else if (f.gold < cost) msg = `Need ${cost - Math.floor(f.gold)} more gold`;
+    if (msg) {
+      g.audio.play('deny');
+      this.toast(msg);
+      card.classList.remove('nope'); void card.offsetWidth; card.classList.add('nope');
+      return;
+    }
+    g.buyForPlayer(item.id);
+    card.classList.remove('bought'); void card.offsetWidth; card.classList.add('bought');
+    this.refreshShop();
+  }
+
+  // Update gold, descriptions and button states in place.
+  refreshShop() {
+    const g = this.game;
+    const f = g.localFaction;
+    $('shopGold').textContent = Math.floor(f.gold);
+    $('shopTroops').textContent = `${g.troopCount(g.localTeam)}/${f.troopCap}`;
+    for (const t of this.targetBtns || []) {
+      const chosen = g.siegeTarget(f) === t.c;
+      const txt = (chosen ? '✓ ' : '') + g.factions[t.c.team].name + (t.c.fallen ? ' (fallen)' : '');
+      if (t.b.textContent !== txt) t.b.textContent = txt;
+      t.b.disabled = t.c.fallen;
+      t.b.classList.toggle('active', chosen);
+    }
+    for (const c of this.shopCards || []) {
+      const can = c.item.can(g, f);
+      const cost = Math.round(c.item.cost(g, f));
+      const desc = c.item.desc(g, f);
+      if (c.p.textContent !== desc) c.p.textContent = desc;
+      const label = can !== true ? can : `Buy · <b>${cost}</b> <span class="coin">●</span>`;
+      if (c.last !== label) { c.btn.innerHTML = can !== true ? esc(can) : label; c.last = label; }
+      c.btn.classList.toggle('unavailable', can !== true);
+      c.btn.classList.toggle('poor', can === true && f.gold < cost);
     }
   }
 
@@ -225,9 +267,9 @@ export class UI {
     if (!g || g.state === 'menu' || g.state === 'loading') return;
     const p = g.player;
     const f = g.localFaction;
-    if (this.shopOpen && g.mode === 'client') {
+    if (this.shopOpen) {
       this.shopT = (this.shopT || 0) - dt;
-      if (this.shopT <= 0) { this.shopT = 0.3; this.renderShop(); }
+      if (this.shopT <= 0) { this.shopT = 0.25; this.refreshShop(); }
     }
 
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));

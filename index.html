@@ -159,6 +159,13 @@
   .card h4 { margin: 0 0 6px; font-size: 16px; color: #f3e2b5; }
   .card p { margin: 0 0 12px; font-size: 15px; opacity: 0.85; flex: 1; }
   .card button { width: 100%; }
+  .card button.unavailable { opacity: 0.45; }
+  .card button.poor { opacity: 0.6; }
+  .card button:active:not(.unavailable) { transform: translateY(1px); }
+  .card.bought { animation: bought 0.45s ease-out; }
+  .card.nope { animation: nope 0.3s ease-out; }
+  @keyframes bought { 0% { background: rgba(224,180,76,0.45); } 100% { background: rgba(255,255,255,0.04); } }
+  @keyframes nope { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
   .targets { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .targets .label { width: 100%; font-size: 15px; opacity: 0.85; }
   #gameover h1.win { color: #2c5a12; }
@@ -338,6 +345,8 @@
       <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
     </div>
     <div class="row" style="margin-top:20px"><button id="resume">Resume</button></div>
+    <div id="pauseHint" class="note"></div>
+    <div class="note">Click anywhere to resume.</div>
   </div>
 </div>
 

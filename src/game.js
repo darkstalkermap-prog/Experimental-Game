@@ -16,11 +16,12 @@ import { Projectiles } from './projectiles.js';
 import { Player } from './player.js';
 import { FX } from './fx.js';
 import { LordAI } from './ai.js';
-import { buy } from './economy.js';
+import { buy, SHOP_BY_ID } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
 import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
+import { prewarmSoldier } from './models.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -164,8 +165,32 @@ export class Game {
     if (this.mode === 'host') this.sync = new HostSync(this);
     if (this.mode === 'client') this.sync = new ClientSync(this);
     this.localFaction.siegeTarget = this.castles[(lp.team + 2) % 4];
+    this.warmup();
+    // prepare every soldier look in the background (a few ms per frame) so new arrivals never stutter
+    this.warmQueue = [];
+    const factionTypes = ['swordsman', 'spearman', 'archer', 'knight', 'horseman', 'lancer', 'longbowman', 'giant'];
+    const raiderTypes = ['raider', 'raiderArcher', 'brute', 'raiderRider', 'shaman', 'warlord', 'giant'];
+    for (let v = 0; v < 6; v++) {
+      for (const t of raiderTypes) this.warmQueue.push([t, RAIDER_TEAM, v]);
+      for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
+    }
     this.audio.play('horn');
     this.ui.banner('Prepare for battle', `${ROUNDS.firstPrep} seconds to recruit and upgrade. B opens the shop${this.mode === 'client' ? '' : ', Enter starts early'}.`);
+  }
+
+  // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
+  // appearance in battle doesn't stall a frame.
+  warmup() {
+    const grp = new THREE.Group();
+    const P = this.projectiles;
+    grp.add(new THREE.Mesh(P.fireGeo, P.fireMat), new THREE.Mesh(P.iceGeo, P.iceMat), new THREE.Mesh(P.arrowGeo, P.arrowMat), new THREE.Mesh(P.rockGeo, P.rockMat));
+    const lg = new THREE.BufferGeometry();
+    lg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1, 0], 3));
+    grp.add(new THREE.LineSegments(lg, this.magic.boltMat));
+    grp.position.copy(this.camera.position);
+    this.scene.add(grp);
+    try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* not fatal */ }
+    this.scene.remove(grp);
   }
 
   spawnLord(f) {
@@ -752,13 +777,26 @@ export class Game {
   buyFor(team, id) {
     const f = this.factions[team];
     const r = buy(this, f, id);
-    if (r === true) f.player.sound('buy');
+    if (r === true) { if (!f.player.remote) f.player.sound('buy'); } // remote buyers already heard it
     else { f.player.sound('deny'); f.player.notify(r); }
     return r;
   }
 
   buyForPlayer(id) {
-    if (this.mode === 'client') { this.net.toHost({ a: 'buy', id }); return true; }
+    if (this.mode === 'client') {
+      // respond instantly: spend the gold locally, the host's next update confirms it
+      const f = this.localFaction;
+      const item = SHOP_BY_ID[id];
+      if (item) {
+        const can = item.can(this, f);
+        const cost = Math.round(item.cost(this, f));
+        if (can !== true || f.gold < cost) { this.audio.play('deny'); this.ui.toast(can !== true ? can : 'Not enough gold'); return can; }
+        f.gold -= cost;
+      }
+      this.audio.play('buy');
+      this.net.toHost({ a: 'buy', id });
+      return true;
+    }
     return this.buyFor(this.localTeam, id);
   }
 
@@ -889,7 +927,22 @@ export class Game {
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
     if (this.simulating) this.cleanup(dt);
+    this.updateLod();
+    if (this.warmQueue && this.warmQueue.length) {
+      const t0 = performance.now();
+      while (this.warmQueue.length && performance.now() - t0 < 2) prewarmSoldier(...this.warmQueue.shift());
+    }
     followShadow(this.lights.sun, this.camera.position);
+  }
+
+  // Pick each soldier's level of detail by distance to the camera (giants stay detailed further out).
+  updateLod() {
+    const c = this.camera.position;
+    for (const u of this.units) {
+      const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
+      const s = u.isGiant ? 3 : 1;
+      u.setLod(d2 < (32 * s) ** 2 ? 0 : d2 < (85 * s) ** 2 ? 1 : d2 < 260 * 260 ? 2 : 3);
+    }
   }
 
   updateTowers(c, dt) {
@@ -906,7 +959,7 @@ export class Game {
         if (d < bd && d > 4) { bd = d; best = u; }
       });
       if (best) {
-        this.projectiles.shootArrow(top.clone(), best, c.team, 14 + 4 * c.towerLevel, { team: c.team, alive: true, pos: top, isTower: true }, 0.03);
+        this.projectiles.shootArrow(top.clone(), best, c.team, 14 + 4 * c.towerLevel, c.towerShooter, 0.03);
       }
     }
   }

@@ -35,6 +35,8 @@ export class Castle {
     this.gateLevel = 0;
     this.towerLevel = 0;
     this.towerCd = [0, 0, 0, 0];
+    // stands in as the 'attacker' for tower arrows (kill credit); soldiers can't fight back at it
+    this.towerShooter = { team, alive: true, isTower: true, isStructure: true, name: 'Tower archers', pos: new THREE.Vector3(site.x, CASTLE.baseY + 14, site.z) };
     this.flags = [];
     this.group = new THREE.Group();
     this.group.position.copy(this.center);

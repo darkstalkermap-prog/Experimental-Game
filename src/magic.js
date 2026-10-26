@@ -9,10 +9,8 @@ export class Magic {
   constructor(game) {
     this.game = game;
     this.bolts = [];
-    // one shared light for explosion / lightning flashes
-    this.light = new THREE.PointLight(0xffa040, 0, 26, 1.6);
-    game.scene.add(this.light);
-    this.lightT = 0;
+    this.flashColor = new THREE.Color();
+    this.boltMat = new THREE.LineBasicMaterial({ color: 0xcfeaff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
   }
 
   // caster: a Player or Unit. dir must be normalised. charge 0..1 (fireball only).
@@ -90,7 +88,7 @@ export class Magic {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    const mat = new THREE.LineBasicMaterial({ color: 0xcfeaff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    const mat = this.boltMat.clone();
     const line = new THREE.LineSegments(geo, mat);
     line.frustumCulled = false;
     g.scene.add(line);
@@ -99,11 +97,10 @@ export class Magic {
     if (this.onBolt) this.onBolt(points);
   }
 
+  // A bright glow burst. (A real light would add lighting cost to every surface on screen.)
   flash(pos, color, intensity) {
-    this.light.position.copy(pos);
-    this.light.color.setHex(color);
-    this.light.intensity = intensity;
-    this.lightT = 0.25;
+    this.flashColor.setHex(color);
+    this.game.fx.glow.emit(pos, new THREE.Vector3(), this.flashColor, intensity * 0.9, 0.22, { grow: intensity * 2, alpha: 0.55 });
   }
 
   update(dt) {
@@ -117,11 +114,6 @@ export class Magic {
         b.line.material.dispose();
         this.bolts.splice(i, 1);
       }
-    }
-    if (this.lightT > 0) {
-      this.lightT -= dt;
-      this.light.intensity *= Math.pow(0.002, dt);
-      if (this.lightT <= 0) this.light.intensity = 0;
     }
   }
 }

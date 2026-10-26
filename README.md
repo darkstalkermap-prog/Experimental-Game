@@ -162,6 +162,16 @@ The stairs beside the gate lead up to the wall walk, so you can fight from the b
 
 Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.
 
+## Performance
+
+- Distant soldiers switch to a single pre-built mesh, and only nearby ones cast shadows. Stuck arrows,
+  trees and grass are instanced. A late-game battle draws about 220 objects per frame.
+- Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
+  models are prepared in the background during the preparation minute, so nothing stutters on first use.
+- Online, other players and soldiers are interpolated between the host's updates for smooth movement, and
+  shop purchases show instantly while the host confirms them.
+- Mouse look uses raw input where the browser supports it.
+
 ## Current limits
 
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host

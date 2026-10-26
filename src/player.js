@@ -142,7 +142,13 @@ export class Player {
   // apply the latest pose received over the network (smoothed)
   remoteUpdate(dt) {
     const n = this.netPose;
-    if (n) {
+    const s = INTERP_SAMPLE;
+    const interpolated = n && this.interp && this.interp.sample(s);
+    if (interpolated) {
+      // network client: interpolated between the host's updates
+      this.pos.set(s.x, s.y, s.z);
+      this.yaw = n.m ? s.extra : s.yaw;
+    } else if (n) {
       const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
       const k = d > 8 ? 1 : Math.min(1, dt * 14);
       this.pos.x += (n.x - this.pos.x) * k;
@@ -152,6 +158,8 @@ export class Player {
       while (dy > Math.PI) dy -= Math.PI * 2;
       while (dy < -Math.PI) dy += Math.PI * 2;
       this.yaw += dy * Math.min(1, dt * 14);
+    }
+    if (n) {
       this.pitch = n.pitch;
       this.vel.set(n.vx, 0, n.vz);
       if (n.b && !this.blocking) this.blockStart = this.game.time - (n.ba || 0);
@@ -160,7 +168,7 @@ export class Player {
       this.weapon = n.w ? 'bow' : 'sword';
       this.mounted = !!n.m && this.hasHorse;
       this.radius = this.mounted ? 0.8 : 0.4;
-      this.heading = n.h;
+      this.heading = interpolated && n.m ? s.yaw : n.h;
       this.rideSpeed = n.rs;
       if (!this.mounted && n.hx !== undefined) { this.horsePos.set(n.hx, n.hy, n.hz); this.horseYaw = n.hyaw; }
     }
@@ -493,9 +501,9 @@ export class Player {
       if (atk) {
         const W = VM_WIND[atk.dir], E = VM_END[atk.dir];
         let from = VM_ZERO, to = W, k;
-        if (atk.phase === 'wind') { k = easeOut(Math.min(1, atk.t / 0.14)); }
-        else if (atk.phase === 'strike') { from = W; to = E; k = easeOut(Math.min(1, atk.t / 0.12)); }
-        else { from = E; to = VM_ZERO; k = easeInOut(Math.min(1, atk.t / 0.25)); }
+        if (atk.phase === 'wind') { k = easeOut(Math.min(1, atk.t / 0.09)); }
+        else if (atk.phase === 'strike') { from = W; to = E; k = easeOut(Math.min(1, atk.t / 0.09)); }
+        else { from = E; to = VM_ZERO; k = easeInOut(Math.min(1, atk.t / 0.2)); }
         applyVm(S, from, to, k);
         if (atk.phase === 'wind' && atk.t > 0.3) S.position.x += (Math.random() - 0.5) * 0.003; // straining a full wind-up
       } else if (this.blocking) {
@@ -652,7 +660,7 @@ export class Player {
       this.blocking = false;
       if (m.left && this.arrows > 0) this.drawT += dt;
       if (m.leftReleased && this.drawT > 0) {
-        if (this.drawT > 0.22 && this.arrows > 0) this.shoot();
+        if (this.drawT > 0.15 && this.arrows > 0) this.shoot();
         this.drawT = 0;
       }
       if (!m.left && !m.leftReleased) this.drawT = 0;
@@ -709,8 +717,8 @@ export class Player {
     if (!atk) return;
     atk.t += dt;
     if (atk.phase === 'wind') {
-      if ((!m.left && atk.t >= 0.14) || atk.t > 1.4) {
-        atk.charge = Math.max(0, Math.min(1, (atk.t - 0.14) / 0.5));
+      if ((!m.left && atk.t >= 0.09) || atk.t > 1.4) {
+        atk.charge = Math.max(0, Math.min(1, (atk.t - 0.09) / 0.5));
         atk.phase = 'strike'; atk.t = 0;
         this.struck = false;
         this.swingT = 0.25;
@@ -718,11 +726,11 @@ export class Player {
       } else this.swingT = Math.min(0.24, atk.t * 1.7);
     } else if (atk.phase === 'strike') {
       this.swingT = 0.25 + atk.t * 0.75;
-      if (!this.struck && atk.t >= 0.07) { this.struck = true; this.meleeStrike(atk.dir, atk.charge); }
-      if (atk.t >= 0.2) { atk.phase = 'recover'; atk.t = 0; }
+      if (!this.struck && atk.t >= 0.05) { this.struck = true; this.meleeStrike(atk.dir, atk.charge); }
+      if (atk.t >= 0.16) { atk.phase = 'recover'; atk.t = 0; }
     } else {
       this.swingT = 0.4 + atk.t * 0.88;
-      if (atk.t >= 0.25) { this.atk = null; this.swingT = -1; }
+      if (atk.t >= 0.2) { this.atk = null; this.swingT = -1; }
     }
   }
 
@@ -933,6 +941,7 @@ export class Player {
 }
 
 const r2 = (x) => Math.round(x * 100) / 100;
+const INTERP_SAMPLE = { x: 0, y: 0, z: 0, yaw: 0, extra: 0 };
 
 // first-person sword key poses per attack direction (offsets from the resting pose)
 const VM_ZERO = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };

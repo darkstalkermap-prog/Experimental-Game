@@ -1,7 +1,7 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS } from './config.js';
-import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y } from './models.js';
+import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
@@ -83,6 +83,12 @@ export class Unit {
     } else {
       this.mesh = m.root;
     }
+    // resting pose, then bake the distant version
+    poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: this.mounted });
+    if (this.horse) poseHorse(this.horse, 0, 0);
+    this.far = bakedMesh(`${type}:${team}:${this.variant}:${this.mounted ? 1 : 0}`, this.mesh);
+    this.mesh.add(this.far);
+    this.lod = 0;
     this.mesh.position.copy(this.pos);
     this.mesh.userData.unit = this;
     game.scene.add(this.mesh);
@@ -100,7 +106,7 @@ export class Unit {
       this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
     }
     this.lastAttacker = attacker;
-    if (attacker && attacker.alive && attacker.pos && !attacker.isStructure && attacker.team !== this.team) {
+    if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && attacker.team !== this.team) {
       const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4;
       const closer = !this.target || this.target.isStructure || this.distTo(attacker) < this.distTo(this.target) - 1;
       if (reachable && closer) this.target = attacker;
@@ -588,7 +594,23 @@ export class Unit {
     if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1;
   }
 
+  // 0 near (animated, shadows) · 1 mid (animated) · 2 far (static mesh) · 3 hidden
+  setLod(level) {
+    if (level === this.lod) return;
+    const m = this.model;
+    const rig = this.horse ? [this.horse.root, m.root] : [m.body];
+    for (const r of rig) r.visible = level <= 1;
+    this.far.visible = level === 2;
+    this.mesh.visible = level <= 2;
+    if ((level === 0) !== (this.lod === 0)) {
+      const cast = level === 0;
+      for (const r of rig) r.traverse((o) => { if (o.isMesh) o.castShadow = cast; });
+    }
+    this.lod = level;
+  }
+
   animate(dt, moving) {
+    if (this.lod >= 2) return; // nobody can see the limbs from here
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (moving) this.walkPhase += dt * sp * (this.mounted ? 0.0 : 2.1);
     this.idleT += dt;
@@ -617,24 +639,18 @@ export class Unit {
 
   // network client: glide toward the host's latest position and animate
   netUpdate(dt) {
-    const t = this.netTarget;
-    if (t) {
-      const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z);
-      const k = d > 10 ? 1 : Math.min(1, dt * 10);
-      this.pos.x += (t.x - this.pos.x) * k;
-      this.pos.y += (t.y - this.pos.y) * k;
-      this.pos.z += (t.z - this.pos.z) * k;
-      let dy = t.yaw - this.yaw;
-      while (dy > Math.PI) dy -= Math.PI * 2;
-      while (dy < -Math.PI) dy += Math.PI * 2;
-      this.yaw += dy * Math.min(1, dt * 10);
-      this.vel.set(Math.sin(this.yaw) * t.speed, 0, Math.cos(this.yaw) * t.speed);
+    const t = NET_SAMPLE;
+    const has = this.interp && this.interp.sample(t);
+    if (has) {
+      this.pos.set(t.x, t.y, t.z);
+      this.yaw = t.yaw;
+      this.vel.set(Math.sin(this.yaw) * t.extra, 0, Math.cos(this.yaw) * t.extra);
     }
     if (!this.alive) { this.animateDeath(dt); return; }
     if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.blockFlash > 0) this.blockFlash -= dt;
-    this.animate(dt, t ? t.speed > 0.3 : false);
+    this.animate(dt, has ? t.extra > 0.3 : false);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;
   }
@@ -667,5 +683,6 @@ export function isEnemy(a, b) {
 
 export { RAIDER_TEAM };
 
+const NET_SAMPLE = { x: 0, y: 0, z: 0, yaw: 0, extra: 0 };
 const PLUME_GEO = new THREE.ConeGeometry(0.07, 0.34, 6);
 const PLUME_MATS = new Map();

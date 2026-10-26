@@ -80,6 +80,8 @@ export class Grass {
     this.mesh.frustumCulled = false;
     this.mesh.receiveShadow = true;
     this.mesh.count = 0;
+    this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.stageMat = null; this.stageCol = null; this.job = null;
     this.scene.add(this.mesh);
     this.center.set(1e9, 1e9);
   }
@@ -94,17 +96,33 @@ export class Grass {
     return true;
   }
 
-  rebuild(cx, cz) {
-    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
+  // Rebuilding is spread over several frames (a small time budget each) into a staging buffer,
+  // then swapped in, so walking never causes a hitch.
+  startRebuild(cx, cz) {
+    const R = this.radius;
+    this.job = {
+      cx, cz, n: 0,
+      i: Math.floor((cx - R) / SPACING), i1: Math.floor((cx + R) / SPACING),
+      j0: Math.floor((cz - R) / SPACING), j1: Math.floor((cz + R) / SPACING),
+      mat: this.stageMat || (this.stageMat = new Float32Array(this.max * 16)),
+      col: this.stageCol || (this.stageCol = new Float32Array(this.max * 3)),
+    };
+  }
+
+  work(budgetMs) {
+    const job = this.job;
+    if (!job) return;
+    const t0 = performance.now();
+    const m4 = this.tmpM || (this.tmpM = new THREE.Matrix4());
+    const q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
-    const col = new THREE.Color();
     const R = this.radius;
     const { fbm } = this.physics.noise;
-    let n = 0;
-    const i0 = Math.floor((cx - R) / SPACING), i1 = Math.floor((cx + R) / SPACING);
-    const j0 = Math.floor((cz - R) / SPACING), j1 = Math.floor((cz + R) / SPACING);
-    for (let i = i0; i <= i1 && n < this.max; i++) {
-      for (let j = j0; j <= j1 && n < this.max; j++) {
+    const { cx, cz } = job;
+    for (; job.i <= job.i1; job.i++) {
+      if (performance.now() - t0 > budgetMs) return;
+      const i = job.i;
+      for (let j = job.j0; j <= job.j1 && job.n < this.max; j++) {
         const x = (i + hash(i, j, 1)) * SPACING, z = (j + hash(i, j, 2)) * SPACING;
         const d = Math.hypot(x - cx, z - cz);
         if (d > R) continue;
@@ -118,24 +136,31 @@ export class Grass {
         q.setFromAxisAngle(up, hash(i, j, 5) * Math.PI * 2);
         sc.set(s * 1.25, s * (0.55 + hash(i, j, 6) * 0.45), s * 1.25);
         m4.compose(p, q, sc);
-        this.mesh.setMatrixAt(n, m4);
+        m4.toArray(job.mat, job.n * 16);
         const v = 0.8 + hash(i, j, 7) * 0.35;
-        col.setRGB(v, v * (0.95 + hash(i, j, 8) * 0.1), v * 0.85);
-        this.mesh.setColorAt(n, col);
-        n++;
+        job.col[job.n * 3] = v; job.col[job.n * 3 + 1] = v * (0.95 + hash(i, j, 8) * 0.1); job.col[job.n * 3 + 2] = v * 0.85;
+        job.n++;
       }
     }
-    this.mesh.count = n;
+    // finished: swap the new patch in
+    this.mesh.instanceMatrix.array.set(job.mat.subarray(0, job.n * 16));
     this.mesh.instanceMatrix.needsUpdate = true;
-    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    if (!this.mesh.instanceColor) this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.mesh.instanceColor.array.set(job.col.subarray(0, job.n * 3));
+    this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.count = job.n;
+    this.job = null;
   }
 
   update(dt, camPos) {
     this.uniforms.time.value += dt;
     if (!this.mesh) return;
-    if (Math.hypot(camPos.x - this.center.x, camPos.z - this.center.y) > this.radius * 0.3) {
+    if (!this.job && Math.hypot(camPos.x - this.center.x, camPos.z - this.center.y) > this.radius * 0.3) {
+      const first = this.center.x > 1e8;
       this.center.set(camPos.x, camPos.z);
-      this.rebuild(camPos.x, camPos.z);
+      this.startRebuild(camPos.x, camPos.z);
+      if (first) this.work(Infinity); // the very first patch appears at once
     }
+    this.work(1.5);
   }
 }

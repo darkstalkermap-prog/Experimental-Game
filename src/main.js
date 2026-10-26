@@ -177,7 +177,18 @@ $('joinBtn').addEventListener('click', async () => {
 
 $('leaveLobby').addEventListener('click', () => location.reload());
 
-$('resume').addEventListener('click', () => { input.lock(); });
+// clicking anywhere on the pause screen resumes
+$('pause').addEventListener('click', (e) => {
+  if (e.target.closest('input, label, .quality')) return;
+  $('pauseHint').textContent = '';
+  input.lock();
+});
+input.onLockFail = () => {
+  if (game.state !== 'playing' || ui.shopOpen) return;
+  game.paused = true;
+  ui.showPause(true);
+  $('pauseHint').textContent = 'The browser needs one more click to capture the mouse. Click anywhere to continue.';
+};
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
 $('again').addEventListener('click', () => location.reload());
 $('sens').addEventListener('input', (e) => { game.player.sensitivity = 0.0008 + (e.target.value / 100) * 0.004; });
@@ -210,12 +221,18 @@ addEventListener('keydown', (e) => {
 });
 
 const clock = new THREE.Clock();
+let frameErrors = 0;
 let fpsT = 0, frames = 0;
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(0.05, clock.getDelta());
-  game.update(dt);
-  ui.update(dt);
+  // one bad frame must never freeze the game: report it once and keep going
+  try {
+    game.update(dt);
+    ui.update(dt);
+  } catch (e) {
+    if (!frameErrors++) console.error('Frame error (the game keeps running):', e);
+  }
   input.endFrame();
   renderer.render(game.scene, game.camera);
   frames++;

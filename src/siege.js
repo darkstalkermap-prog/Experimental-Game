@@ -250,24 +250,16 @@ export class SiegeEngine {
 
   // network client: follow the host's position and animate
   netUpdate(dt) {
-    const t = this.netTarget;
-    if (t) {
-      const k = Math.min(1, dt * 8);
-      this.pos.x += (t.x - this.pos.x) * k;
-      this.pos.y += (t.y - this.pos.y) * k;
-      this.pos.z += (t.z - this.pos.z) * k;
-      let d = t.yaw - this.yaw;
-      while (d > Math.PI) d -= Math.PI * 2;
-      while (d < -Math.PI) d += Math.PI * 2;
-      this.yaw += d * k;
-    }
+    const t = {};
+    const has = this.interp && this.interp.sample(t);
+    if (has) { this.pos.set(t.x, t.y, t.z); this.yaw = t.yaw; t.moving = t.extra; }
     if (!this.alive) {
       this.deadT += dt;
       this.mesh.rotation.z = Math.min(0.35, this.deadT * 0.5);
       this.mesh.position.set(this.pos.x, this.pos.y - Math.min(1.2, this.deadT * 0.3), this.pos.z);
       return;
     }
-    const moving = t && t.moving;
+    const moving = has && t.moving;
     if (moving) {
       for (const w of this.wheels) w.rotation.x += dt * this.speed * 1.7;
       this.anim += dt * this.speed * 2;

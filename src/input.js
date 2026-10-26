@@ -49,11 +49,21 @@ export class Input {
     });
   }
 
+  // Capture the mouse. Asks for raw (unaccelerated) movement where supported for 1:1 aiming.
+  // Browsers sometimes refuse (e.g. right after Esc); onLockFail lets the game ask for another click.
   lock() {
-    try {
-      const p = this.canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});
-    } catch (e) { /* ignore */ }
+    if (this.locked) return;
+    const attempt = (opts) => {
+      try {
+        const r = opts ? this.canvas.requestPointerLock(opts) : this.canvas.requestPointerLock();
+        return r && r.then ? r : Promise.resolve();
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    };
+    attempt({ unadjustedMovement: true })
+      .catch((e) => (e && e.name === 'NotSupportedError' ? attempt() : Promise.reject(e)))
+      .catch(() => { if (!this.locked && this.onLockFail) this.onLockFail(); });
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 

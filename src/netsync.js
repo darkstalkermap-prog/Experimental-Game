@@ -17,6 +17,35 @@ const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
 
+// Snapshot interpolation: keep the two latest samples and show the world slightly in the past,
+// blending between them, so movement is smooth even though updates arrive ~10 times a second.
+const DELAY = 0.12;
+const now = () => performance.now() / 1000;
+export class Interp {
+  constructor() { this.a = null; this.b = null; }
+  push(x, y, z, yaw, extra = 0) {
+    const s = { t: now(), x, y, z, yaw, extra };
+    if (this.b && Math.hypot(x - this.b.x, z - this.b.z) > 12) this.a = null; // teleport: don't slide
+    this.a = this.b || s;
+    this.b = s;
+  }
+  sample(out) {
+    const { a, b } = this;
+    if (!b) return false;
+    const span = Math.max(0.03, b.t - a.t);
+    const k = a === b ? 1 : Math.max(0, Math.min(1.25, (now() - DELAY - a.t) / span));
+    out.x = a.x + (b.x - a.x) * k;
+    out.y = a.y + (b.y - a.y) * k;
+    out.z = a.z + (b.z - a.z) * k;
+    let dy = b.yaw - a.yaw;
+    while (dy > Math.PI) dy -= Math.PI * 2;
+    while (dy < -Math.PI) dy += Math.PI * 2;
+    out.yaw = a.yaw + dy * Math.min(1, k);
+    out.extra = b.extra;
+    return true;
+  }
+}
+
 export class HostSync {
   constructor(game) {
     this.g = game;
@@ -191,7 +220,8 @@ export class ClientSync {
         this.units.set(id, u);
         g.units.push(u);
       }
-      u.netTarget = { x, y, z, yaw, speed };
+      if (!u.interp) u.interp = new Interp();
+      u.interp.push(x, y, z, yaw, speed);
       if (u.alive && !alive) { u.alive = false; u.deathT = 0; }
       if (swingT >= 0 && u.swingT < 0) u.swingT = swingT;
       if (swingT < 0 && u.swingT >= 0 && u.swingT < 0.3) u.swingT = -1; // interrupted or feinted
@@ -219,7 +249,8 @@ export class ClientSync {
         this.siege.set(id, e);
         g.siege.push(e);
       }
-      e.netTarget = { x, y, z, yaw, moving };
+      if (!e.interp) e.interp = new Interp();
+      e.interp.push(x, y, z, yaw, moving);
       if (e.alive && !alive) { e.alive = false; for (const c of e.crew) c.root.visible = false; }
       e.hp = (hpPct / 100) * e.maxHp;
       e.timer = timer;
@@ -265,6 +296,8 @@ export class ClientSync {
         g.humans.push(h);
         g.factions[team].player = h; g.factions[team].isPlayer = true;
       }
+      if (!h.interp) h.interp = new Interp();
+      h.interp.push(a[1], a[2], a[3], a[11] ? a[12] : a[4], a[4]); // riders turn by their horse's heading
       h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18] };
       const mv = a[11] ? a[13] : 0;
       h.netPose.vx = Math.sin(a[11] ? a[12] : a[4]) * mv;
