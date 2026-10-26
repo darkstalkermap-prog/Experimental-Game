@@ -18,6 +18,8 @@ import { FX } from './fx.js';
 import { LordAI } from './ai.js';
 import { buy } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
+import { incomingSide, PARRY_WINDOW } from './combat.js';
+import { Grass } from './grass.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -66,6 +68,7 @@ export class Game {
     createTerrain(this.scene, this.physics);
     createForest(this.scene, this.physics);
     createCentrePiece(this.scene, this.physics, materials().stone);
+    this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene);
     this.projectiles = new Projectiles(this);
     this.grid = new Grid(4);
@@ -80,6 +83,24 @@ export class Game {
     this.round = 0;
     this.phase = 'prep';
     this.phaseT = 0;
+    this.hitStop = 0;
+  }
+
+  // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'
+  setQuality(q) {
+    const level = { low: 0, medium: 1, high: 2 }[q] ?? 1;
+    this.quality = q;
+    this.grass.setDensity(level);
+    const sun = this.lights.sun;
+    sun.castShadow = level > 0;
+    const size = level === 2 ? 2048 : 1024;
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.mapSize.set(size, size);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    }
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.25, 1.75][level]));
+    this.renderer.setSize(innerWidth, innerHeight);
+    this.fx.setScale(innerHeight * this.renderer.getPixelRatio());
   }
 
   get localTeam() { return this.player.team; }
@@ -354,7 +375,9 @@ export class Game {
       case 'banner': this.ui.banner(ev.title, ev.sub); break;
       case 'kill': this.ui.kill(ev.a, ev.v); break;
       case 'gold': this.ui.goldPopup(ev.g); break;
-      case 'hit': this.ui.hitMarker(); break;
+      case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
+      case 'fb': this.ui.feedback(ev.text, !!ev.good); break;
+      case 'stagger': this.player.stagger(ev.t); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner); break;
       default: break;
@@ -376,15 +399,39 @@ export class Game {
       target.takeDamage(dmg, attacker);
       return;
     }
-    // shield block for heroes (frontal only)
-    if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos) {
+    // soldiers may block with shield or weapon
+    if (!target.isPlayer && target.tryBlock && !info.splash && target.tryBlock(attacker, info)) {
+      const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
+      this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
+      this.audio.play('block', target.pos);
+      if (attacker.isPlayer) this.deliver(attacker, { k: 'fb', text: 'Blocked' });
+      return;
+    }
+    // heroes guard with their shield; guarding the side the blow comes from stops it completely,
+    // and doing so just as it lands parries, leaving the attacker reeling
+    if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.35) {
+        const at = target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6);
+        if (info.melee && info.attackDir && target.blockDir === incomingSide(info.attackDir)) {
+          target.stamina = Math.max(0, target.stamina - 4);
+          if (this.time - target.blockStart < PARRY_WINDOW && attacker.stagger) {
+            attacker.stagger(0.9, target);
+            this.fx.sparks(at, 22);
+            this.audio.play('parry', target.pos);
+            this.deliver(target, { k: 'fb', text: 'Parry!', good: true });
+          } else {
+            this.fx.sparks(at, 10);
+            this.audio.play('block', target.pos);
+            this.deliver(target, { k: 'fb', text: 'Blocked' });
+          }
+          return;
+        }
         dmg *= 1 - target.shield.block;
-        target.stamina = Math.max(0, target.stamina - 6);
-        this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6), 8);
+        target.stamina = Math.max(0, target.stamina - 8);
+        this.fx.sparks(at, 8);
         this.audio.play('block', target.pos);
         if (dmg < 1) return;
       }
@@ -393,8 +440,8 @@ export class Game {
     const p = target.chest(new THREE.Vector3());
     this.fx.blood(p, info.ranged ? 5 : 9);
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
-    if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit' });
-    target.takeDamage(dmg, attacker);
+    if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
+    target.takeDamage(dmg, attacker, info);
   }
 
   credit(team, gold, at) {
@@ -491,7 +538,7 @@ export class Game {
         const p = new THREE.Vector3(Math.sin(a) * rad + (Math.random() - 0.5) * 8, 0, Math.cos(a) * rad + (Math.random() - 0.5) * 8);
         this.spawnQueue.push({ t: i * 0.35 + Math.random() * 0.5, type, pos: p, castle: c });
       });
-      if (r >= 3 && r % 3 === 0) this.spawnQueue.push({ t: 2, siege: 'ram', pos: this.edgePoint(ang, 0.6), castle: c });
+      if (r >= 4 && r % 3 === 1) this.spawnQueue.push({ t: 2, siege: 'ram', pos: this.edgePoint(ang, 0.6), castle: c });
       if (r >= 7 && r % 2 === 1) this.spawnQueue.push({ t: 3, siege: 'catapult', pos: this.edgePoint(ang, -0.6), castle: c });
     }
   }
@@ -689,6 +736,7 @@ export class Game {
   update(dt) {
     if (this.state === 'loading' || this.state === 'menu') {
       this.menuCamera(dt);
+      this.grass.update(dt, this.camera.position);
       for (const c of this.castles) c.update(dt, this.time);
       this.time += dt;
       return;
@@ -696,6 +744,8 @@ export class Game {
     // single player pauses the world; online games keep running underneath menus
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
+    // brief hit-stop when a blow lands (single player only)
+    if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.12; }
     this.time += dt;
     const controlling = this.state === 'playing' && !this.paused;
     if (controlling) this.handleInput();
@@ -727,6 +777,7 @@ export class Game {
       if (this.simulating) this.updateTowers(c, dt);
     }
     this.fx.update(dt);
+    this.grass.update(dt, this.camera.position);
 
     if (this.simulating && this.state === 'playing') {
       this.updateRounds(dt);

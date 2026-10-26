@@ -56,6 +56,25 @@
   #crosshair.bow { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; }
   #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
   #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
+  /* direction indicator: four chevrons around the crosshair */
+  #dirs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+  #dirs i { position: absolute; width: 0; height: 0; border: 9px solid transparent; opacity: 0.22; transition: opacity 0.08s; }
+  #dirs i[data-d="over"] { left: -9px; top: -46px; border-bottom: 12px solid #fff; border-top: 0; }
+  #dirs i[data-d="thrust"] { left: -9px; top: 34px; border-top: 12px solid #fff; border-bottom: 0; }
+  #dirs i[data-d="left"] { top: -9px; left: -46px; border-right: 12px solid #fff; border-left: 0; }
+  #dirs i[data-d="right"] { top: -9px; left: 34px; border-left: 12px solid #fff; border-right: 0; }
+  #dirs i.aim { opacity: 0.75; }
+  #dirs i.wind { opacity: 1; filter: drop-shadow(0 0 4px #ffcc55); }
+  #dirs i[data-d="over"].wind { border-bottom-color: #ffd36a; } #dirs i[data-d="thrust"].wind { border-top-color: #ffd36a; }
+  #dirs i[data-d="left"].wind { border-right-color: #ffd36a; } #dirs i[data-d="right"].wind { border-left-color: #ffd36a; }
+  #dirs i[data-d="over"].guard { border-bottom-color: #7cc0ff; opacity: 1; } #dirs i[data-d="thrust"].guard { border-top-color: #7cc0ff; opacity: 1; }
+  #dirs i[data-d="left"].guard { border-right-color: #7cc0ff; opacity: 1; } #dirs i[data-d="right"].guard { border-left-color: #7cc0ff; opacity: 1; }
+  #dirs i[data-d="over"].threat { border-bottom-color: #ff3b2f; opacity: 1; } #dirs i[data-d="thrust"].threat { border-top-color: #ff3b2f; opacity: 1; }
+  #dirs i[data-d="left"].threat { border-right-color: #ff3b2f; opacity: 1; } #dirs i[data-d="right"].threat { border-left-color: #ff3b2f; opacity: 1; }
+  #feedback { position: absolute; left: 50%; top: calc(50% + 60px); transform: translateX(-50%); font-family: Cinzel, serif; font-size: 20px; color: #dfe8f0; text-shadow: 0 2px 6px #000; opacity: 0; }
+  #feedback.good { color: #ffd36a; font-size: 26px; }
+  #feedback.show { animation: fb 0.7s ease-out; }
+  @keyframes fb { 0% { opacity: 1; transform: translate(-50%, 0) scale(1.15); } 70% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -10px) scale(1); } }
   #drawbar { position: absolute; left: 50%; top: calc(50% + 26px); width: 80px; height: 4px; transform: translateX(-50%); background: rgba(0,0,0,0.4); }
   #drawFill { height: 100%; background: var(--gold); width: 0; }
   #hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
@@ -146,6 +165,9 @@
   .stats div { text-align: center; }
   .stats b { display: block; font-family: Cinzel, serif; font-size: 30px; }
   .stats span { font-size: 14px; }
+  .quality { align-items: center; }
+  .quality .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+  .quality button { padding: 6px 14px; font-size: 13px; }
   .section { text-align: center; margin: 22px 0 4px; font-size: 20px; color: #5a1d12; }
   .note { text-align: center; font-size: 14.5px; opacity: 0.85; margin: 8px 0; }
   .note code { font-size: 13px; background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; }
@@ -188,8 +210,10 @@
     <div class="controls">
       <b>WASD</b><span>Move · Shift sprint · Space jump</span>
       <b>Mouse</b><span>Look</span>
-      <b>Left click</b><span>Attack / draw bow</span>
-      <b>Right click</b><span>Block with shield / aim</span>
+      <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
+      <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
+      <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
+      <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
       <b>Q</b><span>Healing draught</span>
       <b>E</b><span>Mount / dismount / call your horse</span>
@@ -201,6 +225,9 @@
       <b>F4 / V</b><span>Troops: defend castle</span>
       <b>T</b><span>Troops: assault target castle</span>
       <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
+    </div>
+    <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
+      <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
     </div>
     <div class="row" id="difficulty">
       <button data-d="easy">Easy</button>
@@ -239,6 +266,8 @@
 <div id="hud" class="hidden">
   <div id="vignette"></div>
   <div id="crosshair"></div>
+  <div id="dirs"><i data-d="over"></i><i data-d="right"></i><i data-d="thrust"></i><i data-d="left"></i></div>
+  <div id="feedback"></div>
   <div id="drawbar"><div id="drawFill"></div></div>
   <div id="hitmarker"></div>
   <div id="factions" class="panel"></div>
@@ -291,6 +320,9 @@
     <div class="settings">
       <label>Mouse sensitivity <input id="sens" type="range" min="0" max="100" value="35"></label>
       <label>Volume <input id="vol" type="range" min="0" max="100" value="50"></label>
+    </div>
+    <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
+      <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
     </div>
     <div class="row" style="margin-top:20px"><button id="resume">Resume</button></div>
   </div>

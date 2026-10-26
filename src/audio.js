@@ -72,6 +72,7 @@ export class Audio {
       case 'swing': this.noise(0.18, 900, 0.8, 0.25 * k, 'bandpass'); break;
       case 'hit': this.noise(0.12, 500, 1.5, 0.5 * k, 'lowpass'); this.tone(120, 0.1, 0.3 * k, 'triangle', 0.5); break;
       case 'clang': this.tone(1800 + Math.random() * 600, 0.25, 0.18 * k, 'square', 0.7); this.noise(0.08, 3000, 2, 0.3 * k, 'highpass'); break;
+      case 'parry': this.tone(2400, 0.35, 0.22 * k, 'square', 0.5); this.tone(1200, 0.4, 0.2 * k, 'triangle', 0.8); this.noise(0.15, 4000, 2, 0.4 * k, 'highpass'); break;
       case 'block': this.tone(700, 0.15, 0.2 * k, 'square', 0.6); this.noise(0.1, 1500, 1, 0.3 * k); break;
       case 'bow': this.tone(220, 0.2, 0.2 * k, 'triangle', 0.6); this.noise(0.15, 2000, 1, 0.15 * k); break;
       case 'arrowHit': this.noise(0.06, 1200, 2, 0.25 * k); break;

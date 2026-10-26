@@ -44,6 +44,8 @@ const send = (ws, obj) => { if (ws && ws.readyState === 1) ws.send(typeof obj ==
 
 const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 1 << 20 });
 wss.on('connection', (ws) => {
+  ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
   ws.room = null;
   ws.id = null;
   ws.on('message', (raw) => {
@@ -106,6 +108,15 @@ wss.on('connection', (ws) => {
     }
   });
 });
+
+// Keep connections alive through cloud proxies, and drop players whose connection died silently.
+setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, 25000);
 
 server.listen(PORT, () => {
   console.log(`Castle Wars running at http://localhost:${PORT}`);

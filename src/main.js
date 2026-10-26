@@ -43,6 +43,18 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
+// graphics quality (remembered per browser)
+let quality = 'medium';
+try { quality = localStorage.getItem('cw-quality') || 'medium'; } catch (e) { /* storage unavailable */ }
+function setQuality(q) {
+  quality = q;
+  game.setQuality(q);
+  document.querySelectorAll('.quality button').forEach((b) => b.classList.toggle('active', b.dataset.q === q));
+  try { localStorage.setItem('cw-quality', q); } catch (e) { /* ignore */ }
+}
+document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
+setQuality(quality);
+
 let difficulty = 'normal';
 document.querySelectorAll('#difficulty button').forEach((b) => {
   b.addEventListener('click', () => {

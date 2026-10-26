@@ -1,0 +1,12 @@
+# Render Blueprint: deploys the Castle Wars server (game files + multiplayer relay) as a free web service.
+services:
+  - type: web
+    name: castle-wars
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/ping
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

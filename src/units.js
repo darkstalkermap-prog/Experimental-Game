@@ -4,6 +4,7 @@ import { UNIT_TYPES, WORLD, RAIDER_TEAM } from './config.js';
 import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
+import { attackDirsFor } from './combat.js';
 
 const tmp = new THREE.Vector3();
 let NEXT_ID = 1;
@@ -32,6 +33,12 @@ export class Unit {
     this.height = this.mounted ? 2.75 : 1.85 * (t.scale || 1);
     this.variant = stats.variant ?? Math.floor(Math.random() * 6);
     this.idleT = Math.random() * 10;
+    this.attackDir = 'over';
+    this.staggerT = 0;
+    this.feint = false;
+    this.strafeSide = Math.random() < 0.5 ? 1 : -1;
+    this.strafeT = 0;
+    this.hasShield = !!t.shield;
     this.siegeBonus = t.siegeBonus || 1;   // vs siege engines
     this.structMult = t.structMult || 0.6; // vs gates and keeps (hand weapons are poor at this)
     this.pos = pos.clone();
@@ -79,9 +86,14 @@ export class Unit {
   get footY() { return this.pos.y; }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
-  takeDamage(amount, attacker) {
+  takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
     this.hp -= amount;
+    // heavy blows interrupt and knock the soldier back; heroes and riders are harder to shake
+    const sturdy = this.isHero || this.mounted || (this.def && this.def.boss);
+    if (this.hp > 0 && info.melee && (info.parry || amount >= this.maxHp * (sturdy ? 0.2 : 0.12) || info.charge >= 0.9)) {
+      this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
+    }
     this.lastAttacker = attacker;
     if (attacker && attacker.alive && attacker.pos && !attacker.isStructure && attacker.team !== this.team) {
       const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4;
@@ -98,6 +110,40 @@ export class Unit {
     this.leavePost();
     this.game.audio.play('death', this.pos);
     this.game.onUnitKilled(this, attacker);
+  }
+
+  stagger(sec, from) {
+    this.staggerT = Math.max(this.staggerT, sec);
+    this.staggerMax = this.staggerT;
+    this.swingT = -1;
+    this.feint = false;
+    this.attackTimer = Math.max(this.attackTimer, sec + 0.25);
+    if (from && from.pos) {
+      const dx = this.pos.x - from.pos.x, dz = this.pos.z - from.pos.z;
+      const d = Math.hypot(dx, dz) || 1;
+      const push = this.mounted ? 1 : 3.5;
+      this.vel.x = (dx / d) * push; this.vel.z = (dz / d) * push;
+    }
+  }
+
+  // Try to block an incoming hit. Returns true when the blow is stopped.
+  tryBlock(attacker, info) {
+    if (!attacker || !attacker.pos || this.staggerT > 0 || this.post) return false;
+    if (this.swingT >= 0 && this.swingT < 0.45) return false; // busy attacking
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const dx = attacker.pos.x - this.pos.x, dz = attacker.pos.z - this.pos.z;
+    const d = Math.hypot(dx, dz) || 1;
+    if ((dx * fx + dz * fz) / d < 0.4) return false; // hit from the side or behind
+    let chance;
+    if (info.ranged) chance = this.hasShield ? 0.35 : 0;
+    else chance = this.def.boss ? 0.45 : this.isHero ? 0.55 : this.hasShield ? 0.22 : 0.06;
+    if (this.mounted) chance *= 0.5;
+    if (info.charge >= 0.8) chance *= 0.6;                                   // heavy blows break through
+    if (attacker.feintedAt !== undefined && this.game.time - attacker.feintedAt < 1.2) chance *= 0.35; // fell for a feint
+    if (Math.random() >= chance) return false;
+    this.blockFlash = 0.35;
+    if (!info.ranged) this.attackTimer = Math.min(this.attackTimer, 0.35); // quick riposte
+    return true;
   }
 
   remove() {
@@ -266,10 +312,22 @@ export class Unit {
     this.thinkTimer -= dt;
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;
+    if (this.blockFlash > 0) this.blockFlash -= dt;
 
     let moving = false;
     const tgt = this.target;
     let face = null;
+
+    if (this.staggerT > 0) {
+      // reeling from a heavy blow: no attacks, sliding back
+      this.staggerT -= dt;
+      this.vel.multiplyScalar(Math.pow(0.02, dt));
+      this.applyMovement(dt, true);
+      this.animate(dt, false);
+      this.mesh.position.copy(this.pos);
+      this.mesh.rotation.y = this.yaw;
+      return;
+    }
 
     if (tgt && tgt.alive) {
       const d = this.distTo(tgt);
@@ -278,6 +336,7 @@ export class Unit {
       if (d <= reach && (!this.ranged || tgt.isStructure || this.los)) {
         face = tgt.pos;
         if (this.attackTimer <= 0 && this.swingT < 0) this.startAttack();
+        else if (this.isHero && !this.mounted && !tgt.isStructure && this.swingT < 0) moving = this.circle(tgt, d, dt);
         if (this.mounted && !tgt.isStructure) {
           // cavalry rides through its target instead of stopping
           face = null;
@@ -372,15 +431,51 @@ export class Unit {
     this.yaw += d * Math.min(1, dt * (this.mounted ? 3.5 : 10));
   }
 
+  // heroes circle their opponent between attacks instead of standing still
+  circle(tgt, d, dt) {
+    this.strafeT -= dt;
+    if (this.strafeT <= 0) { this.strafeT = 1.2 + Math.random() * 1.2; if (Math.random() < 0.6) this.strafeSide *= -1; }
+    const dx = tgt.pos.x - this.pos.x, dz = tgt.pos.z - this.pos.z;
+    const l = Math.hypot(dx, dz) || 1;
+    const back = d < this.range * 0.5 ? -0.8 : 0;  // keep a little distance
+    const sx = (-dz / l) * this.strafeSide + (dx / l) * back, sz = (dx / l) * this.strafeSide + (dz / l) * back;
+    const sp = 1.7;
+    this.vel.x += (sx * sp - this.vel.x) * Math.min(1, dt * 6);
+    this.vel.z += (sz * sp - this.vel.z) * Math.min(1, dt * 6);
+    this.applyMovement(dt, false);
+    return true;
+  }
+
+  chooseAttackDir() {
+    const dirs = attackDirsFor(this.def.weapon);
+    const t = this.target;
+    // a hero aims where its opponent isn't guarding
+    if (this.isHero && t && t.isPlayer && t.blocking && dirs.length > 1 && Math.random() < 0.75) {
+      const open = dirs.filter((d) => d !== t.blockDir);
+      return open[Math.floor(Math.random() * open.length)];
+    }
+    return dirs[Math.floor(Math.random() * dirs.length)];
+  }
+
   startAttack() {
     this.swingT = 0;
     this.struck = false;
+    this.attackDir = this.chooseAttackDir();
+    this.feint = this.isHero && !this.ranged && Math.random() < 0.22;
     this.attackTimer = this.cd * (0.9 + Math.random() * 0.2);
     if (!this.ranged) this.game.audio.play('swing', this.pos);
   }
 
   updateAttack(dt) {
     this.swingT += dt;
+    if (this.feint && this.swingT >= 0.18) {
+      // feint: abandon the wind-up and come in from another side
+      this.feint = false;
+      this.swingT = -1;
+      this.attackTimer = 0.12;
+      this.feintedAt = this.game.time;
+      return;
+    }
     const strikeAt = this.ranged ? 0.55 : 0.32;
     if (!this.struck && this.swingT >= strikeAt) {
       this.struck = true;
@@ -394,7 +489,7 @@ export class Unit {
         } else if (this.distTo(t) <= (this.ranged ? 2.2 : this.range) + 1.0) {
           const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1);
           const charge = this.mounted ? 1 + Math.max(0, Math.hypot(this.vel.x, this.vel.z) - 3) / 8 : 1;
-          this.game.damage(t, this.dmg * mult * charge * (0.85 + Math.random() * 0.3), this, { melee: true });
+          this.game.damage(t, this.dmg * mult * charge * (0.85 + Math.random() * 0.3), this, { melee: true, attackDir: this.attackDir });
         }
       }
     }
@@ -409,7 +504,11 @@ export class Unit {
       poseHorse(this.horse, moving ? sp : 0, dt);
       this.walkPhase = this.horse.phase;
     }
-    poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, mounted: this.mounted, idle: this.idleT });
+    const stag = this.staggerT > 0 ? Math.min(1, this.staggerT / Math.max(0.2, (this.staggerMax || 0.5) * 0.5)) : 0;
+    poseSoldier(this.model, {
+      phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, attackDir: this.attackDir,
+      stagger: stag, blocking: this.blockFlash > 0, mounted: this.mounted, idle: this.idleT,
+    });
   }
 
   // network client: glide toward the host's latest position and animate
@@ -429,6 +528,8 @@ export class Unit {
     }
     if (!this.alive) { this.animateDeath(dt); return; }
     if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }
+    if (this.staggerT > 0) this.staggerT -= dt;
+    if (this.blockFlash > 0) this.blockFlash -= dt;
     this.animate(dt, t ? t.speed > 0.3 : false);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;

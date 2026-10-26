@@ -337,11 +337,27 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
     weapon.add(mk(geos.weapon));
     elR.add(weapon);
   }
-  return { root, body, torso, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, ranged: !!t.ranged, lance: t.weapon === 'lance' };
+  return { weaponTilt: WEAPON_TILT[t.weapon] ?? -1, root, body, torso, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, ranged: !!t.ranged, lance: t.weapon === 'lance' };
 }
 
+// Arm keyframes per attack direction: [shoulder x, elbow x, shoulder z, torso twist, weapon tilt offset]
+const WIND = {
+  over: [-2.8, -1.3, 0, 0, 0],
+  right: [-1.5, -1.3, 1.25, 0.45, -0.3],
+  left: [-1.6, -1.7, -0.95, -0.5, -0.3],
+  thrust: [-0.8, -2.1, 0.15, 0.3, -0.45],
+};
+const END = {
+  over: [-0.5, -0.15, 0, -0.05, 0],
+  right: [-1.4, -0.2, -0.7, -0.4, -0.3],
+  left: [-1.4, -0.2, 0.8, 0.4, -0.3],
+  thrust: [-1.55, 0, 0, -0.15, -0.45],
+};
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = (k) => k * k * (3 - 2 * k);
+
 // Pose a soldier for this frame.
-// st: { phase, speed, moving, swingT, mounted, blocking, dead }
+// st: { phase, speed, moving, swingT, attackDir, stagger, mounted, blocking }
 export function poseSoldier(m, st) {
   const sp = st.speed || 0;
   if (st.mounted) {
@@ -367,6 +383,7 @@ export function poseSoldier(m, st) {
   else { m.shL.rotation.set(-0.45 - armSwing * 0.3, 0, 0.12); m.elL.rotation.x = -0.75; }
   // right arm: weapon ready
   let sh = m.ranged ? -0.15 - armSwing * 0.5 : -0.3 + armSwing * 0.4, el = m.ranged ? -0.3 : -0.55, rz = 0;
+  let twist = 0, tiltOff = 0;
   if (m.lance && st.mounted) { sh = -0.5; el = -0.8; }
   const t = st.swingT;
   if (t >= 0) {
@@ -379,17 +396,25 @@ export function poseSoldier(m, st) {
       rz = 0.15 * a;
     } else if (m.lance && st.mounted) {
       sh = -1.2; el = -0.3;
-    } else if (t < 0.25) {
-      const k = t / 0.25;
-      sh = -0.3 + (-2.7 + 0.3) * k; el = -0.55 - 0.9 * k; rz = -0.35 * k;
-    } else if (t < 0.4) {
-      const k = (t - 0.25) / 0.15;
-      sh = -2.7 + 2.2 * k; el = -1.45 + 1.3 * k; rz = -0.35 + 0.1 * k;
     } else {
-      const k = Math.min(1, (t - 0.4) / 0.22);
-      sh = -0.5 + 0.2 * k; el = -0.15 - 0.4 * k; rz = -0.25 * (1 - k);
+      // directional swing: idle -> wind-up -> strike -> back to idle
+      const W = WIND[st.attackDir] || WIND.over, E = END[st.attackDir] || END.over;
+      const idle = [sh, el, 0, 0, 0];
+      let from, to, k;
+      if (t < 0.25) { from = idle; to = W; k = ease(t / 0.25); }
+      else if (t < 0.4) { from = W; to = E; k = ease((t - 0.25) / 0.15); }
+      else { from = E; to = idle; k = ease(Math.min(1, (t - 0.4) / 0.22)); }
+      sh = lerp(from[0], to[0], k); el = lerp(from[1], to[1], k); rz = lerp(from[2], to[2], k);
+      twist = lerp(from[3], to[3], k); tiltOff = lerp(from[4], to[4], k);
     }
   }
+  if (st.stagger > 0) {
+    // knocked back: lean away, weapon arm flung out
+    m.torso.rotation.x -= 0.4 * st.stagger;
+    sh = lerp(sh, -1.1, st.stagger); rz = lerp(rz, 0.6, st.stagger); el = lerp(el, -0.2, st.stagger);
+  }
+  m.torso.rotation.y = twist;
+  if (m.weapon) m.weapon.rotation.x = m.weaponTilt + tiltOff;
   m.shR.rotation.set(sh, 0, rz);
   m.elR.rotation.x = el;
 }

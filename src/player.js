@@ -5,6 +5,7 @@ import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
 import { avoidCastles } from './nav.js';
+import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -55,10 +56,19 @@ export class Player {
     this.arrows = PLAYER.arrows;
     this.potions = 1;
     this.weapon = 'sword';
-    this.swingT = -1;
-    this.swingDir = 1;
+    this.swingT = -1;          // animation clock other people see on this hero's body
     this.struck = false;
     this.blocking = false;
+    // directional melee
+    this.aim = { x: 0, y: 0 };  // recent mouse movement: picks attack / guard direction
+    this.atkDir = 'right';
+    this.attackDir = 'right';
+    this.atk = null;            // { dir, phase: 'wind' | 'strike' | 'recover', t, charge }
+    this.blockDir = 'right';
+    this.blockStart = -99;
+    this.feintedAt = undefined;
+    this.staggerT = 0;
+    this.shake = 0;
     this.drawT = 0;
     this.lastHurt = -99;
     this.kills = 0;
@@ -119,7 +129,7 @@ export class Player {
     this.walkPhase += dt * sp * 2.1;
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
     b.root.rotation.y = this.mounted ? this.heading : this.yaw;
-    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, mounted: this.mounted, blocking: this.blocking });
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking });
     this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4), this.pos.z);
   }
 
@@ -138,6 +148,8 @@ export class Player {
       this.yaw += dy * Math.min(1, dt * 14);
       this.pitch = n.pitch;
       this.vel.set(n.vx, 0, n.vz);
+      if (n.b && !this.blocking) this.blockStart = this.game.time - (n.ba || 0);
+      if (n.b && n.bd !== undefined && DIRS[n.bd] !== this.blockDir) { this.blockDir = DIRS[n.bd]; this.blockStart = this.game.time - (n.ba || 0); }
       this.blocking = !!n.b;
       this.weapon = n.w ? 'bow' : 'sword';
       this.mounted = !!n.m && this.hasHorse;
@@ -146,7 +158,8 @@ export class Player {
       this.rideSpeed = n.rs;
       if (!this.mounted && n.hx !== undefined) { this.horsePos.set(n.hx, n.hy, n.hz); this.horseYaw = n.hyaw; }
     }
-    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.55) this.swingT = -1; }
+    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.62) this.swingT = -1; }
+    if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
       if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
       if (this.mounted) this.trample(dt);
@@ -158,6 +171,7 @@ export class Player {
   poseMsg() {
     const m = { x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z), yaw: r2(this.yaw), pitch: r2(this.pitch),
       vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
+      bd: DIR_IDX[this.blockDir], ba: r2(Math.max(0, this.game.time - this.blockStart)),
       m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed) };
     if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
     return m;
@@ -421,33 +435,23 @@ export class Player {
       const S = this.vmSword;
       S.position.copy(b.pos);
       S.rotation.copy(b.rot);
-      if (this.swingT >= 0) {
-        const t = this.swingT;
-        const dir = this.swingDir;
-        if (t < 0.12) { // wind-up
-          const k = t / 0.12;
-          S.position.x += 0.12 * k * dir;
-          S.position.y += 0.15 * k;
-          S.rotation.z += -0.9 * k * dir;
-          S.rotation.x += 0.4 * k;
-        } else if (t < 0.3) { // slash across
-          const k = (t - 0.12) / 0.18;
-          const e = 1 - (1 - k) * (1 - k);
-          S.position.x += (0.12 - 0.6 * e) * dir;
-          S.position.y += 0.15 - 0.3 * e;
-          S.position.z -= 0.15 * Math.sin(e * Math.PI);
-          S.rotation.z += (-0.9 + 2.4 * e) * dir;
-          S.rotation.x += 0.4 - 1.4 * e;
-        } else { // recover
-          const k = Math.min(1, (t - 0.3) / 0.25);
-          S.position.x += (-0.48 * (1 - k)) * dir;
-          S.position.y += -0.15 * (1 - k);
-          S.rotation.z += 1.5 * (1 - k) * dir;
-          S.rotation.x += -1.0 * (1 - k);
-        }
+      const atk = this.atk;
+      if (atk) {
+        const W = VM_WIND[atk.dir], E = VM_END[atk.dir];
+        let from = VM_ZERO, to = W, k;
+        if (atk.phase === 'wind') { k = easeOut(Math.min(1, atk.t / 0.14)); }
+        else if (atk.phase === 'strike') { from = W; to = E; k = easeOut(Math.min(1, atk.t / 0.12)); }
+        else { from = E; to = VM_ZERO; k = easeInOut(Math.min(1, atk.t / 0.25)); }
+        applyVm(S, from, to, k);
+        if (atk.phase === 'wind' && atk.t > 0.3) S.position.x += (Math.random() - 0.5) * 0.003; // straining a full wind-up
+      } else if (this.blocking) {
+        // raise the sword out of the way of the shield
+        S.position.x += 0.1; S.position.y -= 0.08; S.rotation.z -= 0.3;
       }
+      if (this.staggerT > 0) { S.position.y -= 0.12 * Math.min(1, this.staggerT * 3); S.rotation.x -= 0.4 * Math.min(1, this.staggerT * 3); }
       const sb = this.vmShieldBase;
-      const target = this.blocking ? { x: -0.14, y: -0.2, z: -0.55, ry: 0.05 } : { x: sb.pos.x, y: sb.pos.y, z: sb.pos.z, ry: sb.rot.y };
+      const guard = { left: [-0.3, -0.2, 0.35], right: [0.02, -0.2, -0.2], over: [-0.14, -0.05, 0.05], thrust: [-0.14, -0.3, 0.05] }[this.blockDir];
+      const target = this.blocking ? { x: guard[0], y: guard[1], z: -0.55, ry: guard[2] } : { x: sb.pos.x, y: sb.pos.y, z: sb.pos.z, ry: sb.rot.y };
       const k = Math.min(1, dt * 14);
       const sh = this.vmShield;
       if (!this._shInit) { sh.position.copy(sb.pos); sh.rotation.copy(sb.rot); this._shInit = true; }
@@ -455,7 +459,6 @@ export class Player {
       sh.position.y += (target.y - sh.position.y) * k;
       sh.position.z += (target.z - sh.position.z) * k;
       sh.rotation.y += (target.ry - sh.rotation.y) * k;
-      if (this.blocking) S.position.x += 0.08;
     } else {
       const b = this.vmBowBase;
       this.vmBow.position.copy(b.pos);
@@ -564,21 +567,17 @@ export class Player {
     this.pos.y = ny;
 
     // combat
-    if (this.weapon === 'sword') {
-      this.blocking = m.right && this.swingT < 0;
-      if ((m.leftPressed || (m.left && this.swingT < 0)) && this.swingT < 0 && !this.blocking && this.stamina > 4) {
-        this.swingT = 0;
-        this.struck = false;
-        this.swingDir = -this.swingDir;
-        this.stamina -= 7;
-        g.audio.play('swing');
-        if (this.netClient) g.net.toHost({ a: 'swing' });
-      }
-      if (this.swingT >= 0) {
-        this.swingT += dt;
-        if (!this.struck && this.swingT >= 0.19) { this.struck = true; this.meleeStrike(); }
-        if (this.swingT > 0.55) this.swingT = -1;
-      }
+    const decay = Math.pow(0.0004, dt);
+    this.aim.x = this.aim.x * decay + m.dx;
+    this.aim.y = this.aim.y * decay + m.dy;
+    const aimDir = dirFromAim(this.aim.x, this.aim.y, null);
+    if (this.staggerT > 0) {
+      this.staggerT -= dt;
+      this.atk = null;
+      this.blocking = false;
+      this.drawT = 0;
+    } else if (this.weapon === 'sword') {
+      this.swordInput(dt, m, aimDir);
       this.zoomed = false;
     } else {
       this.blocking = false;
@@ -590,6 +589,7 @@ export class Player {
       if (!m.left && !m.leftReleased) this.drawT = 0;
       this.zoomed = m.right;
     }
+    this.shake = Math.max(0, this.shake - dt);
 
     // regen when out of combat (the host decides this in online games)
     if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
@@ -597,7 +597,8 @@ export class Player {
 
     // camera
     this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
-    this.camera.rotation.set(this.pitch, this.yaw + Math.PI, 0, 'YXZ');
+    const sk = this.shake * 0.06;
+    this.camera.rotation.set(this.pitch + (Math.random() - 0.5) * sk, this.yaw + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
     const fov = this.zoomed ? 42 : 75;
     if (Math.abs(this.camera.fov - fov) > 0.1) {
       this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 10);
@@ -606,10 +607,77 @@ export class Player {
     this.updateViewModel(dt, moving && this.onGround, sprint);
   }
 
+  // Hold left to wind up in the direction you last moved the mouse, release to strike.
+  // Right click guards; while winding up it feints instead.
+  swordInput(dt, m, aimDir) {
+    const g = this.game;
+    let atk = this.atk;
+    if (atk && atk.phase === 'wind' && m.rightPressed) {
+      this.atk = atk = null;
+      this.feintedAt = g.time;
+      this.stamina = Math.max(0, this.stamina - 3);
+      if (this.netClient) g.net.toHost({ a: 'feint' });
+    }
+    const canGuard = !atk || atk.phase === 'recover';
+    if (m.right && canGuard) {
+      const dir = aimDir || (this.blocking ? this.blockDir : this.atkDir);
+      if (!this.blocking || dir !== this.blockDir) this.blockStart = g.time; // raising or shifting the guard opens a parry window
+      this.blockDir = dir;
+      this.blocking = true;
+      this.atk = atk = null;
+    } else this.blocking = false;
+    if (this.blocking) return;
+
+    if (!atk && (m.leftPressed || m.left) && this.stamina > 4) {
+      const dir = aimDir || this.atkDir;
+      this.atk = atk = { dir, phase: 'wind', t: 0, charge: 0 };
+      this.atkDir = dir;
+      this.attackDir = dir;
+      this.stamina -= 6;
+      this.swingT = 0;
+      if (this.netClient) g.net.toHost({ a: 'swing', d: DIR_IDX[dir] });
+    }
+    if (!atk) return;
+    atk.t += dt;
+    if (atk.phase === 'wind') {
+      if ((!m.left && atk.t >= 0.14) || atk.t > 1.4) {
+        atk.charge = Math.max(0, Math.min(1, (atk.t - 0.14) / 0.5));
+        atk.phase = 'strike'; atk.t = 0;
+        this.struck = false;
+        this.swingT = 0.25;
+        g.audio.play('swing');
+      } else this.swingT = Math.min(0.24, atk.t * 1.7);
+    } else if (atk.phase === 'strike') {
+      this.swingT = 0.25 + atk.t * 0.75;
+      if (!this.struck && atk.t >= 0.07) { this.struck = true; this.meleeStrike(atk.dir, atk.charge); }
+      if (atk.t >= 0.2) { atk.phase = 'recover'; atk.t = 0; }
+    } else {
+      this.swingT = 0.4 + atk.t * 0.88;
+      if (atk.t >= 0.25) { this.atk = null; this.swingT = -1; }
+    }
+  }
+
+  // knocked off balance (e.g. your blow was parried)
+  stagger(sec) {
+    this.staggerT = Math.max(this.staggerT, sec);
+    this.atk = null;
+    this.swingT = -1;
+    this.blocking = false;
+    if (this.isLocal) this.shake = Math.max(this.shake, 0.35);
+    else if (this.game.mode === 'host') this.game.deliver(this, { k: 'stagger', t: sec });
+  }
+
+  // feedback when your blow lands
+  onHitLanded(heavy) {
+    this.shake = Math.max(this.shake, heavy ? 0.22 : 0.1);
+    if (this.game.mode === 'single') this.game.hitStop = heavy ? 0.09 : 0.05;
+  }
+
   setWeapon(w) {
     if (this.weapon === w) return;
     this.weapon = w;
     this.swingT = -1;
+    this.atk = null;
     this.drawT = 0;
   }
 
@@ -627,12 +695,15 @@ export class Player {
     return out.set(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
   }
 
-  meleeStrike() {
+  meleeStrike(dir = this.atkDir, windCharge = 0) {
     const g = this.game;
-    if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg() }); return; }
-    const reach = this.sword.len + (this.mounted ? 2.2 : 1.6);
+    if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg(), d: DIR_IDX[dir], ch: r2(windCharge) }); return; }
+    const S = STRIKE[dir] || STRIKE.right;
+    this.attackDir = dir;
+    const reach = this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach;
     const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
-    const dmg = this.sword.dmg * this.dmgMult * charge * (0.9 + Math.random() * 0.2);
+    const dmg = this.sword.dmg * this.dmgMult * charge * S.mult * (1 + 0.35 * windCharge) * (0.9 + Math.random() * 0.2);
+    const info = { melee: true, attackDir: dir, charge: windCharge, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
     g.grid.query(this.pos.x, this.pos.z, reach + 1, (u) => {
@@ -642,13 +713,13 @@ export class Player {
       if (d - u.radius > reach) return;
       if (Math.abs(u.pos.y - this.pos.y) > (this.mounted ? 2.8 : 2.2)) return;
       const dot = (dx * fx + dz * fz) / (d || 1);
-      if (dot < 0.45) return;
+      if (dot < S.cone) return;
       hits.push({ u, d });
     });
     hits.sort((a, b) => a.d - b.d);
     let hitSomething = false;
-    for (const h of hits.slice(0, 3)) {
-      g.damage(h.u, h === hits[0] ? dmg : dmg * 0.5, this, { melee: true, dir: new THREE.Vector3(fx, 0, fz) });
+    for (const h of hits.slice(0, S.targets)) {
+      g.damage(h.u, h === hits[0] ? dmg : dmg * 0.5, this, info);
       hitSomething = true;
     }
     if (!hitSomething) {
@@ -717,8 +788,9 @@ export class Player {
     });
   }
 
-  takeDamage(amount, attacker) {
+  takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
+    if (info.melee && amount > this.maxHp * 0.15) this.stagger(0.25);
     if (this.mounted) {
       // the horse takes half the blows
       this.horseHp -= amount * 0.5;
@@ -743,3 +815,28 @@ export class Player {
 }
 
 const r2 = (x) => Math.round(x * 100) / 100;
+
+// first-person sword key poses per attack direction (offsets from the resting pose)
+const VM_ZERO = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
+const VM_WIND = {
+  right: { x: 0.18, y: 0.12, z: 0.05, rx: 0.2, ry: 0, rz: -1.3 },
+  left: { x: -0.42, y: 0.12, z: 0, rx: 0.2, ry: 0.3, rz: 1.2 },
+  over: { x: -0.05, y: 0.3, z: 0.1, rx: 0.9, ry: 0, rz: 0.25 },
+  thrust: { x: -0.12, y: 0.02, z: 0.22, rx: -1.2, ry: 0.1, rz: 0.3 },
+};
+const VM_END = {
+  right: { x: -0.6, y: -0.12, z: -0.1, rx: -0.4, ry: 0, rz: 1.3 },
+  left: { x: 0.3, y: -0.1, z: -0.1, rx: -0.4, ry: -0.3, rz: -1.2 },
+  over: { x: -0.1, y: -0.35, z: -0.15, rx: -1.4, ry: 0, rz: 0.2 },
+  thrust: { x: -0.15, y: 0.06, z: -0.4, rx: -1.3, ry: 0.1, rz: 0.3 },
+};
+const easeOut = (k) => 1 - (1 - k) * (1 - k);
+const easeInOut = (k) => k * k * (3 - 2 * k);
+function applyVm(obj, a, b, k) {
+  obj.position.x += a.x + (b.x - a.x) * k;
+  obj.position.y += a.y + (b.y - a.y) * k;
+  obj.position.z += a.z + (b.z - a.z) * k;
+  obj.rotation.x += a.rx + (b.rx - a.rx) * k;
+  obj.rotation.y += a.ry + (b.ry - a.ry) * k;
+  obj.rotation.z += a.rz + (b.rz - a.rz) * k;
+}

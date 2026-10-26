@@ -5,7 +5,7 @@ import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
 import { grassDetailTexture } from './textures.js';
 
-export const SUN_DIR = new THREE.Vector3(-0.45, 0.62, 0.35).normalize();
+export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
 
 // Roads run from each castle gate to the centre of the map.
 export const ROADS = CASTLE_SITES.map((s) => {
@@ -34,8 +34,8 @@ export function createSky(scene, renderer = null) {
     depthWrite: false,
     fog: false,
     uniforms: {
-      top: { value: new THREE.Color(0x3d6fb3) },
-      horizon: { value: new THREE.Color(0xc9d6df) },
+      top: { value: new THREE.Color(0x4472b0) },
+      horizon: { value: new THREE.Color(0xe2d8c4) },
       sunDir: { value: SUN_DIR },
     },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }`,
@@ -75,15 +75,15 @@ export function createSky(scene, renderer = null) {
     scene.environment = pmrem.fromScene(envScene, 0.02).texture;
     pmrem.dispose();
   }
-  scene.fog = new THREE.Fog(0xc4d0d6, 140, 620);
-  scene.background = new THREE.Color(0xc4d0d6);
+  scene.fog = new THREE.FogExp2(0xd6d2c4, 0.0032);
+  scene.background = new THREE.Color(0xd6d2c4);
   return sky;
 }
 
 export function createLights(scene) {
-  const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x4d5638, 0.55);
+  const hemi = new THREE.HemisphereLight(0xc8d8f0, 0x5a5230, 0.6);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff0d6, 2.6);
+  const sun = new THREE.DirectionalLight(0xffdcae, 2.9);
   sun.position.copy(SUN_DIR).multiplyScalar(120);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);

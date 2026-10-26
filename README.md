@@ -34,9 +34,20 @@ npm start
    castles are taken by AI lords.
 3. The host clicks **Start the Battle**.
 
-Friends on the same Wi-Fi can use the host's local IP address, for example `http://192.168.1.20:8080`. To
-play over the internet, run the server somewhere public, such as a cloud VM or a Node host like Render or
-Railway (set `PORT` if the host requires it), or use a tunnel like ngrok.
+Friends on the same Wi-Fi can use the host's local IP address, for example `http://192.168.1.20:8080`.
+
+### Put it online so anyone can join with a link
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/darkstalkermap-prog/experimental-game)
+
+1. Click the button above, sign in to Render (free) and connect your GitHub account. If this repository is
+   private, Render will ask for permission to read it.
+2. Render reads `render.yaml`, builds the server and gives you an address like
+   `https://castle-wars-xxxx.onrender.com`.
+3. Send that address to your friends. One of you hosts, the others join with the room code.
+
+Render's free plan sleeps after about 15 minutes without visitors, so the first load after a break takes
+around a minute. The included `Dockerfile` also works on Fly.io, Railway or any Docker host.
 
 The host's browser runs the whole battle. Other players control their own hero and receive about 10 updates
 a second. If the host leaves, the game ends. If someone else leaves, an AI lord takes over their castle.
@@ -52,6 +63,18 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - **Hero**: vitality, strength and armour.
   - **Items**: better swords, a kite shield, a war bow, a warhorse, arrows and healing draughts.
   - **Siege**: battering rams and catapults, sent against the castle you choose.
+- **Directional combat** (Bannerlord style):
+  - Flick the mouse to choose a direction: left, right, up for an overhead, or down for a thrust. Then hold
+    left-click to wind up and release to strike. A longer wind-up hits harder.
+  - Overheads and thrusts reach further and hit hard but catch one or two enemies. Side swings can hit three.
+  - Right-click raises your shield. It always softens blows from the front, and guarding the side the blow
+    comes from stops it completely.
+  - Guard just as a blow lands (or switch to that side at the last moment) to **parry**. The attacker
+    staggers and is open.
+  - Red chevrons around the crosshair show the side each incoming swing comes from.
+  - Right-click during a wind-up to **feint**. Enemies who fall for it block far less for a moment.
+  - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords and
+    the Warlord block, feint, circle you, and aim for the side you aren't guarding.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
 - **Death**: your hero respawns at the keep. Each death makes the wait longer. Once your keep falls, you can no
   longer respawn.
@@ -68,8 +91,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | --- | --- |
 | WASD / Shift / Space | Move / sprint / jump |
 | Mouse | Look |
-| Left click | Sword attack, or hold and release to shoot the bow |
-| Right click | Block with your shield (sword), or zoom (bow) |
+| Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
+| Left click | Hold to wind up, release to strike; with the bow, hold and release to shoot |
+| Right click | Guard with your shield; feint while winding up; zoom with the bow |
 | 1 / 2 / mouse wheel | Switch between sword & shield and bow |
 | Q | Drink a healing draught |
 | E | Mount or dismount your horse, or call it |
@@ -96,7 +120,9 @@ The stairs beside the gate lead up to the wall walk, so you can fight from the b
 | `src/models.js` | Soldier and horse models (two-segment limbs, armour, heraldry) and their poses |
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults |
-| `src/player.js` | First-person hero: movement, sword, shield, bow, view-model |
+| `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
+| `src/combat.js` | Shared rules for attack and guard directions |
+| `src/grass.js` | Wind-swept grass that grows around the camera |
 | `src/ai.js` | Rival lord strategy |
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/world.js`, `src/textures.js` | Terrain, sky, forests and procedural textures |
@@ -111,4 +137,6 @@ Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.
 - The published claude.ai version of the game is single-player only, because online play needs this server.
+- Graphics quality (Low / Medium / High) is in the main menu and the pause menu. Low turns off shadows and
+  grass for slower computers.
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.

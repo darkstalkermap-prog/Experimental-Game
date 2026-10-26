@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { TEAM_CSS, PLAYER_TEAM, RAIDER_TEAM, WORLD, CASTLE, ROUNDS } from './config.js';
 import { SHOP } from './economy.js';
+import { dirFromAim, incomingSide } from './combat.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -62,6 +63,44 @@ export class UI {
     $('goldpops').appendChild(el);
     setTimeout(() => el.remove(), 1200);
     if (this.game) this.game.audio.play('coin');
+  }
+
+  feedback(text, good = false) {
+    const el = $('feedback');
+    el.textContent = text;
+    el.classList.toggle('good', good);
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+
+  // Direction chevrons: where you're aiming / winding up / guarding, and blows coming at you.
+  updateDirs() {
+    const g = this.game;
+    const p = g.player;
+    const els = this.dirEls || (this.dirEls = Object.fromEntries([...document.querySelectorAll('#dirs i')].map((e) => [e.dataset.d, e])));
+    const show = p.alive && p.weapon === 'sword';
+    $('dirs').style.display = show ? '' : 'none';
+    if (!show) return;
+    const state = { left: '', right: '', over: '', thrust: '' };
+    if (p.blocking) state[p.blockDir] = 'guard';
+    else if (p.atk) state[p.atk.dir] = p.atk.phase === 'wind' ? 'wind' : 'aim';
+    else state[dirFromAim(p.aim.x, p.aim.y, p.atkDir)] = 'aim';
+    // enemies close by, facing you and winding up
+    const check = (u) => {
+      if (!u.alive || u.team === p.team || u.ranged || u.weapon === 'bow' || u.swingT < 0 || u.swingT > 0.33) return;
+      const dx = p.pos.x - u.pos.x, dz = p.pos.z - u.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 4.2) return;
+      const face = u.mounted ? u.heading ?? u.yaw : u.yaw;
+      if ((dx * Math.sin(face) + dz * Math.cos(face)) / (d || 1) < 0.55) return;
+      state[incomingSide(u.attackDir || 'over')] = 'threat';
+    };
+    g.grid.query(p.pos.x, p.pos.z, 5, check);
+    for (const h of g.humans) if (h !== p) check(h);
+    for (const d of ['left', 'right', 'over', 'thrust']) {
+      if (els[d].className !== state[d]) els[d].className = state[d];
+    }
   }
 
   hitMarker() {
@@ -194,6 +233,7 @@ export class UI {
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
     $('crosshair').classList.toggle('block', p.blocking);
+    this.updateDirs();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
     $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.bow.draw) * 100}%` : '0%';
 

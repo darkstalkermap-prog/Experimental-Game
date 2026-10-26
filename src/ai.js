@@ -35,7 +35,7 @@ export class LordAI {
     if (breached || weak) this.try('repair_walls');
 
     // keep a reserve once the war starts so repairs stay affordable
-    const reserve = round >= ROUNDS.warRound ? 120 : 0;
+    const reserve = round >= ROUNDS.warRound ? 150 : round >= 2 ? 100 : 0;
     let guard = 0;
     while (g.troopCount(f.team) < f.troopCap && f.gold - reserve > 60 && guard++ < 6) {
       const r = Math.random();

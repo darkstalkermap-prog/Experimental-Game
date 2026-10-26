@@ -5,6 +5,7 @@ import { UNIT_TYPES } from './config.js';
 import { Unit } from './units.js';
 import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
+import { DIRS, DIR_IDX } from './combat.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
 const TYPE_IDX = Object.fromEntries(TYPE_NAMES.map((t, i) => [t, i]));
@@ -69,7 +70,8 @@ export class HostSync {
     const f = g.factions[p.team];
     switch (d.a) {
       case 'pose': p.netPose = d; break;
-      case 'swing': p.swingT = 0; break;
+      case 'swing': p.swingT = 0; if (DIRS[d.d]) { p.attackDir = DIRS[d.d]; p.atkDir = p.attackDir; } break;
+      case 'feint': p.feintedAt = g.time; p.swingT = -1; break;
       case 'strike':
         if (!p.alive) break;
         p.netPose = d;
@@ -77,7 +79,7 @@ export class HostSync {
         p.yaw = d.yaw;
         p.mounted = !!d.m && p.hasHorse;
         p.rideSpeed = d.rs;
-        p.meleeStrike();
+        if (p.staggerT <= 0) p.meleeStrike(DIRS[d.d] || 'right', Math.max(0, Math.min(1, d.ch || 0)));
         break;
       case 'shoot':
         if (p.alive && p.arrows > 0) p.fireFrom(vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.draw)));
@@ -102,7 +104,8 @@ export class HostSync {
       tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length,
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
-          u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100)];
+          u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
+          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 ? 1 : 0];
         if (u.isHero) a.push(u.name);
         return a;
       }),
@@ -114,7 +117,8 @@ export class HostSync {
         f.earned, f.isPlayer ? 1 : 0, f.lord, f.name]),
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
-        r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch)]),
+        r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
+        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0]),
       ev: this.shared,
     };
     this.shared = [];
@@ -160,7 +164,7 @@ export class ClientSync {
     // units
     const seen = new Set();
     for (const a of s.u) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, name] = a;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, name] = a;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
@@ -177,6 +181,10 @@ export class ClientSync {
       u.netTarget = { x, y, z, yaw, speed };
       if (u.alive && !alive) { u.alive = false; u.deathT = 0; }
       if (swingT >= 0 && u.swingT < 0) u.swingT = swingT;
+      if (swingT < 0 && u.swingT >= 0 && u.swingT < 0.3) u.swingT = -1; // interrupted or feinted
+      u.attackDir = DIRS[dirIdx] || 'over';
+      if (stag && u.staggerT <= 0) { u.staggerT = 0.4; u.staggerMax = 0.5; }
+      if (blk) u.blockFlash = 0.2;
       u.hp = (hpPct / 100) * u.maxHp;
     }
     for (const [id, u] of this.units) {
@@ -255,6 +263,9 @@ export class ClientSync {
       h.alive = !!a[5];
       h.hp = a[6]; h.maxHp = a[7];
       if (a[9] >= 0 && h.swingT < 0) h.swingT = a[9];
+      h.attackDir = DIRS[a[21]] || 'right';
+      h.blockDir = DIRS[a[22]] || 'right';
+      h.staggerT = a[23] ? 0.3 : 0;
       if (a[14] && !h.hasHorse) { h.hasHorse = true; h.horseHp = 320; h.ensureHorseModel(); h.horseDeadT = undefined; }
       if (!a[14] && h.hasHorse) { h.hasHorse = false; h.mounted = false; h.horseDeadT = 0; }
     }
