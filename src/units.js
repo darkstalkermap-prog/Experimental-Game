@@ -1,6 +1,6 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
-import { UNIT_TYPES, WORLD, RAIDER_TEAM } from './config.js';
+import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS } from './config.js';
 import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
@@ -39,6 +39,10 @@ export class Unit {
     this.strafeSide = Math.random() < 0.5 ? 1 : -1;
     this.strafeT = 0;
     this.hasShield = !!t.shield;
+    this.xp = 0;
+    this.rank = 1;
+    this.slowT = 0;
+    this.braced = false;
     this.siegeBonus = t.siegeBonus || 1;   // vs siege engines
     this.structMult = t.structMult || 0.6; // vs gates and keeps (hand weapons are poor at this)
     this.pos = pos.clone();
@@ -112,6 +116,43 @@ export class Unit {
     this.game.onUnitKilled(this, attacker);
   }
 
+  // --- experience ---
+  gainXp(n) {
+    if (this.team === RAIDER_TEAM || this.isHero || !this.alive) return;
+    this.xp += n;
+    while (this.rank < 5 && this.xp >= RANKS.xp[this.rank]) {
+      this.rank++;
+      this.applyRankBonus(this.rank);
+      this.game.fx.gold(this.chest(new THREE.Vector3()).setY(this.pos.y + this.height + 0.3));
+      this.game.onUnitRankUp(this);
+    }
+  }
+
+  applyRankBonus() {
+    const gainHp = this.maxHp * RANKS.hp;
+    this.maxHp += gainHp;
+    this.hp += gainHp;
+    this.dmg *= 1 + RANKS.dmg;
+    this.armor += RANKS.armor;
+    this.setRankVisual(this.rank);
+  }
+
+  // veterans wear a plume: team colour from rank 3, gold at rank 5
+  setRankVisual(rank) {
+    this.rank = rank;
+    if (this.plume) { this.plume.parent.remove(this.plume); this.plume = null; }
+    if (rank < 3 || this.mounted && !this.model) return;
+    const color = rank >= 5 ? 0xe8b830 : TEAM_COLORS[this.team] ?? 0xffffff;
+    if (!PLUME_MATS.has(color)) PLUME_MATS.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.8 }));
+    const m = new THREE.Mesh(PLUME_GEO, PLUME_MATS.get(color));
+    m.position.set(0, 1.93 + (rank >= 4 ? 0.03 : 0), -0.03);
+    m.scale.setScalar(rank >= 4 ? 1.25 : 1);
+    m.rotation.x = -0.35;
+    m.castShadow = true;
+    this.model.torso.add(m);
+    this.plume = m;
+  }
+
   stagger(sec, from) {
     this.staggerT = Math.max(this.staggerT, sec);
     this.staggerMax = this.staggerT;
@@ -137,6 +178,7 @@ export class Unit {
     let chance;
     if (info.ranged) chance = this.hasShield ? 0.35 : 0;
     else chance = this.def.boss ? 0.45 : this.isHero ? 0.55 : this.hasShield ? 0.22 : 0.06;
+    if (this.braced) chance = Math.max(chance, info.ranged ? 0.7 : 0.6); // locked shields
     if (this.mounted) chance *= 0.5;
     if (info.charge >= 0.8) chance *= 0.6;                                   // heavy blows break through
     if (attacker.feintedAt !== undefined && this.game.time - attacker.feintedAt < 1.2) chance *= 0.35; // fell for a feint
@@ -208,10 +250,11 @@ export class Unit {
       }
       case 'follow': {
         const hero = fac.hero;
-        const slot = this.slot;
-        const row = Math.floor(slot / 6), col = (slot % 6) - 2.5;
+        const F = FORMATIONS[fac.formation] || FORMATIONS.line;
+        const cols = Math.min(F.cols, 6);
+        const row = Math.floor(this.slot / cols), col = (this.slot % cols) - (cols - 1) / 2;
         const fx = Math.sin(hero.yaw), fz = Math.cos(hero.yaw);
-        tmp.set(hero.pos.x - fx * (3 + row * 1.8) + fz * col * 1.7, 0, hero.pos.z - fz * (3 + row * 1.8) - fx * col * 1.7);
+        tmp.set(hero.pos.x - fx * (3 + row * F.sz) + fz * col * F.sx, 0, hero.pos.z - fz * (3 + row * F.sz) - fx * col * F.sx);
         this.goal = tmp.clone();
         engage = this.ranged ? Math.min(this.range, 32) : 10;
         anchor = hero.pos; leash = 18;
@@ -219,12 +262,14 @@ export class Unit {
       }
       case 'hold': {
         const d = this.orderData;
-        const slot = this.slot;
-        const row = Math.floor(slot / 8), col = (slot % 8) - 3.5;
+        const F = FORMATIONS[fac.formation] || FORMATIONS.line;
+        const row = Math.floor(this.slot / F.cols), col = (this.slot % F.cols) - (F.cols - 1) / 2;
         const fx = Math.sin(d.yaw), fz = Math.cos(d.yaw);
-        this.goal = new THREE.Vector3(d.pos.x + fz * col * 1.6 - fx * row * 1.8, 0, d.pos.z - fx * col * 1.6 - fz * row * 1.8);
-        engage = this.ranged ? this.range : 5;
-        anchor = this.goal; leash = this.ranged ? 0 : 8;
+        this.goal = new THREE.Vector3(d.pos.x + fz * col * F.sx - fx * row * F.sz, 0, d.pos.z - fx * col * F.sx - fz * row * F.sz);
+        // a shield wall holds its line: it only fights what comes within arm's reach
+        const wall = fac.formation === 'shieldwall' && !this.ranged;
+        engage = this.ranged ? this.range : wall ? 2.8 : 5;
+        anchor = this.goal; leash = this.ranged ? this.range + 5 : wall ? 3 : 8;
         break;
       }
       case 'charge':
@@ -313,6 +358,7 @@ export class Unit {
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;
     if (this.blockFlash > 0) this.blockFlash -= dt;
+    if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 6) g.fx.frost(this.chest(new THREE.Vector3()), 1); }
 
     let moving = false;
     const tgt = this.target;
@@ -359,7 +405,10 @@ export class Unit {
     }
     if (this.post) this.pos.copy(this.post.pos);
 
+    const fac = g.factions[this.team];
+    this.braced = this.order === 'hold' && !this.ranged && this.hasShield && fac && fac.formation === 'shieldwall' && this.swingT < 0;
     if (face) this.faceTo(face, dt);
+    else if (!moving && this.order === 'hold' && this.orderData) this.turnTo(this.orderData.yaw, dt);
     else if (moving) {
       if (this.vel.lengthSq() > 0.1) this.turnTo(Math.atan2(this.vel.x, this.vel.z), dt);
     } else if (this.post) {
@@ -388,7 +437,10 @@ export class Unit {
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     const d = Math.hypot(dx, dz);
     if (d < stopDist) return false;
-    const sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
+    const fac = this.game.factions[this.team];
+    let sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
+    if (this.slowT > 0) sp *= 0.5;
+    if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;
     const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
     this.vel.x += ((dx / d) * sp - this.vel.x) * k;
     this.vel.z += ((dz / d) * sp - this.vel.z) * k;
@@ -460,7 +512,7 @@ export class Unit {
   startAttack() {
     this.swingT = 0;
     this.struck = false;
-    this.attackDir = this.chooseAttackDir();
+    this.attackDir = this.def.spell ? 'thrust' : this.chooseAttackDir();
     this.feint = this.isHero && !this.ranged && Math.random() < 0.22;
     this.attackTimer = this.cd * (0.9 + Math.random() * 0.2);
     if (!this.ranged) this.game.audio.play('swing', this.pos);
@@ -481,7 +533,15 @@ export class Unit {
       this.struck = true;
       const t = this.target;
       if (t && t.alive) {
-        if (this.ranged && !t.isStructure) {
+        if (this.def.spell && !t.isStructure) {
+          // casters hurl their spell straight at where the target will be
+          const from = this.chest(new THREE.Vector3());
+          from.y += 0.3;
+          const aim = t.chest ? t.chest(new THREE.Vector3()) : t.pos.clone();
+          const lead = from.distanceTo(aim) / 38;
+          if (t.vel) aim.addScaledVector(t.vel, lead * 0.8);
+          this.game.magic.cast(this, this.def.spell, from, aim.sub(from).normalize(), 0, this.dmg / 55);
+        } else if (this.ranged && !t.isStructure) {
           const from = this.chest(new THREE.Vector3());
           from.y += 0.25;
           this.game.projectiles.shootArrow(from, t, this.team, this.dmg, this, 0.035);
@@ -507,7 +567,7 @@ export class Unit {
     const stag = this.staggerT > 0 ? Math.min(1, this.staggerT / Math.max(0.2, (this.staggerMax || 0.5) * 0.5)) : 0;
     poseSoldier(this.model, {
       phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, attackDir: this.attackDir,
-      stagger: stag, blocking: this.blockFlash > 0, mounted: this.mounted, idle: this.idleT,
+      stagger: stag, blocking: this.blockFlash > 0 || this.braced, mounted: this.mounted, idle: this.idleT,
     });
   }
 
@@ -562,3 +622,6 @@ export function isEnemy(a, b) {
 }
 
 export { RAIDER_TEAM };
+
+const PLUME_GEO = new THREE.ConeGeometry(0.07, 0.34, 6);
+const PLUME_MATS = new Map();

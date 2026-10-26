@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, ROUNDS, START_GOLD, DIFFICULTY, BOUNTY,
-  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE,
+  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -20,6 +20,7 @@ import { buy } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
 import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
+import { Magic } from './magic.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -71,6 +72,7 @@ export class Game {
     this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene);
     this.projectiles = new Projectiles(this);
+    this.magic = new Magic(this);
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
@@ -137,7 +139,7 @@ export class Game {
         team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: human, heroDeaths: 0, respawnT: 0,
-        eliminated: false, kills: 0, siegeTarget: null,
+        eliminated: false, kills: 0, siegeTarget: null, formation: 'line',
       };
     });
     if (this.mode !== 'single') {
@@ -400,7 +402,7 @@ export class Game {
       return;
     }
     // soldiers may block with shield or weapon
-    if (!target.isPlayer && target.tryBlock && !info.splash && target.tryBlock(attacker, info)) {
+    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && target.tryBlock(attacker, info)) {
       const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
       this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
       this.audio.play('block', target.pos);
@@ -442,6 +444,7 @@ export class Game {
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
     target.takeDamage(dmg, attacker, info);
+    if (attacker && attacker.gainXp) attacker.gainXp(Math.min(dmg, 60) * 0.05);
   }
 
   credit(team, gold, at) {
@@ -462,6 +465,7 @@ export class Game {
     const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
     if (by !== u.team) this.credit(by, u.team === RAIDER_TEAM ? Math.round(bounty * (1 + this.round * 0.08)) : bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
+    if (attacker && attacker.gainXp && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
     if (u.isHero && u.type === 'lord') {
       const f = this.factions[u.team];
@@ -526,8 +530,10 @@ export class Game {
       const archers = r >= 2 ? Math.floor(n * 0.25) : 0;
       const brutes = r >= 4 ? Math.floor(n * 0.12) + Math.floor((r - 4) / 3) : 0;
       const riders = r >= 5 ? Math.floor(n * 0.15) : 0;
+      const shamans = r >= 6 ? 1 + Math.floor(n * 0.06) : 0;
       for (let i = 0; i < n; i++) {
-        list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : i < archers + brutes + riders ? 'raiderRider' : 'raider');
+        const k = i - archers - brutes - riders;
+        list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : i < archers + brutes + riders ? 'raiderRider' : k < shamans ? 'shaman' : 'raider');
       }
       if (boss) list.push('warlord');
       const ang = Math.atan2(c.center.x, c.center.z);
@@ -574,6 +580,8 @@ export class Game {
     for (const f of this.factions) if (!f.eliminated) this.credit(f.team, bonus);
     this.bannerAll(`Round ${this.round} survived`, `+${bonus} gold. Next wave in ${ROUNDS.prep}s`);
     for (const h of this.humans) h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 10);
+    // every soldier who lived through the wave learns from it
+    for (const u of this.units) if (u.alive && u.team !== RAIDER_TEAM && !u.isHero) u.gainXp(10);
   }
 
   updateRounds(dt) {
@@ -593,7 +601,7 @@ export class Game {
     const f = this.factions[team];
     const p = f.player;
     const inGroup = (u) => group === 'all' || (group === 'infantry' && u.kind === 'infantry') || (group === 'archers' && u.kind === 'archer') || (group === 'cavalry' && u.kind === 'cavalry');
-    const troops = this.units.filter((u) => u.alive && u.team === team && !u.isHero && inGroup(u));
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && inGroup(u)));
     if (!troops.length) { p.notify('You have no troops in that group. Recruit some in the shop (B).'); return; }
     let data = null;
     let label = '';
@@ -609,6 +617,70 @@ export class Game {
     p.notify(`${GROUP_NAMES[group]}: ${label}`);
     p.lastOrder = cmd;
     p.sound('order');
+  }
+
+  // infantry in front, archers behind them, cavalry at the back
+  sortForFormation(list) {
+    const rank = { infantry: 0, archer: 1, cavalry: 2 };
+    return list.sort((a, b) => (rank[a.kind] ?? 0) - (rank[b.kind] ?? 0));
+  }
+
+  setFormation(team, formation) {
+    const f = this.factions[team];
+    if (!FORMATIONS[formation]) return;
+    f.formation = formation;
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && (u.order === 'follow' || u.order === 'hold')));
+    troops.forEach((u, i) => { u.slot = i; u.thinkTimer = 0; });
+    if (f.player) {
+      const tips = { line: 'balanced ranks.', shieldwall: 'tight ranks, shields locked; they hold their ground and block far more.', loose: 'spread out, harder to hit with arrows and fire.' };
+      f.player.notify(`Formation: ${FORMATIONS[formation].name}, ${tips[formation]}`);
+      f.player.sound('order');
+    }
+  }
+
+  localFormation() {
+    const f = this.localFaction;
+    const keys = Object.keys(FORMATIONS);
+    const next = keys[(keys.indexOf(f.formation || 'line') + 1) % keys.length];
+    if (this.mode === 'client') { f.formation = next; this.net.toHost({ a: 'formation', f: next }); this.ui.toast(`Formation: ${FORMATIONS[next].name}`); return; }
+    this.setFormation(this.localTeam, next);
+  }
+
+  onUnitRankUp(u) {
+    const f = this.factions[u.team];
+    if (!f || !f.isPlayer || u.rank < 4) return;
+    // don't flood the screen when several soldiers rank up together
+    if (this.time - (f.lastRankNote || -99) < 3) return;
+    f.lastRankNote = this.time;
+    f.player.notify(`Your ${u.name} has risen to rank ${'★'.repeat(u.rank)}`);
+  }
+
+  promotable(team) {
+    return this.units.filter((u) => u.alive && u.team === team && PROMOTIONS[u.type] && u.rank >= RANKS.promoteAt);
+  }
+
+  // Swap the most experienced eligible veteran for its elite type, keeping rank and orders.
+  promote(f) {
+    const list = this.promotable(f.team).sort((a, b) => b.xp - a.xp);
+    const old = list[0];
+    if (!old) return false;
+    old.leavePost();
+    const type = PROMOTIONS[old.type];
+    const t = UNIT_TYPES[type];
+    const k = this.trainMult(f);
+    const u = new Unit(this, type, f.team, old.pos, { hp: Math.round(t.hp * k), dmg: t.dmg * k, variant: old.variant });
+    u.homeCastle = old.homeCastle;
+    u.slot = old.slot;
+    u.yaw = old.yaw;
+    u.setOrder(old.order, old.orderData);
+    if (old.order === 'hold') u.orderData = old.orderData;
+    u.xp = old.xp;
+    for (let r = 2; r <= old.rank; r++) { u.rank = r; u.applyRankBonus(); }
+    old.remove();
+    this.units[this.units.indexOf(old)] = u;
+    this.fx.gold(u.chest(new THREE.Vector3()));
+    if (f.player) f.player.notify(`A veteran ${old.name} is promoted to ${u.name}!`);
+    return true;
   }
 
   // The local player presses an order key.
@@ -642,6 +714,7 @@ export class Game {
     if (i.hit('F3') || i.hit('KeyC')) this.localOrder('charge');
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
+    if (i.hit('KeyF')) this.localFormation();
     if (i.hit('KeyG')) {
       const p = this.player;
       p.group = GROUPS[(GROUPS.indexOf(p.group || 'all') + 1) % GROUPS.length];
@@ -777,6 +850,7 @@ export class Game {
       if (this.simulating) this.updateTowers(c, dt);
     }
     this.fx.update(dt);
+    this.magic.update(dt);
     this.grass.update(dt, this.camera.position);
 
     if (this.simulating && this.state === 'playing') {

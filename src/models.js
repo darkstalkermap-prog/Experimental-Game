@@ -85,6 +85,11 @@ function weaponGeo(kind) {
     parts.push(part(p.cyl8, WOOD, [0, -0.36, 0], [0, 0, 0], [0.045, 0.92, 0.045]));
     parts.push(part(p.box, IRON, [0, -0.74, 0.1], [0, 0, 0], [0.03, 0.22, 0.22]));
     parts.push(part(p.box, STEEL, [0, -0.74, 0.215], [0, 0, 0], [0.034, 0.26, 0.02]));
+  } else if (kind === 'staff') {
+    parts.push(part(p.cyl8, 0x4a3420, [0, -0.45, 0], [0, 0, 0], [0.05, 1.7, 0.05]));
+    parts.push(part(p.sphere, 0xff9a3a, [0, -1.36, 0], [0, 0, 0], [0.16, 0.16, 0.16]));
+    parts.push(part(p.cone, 0xe8dcc0, [0.06, -1.25, 0], [0, 0, 2.6], [0.04, 0.2, 0.04]));
+    parts.push(part(p.cone, 0xe8dcc0, [-0.06, -1.25, 0], [0, 0, -2.6], [0.04, 0.2, 0.04]));
   } else if (kind === 'greataxe') {
     parts.push(part(p.cyl8, WOOD, [0, -0.6, 0], [0, 0, 0], [0.055, 1.6, 0.055]));
     parts.push(part(p.box, IRON, [0, -1.25, 0.16], [0, 0, 0], [0.04, 0.42, 0.34]));
@@ -94,7 +99,7 @@ function weaponGeo(kind) {
   return parts.length ? mergeGeometries(parts) : null;
 }
 
-export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, bow: 0 };
+export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, staff: -2.6, bow: 0 };
 
 function shieldParts(kind, cloth, raider, out) {
   const p = prims();
@@ -237,7 +242,7 @@ export function getModelGeos(type, team, variant = 0) {
     torso.push(part(p.box, cloth, [0, 1.0, -0.17], [0.1, 0, 0], [0.5, 1.0, 0.025]));
     torso.push(part(p.box, GOLD, [0, 1.47, -0.15], [0, 0, 0], [0.5, 0.04, 0.03]));
   }
-  if (t.ranged) {
+  if (t.weapon === 'bow') {
     torso.push(part(p.cyl8, LEATHER, [0.13, 1.25, -0.17], [0, 0, 0.35], [0.12, 0.55, 0.12]));
     for (let i = 0; i < 4; i++) torso.push(part(p.box, 0xe8e0d0, [0.21 + i * 0.012, 1.55, -0.17 + (i % 2) * 0.03], [0, 0, 0.35], [0.02, 0.1, 0.005]));
   }
@@ -337,7 +342,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
     weapon.add(mk(geos.weapon));
     elR.add(weapon);
   }
-  return { weaponTilt: WEAPON_TILT[t.weapon] ?? -1, root, body, torso, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, ranged: !!t.ranged, lance: t.weapon === 'lance' };
+  return { weaponTilt: WEAPON_TILT[t.weapon] ?? -1, root, body, torso, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, ranged: t.weapon === 'bow', lance: t.weapon === 'lance' };
 }
 
 // Arm keyframes per attack direction: [shoulder x, elbow x, shoulder z, torso twist, weapon tilt offset]

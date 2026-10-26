@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, SPELLS, MANA, PROMOTIONS, RANKS } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 
 const heroLv = (g, f) => (f.isPlayer ? f.player.lv : f.heroLv);
@@ -38,6 +38,16 @@ export const SHOP = [
     apply: (g, f) => { f.training++; g.applyTraining(f); },
   },
 
+  {
+    id: 'promote', tab: 'army', name: 'Promote a Veteran',
+    desc: (g, f) => {
+      const n = g.promotable(f.team).length;
+      return `Raise a rank ${'★'.repeat(RANKS.promoteAt)} soldier to an elite (Swordsman/Spearman → Knight, Archer → Longbowman, Cavalry → Lancer), keeping their rank. ${n} ready.`;
+    },
+    cost: () => 70,
+    can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : g.promotable(f.team).length ? true : 'No veterans ready'),
+    apply: (g, f) => g.promote(f),
+  },
   {
     id: 'repair_gate', tab: 'castle', name: 'Repair Gate',
     desc: (g, f) => (f.castle.gate.alive ? `Gate ${Math.round(f.castle.gate.hp)}/${Math.round(f.castle.gate.maxHp)}` : 'Rebuild the destroyed gate'),
@@ -164,6 +174,48 @@ export const SHOP = [
     apply: (g, f) => { f.player.potions++; },
   },
 
+  {
+    id: 'spell_fireball', tab: 'magic', name: SPELLS.fireball.name, playerOnly: true,
+    desc: () => `${SPELLS.fireball.desc} ${SPELLS.fireball.cost} mana.`,
+    cost: () => SPELLS.fireball.price,
+    can: (g, f) => (f.player.spells.includes('fireball') ? 'Learned' : true),
+    apply: (g, f) => f.player.learnSpell('fireball'),
+  },
+  {
+    id: 'spell_lightning', tab: 'magic', name: SPELLS.lightning.name, playerOnly: true,
+    desc: () => `${SPELLS.lightning.desc} ${SPELLS.lightning.cost} mana.`,
+    cost: () => SPELLS.lightning.price,
+    can: (g, f) => (f.player.spells.includes('lightning') ? 'Learned' : true),
+    apply: (g, f) => f.player.learnSpell('lightning'),
+  },
+  {
+    id: 'spell_ice', tab: 'magic', name: SPELLS.ice.name, playerOnly: true,
+    desc: () => `${SPELLS.ice.desc} ${SPELLS.ice.cost} mana.`,
+    cost: () => SPELLS.ice.price,
+    can: (g, f) => (f.player.spells.includes('ice') ? 'Learned' : true),
+    apply: (g, f) => f.player.learnSpell('ice'),
+  },
+  {
+    id: 'arcane', tab: 'magic', name: 'Destruction Mastery', playerOnly: true,
+    desc: (g, f) => `All spells deal +25% damage (level ${f.player.lv.magic || 0}/4)`,
+    cost: (g, f) => 250 * ((f.player.lv.magic || 0) + 1),
+    can: (g, f) => (!f.player.spells.length ? 'Learn a spell first' : (f.player.lv.magic || 0) >= 4 ? 'Maximum' : true),
+    apply: (g, f) => { f.player.lv.magic = (f.player.lv.magic || 0) + 1; },
+  },
+  {
+    id: 'mana_pool', tab: 'magic', name: 'Deep Mana Well', playerOnly: true,
+    desc: (g, f) => `Max mana ${f.player.manaMax} → ${f.player.manaMax + MANA.perLevel} (level ${f.player.lv.mana || 0}/4)`,
+    cost: (g, f) => 200 * ((f.player.lv.mana || 0) + 1),
+    can: (g, f) => ((f.player.lv.mana || 0) >= 4 ? 'Maximum' : true),
+    apply: (g, f) => { f.player.lv.mana = (f.player.lv.mana || 0) + 1; f.player.mana += MANA.perLevel; },
+  },
+  {
+    id: 'mana_regen', tab: 'magic', name: 'Arcane Recovery', playerOnly: true,
+    desc: (g, f) => `Mana regenerates ${Math.round(MANA.regenPerLevel * 100)}% faster (level ${f.player.lv.regen || 0}/3)`,
+    cost: (g, f) => 200 * ((f.player.lv.regen || 0) + 1),
+    can: (g, f) => ((f.player.lv.regen || 0) >= 3 ? 'Maximum' : true),
+    apply: (g, f) => { f.player.lv.regen = (f.player.lv.regen || 0) + 1; },
+  },
   {
     id: 'ram', tab: 'siege', name: SIEGE_TYPES.ram.name,
     desc: (g, f) => `${SIEGE_TYPES.ram.hp} HP. Rolls to the target's gate and smashes it, then the keep. Target: ${g.targetName(f)}`,

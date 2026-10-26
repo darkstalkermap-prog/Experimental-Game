@@ -50,7 +50,7 @@ export const DIFFICULTY = {
 // Gold rewards for kills, by victim kind.
 export const BOUNTY = {
   raider: 10, raiderArcher: 12, brute: 35, warlord: 250,
-  raiderRider: 30, horseman: 50, lancer: 65,
+  raiderRider: 30, shaman: 30, longbowman: 30, horseman: 50, lancer: 65,
   swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120,
   ram: 120, catapult: 180,
   gate: 200,
@@ -75,6 +75,8 @@ export const UNIT_TYPES = {
     weapon: 'bow', helmet: 'hood', body: 'gambeson', cost: 60, kind: 'archer', ranged: true },
   knight: { name: 'Knight', hp: 240, dmg: 26, armor: 7, speed: 4.1, range: 2.1, cd: 1.2,
     weapon: 'sword', shield: 'kite', helmet: 'great', body: 'plate', cost: 130, kind: 'infantry', scale: 1.08 },
+  longbowman: { name: 'Longbowman', hp: 95, dmg: 20, armor: 3, speed: 4.5, range: 54, cd: 2.0,
+    weapon: 'bow', helmet: 'nasal', body: 'mail', kind: 'archer', ranged: true, promoteOnly: true },
   horseman: { name: 'Cavalry', hp: 260, dmg: 22, armor: 5, speed: 8.6, range: 2.6, cd: 1.4,
     weapon: 'sword', shield: 'kite', helmet: 'nasal', body: 'mail', cost: 160, kind: 'cavalry', mounted: true },
   lancer: { name: 'Lancer', hp: 300, dmg: 30, armor: 7, speed: 9.2, range: 3.4, cd: 2.0,
@@ -88,6 +90,8 @@ export const UNIT_TYPES = {
     weapon: 'bow', helmet: 'hood', body: 'leather', kind: 'archer', ranged: true },
   raiderRider: { name: 'Raider Rider', hp: 150, dmg: 15, armor: 2, speed: 8.2, range: 2.5, cd: 1.4,
     weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'cavalry', mounted: true },
+  shaman: { name: 'Raider Shaman', hp: 70, dmg: 26, armor: 0, speed: 4.2, range: 34, cd: 3.4,
+    weapon: 'staff', helmet: 'hood', body: 'fur', kind: 'archer', ranged: true, spell: 'fireball' },
   brute: { name: 'Brute', hp: 260, dmg: 22, armor: 4, speed: 3.8, range: 2.4, cd: 1.6,
     weapon: 'greataxe', helmet: 'horned', body: 'fur', scale: 1.25, kind: 'infantry', siegeBonus: 1.5, structMult: 1.5 },
   warlord: { name: 'Raider Warlord', hp: 1000, dmg: 36, armor: 8, speed: 4.2, range: 2.6, cd: 1.3,
@@ -115,3 +119,25 @@ export const PLAYER = {
 };
 
 export const TROOP_CAP = { start: 12, step: 6, max: 36 };
+
+// Formations for your troops when they follow you or hold a position.
+export const FORMATIONS = {
+  line: { name: 'Line', cols: 8, sx: 1.7, sz: 1.9 },
+  shieldwall: { name: 'Shield Wall', cols: 10, sx: 1.05, sz: 1.3 },
+  loose: { name: 'Loose', cols: 6, sx: 3.4, sz: 3.4 },
+};
+
+// Troop experience: XP needed for ranks 2..5, and what each rank adds.
+export const RANKS = { xp: [0, 30, 80, 160, 300], hp: 0.12, dmg: 0.1, armor: 1, promoteAt: 4 };
+export const PROMOTIONS = { swordsman: 'knight', spearman: 'knight', archer: 'longbowman', horseman: 'lancer' };
+
+// Skyrim-style spells: they fly straight where you aim and are blocked by walls and hills.
+export const SPELLS = {
+  fireball: { name: 'Fireball', cost: 30, dmg: 55, radius: 3.6, speed: 38, charge: 0.8, color: 0xff7a1a, price: 350,
+    desc: 'Hold to charge, release to hurl a fireball that explodes on impact.' },
+  lightning: { name: 'Chain Lightning', cost: 25, dmg: 42, range: 46, chain: 2, chainRange: 9, cd: 0.6, color: 0x9fd8ff, price: 500,
+    desc: 'An instant bolt to whatever you aim at that jumps to two more enemies in sight.' },
+  ice: { name: 'Ice Spike', cost: 20, dmg: 45, speed: 55, pierce: 3, slow: 3, color: 0xbfe8ff, price: 400,
+    desc: 'A fast shard that pierces up to three enemies and slows them.' },
+};
+export const MANA = { base: 100, perLevel: 25, regen: 7, regenPerLevel: 0.4, delay: 1.4 };

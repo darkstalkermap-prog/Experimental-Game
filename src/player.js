@@ -1,6 +1,6 @@
 // The hero: first-person movement, sword & shield, bow, potions, and the view-model.
 import * as THREE from 'three';
-import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM } from './config.js';
+import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, SPELLS, MANA } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
@@ -49,7 +49,13 @@ export class Player {
     this.pitch = 0;
     this.onGround = true;
     this.alive = true;
-    this.lv = { vitality: 0, strength: 0, armor: 0, sword: 0, shield: 0, bow: 0 };
+    this.lv = { vitality: 0, strength: 0, armor: 0, sword: 0, shield: 0, bow: 0, magic: 0, mana: 0, regen: 0, spells: [] };
+    this.mana = MANA.base;
+    this.spell = null;      // selected spell
+    this.castT = 0;         // how long the cast button has been held
+    this.lastCast = -99;
+    this.spellCd = 0;
+    this.castFlash = 0;
     this.maxHp = PLAYER.hp;
     this.hp = this.maxHp;
     this.stamina = 100;
@@ -187,6 +193,15 @@ export class Player {
   get sword() { return SWORDS[this.lv.sword]; }
   get shield() { return SHIELDS[this.lv.shield]; }
   get bow() { return BOWS[this.lv.bow]; }
+  get manaMax() { return MANA.base + MANA.perLevel * (this.lv.mana || 0); }
+  get manaRegen() { return MANA.regen * (1 + MANA.regenPerLevel * (this.lv.regen || 0)); }
+  get spellMult() { return 1 + 0.25 * (this.lv.magic || 0); }
+  get spells() { return this.lv.spells || []; }
+
+  learnSpell(id) {
+    if (!this.lv.spells.includes(id)) this.lv.spells = [...this.lv.spells, id];
+    if (!this.spell) this.spell = id;
+  }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + 1.25, this.pos.z); }
 
   recalc() {
@@ -207,6 +222,7 @@ export class Player {
     this.stamina = 100;
     this.alive = true;
     this.swingT = -1;
+    this.mana = this.manaMax;
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
@@ -339,7 +355,26 @@ export class Player {
     this.vmSword = new THREE.Group();
     this.vmShield = new THREE.Group();
     this.vmBow = new THREE.Group();
-    vm.add(this.vmSword, this.vmShield, this.vmBow);
+    this.vmMagic = new THREE.Group();
+    vm.add(this.vmSword, this.vmShield, this.vmBow, this.vmMagic);
+    // spell hand: an open glove with a flame / frost / spark orb above the palm
+    const glove = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.9 });
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.12), glove);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.22, 8), glove);
+    wrist.rotation.x = Math.PI / 2; wrist.position.z = 0.15;
+    const fingers = new THREE.Group();
+    for (let i = 0; i < 4; i++) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.022, 0.08), glove);
+      f.position.set(-0.035 + i * 0.023, 0.025, -0.08);
+      f.rotation.x = 0.6;
+      fingers.add(f);
+    }
+    this.vmOrbMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+    this.vmOrb = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), this.vmOrbMat);
+    this.vmOrb.position.set(0, 0.09, -0.04);
+    this.vmMagic.add(palm, wrist, fingers, this.vmOrb);
+    this.vmMagic.position.set(0.24, -0.3, -0.48);
+    this.vmMagic.rotation.set(0.2, -0.15, 0);
     this.rebuildWeapons();
   }
 
@@ -423,9 +458,28 @@ export class Player {
   updateViewModel(dt, moving, sprint) {
     const vm = this.viewModel;
     const swordMode = this.weapon === 'sword';
+    const magicMode = this.weapon === 'magic';
+    this.vmMagic.visible = magicMode;
+    if (magicMode) {
+      const s = SPELLS[this.spell];
+      const ready = s && this.mana >= s.cost;
+      this.vmOrbMat.color.setHex(s ? s.color : 0x888888);
+      const charge = this.spell === 'fireball' ? Math.min(1, Math.max(0, (this.castT - 0.15) / SPELLS.fireball.charge)) : 0;
+      const pulse = 1 + Math.sin(this.game.time * 14) * 0.06;
+      this.vmOrb.scale.setScalar((ready ? 0.045 + charge * 0.06 : 0.025) * pulse);
+      this.vmOrbMat.opacity = ready ? 0.9 : 0.35;
+      this.vmMagic.position.set(0.24 - charge * 0.05, -0.3 + charge * 0.04, -0.48 + this.castFlash * 0.12);
+      if (ready && Math.random() < dt * 30) {
+        const wp = this.vmOrb.getWorldPosition(new THREE.Vector3());
+        if (this.spell === 'fireball') this.game.fx.orb(wp, new THREE.Color(0xff8a2a), 0.05 + charge * 0.06);
+        else if (this.spell === 'ice') this.game.fx.orb(wp, new THREE.Color(0xbfe8ff), 0.04);
+        else this.game.fx.orb(wp, new THREE.Color(0xcfeaff), 0.03);
+      }
+      this.castFlash = Math.max(0, (this.castFlash || 0) - dt * 5);
+    }
     this.vmSword.visible = swordMode;
     this.vmShield.visible = swordMode;
-    this.vmBow.visible = !swordMode;
+    this.vmBow.visible = this.weapon === 'bow';
     this.bob += dt * (moving ? (sprint ? 13 : 9) : 2);
     const bobAmt = moving ? (sprint ? 0.03 : 0.018) : 0.004;
     vm.position.set(Math.sin(this.bob * 0.5) * bobAmt, -Math.abs(Math.sin(this.bob)) * bobAmt, 0);
@@ -487,7 +541,18 @@ export class Player {
     // weapon switching
     if (input.hit('Digit1')) this.setWeapon('sword');
     if (input.hit('Digit2')) this.setWeapon('bow');
-    if (m.wheel) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
+    if (input.hit('Digit3')) {
+      if (this.weapon === 'magic') this.cycleSpell();
+      else this.setWeapon('magic');
+    }
+    if (input.hit('KeyR') && this.weapon === 'magic') this.cycleSpell();
+    if (m.wheel) {
+      const order = ['sword', 'bow'].concat(this.spells.length ? ['magic'] : []);
+      this.setWeapon(order[(order.indexOf(this.weapon) + (m.wheel > 0 ? 1 : order.length - 1)) % order.length]);
+    }
+    // mana comes back after a short pause in casting
+    if (g.time - this.lastCast > MANA.delay) this.mana = Math.min(this.manaMax, this.mana + this.manaRegen * dt);
+    this.spellCd = Math.max(0, this.spellCd - dt);
     if (input.hit('KeyQ')) this.drinkPotion();
 
     if (input.hit('KeyE')) this.toggleMount();
@@ -579,6 +644,10 @@ export class Player {
     } else if (this.weapon === 'sword') {
       this.swordInput(dt, m, aimDir);
       this.zoomed = false;
+    } else if (this.weapon === 'magic') {
+      this.blocking = false;
+      this.zoomed = false;
+      this.magicInput(dt, m);
     } else {
       this.blocking = false;
       if (m.left && this.arrows > 0) this.drawT += dt;
@@ -673,7 +742,56 @@ export class Player {
     if (this.game.mode === 'single') this.game.hitStop = heavy ? 0.09 : 0.05;
   }
 
+  // Fireball: hold to charge, release to cast. Ice and lightning cast on click.
+  magicInput(dt, m) {
+    const s = SPELLS[this.spell];
+    if (!s) return;
+    if (this.spell === 'fireball') {
+      if (m.left) this.castT += dt;
+      if (m.leftReleased && this.castT > 0) {
+        if (this.castT >= 0.15) this.castSpell(Math.min(1, (this.castT - 0.15) / s.charge));
+        this.castT = 0;
+      }
+      if (!m.left && !m.leftReleased) this.castT = 0;
+    } else if (m.leftPressed) this.castSpell(0);
+  }
+
+  castSpell(charge) {
+    const g = this.game;
+    const s = SPELLS[this.spell];
+    if (this.mana < s.cost || this.spellCd > 0) { g.audio.play('deny'); return; }
+    this.mana -= s.cost;
+    this.lastCast = g.time;
+    this.spellCd = s.cd || 0.35;
+    this.castFlash = 1;
+    const dir = this.lookDir();
+    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
+    const from = this.camera.position.clone().addScaledVector(dir, 0.8).addScaledVector(right, -0.18);
+    from.y -= 0.15;
+    // aim from the hand at the point under the crosshair so the spell lands where you look
+    const aimPt = this.camera.position.clone().addScaledVector(dir, 40);
+    const d = aimPt.sub(from).normalize();
+    this.attackDir = 'thrust';
+    this.swingT = 0.25;
+    if (this.netClient) {
+      g.net.toHost({ a: 'cast', s: this.spell, f: [from.x, from.y, from.z].map(r2), d: [d.x, d.y, d.z].map((x) => Math.round(x * 1e4) / 1e4), ch: r2(charge) });
+      return;
+    }
+    g.magic.cast(this, this.spell, from, d, charge, this.spellMult);
+  }
+
+  cycleSpell() {
+    const list = this.spells;
+    if (!list.length) return;
+    this.spell = list[(list.indexOf(this.spell) + 1) % list.length];
+    this.castT = 0;
+    this.notify(`Spell: ${SPELLS[this.spell].name}`);
+  }
+
   setWeapon(w) {
+    if (w === 'magic' && !this.spells.length) { this.notify('You know no spells yet. Learn them in the shop (B → Magic).'); return; }
+    if (w === 'magic' && !this.spell) this.spell = this.spells[0];
+    this.castT = 0;
     if (this.weapon === w) return;
     this.weapon = w;
     this.swingT = -1;

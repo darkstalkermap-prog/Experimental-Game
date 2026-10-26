@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { TEAM_CSS, PLAYER_TEAM, RAIDER_TEAM, WORLD, CASTLE, ROUNDS } from './config.js';
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
+import { SPELLS, FORMATIONS } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -232,6 +233,8 @@ export class UI {
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
+    $('mnbar').classList.toggle('hidden', !p.spells.length);
+    $('mnFill').style.width = `${(p.mana / p.manaMax) * 100}%`;
     $('crosshair').classList.toggle('block', p.blocking);
     this.updateDirs();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
@@ -249,12 +252,16 @@ export class UI {
         $('phase').textContent = `${left} raiders remain`;
       }
       $('war').textContent = g.round < ROUNDS.warRound ? `Rival lords attack from round ${ROUNDS.warRound}` : 'War: rival lords are attacking!';
-      $('weapon').textContent = p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}` : `${p.bow.name} · ${p.arrows} arrows`;
+      $('weapon').textContent = p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
+        : p.weapon === 'bow' ? `${p.bow.name} · ${p.arrows} arrows`
+        : `${SPELLS[p.spell] ? SPELLS[p.spell].name : 'Magic'} · ${Math.floor(p.mana)}/${p.manaMax} mana${p.spells.length > 1 ? ' (R: next)' : ''}`;
       $('potions').textContent = `Potions ${p.potions} (Q)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
       const troops = g.troopCount(g.localTeam);
       const grp = { all: 'All troops', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
       const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
-      $('army').textContent = `${troops}/${f.troopCap} troops · ${grp} · ${ord}`;
+      const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
+      const form = FORMATIONS[f.formation || 'line'].name;
+      $('army').textContent = `${troops}/${f.troopCap} troops${vets ? ` (${vets}★)` : ''} · ${form} · ${grp} · ${ord}`;
       this.renderFactions();
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
@@ -329,7 +336,7 @@ export class UI {
     let name;
     if (o.kind === 'gate') name = `${fac.name} – Gate`;
     else if (o.isSiege) name = `${o.name}${team === RAIDER_TEAM ? ' (Raiders)' : ' – ' + fac.name}`;
-    else name = o.isHero ? `${o.name} – ${fac ? fac.name : 'Raiders'}` : `${o.name}${team === RAIDER_TEAM ? '' : ' – ' + fac.name}`;
+    else name = o.isHero ? `${o.name} – ${fac ? fac.name : 'Raiders'}` : `${o.name}${o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''}${team === RAIDER_TEAM ? '' : ' – ' + fac.name}`;
     el.classList.remove('hidden');
     $('targetName').textContent = name;
     $('targetName').style.color = TEAM_CSS[team];

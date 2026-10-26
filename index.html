@@ -91,6 +91,8 @@
   #stFill { background: linear-gradient(#d6c06a, #96803a); }
   #hpText { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 15px; text-shadow: 0 1px 2px #000; }
   #stbar { height: 7px; }
+  #mnbar { height: 7px; }
+  #mnFill { background: linear-gradient(#5aa0ff, #2a5cc8); }
   #weapon { font-family: Cinzel, serif; font-size: 14px; }
   #potions, #army { font-size: 14px; opacity: 0.9; }
 
@@ -214,7 +216,8 @@
       <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
       <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
       <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
-      <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
+      <b>1 / 2 / 3 / wheel</b><span>Sword &amp; shield / bow / magic</span>
+      <b>R (or 3 again)</b><span>Next spell · fireball: hold to charge</span>
       <b>Q</b><span>Healing draught</span>
       <b>E</b><span>Mount / dismount / call your horse</span>
       <b>B</b><span>Shop &amp; upgrades</span>
@@ -225,6 +228,7 @@
       <b>F4 / V</b><span>Troops: defend castle</span>
       <b>T</b><span>Troops: assault target castle</span>
       <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
+      <b>F</b><span>Formation: line / shield wall / loose</span>
     </div>
     <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
       <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
@@ -282,6 +286,7 @@
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
     <div class="bar" id="stbar"><div class="fill" id="stFill"></div></div>
+    <div class="bar hidden" id="mnbar"><div class="fill" id="mnFill"></div></div>
     <div id="weapon"></div>
     <div id="potions"></div>
     <div id="army"></div>
@@ -308,6 +313,7 @@
       <button data-tab="castle">Castle</button>
       <button data-tab="hero">Hero</button>
       <button data-tab="items">Items</button>
+      <button data-tab="magic">Magic</button>
       <button data-tab="siege">Siege</button>
     </div>
     <div id="shopGrid"></div>

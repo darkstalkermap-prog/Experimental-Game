@@ -50,6 +50,12 @@ export class HostSync {
       fire(from, vel, team, dmg, owner);
       this.shared.push({ k: 'arrow', p: v3(from), v: v3(vel), t: team });
     };
+    const spell = g.projectiles.fireSpell.bind(g.projectiles);
+    g.projectiles.fireSpell = (kind, from, vel, team, dmg, owner, radius = 0) => {
+      spell(kind, from, vel, team, dmg, owner, radius);
+      this.shared.push({ k: 'spell', s: kind, p: v3(from), v: v3(vel), t: team, r: r2(radius) });
+    };
+    g.magic.onBolt = (pts) => this.shared.push({ k: 'bolt', pts: pts.map(v3) });
     const rock = g.projectiles.throwBoulder.bind(g.projectiles);
     g.projectiles.throwBoulder = (from, to, team, dmg, owner, time = 3.2) => {
       rock(from, to, team, dmg, owner, time);
@@ -85,6 +91,13 @@ export class HostSync {
         if (p.alive && p.arrows > 0) p.fireFrom(vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.draw)));
         break;
       case 'potion': p.drinkPotion(); break;
+      case 'cast':
+        if (p.alive && p.spells.includes(d.s) && p.staggerT <= 0) {
+          p.swingT = 0.25; p.attackDir = 'thrust';
+          g.magic.cast(p, d.s, vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.ch || 0)), p.spellMult);
+        }
+        break;
+      case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'target': if (g.castles[d.team]) f.siegeTarget = g.castles[d.team]; break;
       case 'order':
@@ -105,7 +118,7 @@ export class HostSync {
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
-          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 ? 1 : 0];
+          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0, u.rank];
         if (u.isHero) a.push(u.name);
         return a;
       }),
@@ -114,7 +127,7 @@ export class HostSync {
       c: g.castles.map((c) => c.netState()),
       f: g.factions.map((f) => [Math.floor(f.gold), f.troopCap, f.training, f.eliminated ? 1 : 0, f.kills, f.heroDeaths,
         r1(f.respawnT), f.siegeTarget ? f.siegeTarget.team : -1, f.heroLv.vitality, f.heroLv.strength, f.heroLv.armor,
-        f.earned, f.isPlayer ? 1 : 0, f.lord, f.name]),
+        f.earned, f.isPlayer ? 1 : 0, f.lord, f.name, f.formation]),
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
         r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
@@ -164,7 +177,7 @@ export class ClientSync {
     // units
     const seen = new Set();
     for (const a of s.u) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, name] = a;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, rank, name] = a;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
@@ -185,6 +198,7 @@ export class ClientSync {
       u.attackDir = DIRS[dirIdx] || 'over';
       if (stag && u.staggerT <= 0) { u.staggerT = 0.4; u.staggerMax = 0.5; }
       if (blk) u.blockFlash = 0.2;
+      if (rank !== u.rank) u.setRankVisual(rank);
       u.hp = (hpPct / 100) * u.maxHp;
     }
     for (const [id, u] of this.units) {
@@ -232,6 +246,7 @@ export class ClientSync {
       f.heroLv = { vitality: a[8], strength: a[9], armor: a[10] };
       f.earned = a[11];
       f.lord = a[13]; f.name = a[14];
+      if (i !== g.localTeam || !f.formation) f.formation = a[15];
       if (!a[12] && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);
@@ -314,6 +329,8 @@ export class ClientSync {
       case 'snd': g.audio.play(ev.n, ev.p ? vec(ev.p) : null); break;
       case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null); break;
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;
+      case 'spell': g.projectiles.fireSpell(ev.s, vec(ev.p), vec(ev.v), ev.t, 0, null, ev.r); break;
+      case 'bolt': g.magic.showBolt(ev.pts.map(vec)); break;
       default: g.applyEvent(ev); break;
     }
   }

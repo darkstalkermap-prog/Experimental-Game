@@ -46,6 +46,7 @@ export class LordAI {
       if (!this.try('recruit_' + type)) break;
     }
     if (g.troopCount(f.team) >= f.troopCap && f.troopCap < TROOP_CAP.max && f.gold > 400) this.try('barracks');
+    if (f.gold > 220 && g.promotable(f.team).length) this.try('promote');
     if (f.gold > 650) {
       const opts = ['training', 'fortify_walls', 'reinforce_gate', 'towers', 'vitality', 'strength', 'armor'];
       this.try(opts[Math.floor(Math.random() * opts.length)]);

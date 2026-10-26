@@ -75,6 +75,23 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - Right-click during a wind-up to **feint**. Enemies who fall for it block far less for a moment.
   - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords and
     the Warlord block, feint, circle you, and aim for the side you aren't guarding.
+- **Magic** (Skyrim style): learn spells in the shop's Magic tab and switch to them with **3**. Spells fly in a
+  straight line to where you aim, and walls, keeps and hills block them. Mana refills after a short pause in
+  casting.
+  - **Fireball**: hold to charge, release to throw. It explodes on impact and burns gates and siege engines.
+    Stone walls shelter anyone behind them.
+  - **Chain Lightning**: instantly hits what you aim at, then jumps to two more enemies in sight.
+  - **Ice Spike**: a fast shard that pierces up to three enemies and slows them.
+  - Upgrades: Destruction Mastery (+25% spell damage per level), Deep Mana Well (more mana) and Arcane
+    Recovery (faster regeneration).
+  - From round 6, **Raider Shamans** throw fireballs at you and your troops.
+- **Formations**: press **F** to cycle Line, Shield Wall and Loose. They shape how your troops follow and hold:
+  infantry in front, archers behind, cavalry at the back. In a held **Shield Wall**, shielded infantry lock
+  shields, block most blows and arrows, and keep their line instead of chasing.
+- **Veterans**: soldiers earn experience from damage, kills and surviving waves, ranking up to ★★★★★ with
+  more health, damage and armour. From rank 3 they wear a plume, which turns gold at rank 5. Rank ★★★★
+  soldiers can be **promoted** in the shop (Army tab): Swordsman or Spearman to Knight, Archer to Longbowman,
+  Cavalry to Lancer. They keep their rank.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
 - **Death**: your hero respawns at the keep. Each death makes the wait longer. Once your keep falls, you can no
   longer respawn.
@@ -94,7 +111,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
 | Left click | Hold to wind up, release to strike; with the bow, hold and release to shoot |
 | Right click | Guard with your shield; feint while winding up; zoom with the bow |
-| 1 / 2 / mouse wheel | Switch between sword & shield and bow |
+| 1 / 2 / 3 / mouse wheel | Sword & shield / bow / magic |
+| R (or 3 again) | Next spell |
 | Q | Drink a healing draught |
 | E | Mount or dismount your horse, or call it |
 | B | Open the shop |
@@ -105,6 +123,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | F4 or V | Troops: defend the castle |
 | T | Troops: assault the selected target castle |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
+| F | Cycle formation: line / shield wall / loose |
 | Esc | Pause |
 
 The stairs beside the gate lead up to the wall walk, so you can fight from the battlements.
@@ -122,6 +141,7 @@ The stairs beside the gate lead up to the wall walk, so you can fight from the b
 | `src/siege.js` | Battering rams and catapults |
 | `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
 | `src/combat.js` | Shared rules for attack and guard directions |
+| `src/magic.js` | Spells: casting, chain lightning, flashes (fireball and ice fly via `projectiles.js`) |
 | `src/grass.js` | Wind-swept grass that grows around the camera |
 | `src/ai.js` | Rival lord strategy |
 | `src/economy.js` | Shop items, shared by the player and the AI |
