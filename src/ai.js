@@ -41,6 +41,8 @@ export class LordAI {
       const r = Math.random();
       let type = r < 0.38 ? 'swordsman' : r < 0.62 ? 'spearman' : 'archer';
       if (f.gold > 450 && round >= 4 && Math.random() < 0.3) type = 'knight';
+      else if (f.gold > 300 && round >= 3 && Math.random() < 0.22) type = 'horseman';
+      else if (f.gold > 600 && round >= 6 && Math.random() < 0.15) type = 'lancer';
       if (!this.try('recruit_' + type)) break;
     }
     if (g.troopCount(f.team) >= f.troopCap && f.troopCap < TROOP_CAP.max && f.gold > 400) this.try('barracks');
@@ -95,7 +97,7 @@ export class LordAI {
     if (!best) return;
     f.siegeTarget = best;
     this.assault = { castle: best, since: g.time };
-    const send = troops.filter((u) => u.kind === 'infantry' || Math.random() < 0.5);
+    const send = troops.filter((u) => u.kind === 'infantry' || u.kind === 'cavalry' || Math.random() < 0.5);
     for (const u of send) u.setOrder('assault', best);
     if (f.hero && f.hero.alive && Math.random() < 0.6) f.hero.setOrder('assault', best);
     if (best.gate.alive && f.gold >= 450) this.try('ram');

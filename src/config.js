@@ -50,6 +50,7 @@ export const DIFFICULTY = {
 // Gold rewards for kills, by victim kind.
 export const BOUNTY = {
   raider: 10, raiderArcher: 12, brute: 35, warlord: 250,
+  raiderRider: 30, horseman: 50, lancer: 65,
   swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120,
   ram: 120, catapult: 180,
   gate: 200,
@@ -74,6 +75,10 @@ export const UNIT_TYPES = {
     weapon: 'bow', helmet: 'hood', body: 'gambeson', cost: 60, kind: 'archer', ranged: true },
   knight: { name: 'Knight', hp: 240, dmg: 26, armor: 7, speed: 4.1, range: 2.1, cd: 1.2,
     weapon: 'sword', shield: 'kite', helmet: 'great', body: 'plate', cost: 130, kind: 'infantry', scale: 1.08 },
+  horseman: { name: 'Cavalry', hp: 260, dmg: 22, armor: 5, speed: 8.6, range: 2.6, cd: 1.4,
+    weapon: 'sword', shield: 'kite', helmet: 'nasal', body: 'mail', cost: 160, kind: 'cavalry', mounted: true },
+  lancer: { name: 'Lancer', hp: 300, dmg: 30, armor: 7, speed: 9.2, range: 3.4, cd: 2.0,
+    weapon: 'lance', shield: 'kite', helmet: 'great', body: 'plate', cost: 220, kind: 'cavalry', mounted: true },
   lord: { name: 'Lord', hp: 340, dmg: 30, armor: 7, speed: 5.0, range: 2.2, cd: 1.0,
     weapon: 'sword', shield: 'kite', helmet: 'crown', body: 'plate', scale: 1.12, cape: true, kind: 'hero', structMult: 1.2 },
 
@@ -81,6 +86,8 @@ export const UNIT_TYPES = {
     weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'infantry' },
   raiderArcher: { name: 'Raider Archer', hp: 55, dmg: 9, armor: 0, speed: 4.4, range: 38, cd: 2.6,
     weapon: 'bow', helmet: 'hood', body: 'leather', kind: 'archer', ranged: true },
+  raiderRider: { name: 'Raider Rider', hp: 150, dmg: 15, armor: 2, speed: 8.2, range: 2.5, cd: 1.4,
+    weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'cavalry', mounted: true },
   brute: { name: 'Brute', hp: 260, dmg: 22, armor: 4, speed: 3.8, range: 2.4, cd: 1.6,
     weapon: 'greataxe', helmet: 'horned', body: 'fur', scale: 1.25, kind: 'infantry', siegeBonus: 1.5, structMult: 1.5 },
   warlord: { name: 'Raider Warlord', hp: 1000, dmg: 36, armor: 8, speed: 4.2, range: 2.6, cd: 1.3,

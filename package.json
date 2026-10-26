@@ -1,0 +1,15 @@
+{
+  "name": "castle-wars",
+  "version": "1.1.0",
+  "private": true,
+  "description": "First-person medieval castle siege game for up to 4 players",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

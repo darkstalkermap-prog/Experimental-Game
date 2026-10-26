@@ -150,6 +150,7 @@ export class Projectiles {
 
   rockImpact(p, at, col) {
     const g = this.game;
+    if (!g.simulating) return; // the host sends the impact effects
     g.fx.dust(at, 18, 2.2);
     g.audio.play('thud', at);
     if (col && col.ref && col.ref.takeDamage && col.ref.team !== p.team) {

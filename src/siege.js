@@ -2,14 +2,17 @@
 import * as THREE from 'three';
 import { SIEGE_TYPES, WORLD } from './config.js';
 import { materials, box, shadowed } from './materials.js';
-import { buildSoldier } from './models.js';
+import { buildSoldier, poseSoldier } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { RAIDER_TEAM } from './config.js';
 
+let NEXT_ID = 1;
+
 export class SiegeEngine {
   constructor(game, type, team, pos, targetCastle, stats = {}) {
     this.game = game;
+    this.id = NEXT_ID++;
     this.type = type;
     this.kind = type;
     this.isSiege = true;
@@ -41,7 +44,7 @@ export class SiegeEngine {
     for (const [x, z] of type === 'ram' ? [[-1.4, -1.5], [1.4, -1.5]] : [[-1.6, -2.6], [1.6, -2.6]]) {
       const s = buildSoldier(crewType, team);
       s.root.position.set(x, 0, z);
-      s.armL.rotation.x = s.armR.rotation.x = -1.3;
+      s.pushing = true;
       this.mesh.add(s.root);
       this.crew.push(s);
     }
@@ -232,19 +235,51 @@ export class SiegeEngine {
       this.turn(Math.atan2(dx, dz), dt);
       for (const w of this.wheels) w.rotation.x += dt * this.speed * 1.7;
       this.anim += dt * this.speed * 2;
-      for (const c of this.crew) {
-        c.legL.rotation.x = Math.sin(this.anim) * 0.6;
-        c.legR.rotation.x = -Math.sin(this.anim) * 0.6;
-      }
+      this.poseCrew(true);
     } else {
       this.vel.set(0, 0, 0);
+      this.poseCrew(false);
       if (faceTo) this.turn(Math.atan2(faceTo.x - this.pos.x, faceTo.z - this.pos.z), dt);
     }
     this.pos.y = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;
 
-    // animations
+    this.animateWeapon();
+  }
+
+  // network client: follow the host's position and animate
+  netUpdate(dt) {
+    const t = this.netTarget;
+    if (t) {
+      const k = Math.min(1, dt * 8);
+      this.pos.x += (t.x - this.pos.x) * k;
+      this.pos.y += (t.y - this.pos.y) * k;
+      this.pos.z += (t.z - this.pos.z) * k;
+      let d = t.yaw - this.yaw;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.yaw += d * k;
+    }
+    if (!this.alive) {
+      this.deadT += dt;
+      this.mesh.rotation.z = Math.min(0.35, this.deadT * 0.5);
+      this.mesh.position.set(this.pos.x, this.pos.y - Math.min(1.2, this.deadT * 0.3), this.pos.z);
+      return;
+    }
+    const moving = t && t.moving;
+    if (moving) {
+      for (const w of this.wheels) w.rotation.x += dt * this.speed * 1.7;
+      this.anim += dt * this.speed * 2;
+    }
+    this.poseCrew(moving);
+    this.timer -= dt;
+    this.animateWeapon();
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.yaw;
+  }
+
+  animateWeapon() {
     if (this.log) {
       const t = Math.max(0, this.timer);
       this.log.position.z = t > this.cd - 0.35 ? 1.0 - (this.cd - t) * 2.5 : -0.8 * Math.min(1, (this.cd - t) / this.cd * 1.5);
@@ -252,6 +287,16 @@ export class SiegeEngine {
     if (this.arm) {
       const since = this.cd - this.timer;
       this.arm.rotation.x = since < 0.25 ? 0.55 - (since / 0.25) * 2.0 : Math.min(0.55, -1.45 + (since - 0.25) * 0.6);
+    }
+  }
+
+  poseCrew(moving) {
+    for (const c of this.crew) {
+      poseSoldier(c, { phase: this.anim, speed: moving ? this.speed : 0, moving, swingT: -1 });
+      // hands on the frame
+      c.shL.rotation.set(-1.35, 0, 0.2); c.shR.rotation.set(-1.35, 0, -0.2);
+      c.elL.rotation.x = c.elR.rotation.x = -0.3;
+      c.torso.rotation.x = 0.25;
     }
   }
 

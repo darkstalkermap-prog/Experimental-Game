@@ -45,12 +45,11 @@ export class UI {
     b.classList.add('show');
   }
 
-  kill(attacker, victim) {
-    const name = (o) => (!o ? 'The fall' : o.isPlayer ? 'You' : o.isTower ? 'Tower archers' : o.name);
-    const team = (o) => (o && o.team !== undefined ? o.team : RAIDER_TEAM);
+  // a / v: [name, team] of the attacker and victim
+  kill(a, v) {
     const el = document.createElement('div');
     el.className = 'kill';
-    el.innerHTML = `<span style="color:${TEAM_CSS[team(attacker)]}">${esc(name(attacker))}</span> <span class="x">⚔</span> <span style="color:${TEAM_CSS[team(victim)]}">${esc(victim.isPlayer ? 'You' : victim.name)}</span>`;
+    el.innerHTML = `<span style="color:${TEAM_CSS[a[1]] || TEAM_CSS[RAIDER_TEAM]}">${esc(a[0])}</span> <span class="x">⚔</span> <span style="color:${TEAM_CSS[v[1]] || TEAM_CSS[RAIDER_TEAM]}">${esc(v[0])}</span>`;
     $('killfeed').prepend(el);
     setTimeout(() => el.remove(), 6000);
     while ($('killfeed').children.length > 6) $('killfeed').lastChild.remove();
@@ -93,10 +92,10 @@ export class UI {
 
   renderShop() {
     const g = this.game;
-    const f = g.factions[PLAYER_TEAM];
+    const f = g.localFaction;
     document.querySelectorAll('#shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
     $('shopGold').textContent = Math.floor(f.gold);
-    $('shopTroops').textContent = `${g.troopCount(PLAYER_TEAM)}/${f.troopCap}`;
+    $('shopTroops').textContent = `${g.troopCount(g.localTeam)}/${f.troopCap}`;
     const grid = $('shopGrid');
     grid.innerHTML = '';
     if (this.tab === 'siege') {
@@ -104,7 +103,7 @@ export class UI {
       sel.className = 'targets';
       sel.innerHTML = '<div class="label">Siege & assault target (T orders your troops to attack it):</div>';
       for (const c of g.castles) {
-        if (c.team === PLAYER_TEAM) continue;
+        if (c.team === g.localTeam) continue;
         const b = document.createElement('button');
         const fac = g.factions[c.team];
         const chosen = g.siegeTarget(f) === c;
@@ -112,7 +111,7 @@ export class UI {
         b.disabled = c.fallen;
         b.style.borderColor = TEAM_CSS[c.team];
         if (chosen) b.classList.add('active');
-        b.addEventListener('click', () => { f.siegeTarget = c; this.renderShop(); });
+        b.addEventListener('click', () => { g.setSiegeTarget(c); this.renderShop(); });
         sel.appendChild(b);
       }
       grid.appendChild(sel);
@@ -134,18 +133,40 @@ export class UI {
     }
   }
 
+  // ---------- lobby ----------
+  showLobby(code, isHost) {
+    $('menu').classList.add('hidden');
+    $('lobby').classList.remove('hidden');
+    $('roomCode').textContent = code;
+    $('roomUrl').textContent = location.origin;
+    $('lobbyHostCtl').classList.toggle('hidden', !isHost);
+    $('lobbyWait').classList.toggle('hidden', isHost);
+  }
+
+  renderLobby(players, myTeam = -1) {
+    const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
+    $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
+      <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle</b>
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') : '<i>AI lord</i>'}</span></li>`).join('');
+  }
+
+  lobbyError(msg) {
+    $('netMsg').textContent = msg;
+  }
+
   // ---------- menus ----------
   showPause(show) { $('pause').classList.toggle('hidden', !show); }
 
-  gameOver(won) {
+  gameOver(won, winner = -1, reason = '') {
     const g = this.game;
-    const f = g.factions[PLAYER_TEAM];
+    const f = g.localFaction;
+    const wf = g.factions[winner];
     $('gameover').classList.remove('hidden');
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
-    $('goText').textContent = won
+    $('goText').textContent = reason || (won
       ? 'Yours is the last castle standing. The realm bows to you.'
-      : 'Your castle has fallen and your hero lies dead.';
+      : wf ? `${wf.name} is the last castle standing.` : 'No castle is left standing.');
     $('goStats').innerHTML = `
       <div><b>${g.round}</b><span>rounds</span></div>
       <div><b>${g.player.kills}</b><span>your kills</span></div>
@@ -163,7 +184,11 @@ export class UI {
     const g = this.game;
     if (!g || g.state === 'menu' || g.state === 'loading') return;
     const p = g.player;
-    const f = g.factions[PLAYER_TEAM];
+    const f = g.localFaction;
+    if (this.shopOpen && g.mode === 'client') {
+      this.shopT = (this.shopT || 0) - dt;
+      if (this.shopT <= 0) { this.shopT = 0.3; this.renderShop(); }
+    }
 
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
@@ -185,10 +210,10 @@ export class UI {
       }
       $('war').textContent = g.round < ROUNDS.warRound ? `Rival lords attack from round ${ROUNDS.warRound}` : 'War: rival lords are attacking!';
       $('weapon').textContent = p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}` : `${p.bow.name} · ${p.arrows} arrows`;
-      $('potions').textContent = `Potions ${p.potions} (Q)`;
-      const troops = g.troopCount(PLAYER_TEAM);
-      const grp = { all: 'All troops', infantry: 'Infantry', archers: 'Archers' }[g.selectedGroup];
-      const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[this.lastOrder || 'defend'];
+      $('potions').textContent = `Potions ${p.potions} (Q)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
+      const troops = g.troopCount(g.localTeam);
+      const grp = { all: 'All troops', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
+      const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
       $('army').textContent = `${troops}/${f.troopCap} troops · ${grp} · ${ord}`;
       this.renderFactions();
       if (!p.alive) {
@@ -211,10 +236,10 @@ export class UI {
       const c = f.castle;
       const keep = Math.round((c.keep.hp / c.keep.maxHp) * 100);
       const gate = c.gate.alive ? Math.round((c.gate.hp / c.gate.maxHp) * 100) + '%' : 'BROKEN';
-      const heroAlive = f.isPlayer ? g.player.alive : f.hero && f.hero.alive;
+      const heroAlive = f.isPlayer && f.player ? f.player.alive : f.hero && f.hero.alive;
       const hero = f.eliminated ? '☠' : heroAlive ? '♚' : `⟳${Math.ceil(Math.max(0, f.respawnT))}`;
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${esc(f.isPlayer ? 'You' : f.name)}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -252,6 +277,7 @@ export class UI {
       if (Math.hypot(px, pz) < r + 0.25 && Math.abs(py) < h / 2 + 0.2) { bt = t; best = o; }
     };
     for (const u of g.units) check(u, u.radius, u.height);
+    for (const h of g.humans) if (h !== p) check(h, h.radius, h.mounted ? 2.8 : h.height);
     for (const s of g.siege) check(s, s.radius, 3);
     for (const c of g.castles) {
       if (c.gate.alive) check({ alive: true, pos: c.gatePos.clone().setY(c.center.y), ref: c.gate }, 3, CASTLE.gateH);
@@ -268,7 +294,7 @@ export class UI {
     $('targetName').textContent = name;
     $('targetName').style.color = TEAM_CSS[team];
     $('targetFill').style.width = `${(o.hp / o.maxHp) * 100}%`;
-    $('targetFill').style.background = team === PLAYER_TEAM ? '#4fa3ff' : '#d33';
+    $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : '#d33';
   }
 
   // ---------- minimap ----------
@@ -323,6 +349,13 @@ export class UI {
       ctx.fillRect(X(s.pos.x) - 3, X(s.pos.z) - 3, 6, 6);
       ctx.fillStyle = TEAM_CSS[s.team];
       ctx.fillRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+    }
+    for (const h of g.humans) {
+      if (h === g.player || !h.alive) continue;
+      ctx.fillStyle = TEAM_CSS[h.team];
+      ctx.fillRect(X(h.pos.x) - 3.5, X(h.pos.z) - 3.5, 7, 7);
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.strokeRect(X(h.pos.x) - 3.5, X(h.pos.z) - 3.5, 7, 7);
     }
     const p = g.player;
     if (p.alive) {

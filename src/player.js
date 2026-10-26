@@ -3,6 +3,10 @@ import * as THREE from 'three';
 import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
+import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
+import { avoidCastles } from './nav.js';
+
+export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
 const SWORDS = [
   { name: 'Arming Sword', dmg: 34, len: 0.95 },
@@ -20,15 +24,20 @@ const BOWS = [
 export { SWORDS, SHIELDS, BOWS };
 
 export class Player {
-  constructor(game, camera) {
+  constructor(game, camera, opts = {}) {
     this.game = game;
     this.camera = camera;
+    this.remote = !!opts.remote;   // another person's hero (driven by network updates)
+    this.netId = opts.netId ?? null;
     this.isPlayer = true;
     this.isHero = true;
     this.kind = 'hero';
     this.type = 'hero';
-    this.team = PLAYER_TEAM;
-    this.name = 'You';
+    this.team = opts.team ?? PLAYER_TEAM;
+    this.name = opts.name || 'You';
+    this.spawnSeq = 0;
+    this.netPose = null;
+    this.walkPhase = 0;
     this.radius = 0.4;
     this.height = 1.8;
     this.eye = 1.68;
@@ -57,8 +66,107 @@ export class Player {
     this.sensitivity = 0.0022;
     this.bob = 0;
     this.hurtFlash = 0;
-    this.buildViewModel();
+    // warhorse
+    this.hasHorse = false;
+    this.mounted = false;
+    this.horse = null;        // model
+    this.horseHp = 0;
+    this.horsePos = new THREE.Vector3();
+    this.horseYaw = 0;
+    this.horseComing = false;
+    this.heading = 0;
+    this.rideSpeed = 0;
+    this.trampled = new Map();
+    if (this.camera) this.buildViewModel();
+    if (this.remote) this.buildBody();
   }
+
+  // ---------- third-person body for other people's heroes ----------
+  buildBody() {
+    this.body = buildSoldier('lord', this.team, 2);
+    this.game.scene.add(this.body.root);
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 48;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 28px Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.strokeText(this.name, 128, 34);
+    ctx.fillStyle = '#' + TEAM_COLORS[this.team].toString(16).padStart(6, '0');
+    ctx.fillText(this.name, 128, 34);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    this.tag.scale.set(2.4, 0.45, 1);
+    this.tag.renderOrder = 10;
+    this.game.scene.add(this.tag);
+  }
+
+  removeBody() {
+    if (this.body) this.game.scene.remove(this.body.root);
+    if (this.tag) this.game.scene.remove(this.tag);
+    if (this.horse) this.game.scene.remove(this.horse.root);
+  }
+
+  updateBody(dt) {
+    if (!this.body) return;
+    const b = this.body;
+    b.root.visible = this.alive;
+    this.tag.visible = this.alive;
+    if (!this.alive) return;
+    const sp = Math.hypot(this.vel.x, this.vel.z);
+    this.walkPhase += dt * sp * 2.1;
+    b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
+    b.root.rotation.y = this.mounted ? this.heading : this.yaw;
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, mounted: this.mounted, blocking: this.blocking });
+    this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4), this.pos.z);
+  }
+
+  // apply the latest pose received over the network (smoothed)
+  remoteUpdate(dt) {
+    const n = this.netPose;
+    if (n) {
+      const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
+      const k = d > 8 ? 1 : Math.min(1, dt * 14);
+      this.pos.x += (n.x - this.pos.x) * k;
+      this.pos.y += (n.y - this.pos.y) * k;
+      this.pos.z += (n.z - this.pos.z) * k;
+      let dy = n.yaw - this.yaw;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      this.yaw += dy * Math.min(1, dt * 14);
+      this.pitch = n.pitch;
+      this.vel.set(n.vx, 0, n.vz);
+      this.blocking = !!n.b;
+      this.weapon = n.w ? 'bow' : 'sword';
+      this.mounted = !!n.m && this.hasHorse;
+      this.radius = this.mounted ? 0.8 : 0.4;
+      this.heading = n.h;
+      this.rideSpeed = n.rs;
+      if (!this.mounted && n.hx !== undefined) { this.horsePos.set(n.hx, n.hy, n.hz); this.horseYaw = n.hyaw; }
+    }
+    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.55) this.swingT = -1; }
+    if (this.game.mode !== 'client' && this.alive) {
+      if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
+      if (this.mounted) this.trample(dt);
+    }
+    this.updateBody(dt);
+  }
+
+  // pose sent from a client to the host
+  poseMsg() {
+    const m = { x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z), yaw: r2(this.yaw), pitch: r2(this.pitch),
+      vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
+      m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed) };
+    if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
+    return m;
+  }
+
+  notify(text, important = false) { this.game.deliver(this, { k: 'toast', text, team: this.team, imp: important }); }
+  sound(name) { this.game.deliver(this, { k: 'snd', n: name }); }
+  get isLocal() { return this === this.game.player; }
+  get netClient() { return this.isLocal && this.game.mode === 'client'; }
 
   get armor() { return PLAYER.armor + this.lv.armor * 3; }
   get dmgMult() { return 1 + this.lv.strength * 0.12; }
@@ -85,7 +193,128 @@ export class Player {
     this.stamina = 100;
     this.alive = true;
     this.swingT = -1;
-    this.viewModel.visible = true;
+    this.spawnSeq++;
+    if (this.viewModel) this.viewModel.visible = true;
+    this.mounted = false;
+    this.rideSpeed = 0;
+    this.radius = 0.4;
+    if (this.hasHorse) {
+      this.horsePos.set(at.x + 2.5, 0, at.z);
+      this.horsePos.y = this.game.physics.groundHeight(this.horsePos.x, this.horsePos.z, at.y + 3);
+      this.horseComing = false;
+    }
+  }
+
+  // ---------- warhorse ----------
+  ensureHorseModel() {
+    if (!this.horse) {
+      this.horse = buildHorse(this.team, 1, true);
+      this.game.scene.add(this.horse.root);
+    }
+  }
+
+  giveHorse() {
+    this.hasHorse = true;
+    this.horseHp = HORSE.hp;
+    this.horseDeadT = undefined;
+    this.ensureHorseModel();
+    this.horse.root.visible = true;
+    this.horse.root.rotation.set(0, 0, 0);
+    this.horsePos.copy(this.pos).add(new THREE.Vector3(Math.cos(this.yaw) * 2.5, 0, -Math.sin(this.yaw) * 2.5));
+    this.horsePos.y = this.game.physics.groundHeight(this.horsePos.x, this.horsePos.z, this.pos.y + 2);
+    this.horseYaw = this.yaw;
+  }
+
+  toggleMount() {
+    const g = this.game;
+    if (!this.hasHorse) { this.notify('You have no horse. Buy a Warhorse in the shop (B → Items).'); return; }
+    if (this.mounted) {
+      this.mounted = false;
+      this.radius = 0.4;
+      this.horsePos.copy(this.pos);
+      this.horseYaw = this.heading;
+      // step off to the left of the horse
+      const sx = Math.cos(this.heading), sz = -Math.sin(this.heading);
+      this.pos.x -= sx * 1.3; this.pos.z -= sz * 1.3;
+      g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team);
+      this.vel.set(0, 0, 0);
+      this.rideSpeed = 0;
+      return;
+    }
+    const d = Math.hypot(this.horsePos.x - this.pos.x, this.horsePos.z - this.pos.z);
+    if (d < 3.5) {
+      this.mounted = true;
+      this.horseComing = false;
+      this.radius = 0.8;
+      this.pos.x = this.horsePos.x; this.pos.z = this.horsePos.z;
+      this.heading = this.horseYaw;
+      this.swingT = -1;
+      this.drawT = 0;
+    } else {
+      this.horseComing = true;
+      this.notify('You whistle for your horse.');
+      this.sound('order');
+    }
+  }
+
+  loseHorse(silent = false) {
+    const g = this.game;
+    const wasMounted = this.mounted;
+    if (wasMounted) {
+      this.horsePos.copy(this.pos);
+      this.horseYaw = this.heading;
+      this.mounted = false;
+      this.radius = 0.4;
+      this.rideSpeed = 0;
+    }
+    this.hasHorse = false;
+    this.horseDeadT = 0;
+    g.fx.blood(this.horsePos.clone().setY(this.horsePos.y + 1.4), 20);
+    g.audio.play('death', this.horsePos);
+    if (!silent) this.notify('Your horse has been killed!', true);
+  }
+
+  // riderless horse: idle, or trot over when whistled; dead horse: topple and fade
+  updateHorse(dt) {
+    if (!this.horse) return;
+    const h = this.horse;
+    const g = this.game;
+    if (!this.hasHorse) {
+      if (this.horseDeadT === undefined) { h.root.visible = false; return; }
+      this.horseDeadT += dt;
+      h.root.rotation.z = Math.min(Math.PI / 2 * 0.95, this.horseDeadT * 3);
+      if (this.horseDeadT > 10) { h.root.visible = false; this.horseDeadT = undefined; }
+      return;
+    }
+    h.root.visible = true;
+    if (this.mounted) {
+      h.root.position.copy(this.pos);
+      h.root.rotation.set(0, this.heading, 0);
+      poseHorse(h, Math.abs(this.rideSpeed), dt);
+      return;
+    }
+    let sp = 0;
+    if (this.horseComing && this.alive) {
+      const d = Math.hypot(this.pos.x - this.horsePos.x, this.pos.z - this.horsePos.z);
+      if (d < 2.6) this.horseComing = false;
+      else {
+        const wp = avoidCastles(g, this.horsePos, this.pos);
+        const dx = wp.x - this.horsePos.x, dz = wp.z - this.horsePos.z;
+        const dl = Math.hypot(dx, dz) || 1;
+        sp = d > 12 ? 11 : 5;
+        this.horsePos.x += (dx / dl) * sp * dt;
+        this.horsePos.z += (dz / dl) * sp * dt;
+        g.physics.resolve(this.horsePos, 0.8, this.horsePos.y, 2.6, this.team);
+        let dy = Math.atan2(dx, dz) - this.horseYaw;
+        while (dy > Math.PI) dy -= Math.PI * 2;
+        while (dy < -Math.PI) dy += Math.PI * 2;
+        this.horseYaw += dy * Math.min(1, dt * 4);
+      }
+    }
+    this.horsePos.y = g.physics.groundHeight(this.horsePos.x, this.horsePos.z, this.horsePos.y + 0.5);
+    h.root.position.copy(this.horsePos);
+    h.root.rotation.set(0, this.horseYaw, 0);
+    poseHorse(h, sp, dt);
   }
 
   // ---------- view model ----------
@@ -101,10 +330,11 @@ export class Player {
   }
 
   rebuildWeapons() {
+    if (!this.camera) return;
     const steel = new THREE.MeshStandardMaterial({ color: 0xdfe3ea, metalness: 0.95, roughness: 0.22 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.8 });
     const gold = new THREE.MeshStandardMaterial({ color: 0xc9a040, metalness: 0.9, roughness: 0.3 });
-    const team = new THREE.MeshStandardMaterial({ color: TEAM_COLORS[PLAYER_TEAM], roughness: 0.75 });
+    const team = new THREE.MeshStandardMaterial({ color: TEAM_COLORS[this.team], roughness: 0.75 });
     const trim = new THREE.MeshStandardMaterial({ color: 0xe8d9a8, roughness: 0.7 });
     const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 });
     for (const g of [this.vmSword, this.vmShield, this.vmBow]) g.clear();
@@ -257,27 +487,55 @@ export class Player {
     if (m.wheel) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyQ')) this.drinkPotion();
 
+    if (input.hit('KeyE')) this.toggleMount();
+
     // movement
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    let mx = 0, mz = 0;
-    if (input.down('KeyW')) { mx += fx; mz += fz; }
-    if (input.down('KeyS')) { mx -= fx; mz -= fz; }
-    if (input.down('KeyA')) { mx += fz; mz -= fx; }
-    if (input.down('KeyD')) { mx -= fz; mz += fx; }
-    const ml = Math.hypot(mx, mz);
-    const moving = ml > 0.01;
-    let sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0;
-    let speed = sprint ? PLAYER.sprint : PLAYER.speed;
-    if (this.blocking) speed *= 0.55;
-    if (this.drawT > 0) speed *= 0.6;
-    if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18);
-    else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16));
-    const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
-    const acc = this.onGround ? 12 : 2.5;
-    this.vel.x += (tx - this.vel.x) * Math.min(1, dt * acc);
-    this.vel.z += (tz - this.vel.z) * Math.min(1, dt * acc);
+    let moving, sprint = false;
+    if (this.mounted) {
+      // the horse has momentum and turns toward where you look
+      let target = 0;
+      sprint = input.down('ShiftLeft') && this.stamina > 5;
+      if (input.down('KeyW')) target = sprint ? HORSE.gallop : HORSE.walk;
+      if (input.down('KeyS')) target = -HORSE.back;
+      const dv = target - this.rideSpeed;
+      this.rideSpeed += clamp(dv, -HORSE.brake * dt, HORSE.accel * dt);
+      if (sprint && this.rideSpeed > HORSE.walk) this.stamina = Math.max(0, this.stamina - dt * 9);
+      else this.stamina = Math.min(100, this.stamina + dt * 14);
+      let turn = 0;
+      if (input.down('KeyA')) turn += 1;
+      if (input.down('KeyD')) turn -= 1;
+      let dy = this.yaw - this.heading;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      const rate = HORSE.turn * dt * (Math.abs(this.rideSpeed) > 0.5 ? 1 : 0.6);
+      this.heading += turn ? turn * rate : clamp(dy, -rate, rate);
+      if (turn) this.yaw += turn * rate;
+      this.vel.x = Math.sin(this.heading) * this.rideSpeed;
+      this.vel.z = Math.cos(this.heading) * this.rideSpeed;
+      moving = Math.abs(this.rideSpeed) > 0.3;
+      this.trample(dt);
+    } else {
+      let mx = 0, mz = 0;
+      if (input.down('KeyW')) { mx += fx; mz += fz; }
+      if (input.down('KeyS')) { mx -= fx; mz -= fz; }
+      if (input.down('KeyA')) { mx += fz; mz -= fx; }
+      if (input.down('KeyD')) { mx -= fz; mz += fx; }
+      const ml = Math.hypot(mx, mz);
+      moving = ml > 0.01;
+      sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0;
+      let speed = sprint ? PLAYER.sprint : PLAYER.speed;
+      if (this.blocking) speed *= 0.55;
+      if (this.drawT > 0) speed *= 0.6;
+      if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18);
+      else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16));
+      const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
+      const acc = this.onGround ? 12 : 2.5;
+      this.vel.x += (tx - this.vel.x) * Math.min(1, dt * acc);
+      this.vel.z += (tz - this.vel.z) * Math.min(1, dt * acc);
+    }
 
-    if (input.hit('Space') && this.onGround && this.stamina > 8) {
+    if (input.hit('Space') && this.onGround && this.stamina > 8 && !this.mounted) {
       this.vy = PLAYER.jump;
       this.onGround = false;
       this.stamina -= 8;
@@ -288,7 +546,9 @@ export class Player {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team);
+    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team) && this.mounted) {
+      this.rideSpeed *= 0.6; // ran into a wall
+    }
 
     // vertical
     this.vy -= WORLD.gravity * dt;
@@ -312,6 +572,7 @@ export class Player {
         this.swingDir = -this.swingDir;
         this.stamina -= 7;
         g.audio.play('swing');
+        if (this.netClient) g.net.toHost({ a: 'swing' });
       }
       if (this.swingT >= 0) {
         this.swingT += dt;
@@ -330,12 +591,12 @@ export class Player {
       this.zoomed = m.right;
     }
 
-    // regen when out of combat
-    if (g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
+    // regen when out of combat (the host decides this in online games)
+    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
 
     // camera
-    this.camera.position.set(this.pos.x, this.pos.y + this.eye, this.pos.z);
+    this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw + Math.PI, 0, 'YXZ');
     const fov = this.zoomed ? 42 : 75;
     if (Math.abs(this.camera.fov - fov) > 0.1) {
@@ -353,11 +614,12 @@ export class Player {
   }
 
   drinkPotion() {
-    if (this.potions <= 0 || this.hp >= this.maxHp) { this.game.audio.play('deny'); return; }
+    if (this.netClient) { this.game.net.toHost({ a: 'potion' }); return; }
+    if (this.potions <= 0 || this.hp >= this.maxHp) { this.sound('deny'); return; }
     this.potions--;
     this.hp = Math.min(this.maxHp, this.hp + 130);
-    this.game.ui.toast('You drink a healing draught (+130 HP)');
-    this.game.audio.play('buy');
+    this.notify('You drink a healing draught (+130 HP)');
+    this.sound('buy');
   }
 
   lookDir(out = new THREE.Vector3()) {
@@ -367,8 +629,10 @@ export class Player {
 
   meleeStrike() {
     const g = this.game;
-    const reach = this.sword.len + 1.6;
-    const dmg = this.sword.dmg * this.dmgMult * (0.9 + Math.random() * 0.2);
+    if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg() }); return; }
+    const reach = this.sword.len + (this.mounted ? 2.2 : 1.6);
+    const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
+    const dmg = this.sword.dmg * this.dmgMult * charge * (0.9 + Math.random() * 0.2);
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
     g.grid.query(this.pos.x, this.pos.z, reach + 1, (u) => {
@@ -376,7 +640,7 @@ export class Player {
       const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d - u.radius > reach) return;
-      if (Math.abs(u.pos.y - this.pos.y) > 2.2) return;
+      if (Math.abs(u.pos.y - this.pos.y) > (this.mounted ? 2.8 : 2.2)) return;
       const dot = (dx * fx + dz * fz) / (d || 1);
       if (dot < 0.45) return;
       hits.push({ u, d });
@@ -410,32 +674,72 @@ export class Player {
   }
 
   shoot() {
-    const g = this.game;
     const draw = Math.min(1, this.drawT / this.bow.draw);
     const dir = this.lookDir();
     const from = this.camera.position.clone().addScaledVector(dir, 0.6);
     from.y -= 0.08;
-    const speed = 30 + 32 * draw;
     const wobble = (1 - draw) * 0.04 + (this.zoomed ? 0 : 0.006);
     dir.x += (Math.random() - 0.5) * wobble; dir.y += (Math.random() - 0.5) * wobble; dir.z += (Math.random() - 0.5) * wobble;
     dir.normalize();
-    g.projectiles.fireArrow(from, dir.multiplyScalar(speed), this.team, this.bow.dmg * this.dmgMult * (0.4 + 0.6 * draw), this);
+    this.game.audio.play('bow');
+    if (this.netClient) {
+      this.game.net.toHost({ a: 'shoot', f: [from.x, from.y, from.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), draw: r2(draw) });
+      this.arrows--;
+      return;
+    }
+    this.fireFrom(from, dir, draw);
+  }
+
+  // spawn the arrow (host / single player)
+  fireFrom(from, dir, draw) {
+    if (this.arrows <= 0) return;
+    const speed = 30 + 32 * draw;
+    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bow.dmg * this.dmgMult * (0.4 + 0.6 * draw), this);
     this.arrows--;
-    g.audio.play('bow');
+  }
+
+  // galloping into enemies knocks them down
+  trample(dt) {
+    const g = this.game;
+    const sp = Math.abs(this.rideSpeed);
+    for (const [u, t] of this.trampled) { if (t - dt <= 0) this.trampled.delete(u); else this.trampled.set(u, t - dt); }
+    if (sp < 6) return;
+    const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
+    g.grid.query(this.pos.x + fx, this.pos.z + fz, 2, (u) => {
+      if (!u.alive || u.team === this.team || u.isPlayer || u.mounted || this.trampled.has(u)) return;
+      const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1.6 || (dx * fx + dz * fz) / (d || 1) < 0.3) return;
+      this.trampled.set(u, 0.8);
+      g.damage(u, 6 + sp * 1.6, this, { melee: true });
+      u.vel.x += fx * 6; u.vel.z += fz * 6;
+      this.rideSpeed *= 0.85;
+    });
   }
 
   takeDamage(amount, attacker) {
     if (!this.alive) return;
+    if (this.mounted) {
+      // the horse takes half the blows
+      this.horseHp -= amount * 0.5;
+      amount *= 0.5;
+      if (this.horseHp <= 0) this.loseHorse();
+    }
     this.hp -= amount;
     this.lastHurt = this.game.time;
-    this.hurtFlash = Math.min(1, this.hurtFlash + 0.5 + amount / 60);
-    this.game.audio.play('hurt');
+    if (this.isLocal) {
+      this.hurtFlash = Math.min(1, this.hurtFlash + 0.5 + amount / 60);
+      this.game.audio.play('hurt');
+    }
     if (this.hp <= 0) {
       this.hp = 0;
       this.alive = false;
       this.deaths++;
-      this.viewModel.visible = false;
-      this.game.onPlayerKilled(attacker);
+      if (this.viewModel) this.viewModel.visible = false;
+      if (this.mounted) { this.mounted = false; this.horsePos.copy(this.pos); this.horseYaw = this.heading; this.rideSpeed = 0; this.radius = 0.4; }
+      this.game.onPlayerKilled(attacker, this);
     }
   }
 }
+
+const r2 = (x) => Math.round(x * 100) / 100;

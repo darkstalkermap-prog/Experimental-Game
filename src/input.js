@@ -8,6 +8,12 @@ export class Input {
     this.locked = false;
     this.enabled = true;
     this.onLockChange = null;
+    // stand-in used while a menu is open in an online game (the world keeps running)
+    this.idle = {
+      mouse: { dx: 0, dy: 0, left: false, right: false, leftPressed: false, leftReleased: false, rightPressed: false, wheel: 0 },
+      down: () => false,
+      hit: () => false,
+    };
 
     window.addEventListener('keydown', (e) => {
       if (!this.enabled) return;

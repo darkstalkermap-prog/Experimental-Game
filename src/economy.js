@@ -2,14 +2,14 @@
 import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 
-const heroLv = (g, f) => (f.isPlayer ? g.player.lv : f.heroLv);
+const heroLv = (g, f) => (f.isPlayer ? f.player.lv : f.heroLv);
 
 function recruit(type) {
   return {
     id: 'recruit_' + type, tab: 'army', name: UNIT_TYPES[type].name,
     desc: () => {
       const t = UNIT_TYPES[type];
-      return `${t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}`;
+      return `${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
     },
     cost: () => UNIT_TYPES[type].cost,
     can: (g, f) => {
@@ -22,7 +22,7 @@ function recruit(type) {
 }
 
 export const SHOP = [
-  recruit('swordsman'), recruit('spearman'), recruit('archer'), recruit('knight'),
+  recruit('swordsman'), recruit('spearman'), recruit('archer'), recruit('knight'), recruit('horseman'), recruit('lancer'),
   {
     id: 'barracks', tab: 'army', name: 'Expand Barracks',
     desc: (g, f) => `Troop limit ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}`,
@@ -120,41 +120,48 @@ export const SHOP = [
 
   {
     id: 'sword', tab: 'items', name: 'Better Sword', playerOnly: true,
-    desc: (g) => {
-      const lv = g.player.lv.sword;
+    desc: (g, f) => {
+      const lv = f.player.lv.sword;
       return lv >= SWORDS.length - 1 ? `${SWORDS[lv].name} (${SWORDS[lv].dmg} dmg) – the finest blade` : `${SWORDS[lv].name} → ${SWORDS[lv + 1].name} (${SWORDS[lv + 1].dmg} dmg)`;
     },
-    cost: (g) => [300, 800, 0][g.player.lv.sword],
-    can: (g) => (g.player.lv.sword >= SWORDS.length - 1 ? 'Best sword owned' : true),
-    apply: (g) => { g.player.lv.sword++; g.player.recalc(); },
+    cost: (g, f) => [300, 800, 0][f.player.lv.sword],
+    can: (g, f) => (f.player.lv.sword >= SWORDS.length - 1 ? 'Best sword owned' : true),
+    apply: (g, f) => { f.player.lv.sword++; f.player.recalc(); },
   },
   {
     id: 'shield', tab: 'items', name: SHIELDS[1].name, playerOnly: true,
     desc: () => `Blocks ${Math.round(SHIELDS[1].block * 100)}% of frontal damage (round shield: ${Math.round(SHIELDS[0].block * 100)}%)`,
     cost: () => 250,
-    can: (g) => (g.player.lv.shield >= 1 ? 'Owned' : true),
-    apply: (g) => { g.player.lv.shield = 1; g.player.recalc(); },
+    can: (g, f) => (f.player.lv.shield >= 1 ? 'Owned' : true),
+    apply: (g, f) => { f.player.lv.shield = 1; f.player.recalc(); },
   },
   {
     id: 'bow', tab: 'items', name: BOWS[1].name, playerOnly: true,
     desc: () => `${BOWS[1].dmg} dmg and faster draw (hunting bow: ${BOWS[0].dmg})`,
     cost: () => 300,
-    can: (g) => (g.player.lv.bow >= 1 ? 'Owned' : true),
-    apply: (g) => { g.player.lv.bow = 1; g.player.recalc(); },
+    can: (g, f) => (f.player.lv.bow >= 1 ? 'Owned' : true),
+    apply: (g, f) => { f.player.lv.bow = 1; f.player.recalc(); },
+  },
+  {
+    id: 'horse', tab: 'items', name: 'Warhorse', playerOnly: true,
+    desc: () => 'A barded destrier. Press E to mount and dismount, or to whistle for it. Hold Shift to gallop; charging adds damage and tramples foes.',
+    cost: () => 400,
+    can: (g, f) => (f.player.hasHorse ? 'Owned' : true),
+    apply: (g, f) => { f.player.giveHorse(); },
   },
   {
     id: 'arrows', tab: 'items', name: 'Quiver of Arrows', playerOnly: true,
-    desc: (g) => `+20 arrows (${g.player.arrows}/${PLAYER.maxArrows})`,
+    desc: (g, f) => `+20 arrows (${f.player.arrows}/${PLAYER.maxArrows})`,
     cost: () => 25,
-    can: (g) => (g.player.arrows >= PLAYER.maxArrows ? 'Quiver full' : true),
-    apply: (g) => { g.player.arrows = Math.min(PLAYER.maxArrows, g.player.arrows + 20); },
+    can: (g, f) => (f.player.arrows >= PLAYER.maxArrows ? 'Quiver full' : true),
+    apply: (g, f) => { f.player.arrows = Math.min(PLAYER.maxArrows, f.player.arrows + 20); },
   },
   {
     id: 'potion', tab: 'items', name: 'Healing Draught', playerOnly: true,
-    desc: (g) => `Restores 130 HP – press Q (${g.player.potions}/3)`,
+    desc: (g, f) => `Restores 130 HP – press Q (${f.player.potions}/3)`,
     cost: () => 60,
-    can: (g) => (g.player.potions >= 3 ? 'Carrying the maximum' : true),
-    apply: (g) => { g.player.potions++; },
+    can: (g, f) => (f.player.potions >= 3 ? 'Carrying the maximum' : true),
+    apply: (g, f) => { f.player.potions++; },
   },
 
   {

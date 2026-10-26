@@ -361,26 +361,63 @@ export class Castle {
     this.flags.push({ flag, base, phase: Math.random() * 10, size, pole });
   }
 
-  // --- damage ---
+  // --- visual / collider state (shared by the simulation and by network clients) ---
+  applyWallVisual(seg) {
+    if (!seg.alive) {
+      seg.collider.top = this.center.y + 0.5;
+      seg.mesh.visible = false;
+      if (!seg.rubble) seg.rubble = this.makeRubble(seg);
+      return;
+    }
+    seg.collider.top = this.center.y + wallH;
+    if (seg.rubble) { this.group.remove(seg.rubble); seg.rubble = null; }
+    seg.mesh.visible = true;
+    const damaged = seg.hp <= seg.maxHp * 0.5;
+    seg.mesh.geometry = damaged ? seg.damaged : seg.full;
+    seg.mesh.material = damaged ? this.mats.stoneDark : this.mats.stone;
+  }
+
+  applyGateVisual() {
+    const gate = this.gate;
+    gate.collider.active = gate.alive;
+    for (const l of gate.leaves) {
+      const leaf = l.pivot.children[0];
+      if (gate.alive) {
+        l.pivot.position.y = 0;
+        leaf.rotation.z = 0;
+        leaf.material = this.mats.wood;
+      } else {
+        l.pivot.rotation.y = l.s * 1.2;
+        l.pivot.position.y = -0.2;
+        leaf.rotation.z = l.s * 0.25;
+        leaf.material = this.mats.stoneBurnt;
+      }
+    }
+  }
+
+  applyFallenVisual() {
+    if (this.burning) return;
+    this.keepMesh.material = this.mats.stoneBurnt;
+    this.keepBanner.visible = false;
+    this.keepFlag.flag.visible = false;
+    for (const f of this.flags) f.flag.material.color.multiplyScalar(0.35);
+    this.burning = true;
+  }
+
+  // --- damage (simulation only) ---
   damageWall(seg, amt, attacker) {
     if (!seg.alive || !seg.breakable || this.fallen) return;
     seg.hp -= amt;
     this.game.fx.dust(seg.pos, 10, 2.5);
-    if (seg.hp <= seg.maxHp * 0.5 && seg.mesh.geometry === seg.full) {
-      seg.mesh.geometry = seg.damaged;
-      seg.mesh.material = this.mats.stoneDark;
-    }
     if (seg.hp <= 0) {
       seg.hp = 0;
       seg.alive = false;
-      seg.collider.top = this.center.y + 0.5;
-      seg.mesh.visible = false;
-      seg.rubble = this.makeRubble(seg);
       this.game.fx.dust(seg.pos, 40, 6);
       this.game.audio.play('collapse', seg.pos);
       for (const p of seg.posts) if (p.occupant) p.occupant.fallFromWall();
+      this.applyWallVisual(seg);
       this.game.onStructureDestroyed(seg, attacker);
-    }
+    } else this.applyWallVisual(seg);
   }
 
   makeRubble(seg) {
@@ -404,15 +441,8 @@ export class Castle {
       if (!seg.breakable) continue;
       seg.maxHp = CASTLE.wallHp * (1 + 0.35 * this.wallLevel);
       seg.hp = seg.maxHp;
-      if (!seg.alive) {
-        // can't rebuild while someone is standing in the breach
-        seg.alive = true;
-        seg.collider.top = this.center.y + wallH;
-        if (seg.rubble) { this.group.remove(seg.rubble); seg.rubble = null; }
-      }
-      seg.mesh.visible = true;
-      seg.mesh.geometry = seg.full;
-      seg.mesh.material = this.mats.stone;
+      seg.alive = true;
+      this.applyWallVisual(seg);
     }
     this.game.pushOutOfWalls(this);
   }
@@ -425,14 +455,7 @@ export class Castle {
     if (gate.hp <= 0) {
       gate.hp = 0;
       gate.alive = false;
-      gate.collider.active = false;
-      for (const l of gate.leaves) {
-        l.pivot.rotation.y = l.s * 1.2;
-        l.pivot.rotation.x = 0.0;
-        l.pivot.children[0].rotation.z = l.s * 0.25;
-        l.pivot.position.y = -0.2;
-        l.pivot.children[0].material = this.mats.stoneBurnt;
-      }
+      this.applyGateVisual();
       this.game.fx.splinters(gate.pos, 40);
       this.game.fx.dust(gate.pos, 25, 4);
       this.game.audio.play('collapse', gate.pos);
@@ -446,12 +469,7 @@ export class Castle {
     gate.hp = gate.maxHp;
     if (!gate.alive) {
       gate.alive = true;
-      gate.collider.active = true;
-      for (const l of gate.leaves) {
-        l.pivot.position.y = 0;
-        l.pivot.children[0].rotation.z = 0;
-        l.pivot.children[0].material = this.mats.wood;
-      }
+      this.applyGateVisual();
       this.game.pushOutOfGate(this);
     }
   }
@@ -476,12 +494,40 @@ export class Castle {
     if (this.fallen) return;
     this.fallen = true;
     if (this.gate.alive) this.damageGate(1e9, attacker);
-    this.keepMesh.material = this.mats.stoneBurnt;
-    this.keepBanner.visible = false;
-    this.keepFlag.flag.visible = false;
-    for (const f of this.flags) f.flag.material.color.multiplyScalar(0.35);
-    this.burning = true;
+    this.applyFallenVisual();
     this.game.onCastleFallen(this, attacker);
+  }
+
+  // --- network snapshot ---
+  netState() {
+    const br = this.walls.filter((w) => w.breakable);
+    return [
+      Math.round(this.gate.hp), Math.round(this.gate.maxHp), this.gate.alive ? 1 : 0,
+      Math.round(this.keep.hp), this.keep.maxHp, this.fallen ? 1 : 0,
+      this.wallLevel, this.gateLevel, this.towerLevel,
+      br.map((w) => Math.round(w.hp)), Math.round(br[0] ? br[0].maxHp : 0),
+    ];
+  }
+
+  applyNet(a) {
+    const g = this.gate;
+    g.hp = a[0]; g.maxHp = a[1];
+    const gAlive = !!a[2];
+    if (gAlive !== g.alive) { g.alive = gAlive; this.applyGateVisual(); }
+    this.keep.hp = a[3]; this.keep.maxHp = a[4];
+    if (a[5] && !this.fallen) { this.fallen = true; this.keep.alive = false; this.applyFallenVisual(); }
+    this.wallLevel = a[6]; this.gateLevel = a[7]; this.towerLevel = a[8];
+    const br = this.walls.filter((w) => w.breakable);
+    br.forEach((w, i) => {
+      const hp = a[9][i];
+      const alive = hp > 0;
+      const wasDamaged = w.hp <= w.maxHp * 0.5;
+      w.maxHp = a[10];
+      const changed = alive !== w.alive || (hp <= w.maxHp * 0.5) !== wasDamaged;
+      w.hp = hp;
+      w.alive = alive;
+      if (changed) this.applyWallVisual(w);
+    });
   }
 
   // --- per-frame ---

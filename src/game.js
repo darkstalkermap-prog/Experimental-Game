@@ -1,4 +1,6 @@
 // Game state and the main simulation loop.
+// Modes: 'single' (you + 3 AI lords), 'host' (this browser simulates and serves up to 3 other people),
+// 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, ROUNDS, START_GOLD, DIFFICULTY, BOUNTY,
@@ -15,6 +17,10 @@ import { Player } from './player.js';
 import { FX } from './fx.js';
 import { LordAI } from './ai.js';
 import { buy } from './economy.js';
+import { HostSync, ClientSync } from './netsync.js';
+
+export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
+const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
 
 class Grid {
   constructor(cell = 4) { this.cell = cell; this.map = new Map(); }
@@ -49,6 +55,8 @@ export class Game {
     this.scene.add(this.camera);
     this.time = 0;
     this.state = 'loading';
+    this.mode = 'single';
+    this.net = null;
     this.paused = false;
     this.diff = DIFFICULTY.normal;
 
@@ -63,15 +71,26 @@ export class Game {
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
+    this.humans = [this.player];
     this.units = [];
     this.siege = [];
     this.factions = [];
     this.spawnQueue = [];
     this.menuCamT = 0;
+    this.round = 0;
+    this.phase = 'prep';
+    this.phaseT = 0;
   }
 
+  get localTeam() { return this.player.team; }
+  get localFaction() { return this.factions[this.player.team]; }
+  get simulating() { return this.mode !== 'client'; }
+
   // ---------------- setup ----------------
-  start(difficulty = 'normal') {
+  // setup: { mode, localTeam, players: [{ team, name, netId }] }
+  start(difficulty = 'normal', setup = null) {
+    setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
+    this.mode = setup.mode;
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
     this.state = 'playing';
@@ -79,28 +98,51 @@ export class Game {
     this.phase = 'prep';
     this.phaseT = ROUNDS.firstPrep;
     this.waveT = 0;
-    this.selectedGroup = 'all';
-    this.factions = this.castles.map((c, i) => ({
-      team: i, name: TEAM_NAMES[i], lord: LORD_NAMES[i], isPlayer: i === PLAYER_TEAM, castle: c,
-      gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
-      heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: null, heroDeaths: 0, respawnT: 0,
-      eliminated: false, kills: 0, siegeTarget: null,
-    }));
-    const pf = this.factions[PLAYER_TEAM];
-    pf.hero = this.player;
-    this.player.spawn(pf.castle.spawnPoint, pf.castle.rot);
-    for (const f of this.factions) {
-      if (f.isPlayer) continue;
-      this.spawnLord(f);
-      f.ai = new LordAI(this, f);
+
+    const lp = this.player;
+    lp.team = setup.localTeam;
+    lp.rebuildWeapons();
+    this.humans = [lp];
+    const byTeam = new Map(setup.players.map((p) => [p.team, p]));
+    lp.name = byTeam.get(lp.team)?.name || 'You';
+    for (const p of setup.players) {
+      if (p.team === lp.team) continue;
+      this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId }));
     }
-    // starting garrison
-    for (const f of this.factions) {
-      for (const t of ['swordsman', 'swordsman', 'spearman', 'archer', 'archer']) this.recruit(f, t);
+
+    this.factions = this.castles.map((c, i) => {
+      const human = this.humans.find((h) => h.team === i) || null;
+      return {
+        team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
+        gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
+        heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: human, heroDeaths: 0, respawnT: 0,
+        eliminated: false, kills: 0, siegeTarget: null,
+      };
+    });
+    if (this.mode !== 'single') {
+      // in online games the human houses are named after their lords
+      for (const f of this.factions) if (f.isPlayer) f.name = `House ${f.lord}`;
     }
-    pf.siegeTarget = this.castles[2];
+    for (const h of this.humans) {
+      const c = this.castles[h.team];
+      h.spawn(c.spawnPoint, c.rot);
+    }
+
+    if (this.simulating) {
+      for (const f of this.factions) {
+        if (f.isPlayer) continue;
+        this.spawnLord(f);
+        f.ai = new LordAI(this, f);
+      }
+      for (const f of this.factions) {
+        for (const t of ['swordsman', 'swordsman', 'spearman', 'archer', 'archer']) this.recruit(f, t);
+      }
+    }
+    if (this.mode === 'host') this.sync = new HostSync(this);
+    if (this.mode === 'client') this.sync = new ClientSync(this);
+    this.localFaction.siegeTarget = this.castles[(lp.team + 2) % 4];
     this.audio.play('horn');
-    this.ui.toast('Defend your castle. Raiders arrive soon – press B to open the shop.');
+    this.ui.toast('Defend your castle. Raiders arrive soon. Press B to open the shop.');
   }
 
   spawnLord(f) {
@@ -121,7 +163,7 @@ export class Game {
   }
 
   refreshHero(f) {
-    if (f.isPlayer) { this.player.recalc(); return; }
+    if (f.isPlayer) { f.player.recalc(); return; }
     const h = f.hero;
     if (!h || !h.alive) return;
     const t = UNIT_TYPES.lord;
@@ -232,7 +274,7 @@ export class Game {
       if (score < bd) { bd = score; best = o; }
     };
     if (radius <= 50) this.grid.query(unit.pos.x, unit.pos.z, radius, consider);
-    else { for (const u of this.units) consider(u); if (this.player.alive) consider(this.player); }
+    else { for (const u of this.units) consider(u); for (const h of this.humans) consider(h); }
     for (const s of this.siege) consider(s);
     return best;
   }
@@ -265,12 +307,63 @@ export class Game {
 
   pushOutOfWalls(castle) {
     for (const u of this.units) if (u.alive && castle.inFootprint(u.pos, 2) && !u.post) this.physics.resolve(u.pos, u.radius, u.pos.y, u.height, u.team);
-    if (castle.inFootprint(this.player.pos, 2)) this.physics.resolve(this.player.pos, this.player.radius, this.player.pos.y, this.player.height, this.player.team);
+    for (const h of this.humans) {
+      if (castle.inFootprint(h.pos, 2)) this.physics.resolve(h.pos, h.radius, h.pos.y, h.height, h.team);
+    }
   }
   pushOutOfGate(castle) { this.pushOutOfWalls(castle); }
 
+  // ---------------- messages to people ----------------
+  // Show something to one person (locally, or over the network for a remote player).
+  deliver(player, ev) {
+    if (!player) return;
+    if (player === this.player) this.applyEvent(ev);
+    else if (this.mode === 'host' && this.sync) this.sync.privateEvent(player, ev);
+  }
+
+  // A toast for every person; text may depend on whose screen it is: fn(viewerTeam) -> text or null.
+  announce(text, colorTeam = -1, importantTeam = -99) {
+    for (const h of this.humans) {
+      if (h.remote && this.mode !== 'host') continue;
+      const t = typeof text === 'function' ? text(h.team) : text;
+      if (t) this.deliver(h, { k: 'toast', text: t, team: colorTeam, imp: importantTeam === h.team || importantTeam === 'all' });
+    }
+  }
+
+  bannerAll(title, sub) {
+    for (const h of this.humans) {
+      if (h.remote && this.mode !== 'host') continue;
+      this.deliver(h, { k: 'banner', title, sub });
+    }
+  }
+
+  killFeed(attacker, victim) {
+    const name = (o, viewer) => (!o ? 'The fall' : o === viewer ? 'You' : o.isTower ? 'Tower archers' : o.name);
+    const team = (o) => (o && o.team !== undefined ? o.team : RAIDER_TEAM);
+    const notable = victim.isHero || (victim.def && victim.def.boss);
+    for (const h of this.humans) {
+      if (h.remote && this.mode !== 'host') continue;
+      if (!notable && attacker !== h && victim !== h) continue;
+      this.deliver(h, { k: 'kill', a: [name(attacker, h), team(attacker)], v: [name(victim, h), team(victim)] });
+    }
+  }
+
+  applyEvent(ev) {
+    switch (ev.k) {
+      case 'toast': this.ui.toast(ev.text, ev.team ?? -1, !!ev.imp); break;
+      case 'banner': this.ui.banner(ev.title, ev.sub); break;
+      case 'kill': this.ui.kill(ev.a, ev.v); break;
+      case 'gold': this.ui.goldPopup(ev.g); break;
+      case 'hit': this.ui.hitMarker(); break;
+      case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
+      case 'end': this.finish(ev.winner); break;
+      default: break;
+    }
+  }
+
   // ---------------- combat ----------------
   damage(target, amount, attacker, info = {}) {
+    if (!this.simulating) return; // clients only show effects; the host decides damage
     if (!target || !target.alive) return;
     let dmg = amount;
     if (target.isStructure) {
@@ -283,8 +376,8 @@ export class Game {
       target.takeDamage(dmg, attacker);
       return;
     }
-    // shield block for the player (frontal only)
-    if (target.isPlayer && target.blocking && attacker && attacker.pos) {
+    // shield block for heroes (frontal only)
+    if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos) {
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
@@ -292,7 +385,7 @@ export class Game {
         dmg *= 1 - target.shield.block;
         target.stamina = Math.max(0, target.stamina - 6);
         this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6), 8);
-        this.audio.play('block');
+        this.audio.play('block', target.pos);
         if (dmg < 1) return;
       }
     }
@@ -300,7 +393,7 @@ export class Game {
     const p = target.chest(new THREE.Vector3());
     this.fx.blood(p, info.ranged ? 5 : 9);
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
-    if (attacker && attacker.isPlayer) this.ui.hitMarker();
+    if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit' });
     target.takeDamage(dmg, attacker);
   }
 
@@ -311,7 +404,10 @@ export class Game {
     const g = Math.round(gold * (f.isPlayer ? 1 : this.diff.aiGold));
     f.gold += g;
     f.earned += g;
-    if (f.isPlayer && g > 0) { this.ui.goldPopup(g); if (at) this.fx.gold(at); }
+    if (f.isPlayer && g > 0) {
+      this.deliver(f.player, { k: 'gold', g });
+      if (at && f.player === this.player) this.fx.gold(at);
+    }
   }
 
   onUnitKilled(u, attacker) {
@@ -324,39 +420,37 @@ export class Game {
       const f = this.factions[u.team];
       f.heroDeaths++;
       f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
-      this.ui.kill(attacker, u);
-      this.ui.toast(`${f.lord} has been slain!${f.castle.fallen ? ' Their house is finished.' : ''}`, u.team);
-    } else if (u.def.boss || (attacker && attacker.isPlayer && u.type === 'warlord')) {
-      this.ui.kill(attacker, u);
-    } else if (attacker && attacker.isPlayer) {
-      this.ui.kill(attacker, u);
+      this.announce(`${f.lord} has been slain!${f.castle.fallen ? ' Their house is finished.' : ''}`, u.team);
     }
+    this.killFeed(attacker, u);
   }
 
-  onPlayerKilled(attacker) {
-    const f = this.factions[PLAYER_TEAM];
+  onPlayerKilled(attacker, p = this.player) {
+    const f = this.factions[p.team];
     f.heroDeaths++;
     f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
     const by = attacker ? attacker.team : -1;
-    if (by >= 0 && by <= 3) this.credit(by, BOUNTY.hero);
-    this.ui.kill(attacker, this.player);
-    this.audio.play('death');
-    if (f.castle.fallen) this.ui.toast('You have fallen, and your castle is gone…', 0, true);
+    if (by >= 0 && by <= 3 && by !== p.team) this.credit(by, BOUNTY.hero);
+    this.killFeed(attacker, p);
+    this.audio.play('death', p.pos);
+    if (f.castle.fallen) p.notify('You have fallen, and your castle is gone.', true);
+    else if (p.remote || this.mode !== 'single') this.announce((t) => (t === p.team ? null : `${p.name} has been slain!`), p.team);
   }
 
   onSiegeDestroyed(s, attacker) {
     const by = attacker ? attacker.team : -1;
     if (by !== s.team) this.credit(by, BOUNTY[s.type] || 100, s.chest(new THREE.Vector3()));
-    if (s.team === PLAYER_TEAM) this.ui.toast(`Your ${s.name.toLowerCase()} was destroyed`, 0, true);
+    const f = this.factions[s.team];
+    if (f && f.isPlayer) f.player.notify(`Your ${s.name.toLowerCase()} was destroyed`, true);
   }
 
   onStructureDestroyed(part, attacker) {
     const owner = this.factions[part.team];
     if (part.kind === 'gate') {
       if (attacker && attacker.team !== part.team) this.credit(attacker.team, BOUNTY.gate);
-      this.ui.toast(part.team === PLAYER_TEAM ? 'Your gate has been broken!' : `${owner.name}'s gate has been broken!`, part.team, part.team === PLAYER_TEAM);
+      this.announce((t) => (t === part.team ? 'Your gate has been broken!' : `${owner.name}'s gate has been broken!`), part.team, part.team);
     } else if (part.kind === 'wall') {
-      this.ui.toast(part.team === PLAYER_TEAM ? 'Your wall has been breached!' : `A breach opens in ${owner.name}'s wall!`, part.team, part.team === PLAYER_TEAM);
+      this.announce((t) => (t === part.team ? 'Your wall has been breached!' : `A breach opens in ${owner.name}'s wall!`), part.team, part.team);
     }
   }
 
@@ -364,8 +458,7 @@ export class Game {
     const f = this.factions[castle.team];
     if (attacker && attacker.team !== castle.team) this.credit(attacker.team, BOUNTY.keep);
     this.audio.play('collapse', castle.keep.pos);
-    if (f.isPlayer) this.ui.toast('YOUR KEEP HAS FALLEN! You can no longer respawn – survive!', 0, true);
-    else this.ui.toast(`${f.name}'s keep has fallen!`, castle.team);
+    this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
     for (const p of castle.posts) if (p.occupant) p.occupant.leavePost();
   }
@@ -375,17 +468,20 @@ export class Game {
     this.round++;
     this.phase = 'wave';
     this.waveT = 0;
-    this.audio.play('horn');
+    this.audio.play('horn', this.camera.position);
     const r = this.round;
     const boss = r % 5 === 0;
-    this.ui.banner(`Round ${r}`, boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
+    this.bannerAll(`Round ${r}`, boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
     for (const c of this.castles) {
       if (c.fallen) continue;
       const n = Math.round(Math.min(28, 3 + r * 2.2) * this.diff.wave);
       const list = [];
       const archers = r >= 2 ? Math.floor(n * 0.25) : 0;
       const brutes = r >= 4 ? Math.floor(n * 0.12) + Math.floor((r - 4) / 3) : 0;
-      for (let i = 0; i < n; i++) list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : 'raider');
+      const riders = r >= 5 ? Math.floor(n * 0.15) : 0;
+      for (let i = 0; i < n; i++) {
+        list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : i < archers + brutes + riders ? 'raiderRider' : 'raider');
+      }
       if (boss) list.push('warlord');
       const ang = Math.atan2(c.center.x, c.center.z);
       list.forEach((type, i) => {
@@ -429,9 +525,8 @@ export class Game {
     this.phaseT = ROUNDS.prep;
     const bonus = ROUNDS.survivalBonus(this.round);
     for (const f of this.factions) if (!f.eliminated) this.credit(f.team, bonus);
-    this.ui.banner(`Round ${this.round} survived`, `+${bonus} gold. Next wave in ${ROUNDS.prep}s`);
-    // refill a few arrows
-    this.player.arrows = Math.min(PLAYER.maxArrows, this.player.arrows + 10);
+    this.bannerAll(`Round ${this.round} survived`, `+${bonus} gold. Next wave in ${ROUNDS.prep}s`);
+    for (const h of this.humans) h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 10);
   }
 
   updateRounds(dt) {
@@ -445,24 +540,18 @@ export class Game {
     }
   }
 
-  // ---------------- player orders ----------------
-  groupFilter(u) {
-    if (this.selectedGroup === 'infantry') return u.kind === 'infantry';
-    if (this.selectedGroup === 'archers') return u.kind === 'archer';
-    return true;
-  }
-
-  order(cmd) {
-    const p = this.player;
-    const f = this.factions[PLAYER_TEAM];
-    const troops = this.units.filter((u) => u.alive && u.team === PLAYER_TEAM && !u.isHero && this.groupFilter(u));
-    if (!troops.length) { this.ui.toast('You have no troops in that group. Recruit some in the shop (B).'); return; }
+  // ---------------- orders ----------------
+  // Give an order to a team's troops. hold = { pos: [x,y,z], yaw } for 'hold'.
+  order(team, cmd, group = 'all', hold = null) {
+    const f = this.factions[team];
+    const p = f.player;
+    const inGroup = (u) => group === 'all' || (group === 'infantry' && u.kind === 'infantry') || (group === 'archers' && u.kind === 'archer') || (group === 'cavalry' && u.kind === 'cavalry');
+    const troops = this.units.filter((u) => u.alive && u.team === team && !u.isHero && inGroup(u));
+    if (!troops.length) { p.notify('You have no troops in that group. Recruit some in the shop (B).'); return; }
     let data = null;
     let label = '';
     if (cmd === 'hold') {
-      const d = p.lookDir();
-      const at = p.pos.clone().addScaledVector(new THREE.Vector3(d.x, 0, d.z).normalize(), 6);
-      data = { pos: at, yaw: p.yaw };
+      data = { pos: new THREE.Vector3(...hold.pos), yaw: hold.yaw };
       label = 'Hold this position!';
     } else if (cmd === 'assault') {
       data = this.siegeTarget(f);
@@ -470,40 +559,68 @@ export class Game {
       label = `Assault ${this.factions[data.team].name}!`;
     } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
     troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
-    const groupName = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers' }[this.selectedGroup];
-    this.ui.toast(`${groupName}: ${label}`);
-    this.ui.setOrder(cmd);
-    this.audio.play('order');
+    p.notify(`${GROUP_NAMES[group]}: ${label}`);
+    p.lastOrder = cmd;
+    p.sound('order');
+  }
+
+  // The local player presses an order key.
+  localOrder(cmd) {
+    const p = this.player;
+    let hold = null;
+    if (cmd === 'hold') {
+      const d = p.lookDir();
+      const at = p.pos.clone().addScaledVector(new THREE.Vector3(d.x, 0, d.z).normalize(), 6);
+      hold = { pos: [at.x, at.y, at.z], yaw: p.yaw };
+    }
+    if (this.mode === 'client') {
+      this.net.toHost({ a: 'order', cmd, group: p.group || 'all', hold, target: this.localFaction.siegeTarget ? this.localFaction.siegeTarget.team : -1 });
+      p.lastOrder = cmd;
+      return;
+    }
+    this.order(p.team, cmd, p.group || 'all', hold);
+  }
+
+  setSiegeTarget(castle) {
+    this.localFaction.siegeTarget = castle;
+    if (this.mode === 'client') this.net.toHost({ a: 'target', team: castle.team });
   }
 
   handleInput() {
     const i = this.input;
     if (i.hit('KeyB')) { this.ui.toggleShop(); return; }
     if (this.ui.shopOpen) return;
-    if (i.hit('F1') || i.hit('KeyZ')) this.order('follow');
-    if (i.hit('F2') || i.hit('KeyX')) this.order('hold');
-    if (i.hit('F3') || i.hit('KeyC')) this.order('charge');
-    if (i.hit('F4') || i.hit('KeyV')) this.order('defend');
-    if (i.hit('KeyT')) this.order('assault');
+    if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
+    if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
+    if (i.hit('F3') || i.hit('KeyC')) this.localOrder('charge');
+    if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
+    if (i.hit('KeyT')) this.localOrder('assault');
     if (i.hit('KeyG')) {
-      const order = ['all', 'infantry', 'archers'];
-      this.selectedGroup = order[(order.indexOf(this.selectedGroup) + 1) % 3];
-      this.ui.toast(`Selected group: ${{ all: 'Everyone', infantry: 'Infantry', archers: 'Archers' }[this.selectedGroup]}`);
+      const p = this.player;
+      p.group = GROUPS[(GROUPS.indexOf(p.group || 'all') + 1) % GROUPS.length];
+      this.ui.toast(`Selected group: ${GROUP_NAMES[p.group]}`);
     }
   }
 
-  buyForPlayer(id) {
-    const r = buy(this, this.factions[PLAYER_TEAM], id);
-    if (r === true) this.audio.play('buy');
-    else { this.audio.play('deny'); this.ui.toast(r); }
+  // Buy for a faction; reports the result to that faction's player.
+  buyFor(team, id) {
+    const f = this.factions[team];
+    const r = buy(this, f, id);
+    if (r === true) f.player.sound('buy');
+    else { f.player.sound('deny'); f.player.notify(r); }
     return r;
+  }
+
+  buyForPlayer(id) {
+    if (this.mode === 'client') { this.net.toHost({ a: 'buy', id }); return true; }
+    return this.buyFor(this.localTeam, id);
   }
 
   // ---------------- heroes / elimination ----------------
   updateHeroes(dt) {
     for (const f of this.factions) {
       if (f.eliminated) continue;
-      const alive = f.isPlayer ? this.player.alive : f.hero && f.hero.alive;
+      const alive = f.hero && f.hero.alive;
       if (!alive) {
         if (f.castle.fallen) {
           this.eliminate(f);
@@ -512,33 +629,60 @@ export class Game {
         f.respawnT -= dt;
         if (f.respawnT <= 0) {
           if (f.isPlayer) {
-            this.player.spawn(f.castle.spawnPoint, f.castle.rot);
-            this.ui.toast('You rise again at your keep.');
+            f.player.spawn(f.castle.spawnPoint, f.castle.rot);
+            f.player.notify('You rise again at your keep.');
           } else {
             this.spawnLord(f);
           }
         }
       }
     }
+    if (this.state !== 'playing') return;
     const left = this.factions.filter((f) => !f.eliminated);
-    if (this.state === 'playing') {
-      if (this.factions[PLAYER_TEAM].eliminated) this.finish(false);
-      else if (left.length === 1) this.finish(true);
+    const humansLeft = left.filter((f) => f.isPlayer);
+    if (this.mode === 'single') {
+      if (this.localFaction.eliminated) this.endGame(left.length === 1 ? left[0].team : -1);
+      else if (left.length === 1) this.endGame(left[0].team);
+    } else if (left.length <= 1 || humansLeft.length === 0) {
+      this.endGame(left.length === 1 ? left[0].team : -1);
     }
   }
 
   eliminate(f) {
     if (f.eliminated) return;
     f.eliminated = true;
-    this.ui.toast(f.isPlayer ? 'Your house has been destroyed.' : `${f.name} has been destroyed!`, f.team, f.isPlayer);
+    this.announce((t) => (t === f.team ? 'Your house has been destroyed. You can keep watching the battle.' : `${f.name} has been destroyed!`), f.team, f.team);
     if (f.ai) f.ai.assault = null;
   }
 
-  finish(won) {
+  endGame(winner) {
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner);
+    this.finish(winner);
+  }
+
+  finish(winner, reason = '') {
+    if (this.state === 'over') return;
     this.state = 'over';
+    const won = winner === this.localTeam;
     this.audio.play(won ? 'victory' : 'defeat');
     this.input.unlock();
-    this.ui.gameOver(won);
+    this.ui.gameOver(won, winner, reason);
+  }
+
+  // A remote player left an online game: their house is taken over by an AI lord.
+  dropHuman(p) {
+    const f = this.factions[p.team];
+    this.humans = this.humans.filter((h) => h !== p);
+    p.removeBody();
+    f.isPlayer = false;
+    f.player = null;
+    f.lord = LORD_NAMES[f.team];
+    f.hero = null;
+    if (!f.eliminated && !f.castle.fallen) {
+      this.spawnLord(f);
+      f.ai = new LordAI(this, f);
+    }
+    this.announce(`${p.name} left. An AI lord takes over ${f.name}.`, f.team);
   }
 
   // ---------------- main loop ----------------
@@ -549,30 +693,42 @@ export class Game {
       this.time += dt;
       return;
     }
-    if (this.paused) return;
+    // single player pauses the world; online games keep running underneath menus
+    const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
+    if (frozen) return;
     this.time += dt;
-    if (this.state === 'playing') this.handleInput();
-    if (this.ui.shopOpen) return;
+    const controlling = this.state === 'playing' && !this.paused;
+    if (controlling) this.handleInput();
+    if (this.mode === 'single' && this.ui.shopOpen) return;
 
     // spatial grid
     this.grid.clear();
     for (const u of this.units) if (u.alive) this.grid.insert(u);
-    if (this.player.alive) this.grid.insert(this.player);
+    for (const h of this.humans) if (h.alive) this.grid.insert(h);
 
-    if (this.player.alive) this.player.update(dt, this.input);
+    const p = this.player;
+    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen ? this.input : this.input.idle);
     else this.deathCamera(dt);
+    for (const h of this.humans) {
+      if (h.remote) h.remoteUpdate(dt);
+      h.updateHorse(dt);
+    }
     this.audio.setListener(this.camera.position);
 
-    for (const u of this.units) u.update(dt);
-    for (const s of this.siege) s.update(dt);
+    if (this.simulating) {
+      for (const u of this.units) u.update(dt);
+      for (const s of this.siege) s.update(dt);
+    } else {
+      this.sync.update(dt);
+    }
     this.projectiles.update(dt);
     for (const c of this.castles) {
       c.update(dt, this.time);
-      this.updateTowers(c, dt);
+      if (this.simulating) this.updateTowers(c, dt);
     }
     this.fx.update(dt);
 
-    if (this.state === 'playing') {
+    if (this.simulating && this.state === 'playing') {
       this.updateRounds(dt);
       this.processSpawns(dt);
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
@@ -580,7 +736,8 @@ export class Game {
       // trickle income while the castle stands
       for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
     }
-    this.cleanup(dt);
+    if (this.mode === 'host' && this.sync) this.sync.update(dt);
+    if (this.simulating) this.cleanup(dt);
     followShadow(this.lights.sun, this.camera.position);
   }
 
@@ -615,8 +772,7 @@ export class Game {
   }
 
   deathCamera(dt) {
-    const f = this.factions[PLAYER_TEAM];
-    const c = f.castle;
+    const c = this.localFaction.castle;
     this.menuCamT += dt * 0.15;
     const t = this.menuCamT;
     this.camera.position.set(c.center.x + Math.sin(t) * 48, c.center.y + 30, c.center.z + Math.cos(t) * 48);

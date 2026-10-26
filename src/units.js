@@ -1,7 +1,7 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM } from './config.js';
-import { buildSoldier, WEAPON_TILT } from './models.js';
+import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 
@@ -27,8 +27,11 @@ export class Unit {
     this.speed = t.speed * (0.94 + Math.random() * 0.12);
     this.range = t.range;
     this.cd = t.cd;
-    this.radius = 0.42 * (t.scale || 1);
-    this.height = 1.85 * (t.scale || 1);
+    this.mounted = !!t.mounted;
+    this.radius = this.mounted ? 0.85 : 0.42 * (t.scale || 1);
+    this.height = this.mounted ? 2.75 : 1.85 * (t.scale || 1);
+    this.variant = stats.variant ?? Math.floor(Math.random() * 6);
+    this.idleT = Math.random() * 10;
     this.siegeBonus = t.siegeBonus || 1;   // vs siege engines
     this.structMult = t.structMult || 0.6; // vs gates and keeps (hand weapons are poor at this)
     this.pos = pos.clone();
@@ -57,9 +60,17 @@ export class Unit {
     this.homeCastle = null;
     this.kills = 0;
 
-    const m = buildSoldier(type, team);
+    const m = buildSoldier(type, team, this.variant);
     this.model = m;
-    this.mesh = m.root;
+    if (this.mounted) {
+      this.horse = buildHorse(team, this.variant, team !== RAIDER_TEAM);
+      this.mesh = new THREE.Group();
+      this.mesh.add(this.horse.root);
+      m.root.position.set(0, SADDLE_Y, -0.05);
+      this.mesh.add(m.root);
+    } else {
+      this.mesh = m.root;
+    }
     this.mesh.position.copy(this.pos);
     this.mesh.userData.unit = this;
     game.scene.add(this.mesh);
@@ -267,6 +278,11 @@ export class Unit {
       if (d <= reach && (!this.ranged || tgt.isStructure || this.los)) {
         face = tgt.pos;
         if (this.attackTimer <= 0 && this.swingT < 0) this.startAttack();
+        if (this.mounted && !tgt.isStructure) {
+          // cavalry rides through its target instead of stopping
+          face = null;
+          moving = this.moveToward(tgt.pos, dt, 0);
+        }
       } else if (!this.post) {
         moving = this.moveToward(this.waypoint || tgt.pos, dt, this.ranged ? 0 : 0.2);
       }
@@ -314,7 +330,7 @@ export class Unit {
     const d = Math.hypot(dx, dz);
     if (d < stopDist) return false;
     const sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
-    const k = Math.min(1, dt * 8);
+    const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
     this.vel.x += ((dx / d) * sp - this.vel.x) * k;
     this.vel.z += ((dz / d) * sp - this.vel.z) * k;
     this.applyMovement(dt, false);
@@ -353,7 +369,7 @@ export class Unit {
     let d = target - this.yaw;
     while (d > Math.PI) d -= Math.PI * 2;
     while (d < -Math.PI) d += Math.PI * 2;
-    this.yaw += d * Math.min(1, dt * 10);
+    this.yaw += d * Math.min(1, dt * (this.mounted ? 3.5 : 10));
   }
 
   startAttack() {
@@ -377,7 +393,8 @@ export class Unit {
           this.game.audio.play('bow', this.pos);
         } else if (this.distTo(t) <= (this.ranged ? 2.2 : this.range) + 1.0) {
           const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1);
-          this.game.damage(t, this.dmg * mult * (0.85 + Math.random() * 0.3), this, { melee: true });
+          const charge = this.mounted ? 1 + Math.max(0, Math.hypot(this.vel.x, this.vel.z) - 3) / 8 : 1;
+          this.game.damage(t, this.dmg * mult * charge * (0.85 + Math.random() * 0.3), this, { melee: true });
         }
       }
     }
@@ -385,34 +402,43 @@ export class Unit {
   }
 
   animate(dt, moving) {
-    const m = this.model;
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    if (moving) this.walkPhase += dt * sp * 2.1;
-    const swing = moving ? Math.sin(this.walkPhase) * Math.min(0.75, sp * 0.16) : 0;
-    m.legL.rotation.x = swing;
-    m.legR.rotation.x = -swing;
-    m.body.position.y = moving ? Math.abs(Math.cos(this.walkPhase)) * 0.05 : 0;
-    m.armL.rotation.x = this.ranged ? -0.3 + swing * 0.3 : -0.55 - swing * 0.2;
-    let rArm = this.ranged ? -0.2 - swing * 0.4 : -0.35 + swing * 0.4;
-    if (this.swingT >= 0) {
-      const t = this.swingT;
-      if (this.ranged) {
-        const a = Math.min(1, t / 0.35);
-        m.armL.rotation.x = -1.55 * a;
-        rArm = -1.45 * a;
-        m.armR.position.z = -0.12 * a;
-      } else if (t < 0.25) rArm = -0.35 + (-2.5 + 0.35) * (t / 0.25);
-      else if (t < 0.4) rArm = -2.5 + 2.1 * ((t - 0.25) / 0.15);
-      else rArm = -0.4 + 0.05 * ((t - 0.4) / 0.22);
-    } else if (this.ranged) m.armR.position.z = 0;
-    m.armR.rotation.x = rArm;
-    m.armR.rotation.z = this.swingT >= 0 && !this.ranged ? -0.25 : 0;
+    if (moving) this.walkPhase += dt * sp * (this.mounted ? 0.0 : 2.1);
+    this.idleT += dt;
+    if (this.horse) {
+      poseHorse(this.horse, moving ? sp : 0, dt);
+      this.walkPhase = this.horse.phase;
+    }
+    poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, mounted: this.mounted, idle: this.idleT });
+  }
+
+  // network client: glide toward the host's latest position and animate
+  netUpdate(dt) {
+    const t = this.netTarget;
+    if (t) {
+      const d = Math.hypot(t.x - this.pos.x, t.z - this.pos.z);
+      const k = d > 10 ? 1 : Math.min(1, dt * 10);
+      this.pos.x += (t.x - this.pos.x) * k;
+      this.pos.y += (t.y - this.pos.y) * k;
+      this.pos.z += (t.z - this.pos.z) * k;
+      let dy = t.yaw - this.yaw;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      this.yaw += dy * Math.min(1, dt * 10);
+      this.vel.set(Math.sin(this.yaw) * t.speed, 0, Math.cos(this.yaw) * t.speed);
+    }
+    if (!this.alive) { this.animateDeath(dt); return; }
+    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }
+    this.animate(dt, t ? t.speed > 0.3 : false);
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.yaw;
   }
 
   animateDeath(dt) {
     this.deathT += dt;
     const t = Math.min(1, this.deathT / 0.55);
-    this.mesh.rotation.x = -t * t * Math.PI / 2;
+    if (this.mounted) this.mesh.rotation.z = t * t * Math.PI / 2 * 0.95;
+    else this.mesh.rotation.x = -t * t * Math.PI / 2;
     this.mesh.position.y = this.pos.y + 0.15 * t;
     if (this.deathT > 9) this.mesh.position.y = this.pos.y - (this.deathT - 9) * 0.4;
   }
