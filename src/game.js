@@ -1,0 +1,637 @@
+// Game state and the main simulation loop.
+import * as THREE from 'three';
+import {
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, ROUNDS, START_GOLD, DIFFICULTY, BOUNTY,
+  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE,
+} from './config.js';
+import { Physics, CASTLE_SITES } from './physics.js';
+import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
+import { materials } from './materials.js';
+import { Castle } from './castle.js';
+import { Unit, makeRaiderStats } from './units.js';
+import { SiegeEngine } from './siege.js';
+import { Projectiles } from './projectiles.js';
+import { Player } from './player.js';
+import { FX } from './fx.js';
+import { LordAI } from './ai.js';
+import { buy } from './economy.js';
+
+class Grid {
+  constructor(cell = 4) { this.cell = cell; this.map = new Map(); }
+  key(ix, iz) { return (ix + 512) * 1024 + (iz + 512); }
+  clear() { for (const a of this.map.values()) a.length = 0; }
+  insert(o) {
+    const k = this.key(Math.floor(o.pos.x / this.cell), Math.floor(o.pos.z / this.cell));
+    let a = this.map.get(k);
+    if (!a) { a = []; this.map.set(k, a); }
+    a.push(o);
+  }
+  query(x, z, r, fn) {
+    const c = this.cell;
+    const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
+    const z0 = Math.floor((z - r) / c), z1 = Math.floor((z + r) / c);
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const a = this.map.get(this.key(ix, iz));
+      if (a) for (let i = 0; i < a.length; i++) fn(a[i]);
+    }
+  }
+}
+
+export class Game {
+  constructor(renderer, ui, audio, input) {
+    this.renderer = renderer;
+    this.ui = ui;
+    this.audio = audio;
+    this.input = input;
+    ui.game = this;
+    this.scene = new THREE.Scene();
+    this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1600);
+    this.scene.add(this.camera);
+    this.time = 0;
+    this.state = 'loading';
+    this.paused = false;
+    this.diff = DIFFICULTY.normal;
+
+    this.physics = new Physics(11);
+    createSky(this.scene, renderer);
+    this.lights = createLights(this.scene);
+    createTerrain(this.scene, this.physics);
+    createForest(this.scene, this.physics);
+    createCentrePiece(this.scene, this.physics, materials().stone);
+    this.fx = new FX(this.scene);
+    this.projectiles = new Projectiles(this);
+    this.grid = new Grid(4);
+    this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
+    this.player = new Player(this, this.camera);
+    this.units = [];
+    this.siege = [];
+    this.factions = [];
+    this.spawnQueue = [];
+    this.menuCamT = 0;
+  }
+
+  // ---------------- setup ----------------
+  start(difficulty = 'normal') {
+    this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
+    this.difficultyName = difficulty;
+    this.state = 'playing';
+    this.round = 0;
+    this.phase = 'prep';
+    this.phaseT = ROUNDS.firstPrep;
+    this.waveT = 0;
+    this.selectedGroup = 'all';
+    this.factions = this.castles.map((c, i) => ({
+      team: i, name: TEAM_NAMES[i], lord: LORD_NAMES[i], isPlayer: i === PLAYER_TEAM, castle: c,
+      gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
+      heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: null, heroDeaths: 0, respawnT: 0,
+      eliminated: false, kills: 0, siegeTarget: null,
+    }));
+    const pf = this.factions[PLAYER_TEAM];
+    pf.hero = this.player;
+    this.player.spawn(pf.castle.spawnPoint, pf.castle.rot);
+    for (const f of this.factions) {
+      if (f.isPlayer) continue;
+      this.spawnLord(f);
+      f.ai = new LordAI(this, f);
+    }
+    // starting garrison
+    for (const f of this.factions) {
+      for (const t of ['swordsman', 'swordsman', 'spearman', 'archer', 'archer']) this.recruit(f, t);
+    }
+    pf.siegeTarget = this.castles[2];
+    this.audio.play('horn');
+    this.ui.toast('Defend your castle. Raiders arrive soon – press B to open the shop.');
+  }
+
+  spawnLord(f) {
+    const lv = f.heroLv;
+    const t = UNIT_TYPES.lord;
+    const u = new Unit(this, 'lord', f.team, f.castle.spawnPoint, {
+      name: f.lord,
+      hp: t.hp + lv.vitality * 30,
+      dmg: t.dmg * (1 + lv.strength * 0.12),
+      armor: t.armor + lv.armor * 3,
+    });
+    u.homeCastle = f.castle;
+    u.slot = 3;
+    u.setOrder('defend');
+    this.units.push(u);
+    f.hero = u;
+    return u;
+  }
+
+  refreshHero(f) {
+    if (f.isPlayer) { this.player.recalc(); return; }
+    const h = f.hero;
+    if (!h || !h.alive) return;
+    const t = UNIT_TYPES.lord;
+    const lv = f.heroLv;
+    const ratio = h.hp / h.maxHp;
+    h.maxHp = t.hp + lv.vitality * 30;
+    h.hp = h.maxHp * ratio;
+    h.dmg = t.dmg * (1 + lv.strength * 0.12);
+    h.armor = t.armor + lv.armor * 3;
+  }
+
+  trainMult(f) { return 1 + 0.15 * f.training; }
+
+  recruit(f, type) {
+    const c = f.castle;
+    const p = c.spawnPoint.clone();
+    p.x += (Math.random() - 0.5) * 6;
+    p.z += (Math.random() - 0.5) * 6;
+    const t = UNIT_TYPES[type];
+    const k = this.trainMult(f);
+    const u = new Unit(this, type, f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
+    u.homeCastle = c;
+    u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
+    u.setOrder('defend');
+    this.units.push(u);
+    return u;
+  }
+
+  applyTraining(f) {
+    const k = this.trainMult(f), prev = 1 + 0.15 * (f.training - 1);
+    for (const u of this.units) {
+      if (u.team !== f.team || u.isHero || !u.alive) continue;
+      u.maxHp = u.maxHp / prev * k;
+      u.hp = u.hp / prev * k;
+      u.dmg = u.dmg / prev * k;
+    }
+  }
+
+  troopCount(team) {
+    let n = 0;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero) n++;
+    return n;
+  }
+  siegeCount(team) { return this.siege.filter((s) => s.alive && s.team === team).length; }
+
+  siegeTarget(f) {
+    if (f.siegeTarget && !f.siegeTarget.fallen && f.siegeTarget.team !== f.team) return f.siegeTarget;
+    let best = null, bd = Infinity;
+    for (const c of this.castles) {
+      if (c.fallen || c.team === f.team) continue;
+      const d = c.center.distanceTo(f.castle.center);
+      if (d < bd) { bd = d; best = c; }
+    }
+    f.siegeTarget = best;
+    return best;
+  }
+  targetName(f) { const t = this.siegeTarget(f); return t ? this.factions[t.team].name : 'none'; }
+
+  buildSiege(f, type) {
+    const c = f.castle;
+    const p = c.gateOut.clone().add(c.dirToWorld(0, 4));
+    p.x += (Math.random() - 0.5) * 4;
+    const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f));
+    this.siege.push(s);
+    return s;
+  }
+
+  // ---------------- queries ----------------
+  castleAt(p) {
+    for (const c of this.castles) if (c.isInside(p)) return c;
+    return null;
+  }
+
+  enemyNear(p, r, team) {
+    let found = false;
+    this.grid.query(p.x, p.z, r, (u) => {
+      if (!found && u.alive && u.team !== team && Math.hypot(u.pos.x - p.x, u.pos.z - p.z) < r) found = true;
+    });
+    return found;
+  }
+
+  raidersNear(castle, r) {
+    let n = 0;
+    for (const u of this.units) if (u.alive && u.team === RAIDER_TEAM && Math.hypot(u.pos.x - castle.center.x, u.pos.z - castle.center.z) < r) n++;
+    return n;
+  }
+
+  siegeAt(p, team, pad = 0.3) {
+    for (const s of this.siege) {
+      if (!s.alive || s.team === team) continue;
+      if (Math.hypot(s.pos.x - p.x, s.pos.z - p.z) < s.radius + pad && p.y < s.pos.y + 3.5 && p.y > s.pos.y - 0.5) return s;
+    }
+    return null;
+  }
+
+  // Nearest hostile character or siege engine for an AI unit.
+  findEnemy(unit, radius, anchor, leash) {
+    let best = null, bd = Infinity;
+    const consider = (o) => {
+      if (!o.alive || o.team === unit.team) return;
+      const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
+      if (d > radius) return;
+      if (!unit.ranged && o.pos.y - unit.pos.y > 2.4) return; // up on a wall: unreachable
+      if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;
+      let score = d;
+      if (o.isSiege) score -= 4;
+      if (unit.ranged && o.post) score += 6;
+      if (score < bd) { bd = score; best = o; }
+    };
+    if (radius <= 50) this.grid.query(unit.pos.x, unit.pos.z, radius, consider);
+    else { for (const u of this.units) consider(u); if (this.player.alive) consider(this.player); }
+    for (const s of this.siege) consider(s);
+    return best;
+  }
+
+  freePost(castle, unit) {
+    for (const p of castle.posts) {
+      if (p.reserved === unit && !p.occupant) return p;
+    }
+    for (const p of castle.posts) {
+      if (p.occupant || (p.seg && !p.seg.alive)) continue;
+      if (p.reserved && p.reserved !== unit && p.reserved.alive && p.reserved.order === 'defend' && !p.reserved.post) continue;
+      p.reserved = unit;
+      return p;
+    }
+    return null;
+  }
+
+  gateShouldOpen(castle) {
+    if (this.state !== 'playing') return false;
+    let friend = false, foe = false;
+    const p = castle.gatePos;
+    this.grid.query(p.x, p.z, 9, (u) => {
+      if (!u.alive) return;
+      const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
+      if (u.team === castle.team && d < 7) friend = true;
+      else if (u.team !== castle.team && d < 9) foe = true;
+    });
+    return friend && !foe;
+  }
+
+  pushOutOfWalls(castle) {
+    for (const u of this.units) if (u.alive && castle.inFootprint(u.pos, 2) && !u.post) this.physics.resolve(u.pos, u.radius, u.pos.y, u.height, u.team);
+    if (castle.inFootprint(this.player.pos, 2)) this.physics.resolve(this.player.pos, this.player.radius, this.player.pos.y, this.player.height, this.player.team);
+  }
+  pushOutOfGate(castle) { this.pushOutOfWalls(castle); }
+
+  // ---------------- combat ----------------
+  damage(target, amount, attacker, info = {}) {
+    if (!target || !target.alive) return;
+    let dmg = amount;
+    if (target.isStructure) {
+      if (target.team === (attacker && attacker.team)) return;
+      target.takeDamage(dmg, attacker);
+      if (info.melee) this.audio.play('thud', target.pos);
+      return;
+    }
+    if (target.isSiege) {
+      target.takeDamage(dmg, attacker);
+      return;
+    }
+    // shield block for the player (frontal only)
+    if (target.isPlayer && target.blocking && attacker && attacker.pos) {
+      const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
+      const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if ((dx * fx + dz * fz) / d > 0.35) {
+        dmg *= 1 - target.shield.block;
+        target.stamina = Math.max(0, target.stamina - 6);
+        this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6), 8);
+        this.audio.play('block');
+        if (dmg < 1) return;
+      }
+    }
+    dmg = Math.max(1, dmg - (target.armor || 0) * (info.splash ? 0.5 : 1));
+    const p = target.chest(new THREE.Vector3());
+    this.fx.blood(p, info.ranged ? 5 : 9);
+    if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
+    if (attacker && attacker.isPlayer) this.ui.hitMarker();
+    target.takeDamage(dmg, attacker);
+  }
+
+  credit(team, gold, at) {
+    if (team < 0 || team > 3) return;
+    const f = this.factions[team];
+    if (!f || f.eliminated) return;
+    const g = Math.round(gold * (f.isPlayer ? 1 : this.diff.aiGold));
+    f.gold += g;
+    f.earned += g;
+    if (f.isPlayer && g > 0) { this.ui.goldPopup(g); if (at) this.fx.gold(at); }
+  }
+
+  onUnitKilled(u, attacker) {
+    const by = attacker && attacker.team !== undefined ? attacker.team : -1;
+    const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
+    if (by !== u.team) this.credit(by, u.team === RAIDER_TEAM ? Math.round(bounty * (1 + this.round * 0.08)) : bounty, u.chest(new THREE.Vector3()));
+    if (attacker) attacker.kills = (attacker.kills || 0) + 1;
+    if (by >= 0 && by <= 3) this.factions[by].kills++;
+    if (u.isHero && u.type === 'lord') {
+      const f = this.factions[u.team];
+      f.heroDeaths++;
+      f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
+      this.ui.kill(attacker, u);
+      this.ui.toast(`${f.lord} has been slain!${f.castle.fallen ? ' Their house is finished.' : ''}`, u.team);
+    } else if (u.def.boss || (attacker && attacker.isPlayer && u.type === 'warlord')) {
+      this.ui.kill(attacker, u);
+    } else if (attacker && attacker.isPlayer) {
+      this.ui.kill(attacker, u);
+    }
+  }
+
+  onPlayerKilled(attacker) {
+    const f = this.factions[PLAYER_TEAM];
+    f.heroDeaths++;
+    f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
+    const by = attacker ? attacker.team : -1;
+    if (by >= 0 && by <= 3) this.credit(by, BOUNTY.hero);
+    this.ui.kill(attacker, this.player);
+    this.audio.play('death');
+    if (f.castle.fallen) this.ui.toast('You have fallen, and your castle is gone…', 0, true);
+  }
+
+  onSiegeDestroyed(s, attacker) {
+    const by = attacker ? attacker.team : -1;
+    if (by !== s.team) this.credit(by, BOUNTY[s.type] || 100, s.chest(new THREE.Vector3()));
+    if (s.team === PLAYER_TEAM) this.ui.toast(`Your ${s.name.toLowerCase()} was destroyed`, 0, true);
+  }
+
+  onStructureDestroyed(part, attacker) {
+    const owner = this.factions[part.team];
+    if (part.kind === 'gate') {
+      if (attacker && attacker.team !== part.team) this.credit(attacker.team, BOUNTY.gate);
+      this.ui.toast(part.team === PLAYER_TEAM ? 'Your gate has been broken!' : `${owner.name}'s gate has been broken!`, part.team, part.team === PLAYER_TEAM);
+    } else if (part.kind === 'wall') {
+      this.ui.toast(part.team === PLAYER_TEAM ? 'Your wall has been breached!' : `A breach opens in ${owner.name}'s wall!`, part.team, part.team === PLAYER_TEAM);
+    }
+  }
+
+  onCastleFallen(castle, attacker) {
+    const f = this.factions[castle.team];
+    if (attacker && attacker.team !== castle.team) this.credit(attacker.team, BOUNTY.keep);
+    this.audio.play('collapse', castle.keep.pos);
+    if (f.isPlayer) this.ui.toast('YOUR KEEP HAS FALLEN! You can no longer respawn – survive!', 0, true);
+    else this.ui.toast(`${f.name}'s keep has fallen!`, castle.team);
+    for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
+    for (const p of castle.posts) if (p.occupant) p.occupant.leavePost();
+  }
+
+  // ---------------- rounds ----------------
+  startWave() {
+    this.round++;
+    this.phase = 'wave';
+    this.waveT = 0;
+    this.audio.play('horn');
+    const r = this.round;
+    const boss = r % 5 === 0;
+    this.ui.banner(`Round ${r}`, boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
+    for (const c of this.castles) {
+      if (c.fallen) continue;
+      const n = Math.round(Math.min(28, 3 + r * 2.2) * this.diff.wave);
+      const list = [];
+      const archers = r >= 2 ? Math.floor(n * 0.25) : 0;
+      const brutes = r >= 4 ? Math.floor(n * 0.12) + Math.floor((r - 4) / 3) : 0;
+      for (let i = 0; i < n; i++) list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : 'raider');
+      if (boss) list.push('warlord');
+      const ang = Math.atan2(c.center.x, c.center.z);
+      list.forEach((type, i) => {
+        const side = i % 2 ? 1 : -1;
+        const a = ang + side * (0.55 + Math.random() * 0.15);
+        const rad = 186 + Math.random() * 10;
+        const p = new THREE.Vector3(Math.sin(a) * rad + (Math.random() - 0.5) * 8, 0, Math.cos(a) * rad + (Math.random() - 0.5) * 8);
+        this.spawnQueue.push({ t: i * 0.35 + Math.random() * 0.5, type, pos: p, castle: c });
+      });
+      if (r >= 3 && r % 3 === 0) this.spawnQueue.push({ t: 2, siege: 'ram', pos: this.edgePoint(ang, 0.6), castle: c });
+      if (r >= 7 && r % 2 === 1) this.spawnQueue.push({ t: 3, siege: 'catapult', pos: this.edgePoint(ang, -0.6), castle: c });
+    }
+  }
+
+  edgePoint(ang, off) {
+    const a = ang + off;
+    return new THREE.Vector3(Math.sin(a) * 180, 0, Math.cos(a) * 180);
+  }
+
+  processSpawns(dt) {
+    for (let i = this.spawnQueue.length - 1; i >= 0; i--) {
+      const s = this.spawnQueue[i];
+      s.t -= dt;
+      if (s.t > 0) continue;
+      this.spawnQueue.splice(i, 1);
+      if (s.castle.fallen) continue;
+      if (s.siege) {
+        const k = 1 + 0.1 * this.round;
+        const e = new SiegeEngine(this, s.siege, RAIDER_TEAM, s.pos, s.castle, { hp: Math.round((s.siege === 'ram' ? 700 : 450) * k) });
+        this.siege.push(e);
+        continue;
+      }
+      const u = new Unit(this, s.type, RAIDER_TEAM, s.pos, makeRaiderStats(s.type, this.round, this.diff));
+      u.setOrder('assault', s.castle);
+      this.units.push(u);
+    }
+  }
+
+  endWave() {
+    this.phase = 'prep';
+    this.phaseT = ROUNDS.prep;
+    const bonus = ROUNDS.survivalBonus(this.round);
+    for (const f of this.factions) if (!f.eliminated) this.credit(f.team, bonus);
+    this.ui.banner(`Round ${this.round} survived`, `+${bonus} gold. Next wave in ${ROUNDS.prep}s`);
+    // refill a few arrows
+    this.player.arrows = Math.min(PLAYER.maxArrows, this.player.arrows + 10);
+  }
+
+  updateRounds(dt) {
+    if (this.phase === 'prep') {
+      this.phaseT -= dt;
+      if (this.phaseT <= 0) this.startWave();
+    } else {
+      this.waveT += dt;
+      const raiders = this.units.some((u) => u.alive && u.team === RAIDER_TEAM) || this.siege.some((s) => s.alive && s.team === RAIDER_TEAM);
+      if ((!raiders && this.spawnQueue.length === 0) || this.waveT > ROUNDS.maxWaveTime) this.endWave();
+    }
+  }
+
+  // ---------------- player orders ----------------
+  groupFilter(u) {
+    if (this.selectedGroup === 'infantry') return u.kind === 'infantry';
+    if (this.selectedGroup === 'archers') return u.kind === 'archer';
+    return true;
+  }
+
+  order(cmd) {
+    const p = this.player;
+    const f = this.factions[PLAYER_TEAM];
+    const troops = this.units.filter((u) => u.alive && u.team === PLAYER_TEAM && !u.isHero && this.groupFilter(u));
+    if (!troops.length) { this.ui.toast('You have no troops in that group. Recruit some in the shop (B).'); return; }
+    let data = null;
+    let label = '';
+    if (cmd === 'hold') {
+      const d = p.lookDir();
+      const at = p.pos.clone().addScaledVector(new THREE.Vector3(d.x, 0, d.z).normalize(), 6);
+      data = { pos: at, yaw: p.yaw };
+      label = 'Hold this position!';
+    } else if (cmd === 'assault') {
+      data = this.siegeTarget(f);
+      if (!data) return;
+      label = `Assault ${this.factions[data.team].name}!`;
+    } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
+    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
+    const groupName = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers' }[this.selectedGroup];
+    this.ui.toast(`${groupName}: ${label}`);
+    this.ui.setOrder(cmd);
+    this.audio.play('order');
+  }
+
+  handleInput() {
+    const i = this.input;
+    if (i.hit('KeyB')) { this.ui.toggleShop(); return; }
+    if (this.ui.shopOpen) return;
+    if (i.hit('F1') || i.hit('KeyZ')) this.order('follow');
+    if (i.hit('F2') || i.hit('KeyX')) this.order('hold');
+    if (i.hit('F3') || i.hit('KeyC')) this.order('charge');
+    if (i.hit('F4') || i.hit('KeyV')) this.order('defend');
+    if (i.hit('KeyT')) this.order('assault');
+    if (i.hit('KeyG')) {
+      const order = ['all', 'infantry', 'archers'];
+      this.selectedGroup = order[(order.indexOf(this.selectedGroup) + 1) % 3];
+      this.ui.toast(`Selected group: ${{ all: 'Everyone', infantry: 'Infantry', archers: 'Archers' }[this.selectedGroup]}`);
+    }
+  }
+
+  buyForPlayer(id) {
+    const r = buy(this, this.factions[PLAYER_TEAM], id);
+    if (r === true) this.audio.play('buy');
+    else { this.audio.play('deny'); this.ui.toast(r); }
+    return r;
+  }
+
+  // ---------------- heroes / elimination ----------------
+  updateHeroes(dt) {
+    for (const f of this.factions) {
+      if (f.eliminated) continue;
+      const alive = f.isPlayer ? this.player.alive : f.hero && f.hero.alive;
+      if (!alive) {
+        if (f.castle.fallen) {
+          this.eliminate(f);
+          continue;
+        }
+        f.respawnT -= dt;
+        if (f.respawnT <= 0) {
+          if (f.isPlayer) {
+            this.player.spawn(f.castle.spawnPoint, f.castle.rot);
+            this.ui.toast('You rise again at your keep.');
+          } else {
+            this.spawnLord(f);
+          }
+        }
+      }
+    }
+    const left = this.factions.filter((f) => !f.eliminated);
+    if (this.state === 'playing') {
+      if (this.factions[PLAYER_TEAM].eliminated) this.finish(false);
+      else if (left.length === 1) this.finish(true);
+    }
+  }
+
+  eliminate(f) {
+    if (f.eliminated) return;
+    f.eliminated = true;
+    this.ui.toast(f.isPlayer ? 'Your house has been destroyed.' : `${f.name} has been destroyed!`, f.team, f.isPlayer);
+    if (f.ai) f.ai.assault = null;
+  }
+
+  finish(won) {
+    this.state = 'over';
+    this.audio.play(won ? 'victory' : 'defeat');
+    this.input.unlock();
+    this.ui.gameOver(won);
+  }
+
+  // ---------------- main loop ----------------
+  update(dt) {
+    if (this.state === 'loading' || this.state === 'menu') {
+      this.menuCamera(dt);
+      for (const c of this.castles) c.update(dt, this.time);
+      this.time += dt;
+      return;
+    }
+    if (this.paused) return;
+    this.time += dt;
+    if (this.state === 'playing') this.handleInput();
+    if (this.ui.shopOpen) return;
+
+    // spatial grid
+    this.grid.clear();
+    for (const u of this.units) if (u.alive) this.grid.insert(u);
+    if (this.player.alive) this.grid.insert(this.player);
+
+    if (this.player.alive) this.player.update(dt, this.input);
+    else this.deathCamera(dt);
+    this.audio.setListener(this.camera.position);
+
+    for (const u of this.units) u.update(dt);
+    for (const s of this.siege) s.update(dt);
+    this.projectiles.update(dt);
+    for (const c of this.castles) {
+      c.update(dt, this.time);
+      this.updateTowers(c, dt);
+    }
+    this.fx.update(dt);
+
+    if (this.state === 'playing') {
+      this.updateRounds(dt);
+      this.processSpawns(dt);
+      for (const f of this.factions) if (f.ai) f.ai.update(dt);
+      this.updateHeroes(dt);
+      // trickle income while the castle stands
+      for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
+    }
+    this.cleanup(dt);
+    followShadow(this.lights.sun, this.camera.position);
+  }
+
+  updateTowers(c, dt) {
+    if (!c.towerLevel || c.fallen) return;
+    for (let i = 0; i < c.towers.length; i++) {
+      c.towerCd[i] -= dt;
+      if (c.towerCd[i] > 0) continue;
+      c.towerCd[i] = 2.6 / c.towerLevel;
+      const top = c.towers[i].top;
+      let best = null, bd = 48;
+      this.grid.query(top.x, top.z, 48, (u) => {
+        if (!u.alive || u.team === c.team) return;
+        const d = Math.hypot(u.pos.x - top.x, u.pos.z - top.z);
+        if (d < bd && d > 4) { bd = d; best = u; }
+      });
+      if (best) {
+        this.projectiles.shootArrow(top.clone(), best, c.team, 14 + 4 * c.towerLevel, { team: c.team, alive: true, pos: top, isTower: true }, 0.03);
+      }
+    }
+  }
+
+  cleanup() {
+    for (let i = this.units.length - 1; i >= 0; i--) {
+      const u = this.units[i];
+      if (!u.alive && u.deathT > 12) { u.remove(); this.units.splice(i, 1); }
+    }
+    for (let i = this.siege.length - 1; i >= 0; i--) {
+      const s = this.siege[i];
+      if (!s.alive && s.deadT > 15) { this.scene.remove(s.mesh); this.siege.splice(i, 1); }
+    }
+  }
+
+  deathCamera(dt) {
+    const f = this.factions[PLAYER_TEAM];
+    const c = f.castle;
+    this.menuCamT += dt * 0.15;
+    const t = this.menuCamT;
+    this.camera.position.set(c.center.x + Math.sin(t) * 48, c.center.y + 30, c.center.z + Math.cos(t) * 48);
+    this.camera.lookAt(c.center.x, c.center.y + 4, c.center.z);
+    if (this.camera.fov !== 75) { this.camera.fov = 75; this.camera.updateProjectionMatrix(); }
+  }
+
+  menuCamera(dt) {
+    this.menuCamT += dt * 0.05;
+    const t = this.menuCamT;
+    const c = this.castles[PLAYER_TEAM];
+    this.camera.position.set(c.center.x + Math.sin(t) * 70, 34, c.center.z - 40 + Math.cos(t) * 30);
+    this.camera.lookAt(c.center.x, 6, c.center.z);
+    followShadow(this.lights.sun, c.center);
+  }
+}
+
+export { CASTLE };

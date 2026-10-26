@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Castle Wars</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --parch: #e9dcbc;
+    --ink: #2a1f14;
+    --gold: #e0b44c;
+    --panel: rgba(20, 16, 12, 0.72);
+    --edge: rgba(224, 180, 76, 0.45);
+    --red: #c43c30;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color: var(--parch);
+    font-family: 'EB Garamond', Georgia, serif; user-select: none; }
+  #app canvas { display: block; }
+  .hidden { display: none !important; }
+  h1, h2, h3, h4, button { font-family: 'Cinzel', Georgia, serif; }
+  button { cursor: pointer; background: linear-gradient(#4a3a24, #2e2416); color: var(--parch); border: 1px solid var(--edge);
+    padding: 10px 18px; font-size: 15px; letter-spacing: 0.04em; border-radius: 3px; }
+  button:hover:not(:disabled) { background: linear-gradient(#6a522e, #3e301c); border-color: var(--gold); }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.active { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; color: #fff; }
+
+  /* ---------- menus ---------- */
+  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20;
+    background: radial-gradient(ellipse at center, rgba(10,8,6,0.35), rgba(10,8,6,0.85)); }
+  .scroll { background: linear-gradient(#efe3c4, #d9c79c); color: var(--ink); padding: 34px 44px; max-width: 760px; width: calc(100% - 32px);
+    border-radius: 6px; box-shadow: 0 10px 60px rgba(0,0,0,0.6), inset 0 0 40px rgba(120,80,30,0.35); border: 2px solid #8a6a3a;
+    max-height: calc(100% - 32px); overflow: auto; }
+  .scroll h1 { margin: 0; font-size: 58px; letter-spacing: 0.08em; text-align: center; color: #5a1d12;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.4); font-weight: 900; }
+  .scroll .sub { text-align: center; margin: 4px 0 18px; font-style: italic; font-size: 18px; }
+  .scroll button { background: linear-gradient(#5a1d12, #3b120b); color: #f4e6c4; border-color: #2a0c06; }
+  .scroll button.active { box-shadow: 0 0 0 2px #e0b44c inset; }
+  .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
+  .controls { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 14px; font-size: 15px; margin: 18px 0 8px; }
+  .controls b { font-family: 'Cinzel', serif; font-size: 13px; white-space: nowrap; }
+  .howto { font-size: 15.5px; line-height: 1.4; }
+  #play { font-size: 22px; padding: 12px 48px; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: Cinzel, serif; font-size: 28px; z-index: 30; background: #111; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; padding: 8px 12px; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.85); }
+  #crosshair::before { left: 10px; top: 4px; width: 2px; height: 14px; }
+  #crosshair::after { top: 10px; left: 4px; height: 2px; width: 14px; }
+  #crosshair.block::before, #crosshair.block::after { background: #7cc0ff; }
+  #crosshair.bow { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; }
+  #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
+  #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
+  #drawbar { position: absolute; left: 50%; top: calc(50% + 26px); width: 80px; height: 4px; transform: translateX(-50%); background: rgba(0,0,0,0.4); }
+  #drawFill { height: 100%; background: var(--gold); width: 0; }
+  #hitmarker { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
+  #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #ff5a4a; }
+  #hitmarker::before { left: 14px; top: 0; width: 2px; height: 30px; }
+  #hitmarker::after { top: 14px; left: 0; height: 2px; width: 30px; }
+  #hitmarker.show { animation: hm 0.25s ease-out; }
+  @keyframes hm { from { opacity: 1; } to { opacity: 0; } }
+
+  #status { position: absolute; left: 16px; bottom: 16px; width: 300px; }
+  .bar { position: relative; height: 16px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); margin-bottom: 6px; }
+  .bar .fill { position: absolute; inset: 0; width: 100%; }
+  #hpFill { background: linear-gradient(#d0463a, #8c1e16); }
+  #stFill { background: linear-gradient(#d6c06a, #96803a); }
+  #hpText { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 15px; text-shadow: 0 1px 2px #000; }
+  #stbar { height: 7px; }
+  #weapon { font-family: Cinzel, serif; font-size: 14px; }
+  #potions, #army { font-size: 14px; opacity: 0.9; }
+
+  #top { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 260px; }
+  #round { font-family: Cinzel, serif; font-size: 22px; color: var(--gold); }
+  #phase { font-size: 15px; }
+  #war { font-size: 12px; opacity: 0.75; }
+  #goldbox { position: absolute; right: 16px; top: 12px; font-family: Cinzel, serif; font-size: 24px; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+  .coin { color: var(--gold); }
+  #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
+  .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
+  @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
+  #hint { position: absolute; right: 16px; top: 58px; font-size: 13px; opacity: 0.75; text-align: right; }
+
+  #factions { position: absolute; left: 16px; top: 12px; width: 330px; font-size: 13px; }
+  .fac { display: grid; grid-template-columns: 12px 1fr 34px 70px 54px 36px; gap: 6px; align-items: center; padding: 2px 0; }
+  .fac i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .fac .bar { height: 7px; margin: 0; }
+  .fac .bar b { display: block; height: 100%; background: #b9a46a; }
+  .fac.dead { opacity: 0.4; text-decoration: line-through; }
+  .fac .g, .fac .t, .fac .h { text-align: right; }
+
+  #minimapWrap { position: absolute; right: 16px; bottom: 16px; padding: 4px; }
+  #minimap { display: block; width: 180px; height: 180px; image-rendering: auto; }
+
+  #toasts { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
+  .toast { background: var(--panel); border-left: 4px solid var(--gold); padding: 6px 14px; font-size: 16px; transition: opacity 0.8s; text-align: center; }
+  .toast.important { font-size: 18px; color: #ffdcc8; border-left-color: var(--red); background: rgba(70,14,10,0.8); }
+  .toast.fade { opacity: 0; }
+  #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
+  .kill { background: rgba(0,0,0,0.55); padding: 3px 10px; }
+  .kill .x { opacity: 0.6; }
+  #banner { position: absolute; left: 0; right: 0; top: 24%; text-align: center; opacity: 0; }
+  #banner h2 { font-size: 54px; margin: 0; color: var(--gold); text-shadow: 0 3px 12px #000; letter-spacing: 0.08em; }
+  #banner p { font-size: 22px; margin: 4px 0; text-shadow: 0 2px 6px #000; }
+  #banner.show { animation: ban 4s ease-out forwards; }
+  @keyframes ban { 0% { opacity: 0; transform: scale(1.1); } 10% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+  #target { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); width: 240px; text-align: center; }
+  #targetName { font-family: Cinzel, serif; font-size: 14px; text-shadow: 0 1px 3px #000; }
+  #target .bar { height: 6px; }
+  #targetFill { position: absolute; inset: 0; }
+  #vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(160,0,0,0.85)); opacity: 0; }
+  #respawn { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%); text-align: center; }
+  #respawn h2 { font-size: 46px; margin: 0; color: #d55; text-shadow: 0 3px 10px #000; }
+  #respawnT { font-size: 22px; text-shadow: 0 2px 6px #000; }
+  #fps { position: absolute; right: 200px; bottom: 16px; font-size: 11px; opacity: 0.5; }
+
+  #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(760px, calc(100% - 32px)); }
+  #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 12px; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 8px; }
+  #scoreboard td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+  /* ---------- shop ---------- */
+  #shop { position: fixed; inset: 0; z-index: 15; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
+  #shop .box { width: min(980px, calc(100% - 32px)); max-height: calc(100% - 32px); display: flex; flex-direction: column; background: linear-gradient(#2a2117, #1b150e);
+    border: 1px solid var(--gold); border-radius: 6px; box-shadow: 0 10px 60px #000; }
+  #shop header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--edge); gap: 12px; flex-wrap: wrap; }
+  #shop header h3 { margin: 0; font-size: 26px; color: var(--gold); }
+  #shop .stat { font-family: Cinzel, serif; font-size: 18px; }
+  #shop .tabs { display: flex; gap: 6px; padding: 10px 20px 0; flex-wrap: wrap; }
+  #shopGrid { padding: 16px 20px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; overflow: auto; }
+  .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.25); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; }
+  .card h4 { margin: 0 0 6px; font-size: 16px; color: #f3e2b5; }
+  .card p { margin: 0 0 12px; font-size: 15px; opacity: 0.85; flex: 1; }
+  .card button { width: 100%; }
+  .targets { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .targets .label { width: 100%; font-size: 15px; opacity: 0.85; }
+  #gameover h1.win { color: #2c5a12; }
+  #gameover h1.lose { color: #6a1010; }
+  .stats { display: flex; gap: 22px; justify-content: center; margin: 16px 0; flex-wrap: wrap; }
+  .stats div { text-align: center; }
+  .stats b { display: block; font-family: Cinzel, serif; font-size: 30px; }
+  .stats span { font-size: 14px; }
+  .settings { display: flex; gap: 20px; justify-content: center; align-items: center; flex-wrap: wrap; font-size: 15px; }
+  @media (max-width: 760px) {
+    #factions { width: 250px; font-size: 11px; }
+    .fac { grid-template-columns: 10px 1fr 26px 40px 44px 30px; }
+    #minimap { width: 120px; height: 120px; }
+    #status { width: 210px; }
+    .controls { grid-template-columns: auto 1fr; }
+    .scroll h1 { font-size: 38px; }
+  }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="loading">Raising the castles…</div>
+
+<div id="menu" class="screen hidden">
+  <div class="scroll">
+    <h1>CASTLE WARS</h1>
+    <div class="sub">Four lords. Four castles. Endless raiders. Only one keep will stand.</div>
+    <div class="howto">
+      You are the lord of the blue castle. Each round, waves of raiders attack every castle, and every wave is harder than the last.
+      Kill enemies to earn gold. Spend it on troops, castle defences, your hero and siege engines.
+      From round 4 the rival lords go to war too. Break their <b>gates</b> with swords or rams, breach their <b>walls</b> with catapults,
+      and destroy their <b>keep</b>. If you die you respawn at your keep after a delay, but only while your keep stands.
+      The last castle and hero standing wins.
+    </div>
+    <div class="controls">
+      <b>WASD</b><span>Move · Shift sprint · Space jump</span>
+      <b>Mouse</b><span>Look</span>
+      <b>Left click</b><span>Attack / draw bow</span>
+      <b>Right click</b><span>Block with shield / aim</span>
+      <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
+      <b>Q</b><span>Healing draught</span>
+      <b>B</b><span>Shop &amp; upgrades</span>
+      <b>Tab</b><span>Scoreboard</span>
+      <b>F1 / Z</b><span>Troops: follow me</span>
+      <b>F2 / X</b><span>Troops: hold here</span>
+      <b>F3 / C</b><span>Troops: charge</span>
+      <b>F4 / V</b><span>Troops: defend castle</span>
+      <b>T</b><span>Troops: assault target castle</span>
+      <b>G</b><span>Select group: all / infantry / archers</span>
+    </div>
+    <div class="row" id="difficulty">
+      <button data-d="easy">Easy</button>
+      <button data-d="normal" class="active">Normal</button>
+      <button data-d="hard">Hard</button>
+    </div>
+    <div class="row"><button id="play">Take Up Arms</button></div>
+  </div>
+</div>
+
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="crosshair"></div>
+  <div id="drawbar"><div id="drawFill"></div></div>
+  <div id="hitmarker"></div>
+  <div id="factions" class="panel"></div>
+  <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
+  <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
+  <div id="goldpops"></div>
+  <div id="hint">B: shop · Tab: scores</div>
+  <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
+  <div id="killfeed"></div>
+  <div id="banner"><h2></h2><p></p></div>
+  <div id="toasts"></div>
+  <div id="status" class="panel">
+    <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
+    <div class="bar" id="stbar"><div class="fill" id="stFill"></div></div>
+    <div id="weapon"></div>
+    <div id="potions"></div>
+    <div id="army"></div>
+  </div>
+  <div id="minimapWrap" class="panel"><canvas id="minimap" width="180" height="180"></canvas></div>
+  <div id="fps"></div>
+  <div id="respawn" class="hidden"><h2>You have fallen</h2><div id="respawnT"></div></div>
+</div>
+
+<div id="scoreboard" class="panel hidden">
+  <table><thead><tr><th>House</th><th>Lord</th><th>Gold</th><th>Troops</th><th>Kills</th><th>Hero deaths</th><th>Keep</th><th>Status</th></tr></thead>
+  <tbody id="scoreRows"></tbody></table>
+</div>
+
+<div id="shop" class="hidden">
+  <div class="box">
+    <header>
+      <h3>Quartermaster</h3>
+      <div class="stat"><span class="coin">●</span> <span id="shopGold">0</span> &nbsp; ⚔ <span id="shopTroops"></span></div>
+      <button id="shopClose">Close (B)</button>
+    </header>
+    <div class="tabs">
+      <button data-tab="army">Army</button>
+      <button data-tab="castle">Castle</button>
+      <button data-tab="hero">Hero</button>
+      <button data-tab="items">Items</button>
+      <button data-tab="siege">Siege</button>
+    </div>
+    <div id="shopGrid"></div>
+  </div>
+</div>
+
+<div id="pause" class="screen hidden">
+  <div class="scroll" style="text-align:center">
+    <h1 style="font-size:44px">Paused</h1>
+    <div class="settings">
+      <label>Mouse sensitivity <input id="sens" type="range" min="0" max="100" value="35"></label>
+      <label>Volume <input id="vol" type="range" min="0" max="100" value="50"></label>
+    </div>
+    <div class="row" style="margin-top:20px"><button id="resume">Resume</button></div>
+  </div>
+</div>
+
+<div id="gameover" class="screen hidden">
+  <div class="scroll" style="text-align:center">
+    <h1 id="goTitle">Victory</h1>
+    <div class="sub" id="goText"></div>
+    <div class="stats" id="goStats"></div>
+    <div class="row"><button id="again">Play Again</button></div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
