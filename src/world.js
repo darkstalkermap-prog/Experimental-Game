@@ -8,11 +8,16 @@ import { grassDetailTexture } from './textures.js';
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
 
 // Roads run from each castle gate to the centre of the map.
-export const ROADS = CASTLE_SITES.map((s) => {
-  const len = Math.hypot(s.x, s.z);
-  const gx = s.x - (s.x / len) * (CASTLE.H + 4), gz = s.z - (s.z / len) * (CASTLE.H + 4);
-  return { ax: gx, az: gz, bx: 0, bz: 0 };
-});
+export const ROADS = [];
+export function layoutRoads() {
+  ROADS.length = 0;
+  for (const s of CASTLE_SITES) {
+    const len = Math.hypot(s.x, s.z);
+    const gx = s.x - (s.x / len) * (CASTLE.H + 4), gz = s.z - (s.z / len) * (CASTLE.H + 4);
+    ROADS.push({ ax: gx, az: gz, bx: 0, bz: 0 });
+  }
+}
+layoutRoads();
 
 function distToSeg(px, pz, r) {
   const vx = r.bx - r.ax, vz = r.bz - r.az;
@@ -103,6 +108,7 @@ export function followShadow(sun, focus) {
 }
 
 export function createTerrain(scene, physics) {
+  layoutRoads();
   const size = WORLD.half * 2;
   const segs = physics.n - 1;
   const geo = new THREE.PlaneGeometry(size, size, segs, segs);
@@ -160,18 +166,19 @@ export function createForest(scene, physics) {
   const pines = [], oaks = [], rocks = [];
   const { fbm } = physics.noise;
   let tries = 0;
-  while ((pines.length + oaks.length) < 900 && tries++ < 20000) {
+  const area = (WORLD.half / 220) ** 2;
+  while ((pines.length + oaks.length) < 900 * area && tries++ < 20000 * area) {
     const x = (rng() * 2 - 1) * (WORLD.half - 4);
     const z = (rng() * 2 - 1) * (WORLD.half - 4);
     if (!okForProp(x, z, physics)) continue;
     const density = fbm(x * 0.012 + 50, z * 0.012, 3) * 0.5 + 0.5;
-    const edge = Math.max(Math.abs(x), Math.abs(z)) > 185 ? 0.35 : 0;
+    const edge = Math.max(Math.abs(x), Math.abs(z)) > WORLD.half - 35 ? 0.35 : 0;
     if (rng() > density * 1.25 - 0.25 + edge) continue;
     const y = physics.terrainHeight(x, z);
     (rng() < 0.6 ? pines : oaks).push({ x, y, z, s: 0.8 + rng() * 0.6, r: rng() * Math.PI * 2, c: rng() });
   }
   tries = 0;
-  while (rocks.length < 160 && tries++ < 5000) {
+  while (rocks.length < 160 * area && tries++ < 5000 * area) {
     const x = (rng() * 2 - 1) * (WORLD.half - 4);
     const z = (rng() * 2 - 1) * (WORLD.half - 4);
     if (!okForProp(x, z, physics)) continue;

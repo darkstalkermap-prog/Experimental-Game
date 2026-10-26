@@ -6,15 +6,22 @@ import { makeNoise, smoothstep, clamp } from './noise.js';
 export const STEP = 0.65; // max height a character can step up
 
 // Castle sites: index = team. rot turns castle-local +Z (gate side) toward the map centre.
-export const CASTLE_SITES = [
-  { x: 0, z: WORLD.castleDist, rot: Math.PI },
-  { x: 0, z: -WORLD.castleDist, rot: 0 },
-  { x: WORLD.castleDist, z: 0, rot: -Math.PI / 2 },
-  { x: -WORLD.castleDist, z: 0, rot: Math.PI / 2 },
-];
+export const CASTLE_SITES = [];
+export function layoutCastles() {
+  const d = WORLD.castleDist;
+  CASTLE_SITES.length = 0;
+  CASTLE_SITES.push(
+    { x: 0, z: d, rot: Math.PI },
+    { x: 0, z: -d, rot: 0 },
+    { x: d, z: 0, rot: -Math.PI / 2 },
+    { x: -d, z: 0, rot: Math.PI / 2 },
+  );
+}
+layoutCastles();
 
 export class Physics {
   constructor(seed = 7) {
+    layoutCastles();
     this.noise = makeNoise(seed);
     this.res = 2; // metres per terrain cell
     this.n = Math.round((WORLD.half * 2) / this.res) + 1;
@@ -38,7 +45,7 @@ export class Physics {
     let h = 7 * fbm(x * 0.0075 + 3.1, z * 0.0075 - 1.7, 4) + 2.2 * fbm(x * 0.03, z * 0.03, 3) + 3;
     // ring of hills at the map edge
     const edge = Math.max(Math.abs(x), Math.abs(z));
-    h += Math.pow(Math.max(0, edge - 175), 1.35) * 0.55;
+    h += Math.pow(Math.max(0, edge - (WORLD.half - 45)), 1.35) * 0.55;
     // gentle battlefield in the middle
     const rc = Math.hypot(x, z);
     h = h * (0.45 + 0.55 * smoothstep(25, 90, rc)) + 1.2 * (1 - smoothstep(25, 90, rc));

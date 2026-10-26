@@ -39,6 +39,7 @@ export class Unit {
     this.strafeSide = Math.random() < 0.5 ? 1 : -1;
     this.strafeT = 0;
     this.hasShield = !!t.shield;
+    this.isGiant = !!t.giant;
     this.xp = 0;
     this.rank = 1;
     this.slowT = 0;
@@ -95,7 +96,7 @@ export class Unit {
     this.hp -= amount;
     // heavy blows interrupt and knock the soldier back; heroes and riders are harder to shake
     const sturdy = this.isHero || this.mounted || (this.def && this.def.boss);
-    if (this.hp > 0 && info.melee && (info.parry || amount >= this.maxHp * (sturdy ? 0.2 : 0.12) || info.charge >= 0.9)) {
+    if (this.hp > 0 && !this.isGiant && info.melee && (info.parry || amount >= this.maxHp * (sturdy ? 0.2 : 0.12) || info.charge >= 0.9)) {
       this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
     }
     this.lastAttacker = attacker;
@@ -116,9 +117,36 @@ export class Unit {
     this.game.onUnitKilled(this, attacker);
   }
 
+  // A giant's club hits the ground in front of it: everything nearby is hurt and thrown off balance.
+  giantSmash(t) {
+    const g = this.game;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const c = new THREE.Vector3(this.pos.x + fx * 2.6, this.pos.y + 0.3, this.pos.z + fz * 2.6);
+    g.fx.dust(c, 24, 3);
+    g.audio.play('boom', c);
+    g.grid.query(c.x, c.z, 5, (u) => {
+      if (!u.alive || u.team === this.team || u === t) return;
+      const d = Math.hypot(u.pos.x - c.x, u.pos.z - c.z);
+      if (d > 3.8 + u.radius || Math.abs(u.pos.y - c.y) > 3) return;
+      g.damage(u, this.dmg * (1 - 0.4 * Math.min(1, d / 3.8)), this, { melee: true, splash: true });
+      if (u.alive && u.stagger) u.stagger(0.9, this);
+    });
+    if (t && t.alive) {
+      const mult = t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1;
+      if (this.distTo(t) <= this.range + 1.5) g.damage(t, this.dmg * mult, this, { melee: true, splash: !t.isStructure && !t.isSiege });
+      if (t.alive && t.stagger && !t.isStructure) t.stagger(0.9, this);
+    }
+    const s = g.siegeAt(c, this.team, 3);
+    if (s && s !== t) g.damage(s, this.dmg * this.siegeBonus, this, { melee: true });
+    for (const h of g.humans) {
+      const d = Math.hypot(h.pos.x - c.x, h.pos.z - c.z);
+      if (d < 35) g.deliver(h, { k: 'shake', a: 0.5 * (1 - d / 35) });
+    }
+  }
+
   // --- experience ---
   gainXp(n) {
-    if (this.team === RAIDER_TEAM || this.isHero || !this.alive) return;
+    if (this.team === RAIDER_TEAM || this.isHero || this.isGiant || !this.alive) return;
     this.xp += n;
     while (this.rank < 5 && this.xp >= RANKS.xp[this.rank]) {
       this.rank++;
@@ -154,6 +182,7 @@ export class Unit {
   }
 
   stagger(sec, from) {
+    if (this.isGiant) return;
     this.staggerT = Math.max(this.staggerT, sec);
     this.staggerMax = this.staggerT;
     this.swingT = -1;
@@ -169,7 +198,7 @@ export class Unit {
 
   // Try to block an incoming hit. Returns true when the blow is stopped.
   tryBlock(attacker, info) {
-    if (!attacker || !attacker.pos || this.staggerT > 0 || this.post) return false;
+    if (!attacker || !attacker.pos || this.staggerT > 0 || this.post || this.isGiant) return false;
     if (this.swingT >= 0 && this.swingT < 0.45) return false; // busy attacking
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const dx = attacker.pos.x - this.pos.x, dz = attacker.pos.z - this.pos.z;
@@ -502,6 +531,7 @@ export class Unit {
     const dirs = attackDirsFor(this.def.weapon);
     const t = this.target;
     // a hero aims where its opponent isn't guarding
+    if (this.isGiant) return Math.random() < 0.5 ? 'over' : 'right';
     if (this.isHero && t && t.isPlayer && t.blocking && dirs.length > 1 && Math.random() < 0.75) {
       const open = dirs.filter((d) => d !== t.blockDir);
       return open[Math.floor(Math.random() * open.length)];
@@ -519,7 +549,7 @@ export class Unit {
   }
 
   updateAttack(dt) {
-    this.swingT += dt;
+    this.swingT += dt * (this.isGiant ? 0.45 : 1); // giants wind up slowly
     if (this.feint && this.swingT >= 0.18) {
       // feint: abandon the wind-up and come in from another side
       this.feint = false;
@@ -533,7 +563,9 @@ export class Unit {
       this.struck = true;
       const t = this.target;
       if (t && t.alive) {
-        if (this.def.spell && !t.isStructure) {
+        if (this.isGiant) {
+          this.giantSmash(t);
+        } else if (this.def.spell && !t.isStructure) {
           // casters hurl their spell straight at where the target will be
           const from = this.chest(new THREE.Vector3());
           from.y += 0.3;
@@ -565,6 +597,18 @@ export class Unit {
       this.walkPhase = this.horse.phase;
     }
     const stag = this.staggerT > 0 ? Math.min(1, this.staggerT / Math.max(0.2, (this.staggerMax || 0.5) * 0.5)) : 0;
+    if (this.isGiant && moving) {
+      // the ground shakes under each step
+      const step = Math.floor(this.walkPhase / Math.PI);
+      if (step !== this.lastStep) {
+        this.lastStep = step;
+        this.game.fx.stomp(this.pos.clone().setY(this.pos.y + 0.2));
+        this.game.audio.play('stomp', this.pos);
+        const p = this.game.player;
+        const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+        if (d < 30) p.shake = Math.max(p.shake, 0.2 * (1 - d / 30));
+      }
+    }
     poseSoldier(this.model, {
       phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, attackDir: this.attackDir,
       stagger: stag, blocking: this.blockFlash > 0 || this.braced, mounted: this.mounted, idle: this.idleT,

@@ -246,7 +246,8 @@ export class UI {
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
       $('round').textContent = g.round ? `Round ${g.round}` : 'Preparation';
-      if (g.phase === 'prep') $('phase').textContent = `Next wave in ${Math.ceil(g.phaseT)}s`;
+      if (g.phase === 'prep' && g.round === 0) $('phase').textContent = `Battle begins in ${Math.ceil(g.phaseT)}s${g.simulating ? ' · Enter to start now' : ''}`;
+      else if (g.phase === 'prep') $('phase').textContent = `Next wave in ${Math.ceil(g.phaseT)}s`;
       else {
         const left = g.units.filter((u) => u.alive && u.team === RAIDER_TEAM).length + g.spawnQueue.length;
         $('phase').textContent = `${left} raiders remain`;
@@ -386,7 +387,7 @@ export class UI {
     for (const u of g.units) {
       if (!u.alive) continue;
       ctx.fillStyle = TEAM_CSS[u.team];
-      const r = u.isHero ? 3 : 1.6;
+      const r = u.isGiant ? 5 : u.isHero ? 3 : 1.6;
       ctx.fillRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2);
       if (u.isHero) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2); }
     }

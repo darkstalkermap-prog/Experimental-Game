@@ -5,6 +5,7 @@ import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Net } from './net.js';
+import { setMapSize, WORLD, MAP_SIZES } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -21,16 +22,27 @@ const ui = new UI();
 const audio = new Audio();
 const input = new Input(renderer.domElement);
 
+// map size (remembered per browser); the world is rebuilt when it changes
+let mapSize = 'medium';
+try { mapSize = localStorage.getItem('cw-map') || 'medium'; } catch (e) { /* storage unavailable */ }
+if (!MAP_SIZES[mapSize]) mapSize = 'medium';
+
 let game;
-try {
+function buildGame(size) {
+  setMapSize(size);
   game = new Game(renderer, ui, audio, input);
+  game.state = 'menu';
+  game.mapBuiltFor = size;
+  ui.mapBg = null;
+  window.__game = game; // handy for debugging from the console
+}
+try {
+  buildGame(mapSize);
 } catch (e) {
   console.error(e);
   $('loading').textContent = 'Failed to start: ' + e.message;
   throw e;
 }
-window.__game = game; // handy for debugging from the console
-game.state = 'menu';
 $('loading').classList.add('hidden');
 $('menu').classList.remove('hidden');
 
@@ -63,7 +75,29 @@ document.querySelectorAll('#difficulty button').forEach((b) => {
   });
 });
 
-function begin(diff, setup = null) {
+function selectMap(size) {
+  mapSize = size;
+  document.querySelectorAll('#mapsize button').forEach((b) => b.classList.toggle('active', b.dataset.m === size));
+  $('mapDesc').textContent = MAP_SIZES[size].desc;
+  try { localStorage.setItem('cw-map', size); } catch (e) { /* ignore */ }
+}
+document.querySelectorAll('#mapsize button').forEach((b) => b.addEventListener('click', () => selectMap(b.dataset.m)));
+selectMap(mapSize);
+
+// rebuild the world if the chosen map size differs from the one on screen
+function ensureMap(size) {
+  if (WORLD.size === size && game.mapBuiltFor === size) return;
+  const net0 = game.net;
+  renderer.renderLists.dispose();
+  buildGame(size);
+  game.net = net0;
+  game.setQuality(quality);
+  resize();
+}
+
+function begin(diff, setup = null, map = mapSize) {
+  ensureMap(map);
+  if (net) game.net = net;
   audio.init();
   $('menu').classList.add('hidden');
   $('lobby').classList.add('hidden');
@@ -119,7 +153,7 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  net.toAll({ k: 'start', diff: difficulty, players: lobby });
+  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize });
   begin(difficulty, { mode: 'host', localTeam: 0, players: lobby });
 });
 
@@ -135,7 +169,7 @@ $('joinBtn').addEventListener('click', async () => {
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name })) });
+      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name })) }, d.map || 'medium');
     }
   });
   net.join(code, playerName());

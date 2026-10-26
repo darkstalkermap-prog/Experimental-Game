@@ -76,6 +76,8 @@ export class Audio {
       case 'boom': this.noise(1.0, 220, 0.7, 1.0 * k, 'lowpass'); this.tone(55, 0.8, 0.6 * k, 'sine', 0.4); break;
       case 'zap': this.noise(0.25, 3500, 0.5, 0.5 * k, 'highpass'); this.tone(900, 0.2, 0.15 * k, 'sawtooth', 0.2); break;
       case 'ice': this.tone(2600, 0.25, 0.12 * k, 'triangle', 0.6); this.noise(0.15, 5000, 2, 0.3 * k, 'highpass'); break;
+      case 'stomp': this.noise(0.35, 90, 1, 0.9 * k, 'lowpass'); this.tone(38, 0.35, 0.7 * k, 'sine', 0.6); break;
+      case 'roar': this.tone(90, 1.2, 0.5 * k, 'sawtooth', 0.6); this.noise(1.0, 300, 0.5, 0.5 * k, 'lowpass'); break;
       case 'parry': this.tone(2400, 0.35, 0.22 * k, 'square', 0.5); this.tone(1200, 0.4, 0.2 * k, 'triangle', 0.8); this.noise(0.15, 4000, 2, 0.4 * k, 'highpass'); break;
       case 'block': this.tone(700, 0.15, 0.2 * k, 'square', 0.6); this.noise(0.1, 1500, 1, 0.3 * k); break;
       case 'bow': this.tone(220, 0.2, 0.2 * k, 'triangle', 0.6); this.noise(0.15, 2000, 1, 0.15 * k); break;

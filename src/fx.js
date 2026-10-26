@@ -74,6 +74,8 @@ export class FX {
   }
   gold(p) { this.burst(p, 8, C.gold, 2, 0.15, 0.8, { grav: 4 }); }
 
+  stomp(p) { this.burst(p, 10, C.dust, 3, 1.2, 1.2, { grow: 1.2, alpha: 0.4 }); }
+
   // --- magic ---
   fireTrail(p) {
     const v = new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.6 + Math.random() * 0.6, (Math.random() - 0.5) * 0.6);

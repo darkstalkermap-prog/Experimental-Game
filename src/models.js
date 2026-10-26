@@ -85,6 +85,13 @@ function weaponGeo(kind) {
     parts.push(part(p.cyl8, WOOD, [0, -0.36, 0], [0, 0, 0], [0.045, 0.92, 0.045]));
     parts.push(part(p.box, IRON, [0, -0.74, 0.1], [0, 0, 0], [0.03, 0.22, 0.22]));
     parts.push(part(p.box, STEEL, [0, -0.74, 0.215], [0, 0, 0], [0.034, 0.26, 0.02]));
+  } else if (kind === 'club') {
+    parts.push(part(p.taper, 0x5a3e24, [0, -0.6, 0], [Math.PI, 0, 0], [0.16, 1.4, 0.16]));
+    parts.push(part(p.sphere, 0x4a321c, [0, -1.25, 0], [0, 0, 0], [0.26, 0.34, 0.26]));
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      parts.push(part(p.cone, IRON, [Math.cos(a) * 0.13, -1.25 + (i % 2) * 0.12, Math.sin(a) * 0.13], [0, 0, 0], [0.05, 0.14, 0.05]).rotateZ(0));
+    }
   } else if (kind === 'staff') {
     parts.push(part(p.cyl8, 0x4a3420, [0, -0.45, 0], [0, 0, 0], [0.05, 1.7, 0.05]));
     parts.push(part(p.sphere, 0xff9a3a, [0, -1.36, 0], [0, 0, 0], [0.16, 0.16, 0.16]));
@@ -99,7 +106,7 @@ function weaponGeo(kind) {
   return parts.length ? mergeGeometries(parts) : null;
 }
 
-export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, staff: -2.6, bow: 0 };
+export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, staff: -2.6, club: -0.9, bow: 0 };
 
 function shieldParts(kind, cloth, raider, out) {
   const p = prims();
@@ -236,6 +243,11 @@ export function getModelGeos(type, team, variant = 0) {
   }
   if (t.body === 'gambeson') {
     for (let i = 0; i < 4; i++) torso.push(part(p.box, 0x7d6a4a, [0, 1.08 + i * 0.1, 0.129], [0, 0, 0], [0.37, 0.012, 0.02]));
+  }
+  if (t.giant && !raider) {
+    // a giant bound to a house wears its colours: a sash and arm bands
+    torso.push(part(p.box, cloth, [0, 1.2, 0.02], [0, 0, 0.75], [0.12, 0.85, 0.3]));
+    torso.push(part(p.box, cloth, [0, 0.97, 0], [0, 0, 0], [0.45, 0.09, 0.29]));
   }
   headParts(t, look, metal, mailCol, torso);
   if (t.cape) {

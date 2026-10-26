@@ -167,7 +167,10 @@
   .stats div { text-align: center; }
   .stats b { display: block; font-family: Cinzel, serif; font-size: 30px; }
   .stats span { font-size: 14px; }
-  .quality { align-items: center; }
+  .quality, #mapsize { align-items: center; }
+  #mapsize .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+  #mapsize button { padding: 6px 14px; font-size: 13px; }
+  .mapdesc { font-size: 14.5px; font-style: italic; flex-basis: 100%; text-align: center; }
   .quality .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
   .quality button { padding: 6px 14px; font-size: 13px; }
   .section { text-align: center; margin: 22px 0 4px; font-size: 20px; color: #5a1d12; }
@@ -233,6 +236,10 @@
     <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
       <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
     </div>
+    <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
+      <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
+      <span id="mapDesc" class="mapdesc"></span>
+    </div>
     <div class="row" id="difficulty">
       <button data-d="easy">Easy</button>
       <button data-d="normal" class="active">Normal</button>
@@ -260,7 +267,7 @@
     <h1 style="font-size:44px">War Council</h1>
     <div class="sub">Room code <b id="roomCode" class="code"></b><br>Friends open <span id="roomUrl"></span>, enter the code and press Join.</div>
     <ul id="lobbyList"></ul>
-    <div class="note">Empty castles are held by AI lords. Difficulty comes from the host's menu choice.</div>
+    <div class="note">Empty castles are held by AI lords. Map size and difficulty come from the host's menu choices.</div>
     <div class="row" id="lobbyHostCtl"><button id="startOnline">Start the Battle</button></div>
     <div class="row hidden" id="lobbyWait"><span>Waiting for the host to start…</span></div>
     <div class="row"><button id="leaveLobby">Leave</button></div>

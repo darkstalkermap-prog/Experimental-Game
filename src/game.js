@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, ROUNDS, START_GOLD, DIFFICULTY, BOUNTY,
-  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS,
+  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -165,7 +165,7 @@ export class Game {
     if (this.mode === 'client') this.sync = new ClientSync(this);
     this.localFaction.siegeTarget = this.castles[(lp.team + 2) % 4];
     this.audio.play('horn');
-    this.ui.toast('Defend your castle. Raiders arrive soon. Press B to open the shop.');
+    this.ui.banner('Prepare for battle', `${ROUNDS.firstPrep} seconds to recruit and upgrade. B opens the shop${this.mode === 'client' ? '' : ', Enter starts early'}.`);
   }
 
   spawnLord(f) {
@@ -227,7 +227,7 @@ export class Game {
 
   troopCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant) n++;
     return n;
   }
   siegeCount(team) { return this.siege.filter((s) => s.alive && s.team === team).length; }
@@ -363,7 +363,7 @@ export class Game {
   killFeed(attacker, victim) {
     const name = (o, viewer) => (!o ? 'The fall' : o === viewer ? 'You' : o.isTower ? 'Tower archers' : o.name);
     const team = (o) => (o && o.team !== undefined ? o.team : RAIDER_TEAM);
-    const notable = victim.isHero || (victim.def && victim.def.boss);
+    const notable = victim.isHero || victim.isGiant || (victim.def && victim.def.boss);
     for (const h of this.humans) {
       if (h.remote && this.mode !== 'host') continue;
       if (!notable && attacker !== h && victim !== h) continue;
@@ -380,6 +380,7 @@ export class Game {
       case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); break;
       case 'stagger': this.player.stagger(ev.t); break;
+      case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner); break;
       default: break;
@@ -522,7 +523,7 @@ export class Game {
     this.audio.play('horn', this.camera.position);
     const r = this.round;
     const boss = r % 5 === 0;
-    this.bannerAll(`Round ${r}`, boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
+    this.bannerAll(`Round ${r}`, r % 10 === 0 ? 'The raiders have brought GIANTS!' : boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
     for (const c of this.castles) {
       if (c.fallen) continue;
       const n = Math.round(Math.min(28, 3 + r * 2.2) * this.diff.wave);
@@ -536,11 +537,12 @@ export class Game {
         list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : i < archers + brutes + riders ? 'raiderRider' : k < shamans ? 'shaman' : 'raider');
       }
       if (boss) list.push('warlord');
+      if (r % 10 === 0) list.push('giant');
       const ang = Math.atan2(c.center.x, c.center.z);
       list.forEach((type, i) => {
         const side = i % 2 ? 1 : -1;
         const a = ang + side * (0.55 + Math.random() * 0.15);
-        const rad = 186 + Math.random() * 10;
+        const rad = WORLD.half - 34 + Math.random() * 10;
         const p = new THREE.Vector3(Math.sin(a) * rad + (Math.random() - 0.5) * 8, 0, Math.cos(a) * rad + (Math.random() - 0.5) * 8);
         this.spawnQueue.push({ t: i * 0.35 + Math.random() * 0.5, type, pos: p, castle: c });
       });
@@ -551,7 +553,7 @@ export class Game {
 
   edgePoint(ang, off) {
     const a = ang + off;
-    return new THREE.Vector3(Math.sin(a) * 180, 0, Math.cos(a) * 180);
+    return new THREE.Vector3(Math.sin(a) * (WORLD.half - 40), 0, Math.cos(a) * (WORLD.half - 40));
   }
 
   processSpawns(dt) {
@@ -601,7 +603,7 @@ export class Game {
     const f = this.factions[team];
     const p = f.player;
     const inGroup = (u) => group === 'all' || (group === 'infantry' && u.kind === 'infantry') || (group === 'archers' && u.kind === 'archer') || (group === 'cavalry' && u.kind === 'cavalry');
-    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && inGroup(u)));
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && inGroup(u)));
     if (!troops.length) { p.notify('You have no troops in that group. Recruit some in the shop (B).'); return; }
     let data = null;
     let label = '';
@@ -629,7 +631,7 @@ export class Game {
     const f = this.factions[team];
     if (!FORMATIONS[formation]) return;
     f.formation = formation;
-    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && (u.order === 'follow' || u.order === 'hold')));
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && (u.order === 'follow' || u.order === 'hold')));
     troops.forEach((u, i) => { u.slot = i; u.thinkTimer = 0; });
     if (f.player) {
       const tips = { line: 'balanced ranks.', shieldwall: 'tight ranks, shields locked; they hold their ground and block far more.', loose: 'spread out, harder to hit with arrows and fire.' };
@@ -644,6 +646,26 @@ export class Game {
     const next = keys[(keys.indexOf(f.formation || 'line') + 1) % keys.length];
     if (this.mode === 'client') { f.formation = next; this.net.toHost({ a: 'formation', f: next }); this.ui.toast(`Formation: ${FORMATIONS[next].name}`); return; }
     this.setFormation(this.localTeam, next);
+  }
+
+  hasGiant(team) { return this.units.some((u) => u.alive && u.isGiant && u.team === team); }
+
+  // A castle calls up a giant, which marches on the faction's siege target.
+  summonGiant(f) {
+    const c = f.castle;
+    const p = c.gateOut.clone().add(c.dirToWorld(0, 6));
+    const k = this.trainMult(f);
+    const t = UNIT_TYPES.giant;
+    const u = new Unit(this, 'giant', f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
+    u.homeCastle = c;
+    u.yaw = c.rot;
+    const target = this.siegeTarget(f);
+    if (target) u.setOrder('assault', target); else u.setOrder('charge');
+    this.units.push(u);
+    this.audio.play('roar', p);
+    const tName = target ? this.factions[target.team].name : 'the enemy';
+    this.announce((v) => (v === f.team ? `Your giant rises and lumbers toward ${tName}!` : v === (target && target.team) ? `${f.name} has summoned a GIANT, and it is coming for you!` : `${f.name} has summoned a giant!`), f.team, target ? target.team : -99);
+    return u;
   }
 
   onUnitRankUp(u) {
@@ -715,6 +737,10 @@ export class Game {
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
     if (i.hit('KeyF')) this.localFormation();
+    if (i.hit('Enter') && this.round === 0 && this.phase === 'prep' && this.simulating && this.phaseT > 3) {
+      this.phaseT = 3;
+      this.announce('The battle begins!');
+    }
     if (i.hit('KeyG')) {
       const p = this.player;
       p.group = GROUPS[(GROUPS.indexOf(p.group || 'all') + 1) % GROUPS.length];

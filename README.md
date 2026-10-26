@@ -55,7 +55,12 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 ## How it works
 
 - **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a warhorse.
-- **Rounds**: there is a preparation phase, then a raider wave hits every castle. Later waves bring archers,
+- **Preparation**: every match opens with 60 seconds and 500 gold to recruit, upgrade and learn spells before
+  the first wave. Press **Enter** to start early (the host decides online). In single player, time stops while
+  the shop is open.
+- **Map size**: choose Small, Medium or Large in the menu. Small puts castles close for early clashes, and
+  Large leaves long marches through more forest. Online, the host's choice applies to everyone.
+- **Rounds**: after preparation, a raider wave hits every castle. Later waves bring archers,
   brutes, battering rams and catapults, and every 5th round a Raider Warlord leads the horde.
 - **Gold** comes from kills, surviving rounds, breaking gates and destroying keeps. Spend it in the shop (**B**):
   - **Army**: swordsmen, spearmen, archers, knights, cavalry and lancers, plus a larger barracks and troop training.
@@ -92,6 +97,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   more health, damage and armour. From rank 3 they wear a plume, which turns gold at rank 5. Rank ★★★★
   soldiers can be **promoted** in the shop (Army tab): Swordsman or Spearman to Knight, Archer to Longbowman,
   Cavalry to Lancer. They keep their rank.
+- **Giants**: once you've saved 1,600 gold, your castle can **summon a giant** (shop, Siege tab). The
+  6-metre giant marches on your target castle, smashing gates and keeps. Its club flattens and staggers
+  everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
+  summon giants too, and every 10th round the raiders bring one.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
 - **Death**: your hero respawns at the keep. Each death makes the wait longer. Once your keep falls, you can no
   longer respawn.
@@ -124,6 +133,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | T | Troops: assault the selected target castle |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
+| Enter | Start the match early during preparation |
 | Esc | Pause |
 
 The stairs beside the gate lead up to the wall walk, so you can fight from the battlements.

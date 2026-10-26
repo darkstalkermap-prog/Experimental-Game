@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, SPELLS, MANA, PROMOTIONS, RANKS } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, SPELLS, MANA, PROMOTIONS, RANKS, GIANT_COST } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 
 const heroLv = (g, f) => (f.isPlayer ? f.player.lv : f.heroLv);
@@ -215,6 +215,13 @@ export const SHOP = [
     cost: (g, f) => 200 * ((f.player.lv.regen || 0) + 1),
     can: (g, f) => ((f.player.lv.regen || 0) >= 3 ? 'Maximum' : true),
     apply: (g, f) => { f.player.lv.regen = (f.player.lv.regen || 0) + 1; },
+  },
+  {
+    id: 'giant', tab: 'siege', name: 'Summon a Giant',
+    desc: (g, f) => `A 6-metre giant (${UNIT_TYPES.giant.hp} HP) marches on ${g.targetName(f)}, smashing gates and keeps and flattening anyone near its club. One at a time.`,
+    cost: () => GIANT_COST,
+    can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : g.hasGiant(f.team) ? 'Your giant still lives' : !g.siegeTarget(f) ? 'No target' : true),
+    apply: (g, f) => g.summonGiant(f),
   },
   {
     id: 'ram', tab: 'siege', name: SIEGE_TYPES.ram.name,

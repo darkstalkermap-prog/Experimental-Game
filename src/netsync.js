@@ -15,7 +15,7 @@ const r1 = (x) => Math.round(x * 10) / 10;
 const r2 = (x) => Math.round(x * 100) / 100;
 const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
-const QUIET_SOUNDS = new Set(['arrowHit']);
+const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
 
 export class HostSync {
   constructor(game) {

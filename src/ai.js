@@ -54,7 +54,7 @@ export class LordAI {
   }
 
   troops() {
-    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero);
+    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero && !u.isGiant);
   }
 
   war() {
@@ -103,6 +103,7 @@ export class LordAI {
     if (f.hero && f.hero.alive && Math.random() < 0.6) f.hero.setOrder('assault', best);
     if (best.gate.alive && f.gold >= 450) this.try('ram');
     if (g.round >= 6 && f.gold >= 800) this.try('catapult');
+    if (g.round >= 7 && f.gold >= 2000) this.try('giant');
     g.ui.toast(`${f.name} marches on ${g.factions[best.team].name}!`, f.team, best.team === 0);
   }
 

@@ -13,7 +13,23 @@ export const WORLD = {
   playHalf: 204,    // characters are clamped to +-playHalf
   castleDist: 130,  // distance of each castle from the map centre
   gravity: 22,
+  size: 'medium',
 };
+
+export const MAP_SIZES = {
+  small: { name: 'Small', half: 160, castleDist: 88, desc: 'Castles close together: early clashes.' },
+  medium: { name: 'Medium', half: 220, castleDist: 130, desc: 'Balanced distances.' },
+  large: { name: 'Large', half: 300, castleDist: 190, desc: 'Wide wilds between castles: long marches, more forest.' },
+};
+
+// Switch map size. Must be called before a Game is built.
+export function setMapSize(size) {
+  const m = MAP_SIZES[size] || MAP_SIZES.medium;
+  WORLD.size = MAP_SIZES[size] ? size : 'medium';
+  WORLD.half = m.half;
+  WORLD.playHalf = m.half - 16;
+  WORLD.castleDist = m.castleDist;
+}
 
 export const CASTLE = {
   H: 20,          // half-size of the curtain wall square
@@ -32,14 +48,15 @@ export const CASTLE = {
 };
 
 export const ROUNDS = {
-  firstPrep: 40,      // seconds before the first wave
+  firstPrep: 60,      // preparation time before the first wave (buy and upgrade before the match)
   prep: 25,           // seconds between waves
   maxWaveTime: 210,   // a wave is force-ended after this long
   warRound: 4,        // rival lords start assaulting castles from this round
   survivalBonus: (round) => 80 + round * 25,
 };
 
-export const START_GOLD = 300;
+export const START_GOLD = 500;
+export const GIANT_COST = 1600;
 
 export const DIFFICULTY = {
   easy:   { wave: 0.7, enemyStat: 0.85, aiGold: 0.8, aiAggro: 0.7 },
@@ -50,7 +67,7 @@ export const DIFFICULTY = {
 // Gold rewards for kills, by victim kind.
 export const BOUNTY = {
   raider: 10, raiderArcher: 12, brute: 35, warlord: 250,
-  raiderRider: 30, shaman: 30, longbowman: 30, horseman: 50, lancer: 65,
+  raiderRider: 30, shaman: 30, longbowman: 30, giant: 600, horseman: 50, lancer: 65,
   swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120,
   ram: 120, catapult: 180,
   gate: 200,
@@ -92,6 +109,8 @@ export const UNIT_TYPES = {
     weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'cavalry', mounted: true },
   shaman: { name: 'Raider Shaman', hp: 70, dmg: 26, armor: 0, speed: 4.2, range: 34, cd: 3.4,
     weapon: 'staff', helmet: 'hood', body: 'fur', kind: 'archer', ranged: true, spell: 'fireball' },
+  giant: { name: 'Giant', hp: 3200, dmg: 90, armor: 6, speed: 3.4, range: 4.4, cd: 2.6,
+    weapon: 'club', helmet: 'none', body: 'fur', scale: 3.2, kind: 'giant', giant: true, structMult: 4, siegeBonus: 2.5 },
   brute: { name: 'Brute', hp: 260, dmg: 22, armor: 4, speed: 3.8, range: 2.4, cd: 1.6,
     weapon: 'greataxe', helmet: 'horned', body: 'fur', scale: 1.25, kind: 'infantry', siegeBonus: 1.5, structMult: 1.5 },
   warlord: { name: 'Raider Warlord', hp: 1000, dmg: 36, armor: 8, speed: 4.2, range: 2.6, cd: 1.3,
