@@ -71,6 +71,21 @@
   #dirs i[data-d="left"].guard { border-right-color: #7cc0ff; opacity: 1; } #dirs i[data-d="right"].guard { border-left-color: #7cc0ff; opacity: 1; }
   #dirs i[data-d="over"].threat { border-bottom-color: #ff3b2f; opacity: 1; } #dirs i[data-d="thrust"].threat { border-top-color: #ff3b2f; opacity: 1; }
   #dirs i[data-d="left"].threat { border-right-color: #ff3b2f; opacity: 1; } #dirs i[data-d="right"].threat { border-left-color: #ff3b2f; opacity: 1; }
+  kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 11px/1.4 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.35); color: #fff; }
+  #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
+  #prompt kbd { font-size: 14px; }
+  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 14px; align-items: center; font-size: 14px; padding: 6px 12px; white-space: nowrap; }
+  #command .orders { display: flex; gap: 8px; }
+  #command .orders span { opacity: 0.7; padding: 1px 6px; border-radius: 3px; }
+  #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.3); color: #fff; }
+  #command b { font-weight: 600; color: var(--gold); }
+  @media (max-width: 1420px) { #command { bottom: 150px; } #toasts { bottom: 196px; } }
+  @media (max-width: 1000px) { #command { font-size: 12px; gap: 8px; } #command .orders { gap: 4px; } }
+  .orders-grid { grid-column: 1 / -1; display: grid; gap: 14px; }
+  .orders-grid h5 { margin: 0 0 6px; font-family: Cinzel, serif; font-size: 14px; color: var(--gold); }
+  .orders-grid .row { justify-content: flex-start; margin: 0; }
+  .orders-grid button { min-width: 110px; }
+  .orders-grid .note { text-align: left; margin: 0; }
   #feedback { position: absolute; left: 50%; top: calc(50% + 60px); transform: translateX(-50%); font-family: Cinzel, serif; font-size: 20px; color: #dfe8f0; text-shadow: 0 2px 6px #000; opacity: 0; }
   #feedback.good { color: #ffd36a; font-size: 26px; }
   #feedback.show { animation: fb 0.7s ease-out; }
@@ -119,7 +134,7 @@
   #minimapWrap { position: absolute; right: 16px; bottom: 16px; padding: 4px; }
   #minimap { display: block; width: 180px; height: 180px; image-rendering: auto; }
 
-  #toasts { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
+  #toasts { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
   .toast { background: var(--panel); border-left: 4px solid var(--gold); padding: 6px 14px; font-size: 16px; transition: opacity 0.8s; text-align: center; }
   .toast.important { font-size: 18px; color: #ffdcc8; border-left-color: var(--red); background: rgba(70,14,10,0.8); }
   .toast.fade { opacity: 0; }
@@ -229,7 +244,8 @@
       <b>1 / 2 / 3 / wheel</b><span>Sword &amp; shield / bow / magic</span>
       <b>R (or 3 again)</b><span>Next spell · fireball: hold to charge</span>
       <b>Q</b><span>Healing draught</span>
-      <b>E</b><span>Mount / dismount / call your horse</span>
+      <b>E</b><span>Use the gate lever · mount / call your horse</span>
+      <b>O</b><span>Orders menu (click to command troops)</span>
       <b>B</b><span>Shop &amp; upgrades</span>
       <b>Tab</b><span>Scoreboard</span>
       <b>F1 / Z</b><span>Troops: follow me</span>
@@ -292,11 +308,20 @@
   <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
-  <div id="hint">B: shop · Tab: scores</div>
+  <div id="hint">B: shop · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
   <div id="banner"><h2></h2><p></p></div>
   <div id="toasts"></div>
+  <div id="prompt" class="hidden"><kbd>E</kbd> <span id="promptText"></span></div>
+  <div id="command" class="panel">
+    <span class="cg"><kbd>G</kbd> <b id="cmdGroup">Everyone</b></span>
+    <span class="cg"><kbd>F</kbd> <b id="cmdForm">Line</b></span>
+    <span class="orders">
+      <span data-o="follow"><kbd>F1</kbd>Follow</span><span data-o="hold"><kbd>F2</kbd>Hold</span><span data-o="charge"><kbd>F3</kbd>Charge</span><span data-o="defend"><kbd>F4</kbd>Defend</span><span data-o="assault"><kbd>T</kbd>Assault</span>
+    </span>
+    <span class="cg"><kbd>O</kbd> Orders menu</span>
+  </div>
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
     <div class="bar" id="stbar"><div class="fill" id="stFill"></div></div>
@@ -318,11 +343,12 @@
 <div id="shop" class="hidden">
   <div class="box">
     <header>
-      <h3>Quartermaster</h3>
+      <h3 id="shopTitle">Quartermaster</h3>
       <div class="stat"><span class="coin">●</span> <span id="shopGold">0</span> &nbsp; ⚔ <span id="shopTroops"></span></div>
-      <button id="shopClose">Close (B)</button>
+      <button id="shopClose">Close</button>
     </header>
     <div class="tabs">
+      <button data-tab="orders">Orders</button>
       <button data-tab="army">Army</button>
       <button data-tab="castle">Castle</button>
       <button data-tab="hero">Hero</button>

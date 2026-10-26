@@ -563,7 +563,10 @@ export class Player {
     this.spellCd = Math.max(0, this.spellCd - dt);
     if (input.hit('KeyQ')) this.drinkPotion();
 
-    if (input.hit('KeyE')) this.toggleMount();
+    if (input.hit('KeyE')) {
+      if (g.leverNear(this)) g.localToggleGate();
+      else this.toggleMount();
+    }
 
     // movement
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);

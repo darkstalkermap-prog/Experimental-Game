@@ -75,6 +75,40 @@ export class UI {
     el.classList.add('show');
   }
 
+  // "E" prompts for things you can interact with right now.
+  updatePrompt() {
+    const g = this.game;
+    const p = g.player;
+    let text = null;
+    if (p.alive && !this.shopOpen) {
+      const c = g.leverNear(p);
+      if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
+      else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
+    }
+    if (text !== this.lastPrompt) {
+      this.lastPrompt = text;
+      $('prompt').classList.toggle('hidden', !text);
+      if (text) $('promptText').textContent = text;
+    }
+    // command bar
+    const grp = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
+    const form = FORMATIONS[(g.localFaction && g.localFaction.formation) || 'line'].name;
+    const ord = p.lastOrder || 'defend';
+    const key = grp + form + ord;
+    if (key !== this.lastCmdKey) {
+      this.lastCmdKey = key;
+      $('cmdGroup').textContent = grp;
+      $('cmdForm').textContent = form;
+      document.querySelectorAll('#command .orders span').forEach((e) => e.classList.toggle('active', e.dataset.o === ord));
+    }
+  }
+
+  openOrders() {
+    this.tab = 'orders';
+    if (this.shopOpen) this.renderShop();
+    else this.toggleShop(true);
+  }
+
   // Direction chevrons: where you're aiming / winding up / guarding, and blows coming at you.
   updateDirs() {
     const g = this.game;
@@ -141,6 +175,9 @@ export class UI {
     grid.innerHTML = '';
     this.shopCards = [];
     this.targetBtns = [];
+    this.orderBtns = [];
+    $('shopTitle').textContent = this.tab === 'orders' ? 'Orders' : 'Quartermaster';
+    if (this.tab === 'orders') { this.buildOrders(grid); this.refreshShop(); return; }
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
@@ -169,6 +206,59 @@ export class UI {
       this.shopCards.push({ item, card, p, btn, last: '' });
     }
     this.refreshShop();
+  }
+
+  // Clickable troop commands (the same as the keys shown on the command bar).
+  buildOrders(grid) {
+    const g = this.game;
+    const wrap = document.createElement('div');
+    wrap.className = 'orders-grid';
+    const section = (title, items, note) => {
+      const sec = document.createElement('div');
+      const h = document.createElement('h5');
+      h.textContent = title;
+      const row = document.createElement('div');
+      row.className = 'row';
+      for (const it of items) {
+        const b = document.createElement('button');
+        b.innerHTML = `<kbd>${it.key}</kbd> ${esc(it.label)}`;
+        b.addEventListener('click', () => { it.act(); g.audio.play('order'); this.refreshShop(); });
+        row.appendChild(b);
+        this.orderBtns.push({ b, active: it.active });
+      }
+      sec.append(h, row);
+      if (note) { const n = document.createElement('div'); n.className = 'note'; n.textContent = note; sec.appendChild(n); }
+      wrap.appendChild(sec);
+    };
+    const p = g.player;
+    const setGroup = (grp) => () => { p.group = grp; };
+    section('Who gets the order', [
+      { key: 'G', label: 'Everyone', act: setGroup('all'), active: () => (p.group || 'all') === 'all' },
+      { key: 'G', label: 'Infantry', act: setGroup('infantry'), active: () => p.group === 'infantry' },
+      { key: 'G', label: 'Archers', act: setGroup('archers'), active: () => p.group === 'archers' },
+      { key: 'G', label: 'Cavalry', act: setGroup('cavalry'), active: () => p.group === 'cavalry' },
+    ]);
+    section('Orders', [
+      { key: 'F1', label: 'Follow me', act: () => g.localOrder('follow'), active: () => p.lastOrder === 'follow' },
+      { key: 'F2', label: 'Hold here', act: () => g.localOrder('hold'), active: () => p.lastOrder === 'hold' },
+      { key: 'F3', label: 'Charge', act: () => g.localOrder('charge'), active: () => p.lastOrder === 'charge' },
+      { key: 'F4', label: 'Defend castle', act: () => g.localOrder('defend'), active: () => (p.lastOrder || 'defend') === 'defend' },
+      { key: 'T', label: 'Assault target', act: () => g.localOrder('assault'), active: () => p.lastOrder === 'assault' },
+    ], 'Hold here places them 6 m in front of where you are looking. Assault sends them at the target chosen in the Siege tab.');
+    const setForm = (f) => () => { if ((g.localFaction.formation || 'line') !== f) { while ((g.localFaction.formation || 'line') !== f) g.localFormation(); } };
+    section('Formation', [
+      { key: 'F', label: 'Line', act: setForm('line'), active: () => (g.localFaction.formation || 'line') === 'line' },
+      { key: 'F', label: 'Shield Wall', act: setForm('shieldwall'), active: () => g.localFaction.formation === 'shieldwall' },
+      { key: 'F', label: 'Loose', act: setForm('loose'), active: () => g.localFaction.formation === 'loose' },
+    ], 'Formations shape how troops follow and hold. A held Shield Wall locks shields and stands its ground.');
+    section('Gate', [
+      { key: 'E', label: 'Bar / unbar the gate', act: () => g.localToggleGate(), active: () => g.localFaction.castle.gateLocked },
+    ], 'You can also pull the lever just inside your gate. A barred gate stays shut, even to your own troops.');
+    const sum = document.createElement('div');
+    sum.className = 'note';
+    sum.id = 'troopSummary';
+    wrap.appendChild(sum);
+    grid.appendChild(wrap);
   }
 
   clickItem(item, card) {
@@ -202,6 +292,12 @@ export class UI {
       if (t.b.textContent !== txt) t.b.textContent = txt;
       t.b.disabled = t.c.fallen;
       t.b.classList.toggle('active', chosen);
+    }
+    for (const o of this.orderBtns || []) o.b.classList.toggle('active', !!o.active());
+    if ($('troopSummary')) {
+      const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant);
+      const n = (k) => mine.filter((u) => u.kind === k).length;
+      $('troopSummary').textContent = `Your troops: ${n('infantry')} infantry, ${n('archer')} archers, ${n('cavalry')} cavalry · ${mine.filter((u) => u.rank >= 3).length} veterans`;
     }
     for (const c of this.shopCards || []) {
       const can = c.item.can(g, f);
@@ -279,6 +375,7 @@ export class UI {
     $('mnFill').style.width = `${(p.mana / p.manaMax) * 100}%`;
     $('crosshair').classList.toggle('block', p.blocking);
     this.updateDirs();
+    this.updatePrompt();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
     $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.bow.draw) * 100}%` : '0%';
 

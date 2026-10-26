@@ -5,7 +5,8 @@ import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { CASTLE, TEAM_COLORS } from './config.js';
 import { materials, box, shadowed } from './materials.js';
 
-const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH } = CASTLE;
+const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
+const TC = H + towerOff; // corner tower centres
 const GW = gateW / 2;
 const KEEP_Z = -6;
 
@@ -179,48 +180,102 @@ export class Castle {
     roofGeo.translate(0, towerH + 2.75 + 0.8, 0);
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
       const t = new THREE.Mesh(towerFull, M.stone);
-      t.position.set(sx * H, 0, sz * H);
+      t.position.set(sx * TC, 0, sz * TC);
       g.add(shadowed(t));
       if (sz === -1) {
         const roof = new THREE.Mesh(roofGeo, M.roof);
         roof.position.copy(t.position);
         g.add(shadowed(roof));
-        this.addFlag(sx * H, towerH + 6.3, sz * H, 1.4);
+        this.addFlag(sx * TC, towerH + 6.3, sz * TC, 1.4);
       } else {
-        this.addFlag(sx * H, towerH + 1.5, sz * H, 1.2);
+        this.addFlag(sx * TC, towerH + 1.5, sz * TC, 1.2);
       }
       const r = towerR * 0.92;
-      this.addCollider(sx * H - r, sx * H + r, sz * H - r, sz * H + r, towerH, { kind: 'tower' });
-      this.towers.push({ top: this.toWorld(sx * H, sz * H, towerH + 1.6) });
+      this.addCollider(sx * TC - r, sx * TC + r, sz * TC - r, sz * TC + r, towerH, { kind: 'tower' });
+      this.towers.push({ top: this.toWorld(sx * TC, sz * TC, towerH + 1.6) });
     }
 
     // ---- keep ----
     this.buildKeep();
 
-    // ---- ramps up to the front wall walk ----
+    // ---- wall walk: a wooden hoarding all the way round the inside of the walls ----
+    // It joins the 2 m stone wall top into one 5.5 m walk; soldiers walk underneath it.
+    const IN = H - T;            // inner face of the walls
+    const E = IN - WALK;         // inner edge of the walkway
+    const cy = this.center.y;
+    const slabs = [[-IN, IN, E, IN], [-IN, IN, -IN, -E], [-IN, -E, -E, E], [E, IN, -E, E],
+      // landings: the top of each staircase runs straight on into the back walkway
+      [E - 3, E, -E, -6], [-E, -E + 3, -E, -6]];
+    const deck = [];
+    for (const [x0, x1, z0, z1] of slabs) {
+      const b = box(x1 - x0, 0.45, z1 - z0, 2);
+      b.translate((x0 + x1) / 2, wallH - 0.225, (z0 + z1) / 2);
+      deck.push(b);
+      this.addCollider(x0, x1, z0, z1, wallH, { kind: 'walk', bottom: cy + wallH - 0.5, noProjectile: true });
+    }
+    g.add(shadowed(new THREE.Mesh(mergeGeometries(deck), M.plank)));
+    // support posts with braces along the inner edge (stairs leave gaps)
+    const posts = [];
+    const postAt = (x, z) => {
+      const pb = box(0.38, wallH - 0.45, 0.38, 1);
+      pb.translate(x, (wallH - 0.45) / 2, z);
+      posts.push(pb);
+      this.addCollider(x - 0.22, x + 0.22, z - 0.22, z + 0.22, wallH - 0.5, { kind: 'post', noWalk: true, noProjectile: true });
+    };
+    for (let t = -E; t <= E + 0.01; t += (2 * E) / 6) {
+      if (Math.abs(t) > 3.6) postAt(t, E);               // front: keep the gateway clear
+      postAt(t, -E);                                     // back
+      if (Math.abs(t) > 6.5) { postAt(-E, t); postAt(E, t); } // sides: the stairs fill the middle
+    }
+    for (const sx of [-1, 1]) postAt(sx * (E - 3), -10.2); // under the landings
+    g.add(shadowed(new THREE.Mesh(mergeGeometries(posts), M.wood)));
+
+    // stairs up to the walk, one on each side, rising toward the back of the castle
+    const STAIR_W = 3, z0 = 6, z1 = -6;
     for (const s of [-1, 1]) {
-      const lo = 15.5, hi = 4;
-      // solid stone stairs (the collider below is a smooth ramp)
+      const xs = s * (E - STAIR_W / 2);
       const steps = [];
-      const N = 12, w = (lo - hi) / N;
+      const N = 14, d = (z0 - z1) / N;
       for (let i = 0; i < N; i++) {
         const h = (wallH * (i + 1)) / N;
-        const st = box(w, h, 3);
-        st.translate(s * (lo - (i + 0.5) * w), h / 2, H - T - 1.5);
+        const st = box(STAIR_W, h, d);
+        st.translate(xs, h / 2, z0 - (i + 0.5) * d);
         steps.push(st);
       }
-      const ramp = new THREE.Mesh(mergeGeometries(steps), M.stoneDark);
-      g.add(shadowed(ramp));
-      const cy = this.center.y;
-      this.addCollider(Math.min(s * hi, s * lo), Math.max(s * hi, s * lo), H - T - 3, H - T, wallH, {
+      g.add(shadowed(new THREE.Mesh(mergeGeometries(steps), M.stoneDark)));
+      this.addCollider(Math.min(xs - STAIR_W / 2, xs + STAIR_W / 2), Math.max(xs - STAIR_W / 2, xs + STAIR_W / 2), z1, z0, wallH, {
         kind: 'ramp',
         heightFn: (x, z) => {
           const l = this.toLocal(x, z);
-          const t = Math.min(1, Math.max(0, (lo - Math.abs(l.x)) / (lo - hi)));
-          return cy + wallH * t;
+          return cy + wallH * Math.min(1, Math.max(0, (z0 - l.z) / (z0 - z1)));
         },
       });
     }
+
+    // ---- the gate lever and the bar that locks the gate ----
+    this.leverLocal = { x: 5.8, z: IN - 5 };
+    const lever = new THREE.Group();
+    lever.position.set(this.leverLocal.x, 0, this.leverLocal.z);
+    const base = new THREE.Mesh(box(0.9, 0.9, 0.6, 1), M.stoneDark);
+    base.position.y = 0.45;
+    const handle = new THREE.Group();
+    handle.position.y = 0.9;
+    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6), M.wood);
+    stick.position.y = 0.6;
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), M.iron);
+    knob.position.y = 1.2;
+    handle.add(stick, knob);
+    handle.rotation.x = 0.6;
+    lever.add(shadowed(base), shadowed(handle));
+    g.add(lever);
+    this.leverHandle = handle;
+    this.leverPos = this.toWorld(this.leverLocal.x, this.leverLocal.z, 1.2);
+    const bar = new THREE.Mesh(box(gateW + 1.2, 0.35, 0.35, 2), M.wood);
+    bar.position.set(0, 2.6, IN - 0.3);
+    bar.visible = false;
+    g.add(shadowed(bar));
+    this.gateBar = bar;
+    this.gateLocked = false;
 
     // ---- hanging banners on the front wall ----
     for (const s of [-1, 1]) {
@@ -231,7 +286,7 @@ export class Castle {
 
     // ---- courtyard props ----
     const crate = new THREE.Mesh(box(1.1, 1.1, 1.1, 1.1), M.plank);
-    const props = [[-12, -14], [-13.3, -14.2], [-12.6, -12.8], [13, -15], [12, -9]];
+    const props = [[-10, -12], [-11.3, -12.2], [-10.6, -10.8], [10.5, -12.5], [9.5, -9]];
     for (const [x, z] of props) {
       const c = crate.clone();
       c.position.set(x, 0.55, z);
@@ -239,7 +294,7 @@ export class Castle {
       g.add(shadowed(c));
     }
     const barrelGeo = new THREE.CylinderGeometry(0.45, 0.45, 1.1, 10);
-    for (const [x, z] of [[14, -12], [14.8, -11.2], [-14.6, -9]]) {
+    for (const [x, z] of [[11.6, -10.6], [12.3, -9.8], [-12.2, -8.5]]) {
       const b = new THREE.Mesh(barrelGeo, M.plank);
       b.position.set(x, 0.55, z);
       g.add(shadowed(b));
@@ -458,6 +513,7 @@ export class Castle {
       gate.hp = 0;
       gate.alive = false;
       this.applyGateVisual();
+      this.gateBar.visible = false;
       this.game.fx.splinters(gate.pos, 40);
       this.game.fx.dust(gate.pos, 25, 4);
       this.game.audio.play('collapse', gate.pos);
@@ -474,6 +530,7 @@ export class Castle {
       this.applyGateVisual();
       this.game.pushOutOfGate(this);
     }
+    this.setGateLocked(this.gateLocked);
   }
 
   damageKeep(amt, attacker) {
@@ -500,6 +557,14 @@ export class Castle {
     this.game.onCastleFallen(this, attacker);
   }
 
+  // Bar or unbar the gate. Barred, it stays shut for everyone, your own troops included.
+  setGateLocked(locked) {
+    this.gateLocked = !!locked;
+    this.gate.collider.passTeam = this.gateLocked ? -1 : this.team;
+    this.gateBar.visible = this.gateLocked && this.gate.alive;
+    this.leverHandle.rotation.x = this.gateLocked ? -0.6 : 0.6;
+  }
+
   // --- network snapshot ---
   netState() {
     const br = this.walls.filter((w) => w.breakable);
@@ -507,7 +572,7 @@ export class Castle {
       Math.round(this.gate.hp), Math.round(this.gate.maxHp), this.gate.alive ? 1 : 0,
       Math.round(this.keep.hp), this.keep.maxHp, this.fallen ? 1 : 0,
       this.wallLevel, this.gateLevel, this.towerLevel,
-      br.map((w) => Math.round(w.hp)), Math.round(br[0] ? br[0].maxHp : 0),
+      br.map((w) => Math.round(w.hp)), Math.round(br[0] ? br[0].maxHp : 0), this.gateLocked ? 1 : 0,
     ];
   }
 
@@ -519,6 +584,7 @@ export class Castle {
     this.keep.hp = a[3]; this.keep.maxHp = a[4];
     if (a[5] && !this.fallen) { this.fallen = true; this.keep.alive = false; this.applyFallenVisual(); }
     this.wallLevel = a[6]; this.gateLevel = a[7]; this.towerLevel = a[8];
+    if (!!a[11] !== this.gateLocked) this.setGateLocked(!!a[11]);
     const br = this.walls.filter((w) => w.breakable);
     br.forEach((w, i) => {
       const hp = a[9][i];
@@ -546,7 +612,7 @@ export class Castle {
     // gate opens for friendly troops when no enemy is close
     const gate = this.gate;
     if (gate.alive) {
-      const want = this.game.gateShouldOpen(this) ? 1 : 0;
+      const want = !this.gateLocked && this.game.gateShouldOpen(this) ? 1 : 0;
       gate.openAmt += (want - gate.openAmt) * Math.min(1, dt * 3);
       for (const l of gate.leaves) l.pivot.rotation.y = -l.s * 1.35 * gate.openAmt;
     }

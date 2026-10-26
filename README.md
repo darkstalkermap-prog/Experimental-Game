@@ -101,6 +101,15 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   6-metre giant marches on your target castle, smashing gates and keeps. Its club flattens and staggers
   everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
   summon giants too, and every 10th round the raiders bring one.
+- **Commanding troops**: the command bar at the bottom of the screen always shows your orders and their keys.
+  Press **O** for the clickable **Orders** menu, which has orders, formations, troop groups, the gate and a
+  troop count.
+- **The gate lever**: stand at the lever just inside your gate and press **E** to bar the gate. A barred gate
+  stays shut for everyone, your own troops included, until you unbar it. You can also do this from the Orders
+  menu.
+- **Wall walk**: a 5 m wide walk (a wooden hoarding beside the stone wall top) runs all the way around the
+  inside of the walls, past every corner tower and over the gate. Stairs on both sides of the courtyard lead
+  up to it.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
 - **Death**: your hero respawns at the keep. Each death makes the wait longer. Once your keep falls, you can no
   longer respawn.
@@ -123,7 +132,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | 1 / 2 / 3 / mouse wheel | Sword & shield / bow / magic |
 | R (or 3 again) | Next spell |
 | Q | Drink a healing draught |
-| E | Mount or dismount your horse, or call it |
+| E | Use the gate lever when next to it; otherwise mount, dismount or call your horse |
+| O | Orders menu (click to command troops) |
 | B | Open the shop |
 | Tab | Scoreboard |
 | F1 or Z | Troops: follow me |
@@ -136,7 +146,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Enter | Start the match early during preparation |
 | Esc | Pause |
 
-The stairs beside the gate lead up to the wall walk, so you can fight from the battlements.
+Stairs on both sides of the courtyard lead up to the wall walk, which goes all the way around the castle.
 
 ## Code layout
 

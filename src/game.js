@@ -747,6 +747,33 @@ export class Game {
     this.order(p.team, cmd, p.group || 'all', hold);
   }
 
+  // Is this hero standing at their own castle's gate lever?
+  leverNear(p) {
+    const c = this.castles[p.team];
+    if (!c || c.fallen || !c.gate.alive || !p.alive) return null;
+    return Math.hypot(p.pos.x - c.leverPos.x, p.pos.z - c.leverPos.z) < 2.6 && Math.abs(p.pos.y - c.center.y) < 2 ? c : null;
+  }
+
+  toggleGate(team) {
+    const c = this.castles[team];
+    const f = this.factions[team];
+    if (!c || c.fallen || !c.gate.alive) return;
+    c.setGateLocked(!c.gateLocked);
+    this.audio.play('thud', c.gatePos);
+    if (f.player) f.player.notify(c.gateLocked ? 'Gate barred: nobody gets through, not even your own troops.' : 'Gate unbarred: it opens for your troops again.');
+  }
+
+  localToggleGate() {
+    if (this.mode === 'client') {
+      const c = this.localFaction.castle;
+      c.setGateLocked(!c.gateLocked); // show it at once; the host confirms
+      this.audio.play('thud', c.gatePos);
+      this.net.toHost({ a: 'gate' });
+      return;
+    }
+    this.toggleGate(this.localTeam);
+  }
+
   setSiegeTarget(castle) {
     this.localFaction.siegeTarget = castle;
     if (this.mode === 'client') this.net.toHost({ a: 'target', team: castle.team });
@@ -754,7 +781,7 @@ export class Game {
 
   handleInput() {
     const i = this.input;
-    if (i.hit('KeyB')) { this.ui.toggleShop(); return; }
+    if (i.hit('KeyB')) { if (this.ui.tab === 'orders') this.ui.tab = 'army'; this.ui.toggleShop(); return; }
     if (this.ui.shopOpen) return;
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
@@ -762,6 +789,7 @@ export class Game {
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
     if (i.hit('KeyF')) this.localFormation();
+    if (i.hit('KeyO')) { this.ui.openOrders(); return; }
     if (i.hit('Enter') && this.round === 0 && this.phase === 'prep' && this.simulating && this.phaseT > 3) {
       this.phaseT = 3;
       this.announce('The battle begins!');

@@ -38,6 +38,8 @@ export const CASTLE = {
   gateW: 6,
   gateH: 6,
   towerR: 3.2,
+  towerOff: 1.8,  // corner towers sit this far outside the wall corners so the wall walk passes them
+  walk: 3.5,      // width of the wooden walkway along the inside of the walls
   towerH: 13,
   keepW: 11,
   keepH: 15,

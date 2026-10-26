@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { CASTLE } from './config.js';
 
 const H = CASTLE.H;
-const OB = H + CASTLE.towerR + 0.2;   // obstacle square incl. corner towers
+const TC = H + CASTLE.towerOff;        // corner tower centres
+const OB = TC + CASTLE.towerR + 0.2;  // obstacle square incl. corner towers
 const CORNER = OB + 3.5;
 
 function segHitsSquare(ax, az, bx, bz, cx, cz, h) {
@@ -22,7 +23,7 @@ function segHitsSquare(ax, az, bx, bz, cx, cz, h) {
 
 function crossesTower(ax, az, bx, bz, c) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    if (segHitsSquare(ax, az, bx, bz, c.center.x + sx * H, c.center.z + sz * H, CASTLE.towerR + 0.3)) return true;
+    if (segHitsSquare(ax, az, bx, bz, c.center.x + sx * TC, c.center.z + sz * TC, CASTLE.towerR + 0.3)) return true;
   }
   return false;
 }
@@ -59,7 +60,7 @@ export function avoidCastles(game, pos, goal) {
 export function entriesFor(castle, team) {
   const list = [];
   const g = castle.gate;
-  if (!g.alive || g.team === team) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
+  if (!g.alive || (g.team === team && !castle.gateLocked)) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
   for (const w of castle.walls) if (!w.alive) list.push({ out: w.outPt, in: w.inPt });
   return list;
 }

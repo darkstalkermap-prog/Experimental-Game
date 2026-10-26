@@ -127,6 +127,7 @@ export class HostSync {
         }
         break;
       case 'formation': g.setFormation(p.team, String(d.f)); break;
+      case 'gate': g.toggleGate(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'target': if (g.castles[d.team]) f.siegeTarget = g.castles[d.team]; break;
       case 'order':

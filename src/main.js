@@ -213,9 +213,9 @@ renderer.domElement.addEventListener('click', () => {
 
 // While the shop is open, B / Escape closes it.
 addEventListener('keydown', (e) => {
-  if (ui.shopOpen && (e.code === 'KeyB' || e.code === 'Escape')) {
+  if (ui.shopOpen && (e.code === 'KeyB' || e.code === 'Escape' || e.code === 'KeyO')) {
     e.preventDefault();
-    input.pressed.delete('KeyB'); // don't let the game loop re-open it this frame
+    input.pressed.delete(e.code); // don't let the game loop re-open it this frame
     ui.toggleShop(false);
   }
 });
