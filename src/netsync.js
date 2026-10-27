@@ -19,7 +19,8 @@ const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
 
 // Snapshot interpolation: keep the two latest samples and show the world slightly in the past,
 // blending between them, so movement is smooth even though updates arrive ~10 times a second.
-const DELAY = 0.12;
+let DELAY = 0.12;
+export function setInterpDelay(d) { DELAY = d; }
 const now = () => performance.now() / 1000;
 export class Interp {
   constructor() { this.a = null; this.b = null; }
@@ -140,7 +141,7 @@ export class HostSync {
 
   update(dt) {
     this.t += dt;
-    if (this.t < SNAP_EVERY) return;
+    if (this.t < (this.g.net.snapEvery || SNAP_EVERY)) return;
     this.t = 0;
     const g = this.g;
     const shared = {
@@ -200,6 +201,7 @@ export class ClientSync {
 
   apply(d) {
     const g = this.g;
+    if (g.net.snapDelay) setInterpDelay(g.net.snapDelay);
     const s = d.s;
     g.round = s.r; g.phase = s.ph; g.phaseT = s.pt;
     g.spawnQueue.length = s.ql;

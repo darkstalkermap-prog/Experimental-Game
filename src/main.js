@@ -5,6 +5,7 @@ import { UI } from './ui.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Net } from './net.js';
+import { RoomNet } from './roomnet.js';
 import { setMapSize, WORLD, MAP_SIZES } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -116,13 +117,19 @@ const playerName = () => ($('pname').value.trim() || 'Lord').slice(0, 16);
 try { $('pname').value = localStorage.getItem('cw-name') || ''; } catch (e) { /* storage unavailable */ }
 const rememberName = () => { try { localStorage.setItem('cw-name', playerName()); } catch (e) { /* ignore */ } };
 
-Net.available().then((ok) => {
-  $('online').classList.toggle('hidden', !ok);
-  $('offlineNote').classList.toggle('hidden', ok);
+// Online play goes through the Castle Wars server when the page comes from one, otherwise through
+// the claude.ai live room when the game is opened as an artifact there.
+let liveRoom = null;
+const onlineReady = Net.available().then(async (ok) => {
+  if (!ok) liveRoom = await RoomNet.open();
+  const can = ok || !!liveRoom;
+  $('online').classList.toggle('hidden', !can);
+  $('offlineNote').classList.toggle('hidden', can);
 });
 
 async function connect() {
-  net = new Net();
+  await onlineReady;
+  net = liveRoom ? new RoomNet(liveRoom) : new Net();
   game.net = net;
   await net.connect();
   net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });

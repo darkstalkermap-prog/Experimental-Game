@@ -317,7 +317,7 @@ export class UI {
     $('menu').classList.add('hidden');
     $('lobby').classList.remove('hidden');
     $('roomCode').textContent = code;
-    $('roomUrl').textContent = location.origin;
+    $('roomUrl').textContent = this.game.net && this.game.net.constructor.name === 'RoomNet' ? 'this same game link' : location.origin;
     $('lobbyHostCtl').classList.toggle('hidden', !isHost);
     $('lobbyWait').classList.toggle('hidden', isHost);
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;

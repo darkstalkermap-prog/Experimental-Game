@@ -28,6 +28,15 @@ python3 -m http.server 8080
 
 ### Online (up to 4 players)
 
+**Easiest: the claude.ai link.** When the game is opened from its claude.ai artifact link, online play works
+with no server: the host clicks **Host Online Game** and gets a 4-letter invite code, and friends open the same
+link, enter the code and click **Join**. Friends must be signed in to claude.ai and have access to the
+artifact (invite them from the artifact's **Share** menu). Visitors who are signed out, or who arrived through a
+public link only, can play single player but can't join a room. The players' pages talk through claude.ai's
+live room, so updates are a little less frequent than with the server (about 7 per second instead of 10).
+
+**Or run your own server:**
+
 Online play needs the small Castle Wars server, which serves the game and relays messages between players.
 It requires Node.js 18 or newer:
 
@@ -201,7 +210,7 @@ Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.
 
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.
-- The published claude.ai version of the game is single-player only, because online play needs this server.
+- On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players.
 - Graphics quality (Low / Medium / High) is in the main menu and the pause menu. Low turns off shadows and
   grass for slower computers.
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.
