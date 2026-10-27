@@ -177,8 +177,8 @@ export class HostSync {
     this.priv.clear();
   }
 
-  sendEnd(winner) {
-    this.g.net.toAll({ k: 'end', winner });
+  sendEnd(winner, reason = '') {
+    this.g.net.toAll({ k: 'end', winner, reason });
   }
 }
 
@@ -195,7 +195,7 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') this.g.finish(d.winner);
+    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '');
   }
 
   apply(d) {

@@ -2,6 +2,7 @@
 // Characters are vertical capsules approximated by a circle in XZ plus a foot height.
 import { WORLD, CASTLE } from './config.js';
 import { makeNoise, smoothstep, clamp } from './noise.js';
+import { allied } from './teams.js';
 
 export const STEP = 0.65; // max height a character can step up
 
@@ -153,7 +154,7 @@ export class Physics {
     let hit = false;
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.near(pos.x, pos.z, radius + 1)) {
-        if (!c.active || c.passTeam === team || (ignoreTrees && c.kind === 'tree')) continue;
+        if (!c.active || (c.passTeam >= 0 && allied(c.passTeam, team)) || (ignoreTrees && c.kind === 'tree')) continue;
         const qx = clamp(pos.x, c.minX, c.maxX);
         const qz = clamp(pos.z, c.minZ, c.maxZ);
         const dx = pos.x - qx, dz = pos.z - qz;
@@ -186,7 +187,7 @@ export class Physics {
     for (const c of this.near(x, z, 0.5)) {
       if (!c.active || c.noProjectile) continue;
       if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
-      if (c.passTeam === ignoreTeam && c.kind === 'gate') continue;
+      if (c.kind === 'gate' && c.passTeam >= 0 && allied(c.passTeam, ignoreTeam)) continue;
       if (y < this.topAt(c, x, z) && y > c.bottom) return c;
     }
     return null;

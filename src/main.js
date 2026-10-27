@@ -111,6 +111,7 @@ $('play').addEventListener('click', () => begin(difficulty));
 // ---------------- online play ----------------
 let net = null;
 let lobby = [];      // [{ team, name, netId }]
+let coop = false;    // lobby game mode chosen by the host
 const playerName = () => ($('pname').value.trim() || 'Lord').slice(0, 16);
 try { $('pname').value = localStorage.getItem('cw-name') || ''; } catch (e) { /* storage unavailable */ }
 const rememberName = () => { try { localStorage.setItem('cw-name', playerName()); } catch (e) { /* ignore */ } };
@@ -139,7 +140,10 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null }];
-  const broadcast = () => { ui.renderLobby(lobby, 0); net.toAll({ k: 'lobby', players: lobby }); };
+  const broadcast = () => { ui.renderLobby(lobby, 0, coop); net.toAll({ k: 'lobby', players: lobby, coop }); };
+  for (const b of document.querySelectorAll('#lobbyModes button')) {
+    b.onclick = () => { coop = b.dataset.mode === 'coop'; broadcast(); };
+  }
   net.on('created', (m) => { ui.showLobby(m.code, true); broadcast(); });
   net.on('peer', (m) => {
     const used = new Set(lobby.map((p) => p.team));
@@ -153,8 +157,8 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize });
-  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby });
+  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop });
+  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -165,11 +169,11 @@ $('joinBtn').addEventListener('click', async () => {
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   net.on('joined', (m) => ui.showLobby(m.code, false));
   net.on('data', ({ d }) => {
-    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team);
+    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop);
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name })) }, d.map || 'medium');
+      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name })), coop: !!d.coop }, d.map || 'medium');
     }
   });
   net.join(code, playerName());

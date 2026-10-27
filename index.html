@@ -204,6 +204,7 @@
   .code { font-family: Cinzel, serif; font-size: 30px; letter-spacing: 0.2em; color: #5a1d12; }
   #lobbyList { list-style: none; padding: 0; margin: 16px auto; max-width: 420px; display: grid; gap: 6px; }
   #lobbyList li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; background: rgba(255,255,255,0.35); border-left: 5px solid; font-size: 17px; }
+  #factions em.ally { font-style: normal; font-size: 10px; color: #4fd17a; border: 1px solid #4fd17a; border-radius: 3px; padding: 0 3px; margin-left: 4px; }
   #lobbyList b { font-family: Cinzel, serif; font-size: 14px; }
   .settings { display: flex; gap: 20px; justify-content: center; align-items: center; flex-wrap: wrap; font-size: 15px; }
   @media (max-width: 760px) {
@@ -289,6 +290,8 @@
   <div class="scroll">
     <h1 style="font-size:44px">War Council</h1>
     <div class="sub">Room code <b id="roomCode" class="code"></b><br>Friends open <span id="roomUrl"></span>, enter the code and press Join.</div>
+    <div class="row" id="lobbyModes"><button data-mode="versus" class="active">Versus</button><button data-mode="coop">Co-op</button></div>
+    <div class="note" id="lobbyMode">Versus: every castle for itself.</div>
     <ul id="lobbyList"></ul>
     <div class="note">Empty castles are held by AI lords. Map size and difficulty come from the host's menu choices.</div>
     <div class="row" id="lobbyHostCtl"><button id="startOnline">Start the Battle</button></div>

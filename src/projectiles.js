@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { SPELLS } from './config.js';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
+import { allied } from './teams.js';
 
 const ARROW_SPEED = 52;
 const G_ARROW = 9.8;
@@ -184,7 +185,7 @@ export class Projectiles {
   hitCharacter(pt, team, pad, skip = null) {
     let found = null;
     this.game.grid.query(pt.x, pt.z, 1.2 + pad, (u) => {
-      if (found || !u.alive || u.team === team || (skip && skip.has(u))) return;
+      if (found || !u.alive || allied(u.team, team) || (skip && skip.has(u))) return;
       const dx = pt.x - u.pos.x, dz = pt.z - u.pos.z;
       const r = u.radius + pad;
       if (dx * dx + dz * dz > r * r) return;
@@ -219,11 +220,11 @@ export class Projectiles {
     g.magic.flash(at, 0xff8a30, 9);
     if (!g.simulating) return;
     // gates, keeps and siege engines burn; stone walls shrug it off
-    if (col && col.ref && col.ref.takeDamage && col.ref.team !== p.team && col.ref.kind !== 'wall') col.ref.takeDamage(p.dmg * 0.6, p.owner);
+    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(p.dmg * 0.6, p.owner);
     const s = g.siegeAt(at, p.team, p.radius);
     if (s) g.damage(s, p.dmg * 0.8, p.owner, { magic: true });
     g.grid.query(at.x, at.z, p.radius + 1, (u) => {
-      if (!u.alive || u.team === p.team) return;
+      if (!u.alive || allied(u.team, p.team)) return;
       const d = Math.hypot(u.pos.x - at.x, u.pos.z - at.z);
       if (d > p.radius + u.radius || Math.abs(u.pos.y + 1 - at.y) > p.radius + 1) return;
       const c = u.chest(new THREE.Vector3());
@@ -239,12 +240,12 @@ export class Projectiles {
     if (!g.simulating) return; // the host sends the impact effects
     g.fx.dust(at, 18, 2.2);
     g.audio.play('thud', at);
-    if (col && col.ref && col.ref.takeDamage && col.ref.team !== p.team) {
+    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team)) {
       col.ref.takeDamage(p.dmg, p.owner);
     }
     // splash damage to characters
     g.grid.query(at.x, at.z, 4, (u) => {
-      if (!u.alive || u.team === p.team) return;
+      if (!u.alive || allied(u.team, p.team)) return;
       const d = Math.hypot(u.pos.x - at.x, u.pos.z - at.z);
       if (d < 3.5 && Math.abs(u.pos.y - at.y) < 4) g.damage(u, 70 * (1 - d / 4), p.owner, { splash: true });
     });

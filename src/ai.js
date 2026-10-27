@@ -1,6 +1,7 @@
 // Rival lord AI: spends gold, keeps the castle repaired and launches assaults on other castles.
 import { buy } from './economy.js';
 import { ROUNDS, TROOP_CAP } from './config.js';
+import { allied } from './teams.js';
 
 export class LordAI {
   constructor(game, faction) {
@@ -89,7 +90,7 @@ export class LordAI {
     // choose the weakest reachable castle
     let best = null, bestScore = Infinity;
     for (const c of g.castles) {
-      if (c.fallen || c.team === f.team) continue;
+      if (c.fallen || allied(c.team, f.team)) continue;
       const enemyTroops = g.troopCount(c.team);
       const dist = Math.hypot(c.center.x - f.castle.center.x, c.center.z - f.castle.center.z);
       const score = enemyTroops * 25 + c.gate.hp / 20 + c.keep.hp / 40 + dist * 0.5 + Math.random() * 60;
@@ -104,7 +105,7 @@ export class LordAI {
     if (best.gate.alive && f.gold >= 450) this.try('ram');
     if (g.round >= 6 && f.gold >= 800) this.try('catapult');
     if (g.round >= 7 && f.gold >= 2000) this.try('giant');
-    g.ui.toast(`${f.name} marches on ${g.factions[best.team].name}!`, f.team, best.team === 0);
+    g.ui.toast(`${f.name} marches on ${g.factions[best.team].name}!`, f.team, best.team === g.localTeam);
   }
 
   recall(troops) {

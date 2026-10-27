@@ -22,6 +22,7 @@ import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { prewarmSoldier } from './models.js';
+import { allied, alliance, setAlliance } from './teams.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -115,6 +116,9 @@ export class Game {
   start(difficulty = 'normal', setup = null) {
     setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
     this.mode = setup.mode;
+    // co-op: every human house fights on one side against the AI lords and the raiders
+    this.coop = !!setup.coop && setup.players.length > 1;
+    setAlliance(this.coop ? setup.players.map((p) => p.team) : []);
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
     this.state = 'playing';
@@ -258,10 +262,10 @@ export class Game {
   siegeCount(team) { return this.siege.filter((s) => s.alive && s.team === team).length; }
 
   siegeTarget(f) {
-    if (f.siegeTarget && !f.siegeTarget.fallen && f.siegeTarget.team !== f.team) return f.siegeTarget;
+    if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
     let best = null, bd = Infinity;
     for (const c of this.castles) {
-      if (c.fallen || c.team === f.team) continue;
+      if (c.fallen || allied(c.team, f.team)) continue;
       const d = c.center.distanceTo(f.castle.center);
       if (d < bd) { bd = d; best = c; }
     }
@@ -288,7 +292,7 @@ export class Game {
   enemyNear(p, r, team) {
     let found = false;
     this.grid.query(p.x, p.z, r, (u) => {
-      if (!found && u.alive && u.team !== team && Math.hypot(u.pos.x - p.x, u.pos.z - p.z) < r) found = true;
+      if (!found && u.alive && !allied(u.team, team) && Math.hypot(u.pos.x - p.x, u.pos.z - p.z) < r) found = true;
     });
     return found;
   }
@@ -301,7 +305,7 @@ export class Game {
 
   siegeAt(p, team, pad = 0.3) {
     for (const s of this.siege) {
-      if (!s.alive || s.team === team) continue;
+      if (!s.alive || allied(s.team, team)) continue;
       if (Math.hypot(s.pos.x - p.x, s.pos.z - p.z) < s.radius + pad && p.y < s.pos.y + 3.5 && p.y > s.pos.y - 0.5) return s;
     }
     return null;
@@ -311,7 +315,7 @@ export class Game {
   findEnemy(unit, radius, anchor, leash) {
     let best = null, bd = Infinity;
     const consider = (o) => {
-      if (!o.alive || o.team === unit.team) return;
+      if (!o.alive || allied(o.team, unit.team)) return;
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
       if (!unit.ranged && o.pos.y - unit.pos.y > 2.4) return; // up on a wall: unreachable
@@ -347,8 +351,8 @@ export class Game {
     this.grid.query(p.x, p.z, 9, (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
-      if (u.team === castle.team && d < 7) friend = true;
-      else if (u.team !== castle.team && d < 9) foe = true;
+      if (allied(u.team, castle.team) && d < 7) friend = true;
+      else if (!allied(u.team, castle.team) && d < 9) foe = true;
     });
     return friend && !foe;
   }
@@ -407,7 +411,7 @@ export class Game {
       case 'stagger': this.player.stagger(ev.t); break;
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
-      case 'end': this.finish(ev.winner); break;
+      case 'end': this.finish(ev.winner, ev.reason || ''); break;
       default: break;
     }
   }
@@ -418,11 +422,13 @@ export class Game {
     if (!target || !target.alive) return;
     let dmg = amount;
     if (target.isStructure) {
-      if (target.team === (attacker && attacker.team)) return;
+      if (attacker && allied(target.team, attacker.team)) return;
       target.takeDamage(dmg, attacker);
       if (info.melee) this.audio.play('thud', target.pos);
       return;
     }
+    // no friendly fire between houses on the same side (own troops and co-op allies)
+    if (attacker && attacker !== target && attacker.team !== undefined && allied(target.team, attacker.team)) return;
     if (target.isSiege) {
       target.takeDamage(dmg, attacker);
       return;
@@ -489,7 +495,7 @@ export class Game {
   onUnitKilled(u, attacker) {
     const by = attacker && attacker.team !== undefined ? attacker.team : -1;
     const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
-    if (by !== u.team) this.credit(by, u.team === RAIDER_TEAM ? Math.round(bounty * (1 + this.round * 0.08)) : bounty, u.chest(new THREE.Vector3()));
+    if (by >= 0 && !allied(by, u.team)) this.credit(by, u.team === RAIDER_TEAM ? Math.round(bounty * (1 + this.round * 0.08)) : bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
     if (attacker && attacker.gainXp && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
@@ -524,7 +530,7 @@ export class Game {
   onStructureDestroyed(part, attacker) {
     const owner = this.factions[part.team];
     if (part.kind === 'gate') {
-      if (attacker && attacker.team !== part.team) this.credit(attacker.team, BOUNTY.gate);
+      if (attacker && !allied(attacker.team, part.team)) this.credit(attacker.team, BOUNTY.gate);
       this.announce((t) => (t === part.team ? 'Your gate has been broken!' : `${owner.name}'s gate has been broken!`), part.team, part.team);
     } else if (part.kind === 'wall') {
       this.announce((t) => (t === part.team ? 'Your wall has been breached!' : `A breach opens in ${owner.name}'s wall!`), part.team, part.team);
@@ -533,7 +539,7 @@ export class Game {
 
   onCastleFallen(castle, attacker) {
     const f = this.factions[castle.team];
-    if (attacker && attacker.team !== castle.team) this.credit(attacker.team, BOUNTY.keep);
+    if (attacker && !allied(attacker.team, castle.team)) this.credit(attacker.team, BOUNTY.keep);
     this.audio.play('collapse', castle.keep.pos);
     this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
@@ -852,7 +858,12 @@ export class Game {
     if (this.state !== 'playing') return;
     const left = this.factions.filter((f) => !f.eliminated);
     const humansLeft = left.filter((f) => f.isPlayer);
-    if (this.mode === 'single') {
+    if (this.coop) {
+      const allies = this.factions.filter((f) => alliance.has(f.team));
+      const rivals = this.factions.filter((f) => !alliance.has(f.team));
+      if (allies.every((f) => f.eliminated)) this.endGame(-1, 'coop-lost');
+      else if (rivals.length && rivals.every((f) => f.eliminated)) this.endGame('alliance');
+    } else if (this.mode === 'single') {
       if (this.localFaction.eliminated) this.endGame(left.length === 1 ? left[0].team : -1);
       else if (left.length === 1) this.endGame(left[0].team);
     } else if (left.length <= 1 || humansLeft.length === 0) {
@@ -867,15 +878,16 @@ export class Game {
     if (f.ai) f.ai.assault = null;
   }
 
-  endGame(winner) {
-    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner);
-    this.finish(winner);
+  endGame(winner, reason = '') {
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason);
+    this.finish(winner, reason);
   }
 
   finish(winner, reason = '') {
     if (this.state === 'over') return;
     this.state = 'over';
-    const won = winner === this.localTeam;
+    if (reason === 'coop-lost') reason = `All allied castles have fallen. You held out for ${this.round} rounds together.`;
+    const won = winner === this.localTeam || (winner === 'alliance' && alliance.has(this.localTeam));
     this.audio.play(won ? 'victory' : 'defeat');
     this.input.unlock();
     this.ui.gameOver(won, winner, reason);
@@ -982,7 +994,7 @@ export class Game {
       const top = c.towers[i].top;
       let best = null, bd = 48;
       this.grid.query(top.x, top.z, 48, (u) => {
-        if (!u.alive || u.team === c.team) return;
+        if (!u.alive || allied(u.team, c.team)) return;
         const d = Math.hypot(u.pos.x - top.x, u.pos.z - top.z);
         if (d < bd && d > 4) { bd = d; best = u; }
       });

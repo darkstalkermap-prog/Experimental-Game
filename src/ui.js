@@ -4,6 +4,7 @@ import { TEAM_CSS, PLAYER_TEAM, RAIDER_TEAM, WORLD, CASTLE, ROUNDS } from './con
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
 import { SPELLS, FORMATIONS } from './config.js';
+import { allied } from './teams.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -123,7 +124,7 @@ export class UI {
     else state[dirFromAim(p.aim.x, p.aim.y, p.atkDir)] = 'aim';
     // enemies close by, facing you and winding up
     const check = (u) => {
-      if (!u.alive || u.team === p.team || u.ranged || u.weapon === 'bow' || u.swingT < 0 || u.swingT > 0.33) return;
+      if (!u.alive || allied(u.team, p.team) || u.ranged || u.weapon === 'bow' || u.swingT < 0 || u.swingT > 0.33) return;
       const dx = p.pos.x - u.pos.x, dz = p.pos.z - u.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 4.2) return;
@@ -183,7 +184,7 @@ export class UI {
       sel.className = 'targets';
       sel.innerHTML = '<div class="label">Siege & assault target (T orders your troops to attack it):</div>';
       for (const c of g.castles) {
-        if (c.team === g.localTeam) continue;
+        if (allied(c.team, g.localTeam)) continue;
         const b = document.createElement('button');
         b.style.borderColor = TEAM_CSS[c.team];
         b.addEventListener('click', () => { if (!c.fallen) { g.setSiegeTarget(c); g.audio.play('order'); this.refreshShop(); } });
@@ -319,13 +320,18 @@ export class UI {
     $('roomUrl').textContent = location.origin;
     $('lobbyHostCtl').classList.toggle('hidden', !isHost);
     $('lobbyWait').classList.toggle('hidden', isHost);
+    for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;
   }
 
-  renderLobby(players, myTeam = -1) {
+  renderLobby(players, myTeam = -1, coop = false) {
+    $('lobbyMode').textContent = coop
+      ? 'Co-op: all players are allies against the AI lords and the raiders.'
+      : 'Versus: every castle for itself.';
+    for (const b of document.querySelectorAll('#lobbyModes button')) b.classList.toggle('active', (b.dataset.mode === 'coop') === coop);
     const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
       <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') : '<i>AI lord</i>'}</span></li>`).join('');
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {
@@ -342,7 +348,9 @@ export class UI {
     $('gameover').classList.remove('hidden');
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
-    $('goText').textContent = reason || (won
+    $('goText').textContent = reason || (winner === 'alliance'
+      ? 'Every rival house has fallen. The alliance holds the realm together.'
+      : won
       ? 'Yours is the last castle standing. The realm bows to you.'
       : wf ? `${wf.name} is the last castle standing.` : 'No castle is left standing.');
     $('goStats').innerHTML = `
@@ -426,7 +434,7 @@ export class UI {
       const heroAlive = f.isPlayer && f.player ? f.player.alive : f.hero && f.hero.alive;
       const hero = f.eliminated ? '☠' : heroAlive ? '♚' : `⟳${Math.ceil(Math.max(0, f.respawnT))}`;
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${esc(f.team === g.localTeam ? 'You' : f.name)}${g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam) ? ' <em class="ally">ally</em>' : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -481,7 +489,7 @@ export class UI {
     $('targetName').textContent = name;
     $('targetName').style.color = TEAM_CSS[team];
     $('targetFill').style.width = `${(o.hp / o.maxHp) * 100}%`;
-    $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : '#d33';
+    $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : allied(team, g.localTeam) ? '#4fd17a' : '#d33';
   }
 
   // ---------- minimap ----------

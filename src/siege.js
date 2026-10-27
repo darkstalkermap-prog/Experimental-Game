@@ -6,6 +6,7 @@ import { buildSoldier, poseSoldier } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { RAIDER_TEAM } from './config.js';
+import { allied } from './teams.js';
 
 let NEXT_ID = 1;
 
@@ -160,10 +161,10 @@ export class SiegeEngine {
 
   pickTarget() {
     const g = this.game;
-    if (this.targetCastle && !this.targetCastle.fallen && this.targetCastle.team !== this.team) return;
+    if (this.targetCastle && !this.targetCastle.fallen && !allied(this.targetCastle.team, this.team)) return;
     let best = null, bd = Infinity;
     for (const c of g.castles) {
-      if (c.fallen || c.team === this.team) continue;
+      if (c.fallen || allied(c.team, this.team)) continue;
       const d = Math.hypot(c.center.x - this.pos.x, c.center.z - this.pos.z);
       if (d < bd) { bd = d; best = c; }
     }

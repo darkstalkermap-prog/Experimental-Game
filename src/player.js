@@ -6,6 +6,7 @@ import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
 import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
+import { allied } from './teams.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -836,7 +837,7 @@ export class Player {
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
     g.grid.query(this.pos.x, this.pos.z, reach + 1, (u) => {
-      if (!u.alive || u.team === this.team || u === this) return;
+      if (!u.alive || allied(u.team, this.team) || u === this) return;
       const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d - u.radius > reach) return;
@@ -858,7 +859,7 @@ export class Player {
       if (s) { g.damage(s, dmg, this, { melee: true }); hitSomething = true; }
       else {
         for (const c of g.castles) {
-          if (c.team === this.team || c.fallen) continue;
+          if (allied(c.team, this.team) || c.fallen) continue;
           for (const st of [c.gate, c.keep]) {
             if (!st.alive) continue;
             const d = Math.hypot(st.pos.x - p.x, st.pos.z - p.z) - st.radius;
@@ -906,7 +907,7 @@ export class Player {
     if (sp < 6) return;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
     g.grid.query(this.pos.x + fx, this.pos.z + fz, 2, (u) => {
-      if (!u.alive || u.team === this.team || u.isPlayer || u.mounted || this.trampled.has(u)) return;
+      if (!u.alive || allied(u.team, this.team) || u.isPlayer || u.mounted || this.trampled.has(u)) return;
       const dx = u.pos.x - this.pos.x, dz = u.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 1.6 || (dx * fx + dz * fz) / (d || 1) < 0.3) return;

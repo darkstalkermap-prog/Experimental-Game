@@ -2,6 +2,7 @@
 // walls, keeps and hills stop them. Projectile spells fly through Projectiles; lightning is instant.
 import * as THREE from 'three';
 import { SPELLS } from './config.js';
+import { allied } from './teams.js';
 
 const BOLT_GLOW = new THREE.Color(0.6, 0.85, 1.0);
 
@@ -51,7 +52,7 @@ export class Magic {
         const lc = last.chest ? last.chest(new THREE.Vector3()) : last.pos.clone();
         let next = null, bd = s.chainRange;
         g.grid.query(lc.x, lc.z, s.chainRange, (u) => {
-          if (!u.alive || u.team === caster.team || hitSet.has(u)) return;
+          if (!u.alive || allied(u.team, caster.team) || hitSet.has(u)) return;
           const d = Math.hypot(u.pos.x - lc.x, u.pos.z - lc.z);
           if (d >= bd) return;
           const uc = u.chest(new THREE.Vector3());

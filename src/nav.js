@@ -1,6 +1,7 @@
 // Lightweight navigation: route around castles and through gates / wall breaches.
 import * as THREE from 'three';
 import { CASTLE } from './config.js';
+import { allied } from './teams.js';
 
 const H = CASTLE.H;
 const TC = H + CASTLE.towerOff;        // corner tower centres
@@ -60,7 +61,7 @@ export function avoidCastles(game, pos, goal) {
 export function entriesFor(castle, team) {
   const list = [];
   const g = castle.gate;
-  if (!g.alive || (g.team === team && !castle.gateLocked)) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
+  if (!g.alive || (allied(g.team, team) && !castle.gateLocked)) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
   for (const w of castle.walls) if (!w.alive) list.push({ out: w.outPt, in: w.inPt });
   return list;
 }

@@ -5,6 +5,7 @@ import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh }
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
+import { allied } from './teams.js';
 
 const tmp = new THREE.Vector3();
 let NEXT_ID = 1;
@@ -108,7 +109,7 @@ export class Unit {
       this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
     }
     this.lastAttacker = attacker;
-    if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && attacker.team !== this.team) {
+    if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && !allied(attacker.team, this.team)) {
       const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4;
       const closer = !this.target || this.target.isStructure || this.distTo(attacker) < this.distTo(this.target) - 1;
       if (reachable && closer) this.target = attacker;
@@ -133,7 +134,7 @@ export class Unit {
     g.fx.dust(c, 24, 3);
     g.audio.play('boom', c);
     g.grid.query(c.x, c.z, 5, (u) => {
-      if (!u.alive || u.team === this.team || u === t) return;
+      if (!u.alive || allied(u.team, this.team) || u === t) return;
       const d = Math.hypot(u.pos.x - c.x, u.pos.z - c.z);
       if (d > 3.8 + u.radius || Math.abs(u.pos.y - c.y) > 3) return;
       g.damage(u, this.dmg * (1 - 0.4 * Math.min(1, d / 3.8)), this, { melee: true, splash: true });
@@ -356,7 +357,7 @@ export class Unit {
     const dest = this.target ? this.target.pos : this.goal;
     if (dest && !this.post) {
       this.waypoint = navigate(g, this, dest);
-      if (this.blockedBy && this.blockedBy.alive && this.blockedBy.team !== this.team) {
+      if (this.blockedBy && this.blockedBy.alive && !allied(this.blockedBy.team, this.team)) {
         // sealed castle in the way: bash the gate
         if (!this.target || (!this.target.isStructure && !this.ranged)) this.target = this.blockedBy;
         if (this.target === this.blockedBy) this.waypoint = avoidCastles(g, this.pos, this.blockedBy.castle.gateOut.clone().lerp(this.blockedBy.pos, 0.55));
@@ -699,7 +700,7 @@ export function makeRaiderStats(type, round, diff) {
 }
 
 export function isEnemy(a, b) {
-  return a.team !== b.team;
+  return !allied(a.team, b.team);
 }
 
 export { RAIDER_TEAM };

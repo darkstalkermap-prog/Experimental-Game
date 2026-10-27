@@ -41,7 +41,13 @@ npm start
    4-letter room code appears.
 2. Friends open the same address, type the code and click **Join**. Each player gets a castle. Any empty
    castles are taken by AI lords.
-3. The host clicks **Start the Battle**.
+3. The host picks a mode in the lobby and clicks **Start the Battle**:
+   - **Versus**: every castle for itself. The last castle and hero standing wins.
+   - **Co-op**: all human players (2 to 4) are allies. Allied troops, towers and spells never hurt each other,
+     allied gates open for each other, and AI lords never march on an allied castle. Any castles without a
+     player are enemy AI lords. The alliance wins when every AI house has fallen and loses when every allied
+     castle has fallen. With 4 players there are no AI lords, so it becomes endless survival against the
+     raider waves. Allies are marked **ally** in the castle list.
 
 Friends on the same Wi-Fi can use the host's local IP address, for example `http://192.168.1.20:8080`.
 
