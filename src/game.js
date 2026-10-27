@@ -26,6 +26,7 @@ import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
+import { XP, killXp, MAX_LEVEL } from './heroes.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -555,6 +556,26 @@ export class Game {
     }
   }
 
+  // ---------------- hero experience ----------------
+  // Pay experience for something brought down: in full to the hero who did it, a share to every hero (and ally hero)
+  // fighting close by. who: whoever struck the blow (a hero, a soldier, a tower, an engine); at: where it happened.
+  heroXp(who, amount, at) {
+    if (!this.simulating || !(amount > 0)) return;
+    for (const h of this.humans) {
+      if (!h.alive) continue;
+      if (who === h) h.gainXp(amount, 'kill');
+      else if (who && who.team !== undefined && allied(who.team, h.team) && at && h.pos.distanceTo(at) < XP.shareRange) h.gainXp(amount * XP.share, 'share');
+    }
+  }
+
+  // A hero has reached a new level: a flare for everyone nearby, and the full story for its owner.
+  onHeroLevel(p) {
+    this.fx.levelUp(p.pos);
+    this.audio.play('levelup', p.pos);
+    this.deliver(p, { k: 'lvl', n: p.level });
+    if (p.level === MAX_LEVEL) this.announce((t) => (t === p.team ? null : `${p.name} has reached level ${MAX_LEVEL}!`), p.team);
+  }
+
   killFeed(attacker, victim) {
     const name = (o, viewer) => (!o ? 'The fall' : o === viewer ? 'You' : o.isTower ? 'Tower archers' : o.name);
     const team = (o) => (o && o.team !== undefined ? o.team : RAIDER_TEAM);
@@ -572,6 +593,8 @@ export class Game {
       case 'banner': this.ui.banner(ev.title, ev.sub); break;
       case 'kill': this.ui.kill(ev.a, ev.v); break;
       case 'gold': this.ui.goldPopup(ev.g); break;
+      case 'xp': this.ui.xpPopup(ev.n); break;
+      case 'lvl': this.ui.levelUp(ev.n); break;
       case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); break;
       case 'stagger': this.player.stagger(ev.t); break;
@@ -642,7 +665,7 @@ export class Game {
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
     target.takeDamage(dmg, attacker, info);
-    if (attacker && attacker.gainXp) attacker.gainXp(Math.min(dmg, 60) * 0.05);
+    if (attacker && attacker.gainXp && !attacker.isPlayer) attacker.gainXp(Math.min(dmg, 60) * 0.05);
     if (attacker && attacker.isPlayer && !info.ranged) {
       const steal = attacker.buffs.get('lifesteal');
       if (steal) attacker.heal(dmg * steal);
@@ -667,7 +690,8 @@ export class Game {
     const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
     if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
-    if (attacker && attacker.gainXp && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
+    if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
+    if (by >= 0 && !allied(by, u.team)) this.heroXp(attacker, killXp(u), u.pos);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
     if (u.isHero && u.type === 'lord') {
       const f = this.factions[u.team];
@@ -684,6 +708,7 @@ export class Game {
     f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
     const by = attacker ? attacker.team : -1;
     if (by >= 0 && by <= 3 && by !== p.team) this.credit(by, BOUNTY.hero);
+    if (by >= 0 && !allied(by, p.team)) this.heroXp(attacker, killXp(p), p.pos);
     this.killFeed(attacker, p);
     this.audio.play('death', p.pos);
     if (f.castle.fallen) p.notify('You have fallen, and your castle is gone.', true);
@@ -693,12 +718,14 @@ export class Game {
   onSiegeDestroyed(s, attacker) {
     const by = attacker ? attacker.team : -1;
     if (by !== s.team) this.credit(by, BOUNTY[s.type] || 100, s.chest(new THREE.Vector3()));
+    if (by >= 0 && !allied(by, s.team)) this.heroXp(attacker, killXp(s), s.pos);
     const f = this.factions[s.team];
     if (f && f.isPlayer) f.player.notify(`Your ${s.name.toLowerCase()} was destroyed`, true);
   }
 
   onStructureDestroyed(part, attacker) {
     const owner = this.factions[part.team];
+    if (attacker && attacker.team !== undefined && !allied(attacker.team, part.team)) this.heroXp(attacker, part.kind === 'gate' ? XP.gate : XP.wall, part.pos || part.castle.center);
     if (part.kind === 'gate') {
       if (attacker && !allied(attacker.team, part.team)) this.credit(attacker.team, BOUNTY.gate);
       this.announce((t) => (t === part.team ? 'Your gate has been broken!' : `${owner.name}'s gate has been broken!`), part.team, part.team);
@@ -709,7 +736,7 @@ export class Game {
 
   onCastleFallen(castle, attacker) {
     const f = this.factions[castle.team];
-    if (attacker && !allied(attacker.team, castle.team)) this.credit(attacker.team, BOUNTY.keep);
+    if (attacker && !allied(attacker.team, castle.team)) { this.credit(attacker.team, BOUNTY.keep); this.heroXp(attacker, XP.keep, castle.keep.pos); }
     this.audio.play('collapse', castle.keep.pos);
     this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
@@ -781,7 +808,7 @@ export class Game {
     }
     // soldiers who are still alive learn from every wave they live through
     for (const u of this.units) if (u.alive && !u.isHero && !u.isGiant) u.gainXp(3);
-    for (const h of this.humans) h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5);
+    for (const h of this.humans) { h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5); h.gainXp(XP.wave, 'wave'); }
     if (r === 1) {
       this.audio.play('horn', this.camera.position);
       this.bannerAll('The battle begins!', `A new army marches from every castle every ${WAVES.interval} seconds.`);

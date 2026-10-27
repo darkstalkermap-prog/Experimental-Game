@@ -116,6 +116,16 @@
   #stFill { background: linear-gradient(#d6c06a, #96803a); }
   #hpText { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 15px; text-shadow: 0 1px 2px #000; }
   #stbar { height: 7px; }
+  #xpbar { height: 8px; margin-bottom: 4px; }
+  #xpFill { background: linear-gradient(#b79bff, #6a47d6); width: 0; }
+  #xpbar.max #xpFill { background: linear-gradient(#ffe08a, #d9a521); width: 100% !important; }
+  #xpbar.glow { animation: xpglow 1.4s ease-out; }
+  @keyframes xpglow { 0% { box-shadow: 0 0 14px 3px rgba(190,160,255,0.95); } 100% { box-shadow: 0 0 0 0 rgba(190,160,255,0); } }
+  #lvl { font-family: Cinzel, serif; font-size: 13px; color: #d9c9ff; margin-left: 4px; }
+  #xppops { position: absolute; left: 50%; top: calc(50% + 46px); width: 0; height: 0; }
+  .xppop { position: absolute; left: 0; top: 0; transform: translateX(-50%); white-space: nowrap; color: #cbb6ff; font-family: Cinzel, serif; font-weight: 700; font-size: 15px; text-shadow: 0 1px 3px #000; animation: xpp 1.5s ease-out forwards; pointer-events: none; }
+  @keyframes xpp { 0% { opacity: 0; transform: translate(-50%, 4px); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px); } }
+  #banner.level h2 { color: #ffe08a; text-shadow: 0 0 18px rgba(255,214,102,0.8), 0 2px 6px #000; }
   #weapon { font-family: Cinzel, serif; font-size: 14px; }
   #cls { font-family: Cinzel, serif; font-size: 13px; opacity: 0.95; }
   #clsHint { font-family: 'EB Garamond', Georgia, serif; font-size: 12px; opacity: 0.6; }
@@ -418,6 +428,7 @@
   <div id="hill" class="panel hidden"></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
+  <div id="xppops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
   <div id="hint">Esc: menu · B: shop · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
@@ -441,7 +452,8 @@
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
     <div class="bar" id="stbar"><div class="fill" id="stFill"></div></div>
-    <div id="cls"><span id="clsName"></span><small id="clsHint"> · B → Class, at your castle</small></div>
+    <div class="bar" id="xpbar"><div class="fill" id="xpFill"></div></div>
+    <div id="cls"><span id="clsName"></span><b id="lvl"></b><small id="clsHint"> · B → Class, at your castle</small></div>
     <div id="weapon"></div>
     <div id="potions"></div>
     <div id="army"></div>

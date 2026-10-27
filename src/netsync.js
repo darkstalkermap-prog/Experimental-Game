@@ -67,7 +67,7 @@ export class HostSync {
   // Record effects, sounds and projectiles so clients can replay them.
   wrap() {
     const g = this.g;
-    for (const name of ['blood', 'sparks', 'dust', 'splinters']) {
+    for (const name of ['blood', 'sparks', 'dust', 'splinters', 'levelUp']) {
       const orig = g.fx[name].bind(g.fx);
       g.fx[name] = (p, ...a) => { orig(p, ...a); this.shared.push({ k: 'fx', f: name, p: v3(p), a }); };
     }
@@ -178,7 +178,7 @@ export class HostSync {
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
         r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
-        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0, (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0)]),
+        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0, (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0), h.level]),
       ev: this.shared,
     };
     this.shared = [];
@@ -188,7 +188,7 @@ export class HostSync {
         hp: r1(h.hp), maxHp: h.maxHp, alive: h.alive ? 1 : 0, arrows: h.arrows, potions: h.potions, lv: h.lv,
         bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
-        order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId),
+        order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId), xp: Math.floor(h.xp), lvl: h.level,
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -331,6 +331,7 @@ export class ClientSync {
         g.factions[team].player = h; g.factions[team].isPlayer = true;
       }
       if (CLASS_IDS[a[24]] && CLASS_IDS[a[24]] !== h.classId) h.adoptClass(CLASS_IDS[a[24]]);   // they changed class
+      if (a[27] && a[27] !== h.level) { h.level = a[27]; if (h.body) h.buildTag(); }               // or reached a new level
       if (!h.interp) h.interp = new Interp();
       h.interp.push(a[1], a[2], a[3], a[11] ? a[12] : a[4], a[4]); // riders turn by their horse's heading
       h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18], dk: a[26] & 1, cl: (a[26] >> 1) & 1 };
@@ -373,6 +374,7 @@ export class ClientSync {
         const e = this.siege.get(me.drv);
         if (e) p.beginDrive(e);
       } else if (!me.drv && p.drive) p.endDrive();
+      p.xp = me.xp; p.level = me.lvl || 1;
       p.maxHp = me.maxHp;
       p.hp = me.hp;
       p.arrows = me.arrows;

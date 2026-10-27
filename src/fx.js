@@ -107,6 +107,14 @@ export class FX {
     }
   }
 
+  // a hero reaches a new level: a golden ring that rises round them, and sparks
+  levelUp(p) {
+    const c = C.level;
+    const q = new THREE.Vector3(p.x, p.y, p.z);
+    for (let i = 0; i < 4; i++) { q.y = p.y + 0.1 + i * 0.55; this.ring(q, 0.9 + i * 0.12, c, 24, { up: 2.2, speed: 0.6, size: 0.4, life: 0.9 }); }
+    this.glow.burst(new THREE.Vector3(p.x, p.y + 1, p.z), 26, c, 3, 0.22, 0.9, { grav: -1, alpha: 1 });
+  }
+
   update(dt) {
     if (this.glow) this.glow.update(dt);
     for (let i = 0; i < MAX; i++) {
@@ -137,4 +145,5 @@ const C = {
   flame: new THREE.Color(1.0, 0.78, 0.35),
   frost: new THREE.Color(0.55, 0.85, 1.0),
   bolt: new THREE.Color(0.75, 0.9, 1.0),
+  level: new THREE.Color(1.0, 0.86, 0.35),
 };

@@ -8,7 +8,7 @@ import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
-import { heroMods, levelFor, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL } from './heroes.js';
+import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -147,9 +147,10 @@ export class Player {
     ctx.fillText(this.name, 128, 32);
     ctx.font = '600 22px Georgia, serif';
     ctx.lineWidth = 4;
-    ctx.strokeText(this.cls.name, 128, 60);
+    const sub = `${this.cls.name} · Lv ${this.level}`;
+    ctx.strokeText(sub, 128, 60);
     ctx.fillStyle = this.cls.color;
-    ctx.fillText(this.cls.name, 128, 60);
+    ctx.fillText(sub, 128, 60);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
@@ -344,6 +345,24 @@ export class Player {
     this.level = Math.max(1, Math.min(MAX_LEVEL, n | 0));
     this.xp = Math.max(this.xp, XP_FOR_LEVEL[this.level]);
     this.refreshStats();
+    if (this.body) this.buildTag();
+  }
+
+  // Experience, decided where the battle is run. It makes levels: stronger, tougher, and a talent point for each.
+  gainXp(n, why = '') {
+    const g = this.game;
+    if (!g.simulating || !this.alive || !(n > 0)) return;
+    this.xp = Math.min(XP_FOR_LEVEL[MAX_LEVEL], this.xp + n);
+    if (n >= 0.5) g.deliver(this, { k: 'xp', n: Math.round(n), why });
+    while (this.level < MAX_LEVEL && this.xp >= XP_FOR_LEVEL[this.level + 1]) this.levelUp();
+  }
+
+  levelUp() {
+    this.level++;
+    this.refreshStats();
+    this.hp = Math.min(this.maxHp, this.hp + this.maxHp * LEVEL.heal);
+    if (this.body) this.buildTag();
+    this.game.onHeroLevel(this);
   }
 
   spawn(at, yaw) {

@@ -6,6 +6,7 @@ import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
+import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -83,10 +84,11 @@ export class UI {
     while ($('toasts').children.length > 6) $('toasts').lastChild.remove();
   }
 
-  banner(title, sub) {
+  banner(title, sub, tone = '') {
     const b = $('banner');
     b.querySelector('h2').textContent = title;
     b.querySelector('p').textContent = sub;
+    b.classList.toggle('level', tone === 'level');
     b.classList.remove('show');
     void b.offsetWidth;
     b.classList.add('show');
@@ -109,6 +111,27 @@ export class UI {
     $('goldpops').appendChild(el);
     setTimeout(() => el.remove(), 1200);
     if (this.game) this.game.audio.play('coin');
+  }
+
+  // "+8 XP" under the crosshair; gains that come close together add up in one popup
+  xpPopup(n) {
+    const now = performance.now();
+    if (this.xpPop && now - this.xpPopAt < 1100) { this.xpPopSum += n; this.xpPop.remove(); } else this.xpPopSum = n;
+    const el = document.createElement('div');
+    el.className = 'xppop';
+    el.textContent = `+${this.xpPopSum} XP`;
+    $('xppops').appendChild(el);
+    setTimeout(() => el.remove(), 1500);
+    this.xpPop = el; this.xpPopAt = now;
+  }
+
+  // a new level: the story in a banner, a line in the log and a glow on the experience bar
+  levelUp(n) {
+    const p = this.game.player;
+    this.banner(`Level ${n}`, n >= MAX_LEVEL ? 'The height of your power.' : 'Stronger and tougher.', 'level');
+    this.toast(`You reached level ${n}${p.talentPoints > 0 ? ': a talent point to spend (N)' : ''}.`, p.team, true);
+    const bar = $('xpbar');
+    bar.classList.remove('glow'); void bar.offsetWidth; bar.classList.add('glow');
   }
 
   feedback(text, good = false) {
@@ -649,6 +672,10 @@ export class UI {
       $('army').textContent = `Garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
       $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
       $('clsName').style.color = p.cls.color;
+      $('lvl').textContent = ` · Lv ${p.level}`;
+      $('xpFill').style.width = `${(levelProgress(p.xp, p.level) * 100).toFixed(1)}%`;
+      $('xpbar').classList.toggle('max', p.level >= MAX_LEVEL);
+      $('xpbar').title = p.level >= MAX_LEVEL ? 'Level 5: the highest level' : `Level ${p.level}: ${Math.floor(p.xp)} / ${XP_FOR_LEVEL[p.level + 1]} experience`;
       this.renderFactions();
       this.updateHill(dt);
       if (!p.alive) {
@@ -764,7 +791,7 @@ export class UI {
     for (const f of g.factions) {
       const c = f.castle;
       const rc = g.roleCounts(f.team);
-      const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)})` : '';
+      const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)} Lv ${f.player.level})` : '';
       rows += `<tr style="color:${TEAM_CSS[f.team]}"><td>${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
         <td>${rc.garrison + rc.army}/${f.troopCap} · ${rc.army} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
         ${g.objective === 'koth' ? `<td>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}${g.hill.owner === f.team ? ' ★' : ''}</td>` : ''}<td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;

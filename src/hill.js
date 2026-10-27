@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { HILL, TEAM_COLORS } from './config.js';
 import { allied } from './teams.js';
+import { XP } from './heroes.js';
 import { band, curtain, fade, SEG } from './aimring.js';
 
 const NEUTRAL = new THREE.Color(0xb9c4d6);   // nobody's: a cool, pale steel
@@ -101,6 +102,10 @@ export class Hill {
       return `${name(team)} has taken the hill${from >= 0 && allied(v, from) ? ' from you' : ''}.`;
     }, team, team);
     g.audio.play('horn', this.pos);
+    // the heroes who stood on it for their house are paid for taking it
+    for (const h of g.humans) {
+      if (h.alive && allied(h.team, team) && Math.hypot(h.pos.x - this.pos.x, h.pos.z - this.pos.z) < HILL.radius + 4) h.gainXp(XP.hill, 'hill');
+    }
   }
 
   // King of the Hill: the first side to have held it for long enough wins
