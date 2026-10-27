@@ -8,6 +8,7 @@ import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
+import { heroMods, levelFor, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL } from './heroes.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -64,6 +65,10 @@ export class Player {
     this.lv = { sword: 0, shield: 0, bow: 0 };
     // class: stat mods and two abilities (Q attacks, R defends)
     this.classId = opts.cls || 'knight';
+    this.xp = 0;               // experience, and the level it makes (1..5); one talent point per level after the first
+    this.level = 1;
+    this.talents = {};         // { talentId: true }: what has been learnt this life of the class
+    this.talentRev = 0;        // bumped whenever the talents change, so the cached mods are rebuilt
     this.buffs = new Buffs();
     this.abilCd = { q: 0, r: 0 };
     this.classAt = -99;        // when this hero last changed class
@@ -71,7 +76,7 @@ export class Player {
     this.castFlash = 0;        // the spell hand is raised while this runs down
     this.castColor = 0xff8a2a;
     this.drive = null;         // the siege engine this hero is steering
-    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp = this.maxHp;
     this.stamina = 100;
     this.arrows = PLAYER.arrows;
@@ -211,7 +216,7 @@ export class Player {
     if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.62) this.swingT = -1; }
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
-      if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
+      if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
       if (this.mounted) this.trample(dt);
       this.tickAbilities(dt);
     }
@@ -234,17 +239,24 @@ export class Player {
   get netClient() { return this.isLocal && this.game.mode === 'client'; }
 
   get cls() { return classOf(this.classId); }
-  get armor() { return PLAYER.armor + this.cls.mods.armor; }
-  get dmgMult() { return this.cls.mods.melee * (this.buffs.get('rage') || 1) * (this.hp < this.maxHp * 0.5 ? 1 + (this.cls.mods.bloodied || 0) : 1); }
-  get blockPower() { return Math.min(0.97, this.shield.block + (this.cls.mods.block || 0)); }
-  get drawTime() { return this.bow.draw * (this.cls.mods.draw || 1); }
+  // the class numbers with the level and the talents applied (cached until one of the three changes)
+  get mods() {
+    const k = `${this.classId}|${this.level}|${this.talentRev}`;
+    if (this._modsKey !== k) { this._modsKey = k; this._mods = heroMods(this); }
+    return this._mods;
+  }
+  get talentPoints() { return talentPointsFor(this.level) - Object.keys(this.talents).length; }
+  get armor() { return PLAYER.armor + this.mods.armor; }
+  get dmgMult() { return this.mods.melee * (this.buffs.get('rage') || 1) * (this.hp < this.maxHp * 0.5 ? 1 + (this.mods.bloodied || 0) : 1); }
+  get blockPower() { return Math.min(0.97, this.shield.block + (this.mods.block || 0)); }
+  get drawTime() { return this.bow.draw * (this.mods.draw || 1); }
   get sword() { return SWORDS[this.lv.sword]; }
   get shield() { return SHIELDS[this.lv.shield]; }
   get bow() { return BOWS[this.lv.bow]; }
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
-  get bowDmg() { return this.bow.dmg * this.cls.mods.bow; }
+  get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return this.cls.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 0.7 : 1); }
+  get speedMult() { return this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 0.7 : 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
@@ -252,7 +264,8 @@ export class Player {
   // Choose the hero's class before the battle: health and abilities follow from it.
   setClass(id) {
     this.classId = CLASSES[id] ? id : 'knight';
-    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.clearTalents();
+    this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp = this.maxHp;
     this.abilCd = { q: 0, r: 0 };
     this.buffs.clear();
@@ -284,6 +297,7 @@ export class Player {
   // The class itself and what hangs off it on every screen (the abilities need a moment to ready).
   adoptClass(id) {
     this.classId = id;
+    this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
     this.dash = null;
     this.castFlash = 0;
@@ -296,7 +310,7 @@ export class Player {
     const g = this.game;
     const frac = this.alive ? this.hp / this.maxHp : 1;
     this.adoptClass(id);
-    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp = this.alive ? Math.max(1, Math.round(this.maxHp * frac)) : this.maxHp;
     this.buffs.clear();
     this.classAt = g.phase === 'prep' && g.round === 0 ? -99 : g.time;
@@ -306,9 +320,30 @@ export class Player {
 
   recalc() {
     const old = this.maxHp;
-    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp += this.maxHp - old;
     this.rebuildWeapons();
+  }
+
+  // The talents are forgotten (a new class starts a new tree); the points come back with the level.
+  clearTalents() {
+    if (!Object.keys(this.talents).length) return;
+    this.talents = {};
+    this.talentRev++;
+  }
+
+  // Health follows the level and the talents; the hero keeps the same share of it.
+  refreshStats() {
+    const frac = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+    this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
+    this.hp = this.alive ? Math.max(1, Math.round(this.maxHp * frac)) : this.maxHp;
+  }
+
+  // Jump straight to a level (the experience that goes with it), for a fresh hero or a test.
+  setLevel(n) {
+    this.level = Math.max(1, Math.min(MAX_LEVEL, n | 0));
+    this.xp = Math.max(this.xp, XP_FOR_LEVEL[this.level]);
+    this.refreshStats();
   }
 
   spawn(at, yaw) {
@@ -727,7 +762,7 @@ export class Player {
     this.shake = Math.max(0, this.shake - dt);
 
     // regen when out of combat (the host decides this in online games)
-    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
+    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
 
     // camera
@@ -1058,7 +1093,7 @@ export class Player {
     }
     const cam = this.camera.position.clone();
     if (this.netClient) {
-      this.abilCd[slot] = def.cd * (this.cls.mods.cd || 1);
+      this.abilCd[slot] = def.cd * (this.mods.cd || 1);
       const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
       if (at) msg.at = [at.x, at.y, at.z].map(r2);
       g.net.toHost(msg);
@@ -1239,7 +1274,7 @@ export class Player {
       const d = Math.hypot(dx, dz);
       if (d > 1.6 || (dx * fx + dz * fz) / (d || 1) < 0.3) return;
       this.trampled.set(u, 0.8);
-      g.damage(u, (6 + sp * 1.6) * (this.cls.mods.trample || 1), this, { melee: true });
+      g.damage(u, (6 + sp * 1.6) * (this.mods.trample || 1), this, { melee: true });
       u.vel.x += fx * 6; u.vel.z += fz * 6;
       this.rideSpeed *= 0.85;
     });
@@ -1259,7 +1294,7 @@ export class Player {
     if (this.mounted) {
       // the horse takes half the blows
       this.horseHp -= amount * 0.5;
-      amount *= 0.5 * (this.cls.mods.rider || 1);
+      amount *= 0.5 * (this.mods.rider || 1);
       if (this.horseHp <= 0) this.loseHorse();
     }
     this.hp -= amount;

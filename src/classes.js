@@ -134,7 +134,7 @@ export class Abilities {
     const def = p.cls[slot];
     if (!def || !p.alive || p.drive) return false;
     if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
-    p.abilCd[slot] = def.cd * (p.cls.mods.cd || 1);
+    p.abilCd[slot] = def.cd * (p.mods.cd || 1);
     this[def.id](p, cam, dir.clone().normalize(), at);
     return true;
   }
@@ -350,7 +350,7 @@ export class Abilities {
     from.y -= 0.15;
     // aim from the hand at the point under the crosshair so the ball lands where you look
     const d = cam.clone().addScaledVector(dir, 40).sub(from).normalize();
-    this.g.magic.fireball(p, from, d, s.dmg * p.cls.mods.spell, s.radius);
+    this.g.magic.fireball(p, from, d, s.dmg * p.mods.spell, s.radius);
     p.swingT = 0.25; p.attackDir = 'thrust';
   }
 
@@ -367,7 +367,7 @@ export class Abilities {
   smite(p, cam, dir) {
     const g = this.g, s = SPELLS.smite;
     const { pos: at, col } = this.rayHit(cam, dir, s.range, p.team);
-    const dmg = s.dmg * p.cls.mods.spell;
+    const dmg = s.dmg * p.mods.spell;
     this.eachFoe(p.team, at.x, at.z, s.radius, (o, d) => {
       g.damage(o, dmg * (1 - 0.4 * Math.min(1, d / s.radius)), p, { magic: true, splash: true });
       if (o.alive && o.stagger) o.stagger(0.8, { pos: at });
