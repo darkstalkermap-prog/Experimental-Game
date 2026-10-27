@@ -242,8 +242,10 @@ export class Player {
   get cls() { return classOf(this.classId); }
   // the class numbers with the level and the talents applied (cached until one of the three changes)
   get mods() {
-    const k = `${this.classId}|${this.level}|${this.talentRev}`;
-    if (this._modsKey !== k) { this._modsKey = k; this._mods = heroMods(this); }
+    if (this._mc !== this.classId || this._ml !== this.level || this._mr !== this.talentRev) {
+      this._mc = this.classId; this._ml = this.level; this._mr = this.talentRev;
+      this._mods = heroMods(this);
+    }
     return this._mods;
   }
   get talentPoints() { return talentPointsFor(this.level) - Object.keys(this.talents).length; }
