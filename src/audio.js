@@ -1,6 +1,10 @@
 // Sound effects synthesized with WebAudio (no audio files needed), plus the medieval music (see music.js).
 import { Music } from './music.js';
 
+// More sounds, registered by the modules that use them: SOUNDS.name = (audio, k) => { audio.tone(...); audio.noise(...); }
+// (k is the volume from distance, 1 when the sound has no place in the world).
+export const SOUNDS = {};
+
 export class Audio {
   constructor() {
     this.ctx = null;
@@ -143,7 +147,7 @@ export class Audio {
       case 'hurt': this.noise(0.2, 400, 1, 0.6, 'lowpass'); this.tone(90, 0.2, 0.3, 'sine', 0.5); break;
       case 'victory': [392, 494, 587, 784].forEach((f, i) => this.tone(f, 0.6, 0.2, 'triangle', 1, i * 0.18)); break;
       case 'defeat': [392, 330, 262, 196].forEach((f, i) => this.tone(f, 0.7, 0.2, 'triangle', 1, i * 0.25)); break;
-      default: break;
+      default: if (SOUNDS[name]) SOUNDS[name](this, k); break;
     }
   }
 }
