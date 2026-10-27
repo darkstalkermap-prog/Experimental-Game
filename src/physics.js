@@ -1,6 +1,6 @@
 // Terrain heightfield + simple box colliders (walls, towers, gates, ramps).
 // Characters are vertical capsules approximated by a circle in XZ plus a foot height.
-import { WORLD, CASTLE, BODY } from './config.js';
+import { WORLD, CASTLE, BODY, HILL } from './config.js';
 import { makeNoise, smoothstep, clamp } from './noise.js';
 import { allied } from './teams.js';
 
@@ -53,6 +53,8 @@ export class Physics {
     // gentle battlefield in the middle
     const rc = Math.hypot(x, z);
     h = h * (0.45 + 0.55 * smoothstep(25, 90, rc)) + 1.2 * (1 - smoothstep(25, 90, rc));
+    // the hill in the middle: a flat top with long, gentle slopes
+    h += HILL.rise * (1 - smoothstep(HILL.plateau, HILL.foot, rc));
     // flatten castle plateaus
     for (const s of CASTLE_SITES) {
       const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
@@ -220,13 +222,15 @@ export class Physics {
   // A wall (or the edge of the wall walk) right in front of someone standing at (x,z) that they can scramble up, with
   // the spot to hang on at the foot of it and the spot to climb out onto the top. Walls are far higher than a jump,
   // so this is how a hero gets up without the stairs: from outside, up the face of a curtain wall, or from the
-  // courtyard, up onto the edge of the wall walk. Returns null when there is nothing to climb: nothing within reach,
-  // not facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
-  ledge(x, z, footY, radius, fx, fz, height = 1.8) {
+  // courtyard, up onto the edge of the wall walk. Only the climber's own castle can be climbed (team; pass null to see
+  // any castle's, to tell someone why not). Returns null when there is nothing to climb: nothing within reach, not
+  // facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
+  ledge(x, z, footY, radius, fx, fz, height = 1.8, team = -99) {
     if (this.covered(x, z, footY, height)) return null;
     let best = null, bd = Infinity;
     for (const c of this.near(x, z, radius + BODY.climbReach + 1)) {
       if (!LEDGE_KINDS.has(c.kind) || !c.active) continue;
+      if (team !== null && (c.team !== undefined ? c.team : c.ref && c.ref.team) !== team) continue;
       const rise = c.top - footY;
       if (rise < BODY.climbMin || rise > BODY.climbMax) continue;
       const dx = x - clamp(x, c.minX, c.maxX), dz = z - clamp(z, c.minZ, c.maxZ);
@@ -256,7 +260,7 @@ export class Physics {
       probe.x = p.x; probe.z = p.z;
       if (this.resolve(probe, radius, c.top, height, -99)) continue;
       if (this.groundHeight(p.x, p.z, c.top) < c.top - 0.05) continue;
-      return { c, top: c.top, nx, nz, hang: at(radius + 0.04), land: p };
+      return { c, owner: c.team !== undefined ? c.team : c.ref && c.ref.team, top: c.top, nx, nz, hang: at(radius + 0.04), land: p };
     }
     return null;
   }

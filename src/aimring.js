@@ -7,12 +7,12 @@ import * as THREE from 'three';
 import { CASTLE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 
-const SEG = 56;
+export const SEG = 56;
 const GOOD = new THREE.Color(0x8fe88a);
 const FAR = new THREE.Color(0xffb347);
 
 // a flat band between two radii (in the xz plane, centred on the origin), `rings` quads thick
-function band(rIn, rOut, rings) {
+export function band(rIn, rOut, rings) {
   const pos = new Float32Array((rings + 1) * SEG * 3), idx = [];
   for (let j = 0; j <= rings; j++) {
     const r = rIn + ((rOut - rIn) * j) / rings;
@@ -35,7 +35,7 @@ function band(rIn, rOut, rings) {
 }
 
 // a tall strip standing on the circle's rim: bottom row at the ground, top row above it
-function curtain(r) {
+export function curtain(r) {
   const pos = new Float32Array(2 * (SEG + 1) * 3), uv = new Float32Array(2 * (SEG + 1) * 2), idx = [];
   for (let i = 0; i <= SEG; i++) {
     const a = (i / SEG) * Math.PI * 2;
@@ -55,7 +55,7 @@ function curtain(r) {
 
 // white at the foot of the curtain fading to black at the top (black adds nothing, so it simply fades out)
 let fadeTex = null;
-function fade() {
+export function fade() {
   if (fadeTex) return fadeTex;
   const c = document.createElement('canvas');
   c.width = 4; c.height = 64;

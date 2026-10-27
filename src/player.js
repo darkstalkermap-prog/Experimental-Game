@@ -50,6 +50,7 @@ export class Player {
     this.climbing = false;     // (what other screens are told)
     this.climbCd = 0;
     this.climbHint = false;    // a wall is right in front and a jump would climb it (for the on-screen prompt)
+    this.climbMsgAt = -99;
     this.hintT = 0;
     this.vmDown = 0;           // how far the weapons are lowered (while climbing)
     this.aiming = null;        // holding Q to place the Ranger's volley: { slot, t, at, far }
@@ -258,13 +259,22 @@ export class Player {
     if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
   }
 
-  // Why this hero can't take up another class right now (null when they can). In the field it is not allowed in
-  // the middle of a fight or again straight away; before the first wave, or while waiting to respawn, it is free.
+  // In the grounds of your own castle: inside its walls, or just outside them.
+  atHome(margin = 14) {
+    const c = this.game.castles[this.team];
+    return !!c && c.inFootprint(this.pos, margin);
+  }
+
+  // Why this hero can't take up another class right now (null when they can). A class is taken up at your own castle
+  // (a fallen hero is about to rise at their keep, so they may choose wherever they lie). Before the first wave that
+  // is all; after it, not in the middle of a fight and not again straight away.
   classBlock(id) {
     const g = this.game;
     if (!CLASSES[id]) return 'No such class';
     if (id === this.classId) return 'Your class';
-    if (!this.alive || (g.phase === 'prep' && g.round === 0)) return null;
+    if (!this.alive) return null;
+    if (!this.atHome()) return 'Only at your own castle';
+    if (g.phase === 'prep' && g.round === 0) return null;
     if (this.drive) return 'Climb out of the siege engine first';
     if (g.time - this.lastHurt < SWITCH.combat) return 'Not in the middle of a fight';
     const wait = Math.ceil(SWITCH.cooldown - (g.time - this.classAt));
@@ -683,7 +693,7 @@ export class Player {
     if ((this.hintT -= dt) <= 0) {
       this.hintT = 0.15;
       this.climbHint = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround && this.stamina >= BODY.climbStamina &&
-        !!g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height);
+        !!g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height, this.team);
     }
     if (this.aiming) this.updateAim(dt, input);
 
@@ -919,8 +929,16 @@ export class Player {
     if (this.mounted || this.drive || this.climb || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (!this.onGround && this.pos.y - ground > 2.2) return false;
-    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height);
-    if (!l) return false;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, this.team);
+    if (!l) {
+      // somebody else's wall: say why the jump does nothing (not every time)
+      if (g.time - this.climbMsgAt > 4) {
+        const other = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, null);
+        if (other && other.owner !== this.team) { this.climbMsgAt = g.time; this.notify('You can only climb the walls of your own castle.'); }
+      }
+      return false;
+    }
     if (this.stamina < BODY.climbStamina) { this.notify('Too tired to climb.'); this.sound('deny'); return true; }
     this.stamina -= BODY.climbStamina;
     this.climb = { t: 0, dur: 0.5 + (l.top - this.pos.y) * 0.08, x0: this.pos.x, y0: this.pos.y, z0: this.pos.z,

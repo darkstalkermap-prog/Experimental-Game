@@ -8,7 +8,7 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, WORLD, MAP_SIZES } from './config.js';
+import { setMapSize, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -99,6 +99,18 @@ function selectMap(size) {
 document.querySelectorAll('#mapsize button').forEach((b) => b.addEventListener('click', () => selectMap(b.dataset.m)));
 selectMap(mapSize);
 
+// game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
+let objective = 'conquest';
+function selectObjective(o) {
+  if (!OBJECTIVES[o]) return;
+  objective = o;
+  document.querySelectorAll('#objective button, #lobbyObjective button').forEach((b) => b.classList.toggle('active', b.dataset.o === o));
+  $('objDesc').textContent = OBJECTIVES[o].desc;
+  $('lobbyObjDesc').textContent = OBJECTIVES[o].desc;
+}
+document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => selectObjective(b.dataset.o)));
+selectObjective(objective);
+
 // rebuild the world if the chosen map size differs from the one on screen
 function ensureMap(size) {
   if (WORLD.size === size && game.mapBuiltFor === size) return;
@@ -132,7 +144,7 @@ const rememberClass = (id) => {
 };
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
-$('play').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }] }));
+$('play').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective }));
 
 // ---------------- online play ----------------
 let net = null;
@@ -222,7 +234,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass }];
-  const broadcast = () => { ui.renderLobby(lobby, 0, coop); net.toAll({ k: 'lobby', players: lobby, coop }); };
+  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective }); };
   lobbyBroadcast = broadcast;
   // guests report the class they pick
   net.on('data', ({ from, d }) => {
@@ -232,6 +244,9 @@ $('hostBtn').addEventListener('click', async () => {
   });
   for (const b of document.querySelectorAll('#lobbyModes button')) {
     b.onclick = () => { coop = b.dataset.mode === 'coop'; broadcast(); };
+  }
+  for (const b of document.querySelectorAll('#lobbyObjective button')) {
+    b.onclick = () => { selectObjective(b.dataset.o); broadcast(); };
   }
   net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); broadcast(); });
   net.on('peer', (m) => {
@@ -246,8 +261,8 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop });
-  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop });
+  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective });
+  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -258,11 +273,11 @@ $('joinBtn').addEventListener('click', async () => {
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); });
   net.on('data', ({ d }) => {
-    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop);
+    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj);
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop }, d.map || 'medium');
+      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest' }, d.map || 'medium');
     }
   });
   net.join(code, playerName());

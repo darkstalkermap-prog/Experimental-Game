@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY, clock,
-  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -23,6 +23,7 @@ import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
 import { AimRing } from './aimring.js';
+import { Hill } from './hill.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
 
@@ -79,6 +80,8 @@ export class Game {
     this.magic = new Magic(this);
     this.abilities = new Abilities(this);
     this.aimRing = new AimRing(this);
+    this.hill = new Hill(this);
+    this.objective = 'conquest';   // 'conquest' (the main mode) or 'koth' (King of the Hill)
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
@@ -120,6 +123,8 @@ export class Game {
   start(difficulty = 'normal', setup = null) {
     setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
     this.mode = setup.mode;
+    this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
+    this.hill.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
     // so the game becomes two teams of two: Blue + Red against Green + Gold.
     this.coop = !!setup.coop && setup.players.length > 1;
@@ -174,6 +179,13 @@ export class Game {
       for (const f of this.factions) {
         for (const t of ['swordsman', 'swordsman', 'spearman', 'archer', 'archer']) this.recruit(f, t);
       }
+      // King of the Hill: the rival lords send a few of their first men up to the hill at once, so nobody can camp on it unopposed
+      if (this.hill.live) {
+        for (const f of this.factions) {
+          if (f.isPlayer) continue;
+          this.units.filter((u) => u.team === f.team && !u.isHero).slice(0, HILL.squad).forEach((u) => this.hill.sendSquad(u));
+        }
+      }
     }
     if (this.mode === 'host') this.sync = new HostSync(this);
     if (this.mode === 'client') this.sync = new ClientSync(this);
@@ -185,7 +197,8 @@ export class Game {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
     this.audio.play('horn');
-    this.ui.banner('Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds. B: shop and roster · M: map · Q / R: your abilities.`);
+    const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -794,7 +807,8 @@ export class Game {
       }
       const u = this.recruit(f, s.type, true);
       const target = this.siegeTarget(f);
-      if (target) u.setOrder('assault', target);
+      if (this.hill.live && !f.isPlayer && this.hill.wantsSquad(f)) this.hill.sendSquad(u);   // a few of the rival lords' men always go for the hill (King of the Hill)
+      else if (target) u.setOrder('assault', target);
     }
   }
 
@@ -818,7 +832,7 @@ export class Game {
     let label = '';
     if (cmd === 'hold') {
       data = { pos: new THREE.Vector3(...hold.pos), yaw: hold.yaw };
-      label = 'Hold this position!';
+      label = hold.hill ? 'Take the hill!' : 'Hold this position!';
     } else if (cmd === 'assault') {
       data = this.siegeTarget(f);
       if (!data) return;
@@ -918,10 +932,10 @@ export class Game {
   }
 
   // The local player presses an order key.
-  localOrder(cmd) {
+  localOrder(cmd, holdAt = null) {
     const p = this.player;
-    let hold = null;
-    if (cmd === 'hold') {
+    let hold = holdAt;
+    if (cmd === 'hold' && !hold) {
       const d = p.lookDir();
       const at = p.pos.clone().addScaledVector(new THREE.Vector3(d.x, 0, d.z).normalize(), 6);
       hold = { pos: [at.x, at.y, at.z], yaw: p.yaw };
@@ -932,6 +946,14 @@ export class Game {
       return;
     }
     this.order(p.team, cmd, p.group || 'all', hold);
+  }
+
+  // Army: go up to the hill in the middle and hold it (standing on your own house's side of it)
+  localHillOrder() {
+    if (!this.hill.live) { this.player.notify('There is no fight for the hill in Conquest. Choose King of the Hill to play for it.'); return; }
+    const h = this.hill.pos, c = this.localFaction.castle.center;
+    const dx = c.x - h.x, dz = c.z - h.z, l = Math.hypot(dx, dz) || 1;
+    this.localOrder('hold', { pos: [h.x + (dx / l) * 4, h.y, h.z + (dz / l) * 4], yaw: Math.atan2(-dx, -dz), hill: 1 });
   }
 
   // Is this hero standing at their own castle's gate lever?
@@ -996,6 +1018,7 @@ export class Game {
     if (i.hit('F3')) this.localOrder('charge');
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
+    if (i.hit('KeyY')) this.localHillOrder();
     if (i.hit('KeyF')) this.localFormation();
     if (i.hit('KeyO')) { this.ui.openOrders(); return; }
     if (i.hit('KeyG')) {
@@ -1166,6 +1189,7 @@ export class Game {
     this.fx.update(dt);
     this.abilities.updateFx(dt);
     this.aimRing.update(dt);
+    this.hill.visual(dt);
     this.magic.update(dt);
     this.grass.update(dt, this.camera.position);
     for (const c of this.castles) if (this.factions[c.team]) c.syncUpgrades(this.factions[c.team]);
@@ -1173,6 +1197,7 @@ export class Game {
     if (this.simulating && this.state === 'playing') {
       this.updateWaves(dt);
       this.processSpawns(dt);
+      this.hill.update(dt);
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       this.updateHeroes(dt);
       // trickle income while the castle stands

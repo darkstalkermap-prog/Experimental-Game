@@ -159,7 +159,7 @@ export class HostSync {
     this.t = 0;
     const g = this.g;
     const shared = {
-      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length,
+      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(),
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
@@ -222,6 +222,7 @@ export class ClientSync {
     const s = d.s;
     g.round = s.r; g.phase = s.ph; g.phaseT = s.pt;
     g.spawnQueue.length = s.ql;
+    g.hill.applyNet(s.hl);
 
     // units
     const seen = new Set();

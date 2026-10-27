@@ -6,7 +6,23 @@ preparation time is over, every castle sends a fresh army marching out every 30 
 stands. The armies meet in the field, fight, and push on to the enemy gates, while you lead from the front as
 a hero of one of six classes, spend gold on your army, castle and siege engines, and break the other lords'
 gates, walls and keeps.
-**The last castle and hero standing wins.**
+
+## Game modes
+
+Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** is the main one.
+
+- **Conquest** (the main mode): break the other houses' castles. **The last castle and hero standing wins.**
+  The hill in the middle of the map is only scenery here: a mound ringed by standing stones, with a banner.
+- **King of the Hill**: the same war, with the hill in the middle of the map live. A house takes the hill by standing on it
+  alone: a lone soldier takes an empty hill in about eight seconds, more soldiers are quicker (a hero counts for two,
+  a giant for four). While soldiers of two houses are on it, it is **contested** and nothing changes. Whoever holds it
+  earns **2 gold a second** (paid in lumps of ten) and the seconds add up: **hold it for 2:30 in all and you win
+  outright**, wherever the rest of the war stands. A house that is destroyed loses its hold. The hill box under the
+  top panel shows who holds it, who is taking it and each side's time (the castle list and the scoreboard show it
+  too, and the map marks the hill in the holder's colour). Each rival lord sends three of his first soldiers up to the
+  hill at once, and men of every wave after that (more as the war goes on) to keep them there, so nobody can sit on it
+  unopposed and it is fought over all game long. **Y** sends your own army up to
+  hold it. In co-op, allies share the hold and the time, and win together.
 
 ## Play
 
@@ -37,7 +53,7 @@ one (Render or `npm start`, below), the **claude.ai live room** when the game is
 artifact, and otherwise **browser to browser** when it is plain static files (GitHub Pages). All three
 use the same host, invite code and lobby. Before the battle starts, the host picks a mode in the lobby:
 
-- **Versus**: every castle for itself. The last castle and hero standing wins.
+- **Versus**: every castle for itself. (In Conquest the last castle and hero standing wins.)
 - **Co-op** (2 to 4 players): the human players are allies. With 2 or 3 players everyone fights on one side
   against the AI lords that hold the empty castles. With 4 players there are no AI lords, so the lobby makes
   **two teams of two: Blue + Red against Green + Gold**. Allied troops, towers, arrows and spells never hurt
@@ -51,7 +67,7 @@ use the same host, invite code and lobby. Before the battle starts, the host pic
 2. The host clicks **Copy Invite** and sends the link (it looks like `.../?join=ABCD`) to friends.
 3. Friends open it, type a name and press Enter. If they only have the code, they can use **Multiplayer** and
    type it in.
-4. The host picks **Versus** or **Co-op** and clicks **Start the Battle**.
+4. The host picks **Versus** or **Co-op**, and **Conquest** or **King of the Hill**, and clicks **Start the Battle**.
 
 Players' browsers connect straight to each other (WebRTC, using the free PeerJS matchmaking service only to
 introduce them), and the host's browser runs the battle. Everyone needs internet access. On rare strict networks
@@ -142,7 +158,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     3 levels, and each adds one more elite to every wave: a knight, then a cavalry rider, then a lancer.
     **Drill Sergeants** give all your troops, waves included, +15% health and damage per level. Veterans can
     be promoted.
-  - **Class**: change your hero class in the field (see **Hero classes**).
+  - **Class**: change your hero class, at your own castle (see **Hero classes**).
   - **Castle**: repair or reinforce the gate, repair or thicken the walls, restore the keep, and add tower archers.
   - **Items** (greyed out for now): better swords, a kite shield, a war bow, a warhorse, arrows and healing
     draughts. The tab is disabled in the shop until the items come back.
@@ -207,10 +223,13 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     in your path. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
     (you take 40% less).
 
-  **Switching class in the field**: open the shop (**B**) and choose the **Class** tab. Health keeps its proportion
-  (a hero at half health stays at half health), buffs end, and the new abilities are ready after 6 seconds. You can't
-  switch in the middle of a fight (within 4 s of being hit) or again within 15 s. It is free before the first wave and
-  while you wait to respawn (you come back as the new class). Online, everyone sees the new class on your name tag.
+  **Switching class**: open the shop (**B**) and choose the **Class** tab. A class can only be taken up **at your own
+  castle**: inside its walls or within 14 m of them (the card says "Only at your own castle" anywhere else, in the
+  field or at another house's castle). A hero waiting to respawn may choose from wherever they lie, since they
+  rise at their own keep. Health keeps its proportion (a hero at half health stays at half health), buffs end, and the
+  new abilities are ready after 6 seconds. After the first wave you also can't switch in the middle of a fight (within 4 s
+  of being hit) or again within 15 s. A hero who has died comes back as the new class. Online, the host checks the
+  position too, and everyone sees the new class on your name tag.
 
   The two ability tiles and any effects running on you sit above your health bar.
 - **Siege crews**: every ram and catapult is worked by two engineers. They are real soldiers: they push the engine to
@@ -286,7 +305,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Key | Action |
 | --- | --- |
 | WASD / Shift / Space | Move / sprint / jump |
-| Space (at a castle wall) | Jump at a wall from outside, or at the edge of the wall walk from the courtyard, to climb up and stand on the wall walk (a prompt shows when you can) |
+| Space (at your own castle's wall) | Jump at a wall of your own castle from outside, or at the edge of the wall walk from its courtyard, to climb up and stand on the wall walk (a prompt shows when you can) |
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
@@ -299,7 +318,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
 | W / S / A / D, left click, E (inside an engine) | Roll / turn / strike or fire / climb out |
 | O | Orders menu (click to command troops) |
-| B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class) |
+| B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
 | M | Big map (press again to close) |
 | Tab | Scoreboard |
 | F1 or Z | Army: follow me |
@@ -307,6 +326,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | F3 | Army: charge |
 | F4 or V | Army: defend the castle |
 | T | Army: assault the selected target castle |
+| Y | King of the Hill: army takes the hill in the middle and holds it |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
 | Esc | Game menu: resume, options, controls, quit (closes the shop or a panel first) |
@@ -316,8 +336,9 @@ Stairs on both sides of the courtyard lead up to the wall walk, which goes all t
 **Climbing and ducking.** The walls are 8 m high, far past a jump, so a hero who stands at the foot of a wall on the outside
 and jumps at it (Space, facing it, within about a metre and a half) scrambles up it: about a second, 20 stamina, and the hero
 ends up on the wall walk behind the battlements. From the courtyard the same jump takes you up onto the edge of the wall walk
-(not from underneath its planking). It works on any wall of any castle that is still standing, enemy ones included (not on a
-breach, not while ducking), a "Space: Climb the wall" prompt shows when it will work, and other players see the climb. Holding **C** ducks: the head and the hitbox
+(not from underneath its planking). It works only on the walls of **your own castle** (not on an enemy's, not on a
+breach, not while ducking; trying on someone else's wall tells you so), a "Space: Climb the wall" prompt shows when it will
+work, and other players see the climb. Holding **C** ducks: the head and the hitbox
 drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
 walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
 
@@ -328,6 +349,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
 | `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
+| `src/hill.js` | The hill in the middle: the banner, and in King of the Hill the capture, scoring, gold and win |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |

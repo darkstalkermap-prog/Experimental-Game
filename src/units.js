@@ -1,6 +1,6 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
-import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS } from './config.js';
+import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL } from './config.js';
 import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh, getModelGeos, prewarmSoldier, TIER_SCALE } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
@@ -342,6 +342,8 @@ export class Unit {
         const wall = fac.formation === 'shieldwall' && !this.ranged;
         engage = this.ranged ? this.range : wall ? 2.8 : 5;
         anchor = this.goal; leash = this.ranged ? this.range + 5 : wall ? 3 : 8;
+        // a soldier sent up the hill fights anyone who sets foot inside it, and goes back to his place afterwards
+        if (this.hillDuty && g.hill && g.objective === 'koth') { engage = Math.max(engage, HILL.radius + 4); anchor = g.hill.pos; leash = HILL.radius + 6; }
         break;
       }
       case 'charge':

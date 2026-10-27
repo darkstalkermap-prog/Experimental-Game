@@ -168,6 +168,29 @@ export const VOLLEY = {
   aimed: 0.7,         // share of the arrows that pick a foe inside the circle (the rest fall at random)
 };
 
+// Game modes. Conquest is the main one: break the other houses' castles, last castle standing wins. King of the Hill is
+// the same war with a prize in the middle of the map: hold the hill and win outright.
+export const OBJECTIVES = {
+  conquest: { name: 'Conquest', desc: "Break the other houses' castles. The last castle standing wins." },
+  koth: { name: 'King of the Hill', desc: 'The same war, with a hill in the middle of the map: hold it long enough and you win.' },
+};
+
+// The hill in the middle of the map (a mound ringed by the standing stones). Whoever holds it earns gold; in King of
+// the Hill, holding it is also how the match is won. A house takes it by standing on it alone: a rival's soldier on
+// the hill makes it contested, and nobody gains anything while it is.
+export const HILL = {
+  radius: 13,         // the capture zone: inside the ring of standing stones
+  plateau: 11, foot: 30, rise: 3.6,   // the mound: flat top, long slopes down to the ring road
+  capture: 8,         // seconds for a lone soldier to take an empty hill (more soldiers are quicker)
+  perHead: 0.35,      // what each further soldier adds to that speed, up to maxHeads of them
+  maxHeads: 8,
+  melt: 0.5,          // a capture nobody is making fades by this much of the bar per second
+  income: 2,          // gold per second to the house that holds it (and its allies)
+  target: 150,        // King of the Hill: seconds of holding that win the match
+  squad: 3,           // the rival lords keep this many men on the hill from the start, and more as the war goes on
+  squadMax: 10,
+};
+
 export const TROOP_CAP = { start: 12, step: 6, max: 36 };
 
 // Formations for your troops when they follow you or hold a position.

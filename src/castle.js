@@ -217,7 +217,7 @@ export class Castle {
       const b = box(x1 - x0, 0.45, z1 - z0, 2);
       b.translate((x0 + x1) / 2, wallH - 0.225, (z0 + z1) / 2);
       deck.push(b);
-      this.addCollider(x0, x1, z0, z1, wallH, { kind: 'walk', bottom: cy + wallH - 0.5, noProjectile: true });
+      this.addCollider(x0, x1, z0, z1, wallH, { kind: 'walk', bottom: cy + wallH - 0.5, noProjectile: true, team: this.team });
     }
     g.add(shadowed(new THREE.Mesh(mergeGeometries(deck), M.plank)));
     // support posts with braces along the inner edge (stairs leave gaps)
@@ -459,7 +459,7 @@ export class Castle {
       col(F0, F1, F1 - W, F1, towerH, { kind: 'tower' });
       col(F0, F0 + W, H, F1, towerH, { kind: 'tower' });
       col(H, F1, F0, F0 + W, towerH, { kind: 'tower' });
-      col(F0 + W, F1 - W - 2, B0, F1 - W, towerH, { kind: 'walk', bottom: cy + towerH - 0.4, noProjectile: true });   // the roof deck
+      col(F0 + W, F1 - W - 2, B0, F1 - W, towerH, { kind: 'walk', bottom: cy + towerH - 0.4, noProjectile: true, team: this.team });   // the roof deck
       const rail = (x0, x1, z0, z1) => col(x0, x1, z0, z1, towerH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: cy + towerH - 0.05 });
       rail(F1 - 0.55, F1, F0, F1);                                           // keeps you on the roof
       rail(F0, F1, F1 - 0.55, F1);

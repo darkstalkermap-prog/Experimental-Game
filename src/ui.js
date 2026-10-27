@@ -1,6 +1,6 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, clock } from './config.js';
+import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, clock } from './config.js';
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
@@ -277,7 +277,7 @@ export class UI {
     const g = this.game;
     const note = document.createElement('div');
     note.className = 'classnote';
-    note.textContent = `Take up another class at any time: your health keeps its proportion and the new abilities are ready after ${SWITCH.ready} s. You can't change in the middle of a fight, or again within ${SWITCH.cooldown} s. It is free before the first wave, and while you wait to respawn.`;
+    note.textContent = `Take up another class at your own castle (inside its walls or just outside them): your health keeps its proportion and the new abilities are ready after ${SWITCH.ready} s. You can't change in the middle of a fight, or again within ${SWITCH.cooldown} s. Before the first wave, and while you wait to respawn, the only rule is the castle.`;
     grid.appendChild(note);
     this.classCards = [];
     for (const id of CLASS_IDS) {
@@ -449,7 +449,8 @@ export class UI {
       { key: 'F3', label: 'Charge', act: () => g.localOrder('charge'), active: () => p.lastOrder === 'charge' },
       { key: 'F4', label: 'Defend castle', act: () => g.localOrder('defend'), active: () => (p.lastOrder || 'defend') === 'defend' },
       { key: 'T', label: 'Assault target', act: () => g.localOrder('assault'), active: () => p.lastOrder === 'assault' },
-    ], 'Hold here places them 6 m in front of where you are looking. Assault sends them at the target chosen in the Siege tab.');
+      ...(g.objective === 'koth' ? [{ key: 'Y', label: 'Take the hill', act: () => g.localHillOrder(), active: () => false }] : []),
+    ], 'Hold here places them 6 m in front of where you are looking. Assault sends them at the target chosen in the Siege tab.' + (g.objective === 'koth' ? ' Take the hill sends them to the hill in the middle of the map to hold it.' : ''));
     const setForm = (f) => () => { if ((g.localFaction.formation || 'line') !== f) { while ((g.localFaction.formation || 'line') !== f) g.localFormation(); } };
     section('Formation', [
       { key: 'F', label: 'Line', act: setForm('line'), active: () => (g.localFaction.formation || 'line') === 'line' },
@@ -552,7 +553,7 @@ export class UI {
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;
   }
 
-  renderLobby(players, myTeam = -1, coop = false) {
+  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest') {
     const clsName = (p) => (CLASSES[p.cls] ? ` · ${CLASSES[p.cls].icon} ${CLASSES[p.cls].name}` : '');
     $('lobbyMode').textContent = coop
       ? (players.length >= 4
@@ -560,6 +561,9 @@ export class UI {
         : 'Co-op: all players are allies against the AI lords.')
       : 'Versus: every castle for itself.';
     for (const b of document.querySelectorAll('#lobbyModes button')) b.classList.toggle('active', (b.dataset.mode === 'coop') === coop);
+    const obj = OBJECTIVES[objective] ? objective : 'conquest';
+    for (const b of document.querySelectorAll('#lobbyObjective button')) b.classList.toggle('active', b.dataset.o === obj);
+    $('lobbyObjDesc').textContent = `${OBJECTIVES[obj].name}: ${OBJECTIVES[obj].desc}`;
     const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
@@ -595,7 +599,8 @@ export class UI {
       <div><b>${g.player.kills}</b><span>your kills</span></div>
       <div><b>${f.kills}</b><span>army kills</span></div>
       <div><b>${f.earned}</b><span>gold earned</span></div>
-      <div><b>${g.player.deaths}</b><span>deaths</span></div>`;
+      <div><b>${g.player.deaths}</b><span>deaths</span></div>
+      ${g.objective === 'koth' ? `<div><b>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</b><span>on the hill</span></div>` : ''}`;
     this.hideHud();
   }
 
@@ -645,6 +650,7 @@ export class UI {
       $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
       $('clsName').style.color = p.cls.color;
       this.renderFactions();
+      this.updateHill(dt);
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
         $('respawnT').textContent = f.castle.fallen ? 'Your keep has fallen – no respawn' : `Respawning in ${Math.ceil(f.respawnT)}s`;
@@ -660,6 +666,39 @@ export class UI {
       this.bigT -= dt;
       if (this.bigT <= 0) { this.bigT = 0.1; this.drawBigMap(); }
     }
+  }
+
+  // The hill in the middle: who holds it, who is taking it, and (King of the Hill) how long each side has held it.
+  updateHill(dt) {
+    const g = this.game, h = g.hill, el = $('hill');
+    if (!h) return;
+    const koth = g.objective === 'koth';
+    if (!koth) { el.classList.add('hidden'); return; }
+    const me = g.localTeam;
+    const nm = (t) => (t === me ? 'You' : g.factions[t].name);
+    let state, color = 'var(--parch)';
+    if (h.contested) { state = 'Contested'; color = '#ff8a6a'; }
+    else if (h.owner >= 0) { state = allied(h.owner, me) && h.owner !== me ? `Held by ally ${g.factions[h.owner].name.replace(/^House /, '')}` : `Held by ${nm(h.owner).replace(/^House /, '')}`; color = TEAM_CSS[h.owner]; }
+    else state = 'Nobody holds it';
+    const taking = !h.contested && h.capturer >= 0 && h.progress > 0.01;
+    const bar = taking ? h.progress : h.owner >= 0 && !h.contested ? 1 : 0;
+    const barColor = taking ? TEAM_CSS[h.capturer] : h.owner >= 0 ? TEAM_CSS[h.owner] : '#888';
+    let lines = '';
+    if (taking) lines += `<div class="hc" style="color:${TEAM_CSS[h.capturer]}">${esc(nm(h.capturer).replace(/^House /, ''))} taking it · ${Math.round(h.progress * 100)}%</div>`;
+    if (koth) {
+      const seen = new Set(), parts = [];
+      for (const f of g.factions) {
+        const k = [0, 1, 2, 3].find((t) => allied(t, f.team));
+        if (seen.has(k) || (f.eliminated && !h.held[k])) continue;
+        seen.add(k);
+        const mine = allied(k, me);
+        parts.push(`<span style="color:${TEAM_CSS[k]}${mine ? ';font-weight:700' : ''}">${mine ? 'You' : esc(f.name.replace(/^House /, ''))} ${clock(Math.floor(h.held[k]))}</span>`);
+      }
+      lines += `<div class="hs">${parts.join(' · ')} · first to ${clock(HILL.target)}</div>`;
+    }
+    const html = `<div class="ht"><span>⛰ The Hill</span><b style="color:${color}">${esc(state)}</b></div><div class="hb"><i style="width:${(bar * 100).toFixed(0)}%;background:${barColor}"></i></div>${lines}`;
+    if (html !== this.hillHtml) { this.hillHtml = html; el.innerHTML = html; }
+    el.classList.toggle('hidden', g.state !== 'playing');
   }
 
   // Q and R: icon, name, cooldown sweep and the effects running on you
@@ -710,7 +749,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span></span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -728,8 +767,9 @@ export class UI {
       const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)})` : '';
       rows += `<tr style="color:${TEAM_CSS[f.team]}"><td>${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
         <td>${rc.garrison + rc.army}/${f.troopCap} · ${rc.army} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
-        <td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
+        ${g.objective === 'koth' ? `<td>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}${g.hill.owner === f.team ? ' ★' : ''}</td>` : ''}<td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
     }
+    $('hillTh').style.display = g.objective === 'koth' ? '' : 'none';
     $('scoreRows').innerHTML = rows;
   }
 
@@ -890,6 +930,29 @@ export class UI {
         ctx.fillStyle = '#fff';
         ctx.fillText(label, cx, cz - s / 2 - 9);
       }
+    }
+    // King of the Hill: the hill in the middle, shaded in the colour of the house that holds it, red while it is contested
+    if (g.objective === 'koth') {
+      const h = g.hill, hx = X(0), hz = X(0), r = Math.max(5, HILL.radius * k);
+      const col = h.contested ? '#ff6a4a' : h.owner >= 0 ? TEAM_CSS[h.owner] : '#e9dfc2';
+      ctx.save();
+      ctx.globalAlpha = 0.4; ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(hx, hz, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.strokeStyle = col; ctx.lineWidth = big ? 3 : 2;
+      ctx.beginPath(); ctx.arc(hx, hz, r, 0, Math.PI * 2); ctx.stroke();
+      if (h.capturer >= 0 && h.progress > 0) {   // the capture under way
+        ctx.strokeStyle = TEAM_CSS[h.capturer]; ctx.lineWidth = big ? 5 : 3;
+        ctx.beginPath(); ctx.arc(hx, hz, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, h.progress)); ctx.stroke();
+      }
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#0009'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(hx, hz - r * 0.5); ctx.lineTo(hx + r * 0.42, hz + r * 0.32); ctx.lineTo(hx - r * 0.42, hz + r * 0.32); ctx.closePath(); ctx.fill(); ctx.stroke();   // a peak
+      if (big) {
+        ctx.font = '600 15px Cinzel, Georgia, serif'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+        const label = 'The Hill';
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(label, hx, hz - r - 8);
+        ctx.fillStyle = '#fff'; ctx.fillText(label, hx, hz - r - 8);
+      }
+      ctx.restore();
     }
     for (const u of g.units) {
       if (!u.alive || u.crewOf) continue;   // an engine's crew is shown by the engine

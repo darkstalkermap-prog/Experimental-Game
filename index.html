@@ -162,6 +162,13 @@
   #potions, #army { font-size: 14px; opacity: 0.9; }
 
   #top { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 260px; }
+  #hill { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); width: 310px; padding: 5px 10px 6px; font-size: 13px; }
+  #hill .ht { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-family: Cinzel, serif; font-size: 12px; letter-spacing: 0.03em; white-space: nowrap; }
+  #hill .ht b { font-weight: 600; text-align: right; }
+  #hill .hb { height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; margin: 4px 0 3px; overflow: hidden; }
+  #hill .hb i { display: block; height: 100%; transition: width 0.2s; }
+  #hill .hs { font-size: 11px; opacity: 0.85; text-align: center; }
+  #hill .hc { font-size: 12px; text-align: center; font-weight: 600; }
   #round { font-family: Cinzel, serif; font-size: 22px; color: var(--gold); }
   #phase { font-size: 15px; }
   #war { font-size: 13px; opacity: 0.9; }
@@ -181,6 +188,7 @@
   .fac .g, .fac .t, .fac .h { text-align: right; }
   .fac .n { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
   .fac .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .fac .hl { flex: none; font-style: normal; font-size: 11px; color: #e8d9a0; margin-left: 6px; opacity: 0.9; }
 
   #minimapWrap { position: absolute; right: 16px; bottom: 16px; padding: 4px; }
   #minimap { display: block; width: 180px; height: 180px; image-rendering: auto; }
@@ -258,7 +266,7 @@
   .stats b { display: block; font-family: Cinzel, serif; font-size: 30px; }
   .stats span { font-size: 14px; }
   .quality, #mapsize { align-items: center; }
-  #mapsize .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+  #mapsize .qlabel, #objective .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
   #mapsize button { padding: 6px 14px; font-size: 13px; }
   .mapdesc { font-size: 14.5px; font-style: italic; flex-basis: 100%; text-align: center; }
   .quality .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
@@ -303,6 +311,7 @@
     #factions { width: 250px; font-size: 11px; }
     .fac { grid-template-columns: 10px 1fr 26px 40px 44px 30px; }
     #minimap { width: 120px; height: 120px; }
+    #hill { width: 250px; top: 98px; }
     #status { width: 210px; }
     .controls { grid-template-columns: auto 1fr; }
     .scroll h1 { font-size: 38px; }
@@ -329,11 +338,16 @@
           You are the lord of the blue castle. Every castle sends a fresh army marching out every 30 seconds, for as long as it stands.
           Earn gold from kills and spend it on soldiers, castle upgrades and siege engines; pick a hero class; and choose who garrisons your castle
           and who marches with you. Break their <b>gates</b> with swords or rams, breach their <b>walls</b> with catapults and destroy their <b>keep</b>.
-          Cut down an engine's crew and it is yours for the taking. The last castle and hero standing wins.
+          Cut down an engine's crew and it is yours for the taking. <b>Conquest</b> is the main mode: the last castle and hero standing wins.
+          In <b>King of the Hill</b> the same war has a hill in the middle of the map, and the house that holds it long enough wins outright.
         </div>
         <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
           <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
           <span id="mapDesc" class="mapdesc"></span>
+        </div>
+        <div class="row" id="objective" role="group" aria-label="Game mode"><span class="qlabel">Mode</span>
+          <button data-o="conquest" class="active">Conquest</button><button data-o="koth">King of the Hill</button>
+          <span id="objDesc" class="mapdesc"></span>
         </div>
         <div class="row" id="difficulty">
           <button data-d="easy">Easy</button>
@@ -375,6 +389,8 @@
         <div id="invite"><input id="inviteLink" readonly aria-label="Invite link"><button id="copyInvite">Copy Invite</button></div>
         <div class="row" id="lobbyModes"><button data-mode="versus" class="active">Versus</button><button data-mode="coop">Co-op</button></div>
         <div class="note" id="lobbyMode">Versus: every castle for itself.</div>
+        <div class="row" id="lobbyObjective"><button data-o="conquest" class="active">Conquest</button><button data-o="koth">King of the Hill</button></div>
+        <div class="note" id="lobbyObjDesc"></div>
         <ul id="lobbyList"></ul>
         <div class="note">Empty castles are held by AI lords. Map size and difficulty come from the host's menu choices.</div>
       </div>
@@ -399,6 +415,7 @@
   <div id="hitmarker"></div>
   <div id="factions" class="panel"></div>
   <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
+  <div id="hill" class="panel hidden"></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
@@ -424,7 +441,7 @@
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
     <div class="bar" id="stbar"><div class="fill" id="stFill"></div></div>
-    <div id="cls"><span id="clsName"></span><small id="clsHint"> · B → Class to switch</small></div>
+    <div id="cls"><span id="clsName"></span><small id="clsHint"> · B → Class, at your castle</small></div>
     <div id="weapon"></div>
     <div id="potions"></div>
     <div id="army"></div>
@@ -442,7 +459,7 @@
 </div>
 
 <div id="scoreboard" class="panel hidden">
-  <table><thead><tr><th>House</th><th>Lord</th><th>Gold</th><th>Garrison · army · lane</th><th>Kills</th><th>Hero deaths</th><th>Keep</th><th>Status</th></tr></thead>
+  <table><thead><tr><th>House</th><th>Lord</th><th>Gold</th><th>Garrison · army · lane</th><th>Kills</th><th>Hero deaths</th><th id="hillTh">Hill</th><th>Keep</th><th>Status</th></tr></thead>
   <tbody id="scoreRows"></tbody></table>
 </div>
 
@@ -507,7 +524,7 @@
     <div class="controls">
       <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
       <b>WASD</b><span>Move · Shift sprint · Space jump</span>
-      <b>Space at a wall</b><span>Jump at a castle wall to climb onto the wall walk</span>
+      <b>Space at a wall</b><span>Jump at your own castle's wall to climb onto the wall walk</span>
       <b>C (hold)</b><span>Duck: harder to hit, slower</span>
       <b>Mouse</b><span>Look</span>
       <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
@@ -522,7 +539,7 @@
       <b>Engine</b><span>W/S roll · A/D turn · left click batters or fires · E climbs out</span>
       <b>O</b><span>Orders menu (click to command troops)</span>
       <b>B</b><span>Shop &amp; upgrades</span>
-      <b>B → Class</b><span>Switch your hero class in the field</span>
+      <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
       <b>M</b><span>Big battle map (press again to close; the battle goes on)</span>
       <b>Tab</b><span>Scoreboard</span>
       <b>F1 / Z</b><span>Your army: follow me</span>
@@ -530,6 +547,7 @@
       <b>F3</b><span>Your army: charge</span>
       <b>F4 / V</b><span>Your army: defend castle</span>
       <b>T</b><span>Your army: assault target castle</span>
+      <b>Y</b><span>King of the Hill: your army takes the hill</span>
       <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
       <b>B → Army</b><span>Choose who garrisons the castle and who is in your army</span>
       <b>F</b><span>Formation: line / shield wall / loose</span>
