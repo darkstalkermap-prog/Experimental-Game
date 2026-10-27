@@ -74,6 +74,15 @@ export class Unit {
     this.lastPos = this.pos.clone();
     this.homeCastle = null;
     this.lane = false;     // a wave soldier marching on the enemy, rather than a bought troop in the garrison
+    this.army = false;     // a bought troop that follows its lord and takes orders (otherwise it holds the garrison)
+    this.isCrew = !!t.crew;
+    this.crewOf = null;    // the siege engine this soldier is manning, and which seat
+    this.crewSlot = 0;
+    this.crewRef = 0;      // (network clients) engine id * 4 + seat + 1
+    this.guardT = 0;       // class abilities: damage taken is multiplied by guardMul while guardT runs
+    this.guardMul = 1;
+    this.hasteT = 0;
+    this.hasteMul = 1;
     this.kills = 0;
 
     const m = buildSoldier(type, team, this.variant);
@@ -99,10 +108,18 @@ export class Unit {
   }
 
   get footY() { return this.pos.y; }
+  get role() { return this.lane ? 'lane' : this.army ? 'army' : 'garrison'; }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
+
+  addGuard(t, mul) {
+    if (this.guardT > 0 && this.guardMul < mul) return;   // keep the stronger guard
+    this.guardT = t; this.guardMul = mul;
+  }
+  addHaste(t, mul) { this.hasteT = Math.max(this.hasteT, t); this.hasteMul = mul; }
 
   takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
+    if (this.guardT > 0) amount *= this.guardMul;
     this.hp -= amount;
     // heavy blows interrupt and knock the soldier back; heroes and riders are harder to shake
     const sturdy = this.isHero || this.mounted || (this.def && this.def.boss);
@@ -122,6 +139,7 @@ export class Unit {
     this.hp = 0;
     this.alive = false;
     this.deathT = 0;
+    if (this.crewOf) this.crewOf.crewDied(this);
     this.leavePost();
     this.game.audio.play('death', this.pos);
     this.game.onUnitKilled(this, attacker);
@@ -156,7 +174,7 @@ export class Unit {
 
   // --- experience ---
   gainXp(n) {
-    if (this.team === RAIDER_TEAM || this.isHero || this.isGiant || !this.alive) return;
+    if (this.team === RAIDER_TEAM || this.isHero || this.isGiant || this.isCrew || !this.alive) return;
     this.xp += n;
     while (this.rank < 5 && this.xp >= RANKS.xp[this.rank]) {
       this.rank++;
@@ -192,7 +210,7 @@ export class Unit {
   }
 
   stagger(sec, from) {
-    if (this.isGiant) return;
+    if (this.isGiant || this.crewOf) return;
     this.staggerT = Math.max(this.staggerT, sec);
     this.staggerMax = this.staggerT;
     this.swingT = -1;
@@ -208,7 +226,7 @@ export class Unit {
 
   // Try to block an incoming hit. Returns true when the blow is stopped.
   tryBlock(attacker, info) {
-    if (!attacker || !attacker.pos || this.staggerT > 0 || this.post || this.isGiant) return false;
+    if (!attacker || !attacker.pos || this.staggerT > 0 || this.post || this.isGiant || this.crewOf) return false;
     if (this.swingT >= 0 && this.swingT < 0.45) return false; // busy attacking
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const dx = attacker.pos.x - this.pos.x, dz = attacker.pos.z - this.pos.z;
@@ -352,6 +370,12 @@ export class Unit {
       } else if (order === 'assault') {
         this.assaultThink();
       }
+      // an engine with an empty seat close by: marching soldiers go and take it
+      if (!this.target && (order === 'assault' || order === 'charge')) {
+        const e = this.seekEngine();
+        if (e) this.goal = e.pos;
+        else if (this.crewOf) return;
+      }
     }
 
     // pick the walking waypoint
@@ -441,9 +465,47 @@ export class Unit {
     return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) - (t.radius || 0.4);
   }
 
+  // --- siege crews ---
+  // The nearest siege engine with a seat for this soldier: walk over and take it (returns it while still walking).
+  seekEngine() {
+    if (this.mounted || this.isHero || this.isGiant || this.isCrew || this.crewOf) return null;
+    let best = null, bd = 26;
+    for (const e of this.game.siege) {
+      if (!e.canBeManned(this)) continue;
+      const d = Math.hypot(e.pos.x - this.pos.x, e.pos.z - this.pos.z);
+      if (d < bd) { bd = d; best = e; }
+    }
+    if (!best) return null;
+    if (bd < best.radius + 1.6 && best.man(this)) return null;
+    return best;
+  }
+
+  // Seated on an engine: carried along with it, pushing or loading. No thinking, no fighting; but still a target.
+  updateCrew(dt) {
+    const e = this.crewOf;
+    e.seatPos(this.crewSlot, this.pos);
+    this.yaw = e.yaw;
+    const sp = e.moving ? e.speedNow : 0;
+    this.vel.set(Math.sin(e.yaw) * sp, 0, Math.cos(e.yaw) * sp);
+    this.idleT += dt;
+    if (this.lod < 2) {
+      if (sp > 0.2) this.walkPhase += dt * sp * 2.1;
+      poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT });
+      const c = this.model;
+      c.shL.rotation.set(-1.35, 0, 0.2); c.shR.rotation.set(-1.35, 0, -0.2);   // hands on the frame
+      c.elL.rotation.x = c.elR.rotation.x = -0.3;
+      c.torso.rotation.x = 0.25;
+    }
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.yaw;
+  }
+
   update(dt) {
     if (!this.alive) { this.animateDeath(dt); return; }
     const g = this.game;
+    if (this.guardT > 0) this.guardT -= dt;
+    if (this.hasteT > 0) this.hasteT -= dt;
+    if (this.crewOf) { this.updateCrew(dt); return; }
     this.thinkTimer -= dt;
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;
@@ -533,6 +595,7 @@ export class Unit {
     const fac = this.game.factions[this.team];
     let sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
     if (this.slowT > 0) sp *= 0.5;
+    if (this.hasteT > 0) sp *= this.hasteMul;
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;
     const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
     let ux = dx / d, uz = dz / d;
@@ -609,7 +672,7 @@ export class Unit {
   startAttack() {
     this.swingT = 0;
     this.struck = false;
-    this.attackDir = this.def.spell ? 'thrust' : this.chooseAttackDir();
+    this.attackDir = this.chooseAttackDir();
     this.feint = this.isHero && !this.ranged && Math.random() < 0.22;
     this.attackTimer = this.cd * (0.9 + Math.random() * 0.2);
     if (!this.ranged) this.game.audio.play('swing', this.pos);
@@ -632,14 +695,6 @@ export class Unit {
       if (t && t.alive) {
         if (this.isGiant) {
           this.giantSmash(t);
-        } else if (this.def.spell && !t.isStructure) {
-          // casters hurl their spell straight at where the target will be
-          const from = this.chest(new THREE.Vector3());
-          from.y += 0.3;
-          const aim = t.chest ? t.chest(new THREE.Vector3()) : t.pos.clone();
-          const lead = from.distanceTo(aim) / 38;
-          if (t.vel) aim.addScaledVector(t.vel, lead * 0.8);
-          this.game.magic.cast(this, this.def.spell, from, aim.sub(from).normalize(), 0, this.dmg / 55);
         } else if (this.ranged && !t.isStructure) {
           const from = this.shotOrigin(new THREE.Vector3(), t.pos);
           // a head peeking over battlements is a small target: harder to hit
@@ -700,6 +755,15 @@ export class Unit {
 
   // network client: glide toward the host's latest position and animate
   netUpdate(dt) {
+    if (!this.crewRef) this.crewOf = null;
+    else if (this.alive) {
+      const e = this.game.sync && this.game.sync.siege.get(Math.floor((this.crewRef - 1) / 4));
+      if (e) {
+        this.crewOf = e; this.crewSlot = (this.crewRef - 1) % 4;
+        this.updateCrew(dt);
+        return;
+      }
+    }
     const t = NET_SAMPLE;
     const has = this.interp && this.interp.sample(t);
     if (has) {

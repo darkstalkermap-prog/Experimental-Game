@@ -74,7 +74,7 @@ export const DIFFICULTY = {
 // Gold rewards for kills, by victim kind.
 export const BOUNTY = {
   longbowman: 30, giant: 600, horseman: 50, lancer: 65,
-  swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120,
+  swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120, engineer: 14,
   ram: 120, catapult: 180,
   gate: 200,
   keep: 500,
@@ -107,6 +107,10 @@ export const UNIT_TYPES = {
   lord: { name: 'Lord', hp: 340, dmg: 30, armor: 7, speed: 5.0, range: 2.2, cd: 1.0,
     weapon: 'sword', shield: 'kite', helmet: 'crown', body: 'plate', scale: 1.12, cape: true, kind: 'hero', structMult: 1.2 },
 
+  // Siege crews push and load the engines. They carry no weapons, but they can be cut down like anyone else.
+  engineer: { name: 'Engineer', hp: 75, dmg: 0, armor: 1, speed: 2.6, range: 1.5, cd: 9,
+    weapon: 'none', helmet: 'hood', body: 'leather', cost: 0, kind: 'crew', crew: true },
+
   giant: { name: 'Giant', hp: 3200, dmg: 90, armor: 6, speed: 3.4, range: 4.4, cd: 2.6,
     weapon: 'club', helmet: 'none', body: 'fur', scale: 3.2, kind: 'giant', giant: true, structMult: 4, siegeBonus: 2.5 },
 };
@@ -115,6 +119,8 @@ export const SIEGE_TYPES = {
   ram: { name: 'Battering Ram', hp: 700, speed: 2.6, dmg: 110, cd: 2.6, cost: 400 },
   catapult: { name: 'Catapult', hp: 450, speed: 2.0, dmg: 140, cd: 6.5, cost: 750, range: 62 },
 };
+
+export const ENGINE_TURN = 0.9;   // how fast a siege engine turns when steered (rad/s)
 
 export const PLAYER = {
   hp: 220,
@@ -144,13 +150,9 @@ export const FORMATIONS = {
 export const RANKS = { xp: [0, 30, 80, 160, 300], hp: 0.12, dmg: 0.1, armor: 1, promoteAt: 4 };
 export const PROMOTIONS = { swordsman: 'knight', spearman: 'knight', archer: 'longbowman', horseman: 'lancer' };
 
-// Skyrim-style spells: they fly straight where you aim and are blocked by walls and hills.
+// The spells behind the Mage's Fireball and the Cleric's Smite. They fly (or fall) where the caster aims and are
+// stopped by walls and hills.
 export const SPELLS = {
-  fireball: { name: 'Fireball', cost: 30, dmg: 55, radius: 3.6, speed: 38, charge: 0.8, color: 0xff7a1a, price: 350,
-    desc: 'Hold to charge, release to hurl a fireball that explodes on impact.' },
-  lightning: { name: 'Chain Lightning', cost: 25, dmg: 42, range: 46, chain: 2, chainRange: 9, cd: 0.6, color: 0x9fd8ff, price: 500,
-    desc: 'An instant bolt to whatever you aim at that jumps to two more enemies in sight.' },
-  ice: { name: 'Ice Spike', cost: 20, dmg: 45, speed: 55, pierce: 3, slow: 3, color: 0xbfe8ff, price: 400,
-    desc: 'A fast shard that pierces up to three enemies and slows them.' },
+  fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, color: 0xff7a1a },
+  smite: { name: 'Smite', dmg: 95, radius: 3.8, range: 60, color: 0xffe9a0 },
 };
-export const MANA = { base: 100, perLevel: 25, regen: 7, regenPerLevel: 0.4, delay: 1.4 };

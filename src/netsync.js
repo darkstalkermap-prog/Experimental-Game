@@ -2,6 +2,7 @@
 // clients move their own hero locally and send its pose and actions back.
 import * as THREE from 'three';
 import { UNIT_TYPES } from './config.js';
+import { CLASS_IDS } from './classes.js';
 import { Unit } from './units.js';
 import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
@@ -85,7 +86,7 @@ export class HostSync {
       spell(kind, from, vel, team, dmg, owner, radius);
       this.shared.push({ k: 'spell', s: kind, p: v3(from), v: v3(vel), t: team, r: r2(radius) });
     };
-    g.magic.onBolt = (pts) => this.shared.push({ k: 'bolt', pts: pts.map(v3) });
+    g.magic.onBolt = (pts, color) => this.shared.push({ k: 'bolt', pts: pts.map(v3), c: color });
     const rock = g.projectiles.throwBoulder.bind(g.projectiles);
     g.projectiles.throwBoulder = (from, to, team, dmg, owner, time = 3.2) => {
       rock(from, to, team, dmg, owner, time);
@@ -105,7 +106,7 @@ export class HostSync {
     if (!p || !d) return;
     const f = g.factions[p.team];
     switch (d.a) {
-      case 'pose': p.netPose = d; break;
+      case 'pose': if (!p.drive) p.netPose = d; break;
       case 'swing': p.swingT = 0; if (DIRS[d.d]) { p.attackDir = DIRS[d.d]; p.atkDir = p.attackDir; } break;
       case 'feint': p.feintedAt = g.time; p.swingT = -1; break;
       case 'strike':
@@ -121,10 +122,20 @@ export class HostSync {
         if (p.alive && p.arrows > 0) p.fireFrom(vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.draw)));
         break;
       case 'potion': p.drinkPotion(); break;
-      case 'cast':
-        if (p.alive && p.spells.includes(d.s) && p.staggerT <= 0) {
-          p.swingT = 0.25; p.attackDir = 'thrust';
-          g.magic.cast(p, d.s, vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.ch || 0)), p.spellMult);
+      case 'abil':
+        // class ability: the client has already moved itself; the host works out the rest
+        if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r') && !p.drive) {
+          p.mounted = !!d.m && p.hasHorse;
+          g.abilities.use(p, d.s, vec(d.f), vec(d.d));
+        }
+        break;
+      case 'role': g.setRoles(p.team, d); break;
+      case 'recruitRole': f.recruitRole = d.role === 'army' ? 'army' : 'garrison'; break;
+      case 'board': g.boardEngine(p, g.siege.find((e) => e.id === d.id)); break;
+      case 'unboard': g.leaveEngine(p); break;
+      case 'drive':
+        if (p.drive && p.drive.driver === p) {
+          p.drive.input = { f: Math.max(-1, Math.min(1, d.f || 0)), t: Math.max(-1, Math.min(1, d.t || 0)), fire: !!d.fire, cam: d.c ? vec(d.c) : null, dir: d.d ? vec(d.d).normalize() : null };
         }
         break;
       case 'formation': g.setFormation(p.team, String(d.f)); break;
@@ -149,20 +160,22 @@ export class HostSync {
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
-          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0, u.rank | (u.lane ? 8 : 0)];
+          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
+          u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0), u.crewOf ? u.crewOf.id * 4 + u.crewSlot + 1 : 0];
         if (u.isHero) a.push(u.name);
         return a;
       }),
       s: g.siege.map((s) => [s.id, s.type === 'ram' ? 0 : 1, s.team, r1(s.pos.x), r2(s.pos.y), r1(s.pos.z), r2(s.yaw),
-        s.alive ? 1 : 0, Math.round((s.hp / s.maxHp) * 100), r2(s.timer), s.vel.lengthSq() > 0.01 ? 1 : 0]),
+        s.alive ? 1 : 0, Math.round((s.hp / s.maxHp) * 100), r2(s.timer), s.vel.lengthSq() > 0.01 ? 1 : 0,
+        (s.abandoned ? 1 : 0) | (s.driver ? 2 : 0), s.crewAlive()]),
       c: g.castles.map((c) => c.netState()),
       f: g.factions.map((f) => [Math.floor(f.gold), f.troopCap, f.training, f.eliminated ? 1 : 0, f.kills, f.heroDeaths,
-        r1(f.respawnT), f.siegeTarget ? f.siegeTarget.team : -1, f.heroLv.vitality, f.heroLv.strength, f.heroLv.armor,
+        r1(f.respawnT), f.siegeTarget ? f.siegeTarget.team : -1, f.recruitRole === 'army' ? 1 : 0,
         f.earned, f.isPlayer ? 1 : 0, f.lord, f.name, f.formation, f.levies]),
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
         r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
-        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0]),
+        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0]),
       ev: this.shared,
     };
     this.shared = [];
@@ -170,6 +183,7 @@ export class HostSync {
       if (!h.remote) continue;
       const me = {
         hp: r1(h.hp), maxHp: h.maxHp, alive: h.alive ? 1 : 0, arrows: h.arrows, potions: h.potions, lv: h.lv,
+        bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
         order: h.lastOrder || 'defend',
       };
@@ -209,8 +223,8 @@ export class ClientSync {
     // units
     const seen = new Set();
     for (const a of s.u) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, rankLane, name] = a;
-      const rank = rankLane & 7;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name] = a;
+      const rank = flags & 7;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
@@ -233,7 +247,11 @@ export class ClientSync {
       if (stag && u.staggerT <= 0) { u.staggerT = 0.4; u.staggerMax = 0.5; }
       if (blk) u.blockFlash = 0.2;
       if (rank !== u.rank) u.setRankVisual(rank);
-      u.lane = !!(rankLane & 8);
+      // a role you have just picked shows at once; the host's word wins again after a moment
+      const pend = g.rolePending && g.rolePending.get(id);
+      if (pend && g.time < pend.until) { u.lane = pend.role === 'lane'; u.army = pend.role === 'army'; }
+      else { u.lane = !!(flags & 8); u.army = !!(flags & 16); if (pend) g.rolePending.delete(id); }
+      u.crewRef = crewRef;   // engine id * 4 + seat + 1, or 0
       u.hp = (hpPct / 100) * u.maxHp;
     }
     for (const [id, u] of this.units) {
@@ -244,7 +262,7 @@ export class ClientSync {
     // siege engines
     const seenS = new Set();
     for (const a of s.s) {
-      const [id, ti, team, x, y, z, yaw, alive, hpPct, timer, moving] = a;
+      const [id, ti, team, x, y, z, yaw, alive, hpPct, timer, moving, eflags, crewN] = a;
       seenS.add(id);
       let e = this.siege.get(id);
       if (!e) {
@@ -256,7 +274,11 @@ export class ClientSync {
       }
       if (!e.interp) e.interp = new Interp();
       e.interp.push(x, y, z, yaw, moving);
-      if (e.alive && !alive) { e.alive = false; for (const c of e.crew) c.root.visible = false; }
+      if (e.alive && !alive) e.alive = false;
+      e.team = team;
+      e.abandoned = !!(eflags & 1);
+      e.driven = !!(eflags & 2);
+      e.crewN = crewN;
       e.hp = (hpPct / 100) * e.maxHp;
       e.timer = timer;
     }
@@ -281,12 +303,12 @@ export class ClientSync {
       // your own pick shows at once and the host's word wins again after a moment (a late snapshot must not undo it)
       const mine = i === g.localTeam && g.time < (g.localPickUntil || 0);
       if (!mine) f.siegeTarget = a[7] >= 0 ? g.castles[a[7]] : null;
-      f.heroLv = { vitality: a[8], strength: a[9], armor: a[10] };
-      f.earned = a[11];
-      f.lord = a[13]; f.name = a[14];
-      if (!mine) f.formation = a[15];
-      f.levies = a[16] || 0;
-      if (!a[12] && f.isPlayer && f.player !== g.player) {
+      if (i !== g.localTeam || g.time >= (g.localRolePickUntil || 0)) f.recruitRole = a[8] ? 'army' : 'garrison';
+      f.earned = a[9];
+      f.lord = a[11]; f.name = a[12];
+      if (!mine) f.formation = a[13];
+      f.levies = a[14] || 0;
+      if (!a[10] && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);
         f.player.removeBody();
@@ -300,7 +322,7 @@ export class ClientSync {
       if (team === g.localTeam) continue;
       let h = g.humans.find((o) => o.team === team);
       if (!h) {
-        h = new Player(g, null, { remote: true, team, name: a[19] });
+        h = new Player(g, null, { remote: true, team, name: a[19], cls: CLASS_IDS[a[24]] });
         g.humans.push(h);
         g.factions[team].player = h; g.factions[team].isPlayer = true;
       }
@@ -322,6 +344,7 @@ export class ClientSync {
       h.attackDir = DIRS[a[21]] || 'right';
       h.blockDir = DIRS[a[22]] || 'right';
       h.staggerT = a[23] ? 0.3 : 0;
+      h.drive = a[25] ? true : null;   // inside a siege engine
       if (a[14] && !h.hasHorse) { h.hasHorse = true; h.horseHp = 320; h.ensureHorseModel(); h.horseDeadT = undefined; }
       if (!a[14] && h.hasHorse) { h.hasHorse = false; h.mounted = false; h.horseDeadT = 0; }
     }
@@ -334,6 +357,12 @@ export class ClientSync {
       const lvChanged = JSON.stringify(me.lv) !== JSON.stringify(p.lv);
       p.lv = me.lv;
       if (lvChanged) p.rebuildWeapons();
+      p.buffs.setList(me.bf);
+      // steering a siege engine (the host decides when you board or are thrown out)
+      if (me.drv && (!p.drive || p.drive.id !== me.drv)) {
+        const e = this.siege.get(me.drv);
+        if (e) p.beginDrive(e);
+      } else if (!me.drv && p.drive) p.endDrive();
       p.maxHp = me.maxHp;
       p.hp = me.hp;
       p.arrows = me.arrows;
@@ -371,19 +400,21 @@ export class ClientSync {
       case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null); break;
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;
       case 'spell': g.projectiles.fireSpell(ev.s, vec(ev.p), vec(ev.v), ev.t, 0, null, ev.r); break;
-      case 'bolt': g.magic.showBolt(ev.pts.map(vec)); break;
+      case 'bolt': g.magic.showBolt(ev.pts.map(vec), ev.c); break;
+      case 'abil': g.abilities.show(ev.id, vec(ev.p), new THREE.Vector3(ev.d[0], 0, ev.d[1]), true, ev.t ? ev.t.map(vec) : null); break;
       default: g.applyEvent(ev); break;
     }
   }
 
   update(dt) {
-    for (const u of this.units.values()) u.netUpdate(dt);
+    // engines first: their crews ride along with them
     for (const e of this.siege.values()) e.netUpdate(dt);
+    for (const u of this.units.values()) u.netUpdate(dt);
     this.t += dt;
     if (this.t >= POSE_EVERY) {
       this.t = 0;
       const p = this.g.player;
-      if (p.alive) this.g.net.toHost({ a: 'pose', ...p.poseMsg() });
+      if (p.alive) this.g.net.toHost(p.drive ? { a: 'drive', ...p.driveMsg() } : { a: 'pose', ...p.poseMsg() });
     }
   }
 }

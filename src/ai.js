@@ -56,14 +56,14 @@ export class LordAI {
     if (stage >= 3 && f.gold > 2200 && !g.hasGiant(f.team) && g.siegeTarget(f)) this.try('giant');
     if (f.gold > 220 && g.promotable(f.team).length) this.try('promote');
     if (f.gold > 400) {
-      const opts = ['training', 'levies', 'training', 'levies', 'fortify_walls', 'reinforce_gate', 'towers', 'vitality', 'strength', 'armor'];
+      const opts = ['training', 'levies', 'training', 'levies', 'fortify_walls', 'reinforce_gate', 'towers'];
       this.try(opts[Math.floor(Math.random() * opts.length)]);
     }
   }
 
   // the bought troops that stay at home (wave soldiers march by themselves)
   troops() {
-    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero && !u.isGiant && !u.lane);
+    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf && !u.lane);
   }
 
   war() {

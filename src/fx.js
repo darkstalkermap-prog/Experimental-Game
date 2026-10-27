@@ -95,6 +95,16 @@ export class FX {
   frost(p, n = 14) { this.glow.burst(p, n, C.frost, 3, 0.25, 0.6, { grav: 3, alpha: 0.9 }); }
   zap(p, n = 10) { this.glow.burst(p, n, C.bolt, 4, 0.2, 0.3, { alpha: 1 }); }
   orb(p, color, size) { this.glow.emit(p, new THREE.Vector3(0, 0.3, 0), color, size, 0.12, { grow: -size * 4, alpha: 0.9 }); }
+  // a ring of glowing motes on the ground around p; speed pushes them outward, up lifts them
+  ring(p, r, color, n = 28, { up = 0.8, speed = 0, size = 0.35, life = 0.6 } = {}) {
+    const q = new THREE.Vector3(), v = new THREE.Vector3();
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      q.set(p.x + Math.cos(a) * r, p.y + 0.15, p.z + Math.sin(a) * r);
+      v.set(Math.cos(a) * speed, up + Math.random() * 0.6, Math.sin(a) * speed);
+      this.glow.emit(q, v, color, size * (0.7 + Math.random() * 0.6), life * (0.8 + Math.random() * 0.4), { alpha: 0.9 });
+    }
+  }
 
   update(dt) {
     if (this.glow) this.glow.update(dt);

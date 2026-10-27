@@ -4,7 +4,8 @@ A first-person medieval castle-siege game that runs in the browser. It's inspire
 Mount & Blade II: Bannerlord, and by the lane waves of a MOBA. Four lords each hold a castle. When the
 preparation time is over, every castle sends a fresh army marching out every 30 seconds, for as long as it
 stands. The armies meet in the field, fight, and push on to the enemy gates, while you lead from the front as
-a hero, spend gold on your army, castle and hero, and break the other lords' gates, walls and keeps.
+a hero of one of six classes, spend gold on your army, castle and siege engines, and break the other lords'
+gates, walls and keeps.
 **The last castle and hero standing wins.**
 
 ## Play
@@ -101,10 +102,11 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 
 ## How it works
 
-- **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a warhorse.
-- **Preparation**: every match opens with 60 seconds and 500 gold to recruit, upgrade and learn spells before
-  the first wave. Press **Enter** to start early (the host decides online). In single player, time stops while
-  the shop or the game menu is open.
+- **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a
+  warhorse. Before the battle you pick one of six **hero classes** (below).
+- **Preparation**: every match opens with 60 seconds and 500 gold to recruit and upgrade before the first wave.
+  Press **Enter** to start early (the host decides online). In single player, time stops while the shop or the
+  game menu is open.
 - **Map size**: choose Small, Medium or Large in the menu. Small puts castles close for early clashes, and
   Large leaves long marches through more forest. Online, the host's choice applies to everyone.
 - **Waves**: when preparation ends, every castle that still stands sends a new army out of its gate every
@@ -119,21 +121,27 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   waves pair Blue with Gold and Red with Green (an ally or a fallen partner is skipped). In the shop's **Siege**
   tab, **Auto lanes** is that default. Pick a castle instead and every wave and engine goes there until it
   falls; **T** sends your troops at it too. The top of the screen says where your armies march.
-- **Garrison and army**: troops you buy stay home as your **garrison**: they defend the castle and the archers
-  man the wall walk. The soldiers sent out with the waves are your **army**, and they march by themselves. You
-  can still command both (see *Commanding troops*); ordering troops to defend sends wave soldiers home to join
-  the garrison. The troop limit (12, raised by Expand Barracks up to 36) counts the garrison and the army
-  separately.
+- **Garrison, army and lane**: every soldier you own has one of three jobs, and you choose who does what in the
+  shop's **Army** tab (**B**):
+  - **Garrison**: stays home and defends the castle; the archers man the wall walk.
+  - **Army**: follows you and takes your orders (follow, hold, charge, defend, assault, formations).
+  - **Lane**: marches out with the waves, by itself, on the enemy. The soldiers that leave your gate on the wave
+    timer start out as lane soldiers.
+
+  The tab lists every soldier with a health bar and three buttons, so you can move them one at a time, move
+  everyone, or move every soldier of one type (all the archers up on the walls, all the swordsmen into your army).
+  A switch decides where **new recruits** go: the garrison or straight into your army. Orders only reach your
+  army, and a soldier drafted into it later takes up the army's standing order. The troop limit (12, raised by
+  Expand Barracks up to 36) counts the garrison and the army together; lane soldiers are counted separately.
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
-  - **Army**: swordsmen, spearmen, archers, knights, cavalry and lancers for your garrison. **Expand Barracks**
-    raises the troop limit and adds a soldier to every wave. **Elite Levies** has 3 levels, and each adds one
-    more elite to every wave: a knight, then a cavalry rider, then a lancer. **Drill Sergeants** give all your
-    troops, waves included, +15% health and damage per level. Veterans can be promoted.
+  - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
+    recruit. **Expand Barracks** raises the troop limit and adds a soldier to every wave. **Elite Levies** has
+    3 levels, and each adds one more elite to every wave: a knight, then a cavalry rider, then a lancer.
+    **Drill Sergeants** give all your troops, waves included, +15% health and damage per level. Veterans can
+    be promoted.
   - **Castle**: repair or reinforce the gate, repair or thicken the walls, restore the keep, and add tower archers.
-  - **Hero**: vitality, strength and armour.
   - **Items**: better swords, a kite shield, a war bow, a warhorse, arrows and healing draughts.
-  - **Magic**: spells and mana upgrades (below).
   - **Siege**: battering rams, catapults and the giant, plus where your armies march (Auto lanes, or a castle you choose).
 - **Rival lords** (AI) buy troops, repair, upgrade, and spend spare gold on rams, catapults and giants. After the
   first few minutes they also now and then send their whole garrison, and sometimes their hero, on a push at
@@ -151,15 +159,44 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - Right-click during a wind-up to **feint**. Enemies who fall for it block far less for a moment.
   - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords
     block, feint, circle you, and aim for the side you aren't guarding.
-- **Magic** (Skyrim style): learn spells in the shop's Magic tab and switch to them with **3**. Spells fly in a
-  straight line to where you aim, and walls, keeps and hills block them. Mana refills after a short pause in
-  casting.
-  - **Fireball**: hold to charge, release to throw. It explodes on impact and burns gates and siege engines.
-    Stone walls shelter anyone behind them.
-  - **Chain Lightning**: instantly hits what you aim at, then jumps to two more enemies in sight.
-  - **Ice Spike**: a fast shard that pierces up to three enemies and slows them.
-  - Upgrades: Destruction Mastery (+25% spell damage per level), Deep Mana Well (more mana) and Arcane
-    Recovery (faster regeneration).
+- **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
+  Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
+  attack and **R** is a defence. The numbers are in `src/classes.js`.
+  - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). **Q Shield Bash**: lunge forward
+    and slam your shield into everything ahead for heavy damage, a long stun and a shove. **R Bulwark**: for 5 s
+    you take 70% less damage and can't be staggered; allies beside you take 40% less.
+  - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
+    spin for a second and cut everyone around you three times. **R Blood Rage**: for 7 s you heal for half the
+    damage you deal, can't be staggered and hit 25% harder.
+  - **Ranger** (140% bow damage, draws 20% faster, quick, frail). **Q Arrow Volley**: nine free arrows in a fan.
+    **R Evasive Roll**: throw yourself nine metres the way you are moving (back when standing still); nothing
+    can hurt you for a moment.
+  - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
+    flies where you aim and explodes on impact, burning gates and engines too. Stone walls shelter anyone behind
+    them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
+    enemies close to you.
+  - **Cleric** (some armour, 110% spell damage, heals 2.5 times faster out of combat). **Q Smite**: a bolt of
+    holy light on the spot you aim at, blasting everyone near it. **R Healing Light**: heal yourself for 45% and
+    every ally within 14 m for 40%.
+  - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you and tramples harder).
+    **Q Lance Charge**: charge straight ahead for a second at full gallop (a rush on foot), flattening everyone
+    in your path. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
+    (you take 40% less).
+
+  The two ability tiles and any effects running on you sit above your health bar.
+- **Siege crews**: every ram and catapult is worked by two engineers. They are real soldiers: they push the engine to
+  its target, and enemies (and your own arrows) can cut them down one at a time. A short-handed engine is slower, and
+  when both have fallen it stands **abandoned**, drawn as an empty box on the minimap. **Anyone can take over an
+  abandoned engine**:
+  - Marching soldiers of any house (wave troops, an army you told to charge or assault, the rival lords' men) walk
+    over and take the empty seats. An engine nobody works for goes to whoever takes it, and rolls on that house's
+    target. A friendly soldier can also replace a fallen crewman on an engine that still has one.
+  - **You** can climb aboard: press **E** beside an abandoned engine (or one of your own). **W/S** roll it, **A/D**
+    turn it, the **left button** swings the ram or looses a boulder at the spot you are looking at (a catapult
+    reaches 62 m), and **E** climbs out. While you steer, you are inside the engine and can't be hit; the engine
+    takes the blows. Your allies in co-op can do the same.
+  - Soldiers don't waste time smashing an empty engine, they take it. An abandoned engine nobody takes falls apart
+    after 90 seconds and doesn't count toward your engine limit.
 - **Formations**: press **F** to cycle Line, Shield Wall and Loose. They shape how your troops follow and hold:
   infantry in front, archers behind, cavalry at the back. In a held **Shield Wall**, shielded infantry lock
   shields, block most blows and arrows, and keep their line instead of chasing.
@@ -171,9 +208,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   6-metre giant marches on your target castle, smashing gates and keeps. Its club flattens and staggers
   everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
   summon giants too.
-- **Commanding troops**: the command bar at the bottom of the screen always shows your orders and their keys.
-  Press **O** for the clickable **Orders** menu, which has orders, formations, troop groups, the gate and a
-  troop count. Orders go to garrison and army alike.
+- **Commanding your army**: the command bar at the bottom of the screen always shows your orders and their keys.
+  Press **O** for the clickable **Orders** menu, which has orders, formations, army groups, the gate and an
+  army count. Orders go to the soldiers in your **army** (see above); the garrison always defends the castle and
+  the lane soldiers march on their own.
 - **The gate lever**: stand at the lever just inside your gate and press **E** to bar the gate. A barred gate
   stays shut for everyone, your own troops included, until you unbar it. You can also do this from the Orders
   menu.
@@ -211,18 +249,20 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
 | Left click | Hold to wind up, release to strike; with the bow, hold and release to shoot |
 | Right click | Guard with your shield; feint while winding up; zoom with the bow |
-| 1 / 2 / 3 / mouse wheel | Sword & shield / bow / magic |
-| R (or 3 again) | Next spell |
-| Q | Drink a healing draught |
-| E | Use the gate lever when next to it; otherwise mount, dismount or call your horse |
+| 1 / 2 / mouse wheel | Sword & shield / bow |
+| Q | Class ability: attack |
+| R | Class ability: defence |
+| H | Drink a healing draught |
+| E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
+| W / S / A / D, left click, E (inside an engine) | Roll / turn / strike or fire / climb out |
 | O | Orders menu (click to command troops) |
-| B | Open the shop |
+| B | Open the shop (the Army tab is where you choose garrison, army and lane) |
 | Tab | Scoreboard |
-| F1 or Z | Troops: follow me |
-| F2 or X | Troops: hold the position you're looking at |
-| F3 or C | Troops: charge |
-| F4 or V | Troops: defend the castle |
-| T | Troops: assault the selected target castle |
+| F1 or Z | Army: follow me |
+| F2 or X | Army: hold the position you're looking at |
+| F3 or C | Army: charge |
+| F4 or V | Army: defend the castle |
+| T | Army: assault the selected target castle |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
 | Enter | Start the match early during preparation |
@@ -240,10 +280,11 @@ Stairs on both sides of the courtyard lead up to the wall walk, which goes all t
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
 | `src/models.js` | Soldier and horse models (two-segment limbs, armour, heraldry) and their poses |
 | `src/nav.js` | Routing around castles and through gates and breaches |
-| `src/siege.js` | Battering rams and catapults |
+| `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
+| `src/classes.js` | The six hero classes: stats, abilities, buffs |
 | `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
 | `src/combat.js` | Shared rules for attack and guard directions |
-| `src/magic.js` | Spells: casting, chain lightning, flashes (fireball and ice fly via `projectiles.js`) |
+| `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |
 | `src/grass.js` | Wind-swept grass that grows around the camera |
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes |
 | `src/teams.js` | Who fights whom: co-op sides |

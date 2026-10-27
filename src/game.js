@@ -21,6 +21,7 @@ import { HostSync, ClientSync } from './netsync.js';
 import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
+import { Abilities } from './classes.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
 
@@ -75,6 +76,7 @@ export class Game {
     this.fx = new FX(this.scene);
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
+    this.abilities = new Abilities(this);
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
@@ -132,13 +134,14 @@ export class Game {
 
     const lp = this.player;
     lp.team = setup.localTeam;
-    lp.rebuildWeapons();
     this.humans = [lp];
     const byTeam = new Map(setup.players.map((p) => [p.team, p]));
     lp.name = byTeam.get(lp.team)?.name || 'You';
+    lp.setClass(byTeam.get(lp.team)?.cls || 'knight');
+    lp.rebuildWeapons();
     for (const p of setup.players) {
       if (p.team === lp.team) continue;
-      this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId }));
+      this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls }));
     }
 
     this.factions = this.castles.map((c, i) => {
@@ -146,8 +149,9 @@ export class Game {
       return {
         team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
-        heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: human, heroDeaths: 0, respawnT: 0,
+        hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
+        recruitRole: 'garrison', armyOrder: null,
       };
     });
     if (this.mode !== 'single') {
@@ -174,12 +178,12 @@ export class Game {
     this.warmup();
     // prepare every soldier look in the background (a few ms per frame) so new arrivals never stutter
     this.warmQueue = [];
-    const factionTypes = ['swordsman', 'spearman', 'archer', 'knight', 'horseman', 'lancer', 'longbowman', 'giant'];
+    const factionTypes = ['swordsman', 'spearman', 'archer', 'knight', 'horseman', 'lancer', 'longbowman', 'engineer', 'giant'];
     for (let v = 0; v < 6; v++) {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
     this.audio.play('horn');
-    this.ui.banner('Prepare for battle', `${WAVES.firstPrep} seconds to upgrade. Then a new army marches from every castle every ${WAVES.interval} seconds. B opens the shop${this.mode === 'client' ? '' : ', Enter starts early'}.`);
+    this.ui.banner('Prepare for battle', `${WAVES.firstPrep} seconds to get ready. Then a new army marches from every castle every ${WAVES.interval} seconds. B: shop and soldier roster · Q / R: your abilities${this.mode === 'client' ? '' : ' · Enter starts early'}.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -187,7 +191,7 @@ export class Game {
   warmup() {
     const grp = new THREE.Group();
     const P = this.projectiles;
-    grp.add(new THREE.Mesh(P.fireGeo, P.fireMat), new THREE.Mesh(P.iceGeo, P.iceMat), new THREE.Mesh(P.arrowGeo, P.arrowMat), new THREE.Mesh(P.rockGeo, P.rockMat));
+    grp.add(new THREE.Mesh(P.fireGeo, P.fireMat), new THREE.Mesh(P.arrowGeo, P.arrowMat), new THREE.Mesh(P.rockGeo, P.rockMat));
     const lg = new THREE.BufferGeometry();
     lg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1, 0], 3));
     grp.add(new THREE.LineSegments(lg, this.magic.boltMat));
@@ -197,14 +201,15 @@ export class Game {
     this.scene.remove(grp);
   }
 
+  // The rival lords grow tougher as the war goes on (a lord who falls comes back stronger).
   spawnLord(f) {
-    const lv = f.heroLv;
     const t = UNIT_TYPES.lord;
+    const k = (1 + 0.03 * Math.max(0, this.round - 1)) * this.diff.enemyStat;
     const u = new Unit(this, 'lord', f.team, f.castle.spawnPoint, {
       name: f.lord,
-      hp: t.hp + lv.vitality * 30,
-      dmg: t.dmg * (1 + lv.strength * 0.12),
-      armor: t.armor + lv.armor * 3,
+      hp: Math.round(t.hp * k),
+      dmg: t.dmg * k,
+      armor: t.armor + Math.floor(this.round / 8),
     });
     u.homeCastle = f.castle;
     u.slot = 3;
@@ -212,19 +217,6 @@ export class Game {
     this.units.push(u);
     f.hero = u;
     return u;
-  }
-
-  refreshHero(f) {
-    if (f.isPlayer) { f.player.recalc(); return; }
-    const h = f.hero;
-    if (!h || !h.alive) return;
-    const t = UNIT_TYPES.lord;
-    const lv = f.heroLv;
-    const ratio = h.hp / h.maxHp;
-    h.maxHp = t.hp + lv.vitality * 30;
-    h.hp = h.maxHp * ratio;
-    h.dmg = t.dmg * (1 + lv.strength * 0.12);
-    h.armor = t.armor + lv.armor * 3;
   }
 
   trainMult(f) { return 1 + 0.15 * f.training; }
@@ -244,13 +236,80 @@ export class Game {
     u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
     u.setOrder('defend');
     this.units.push(u);
+    // a lord who has chosen to take new recruits into the army sends them straight to the colours
+    if (!lane && f.isPlayer && f.recruitRole === 'army') { this.assignRole(f, u, 'army'); this.reslot(f.team); }
     return u;
+  }
+
+  // ---------------- the roster ----------------
+  // Every bought soldier is in the garrison (stays home and defends), the army (follows its lord and takes orders) or
+  // the lane (marches out with the waves). The lord can move anyone between the three.
+  assignRole(f, u, role) {
+    if (role === 'garrison') {
+      u.lane = false; u.army = false;
+      u.setOrder('defend');
+    } else if (role === 'army') {
+      u.lane = false; u.army = true;
+      const o = f.armyOrder || { cmd: 'follow', data: null };
+      u.setOrder(o.cmd, o.data);
+      if (o.cmd === 'hold') u.orderData = o.data;
+    } else {
+      u.lane = true; u.army = false;
+      const t = this.siegeTarget(f);
+      if (t) u.setOrder('assault', t); else u.setOrder('charge');
+    }
+  }
+
+  // d: { role, ids?: [unit ids], type?: 'archer' }; with neither ids nor type everybody changes
+  setRoles(team, d) {
+    const f = this.factions[team];
+    if (!f || !['garrison', 'army', 'lane'].includes(d.role)) return 0;
+    const ids = Array.isArray(d.ids) ? new Set(d.ids) : null;
+    const list = this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf
+      && u.role !== d.role && (ids ? ids.has(u.id) : d.type ? u.type === d.type : true));
+    for (const u of list) this.assignRole(f, u, d.role);
+    this.reslot(team);
+    if (list.length > 1 && f.player) {
+      const label = { garrison: 'to the garrison', army: 'into your army', lane: 'out with the waves' }[d.role];
+      f.player.notify(`${list.length} soldiers ${d.role === 'army' ? 'join' : 'go'} ${label}`);
+      f.player.sound('order');
+    }
+    return list.length;
+  }
+
+  // formation places for everyone who follows or holds a position
+  reslot(team) {
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && u.army && (u.order === 'follow' || u.order === 'hold')));
+    troops.forEach((u, i) => { u.slot = i; u.thinkTimer = 0; });
+  }
+
+  // the local player's choice in the Army tab
+  localRoles(d) {
+    if (this.mode === 'client') {
+      this.net.toHost({ a: 'role', ...d });
+      // show the change at once; the host's next snapshot confirms it
+      this.rolePending = this.rolePending || new Map();
+      for (const u of this.units) {
+        if (!u.alive || u.team !== this.localTeam || u.isHero || u.isGiant || u.isCrew) continue;
+        if (d.ids ? !d.ids.includes(u.id) : d.type ? u.type !== d.type : false) continue;
+        u.lane = d.role === 'lane'; u.army = d.role === 'army';
+        this.rolePending.set(u.id, { role: d.role, until: this.time + 1.5 });
+      }
+      return;
+    }
+    this.setRoles(this.localTeam, d);
+  }
+
+  localRecruitRole(role) {
+    const f = this.localFaction;
+    f.recruitRole = role;
+    if (this.mode === 'client') { this.localRolePickUntil = this.time + 2; this.net.toHost({ a: 'recruitRole', role }); }
   }
 
   applyTraining(f) {
     const k = this.trainMult(f), prev = 1 + 0.15 * (f.training - 1);
     for (const u of this.units) {
-      if (u.team !== f.team || u.isHero || !u.alive) continue;
+      if (u.team !== f.team || u.isHero || u.isCrew || !u.alive) continue;
       u.maxHp = u.maxHp / prev * k;
       u.hp = u.hp / prev * k;
       u.dmg = u.dmg / prev * k;
@@ -259,7 +318,7 @@ export class Game {
 
   troopCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew) n++;
     return n;
   }
   // soldiers marching out with the waves, and bought troops staying home
@@ -268,12 +327,22 @@ export class Game {
     for (const u of this.units) if (u.alive && u.team === team && u.lane) n++;
     return n;
   }
+  // bought troops at the barracks: the garrison and the army that follows its lord (this is what the limit counts)
   garrisonCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.lane) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane) n++;
     return n;
   }
-  siegeCount(team) { return this.siege.filter((s) => s.alive && s.team === team).length; }
+  // how many soldiers hold each role: staying home, marching with the lord, or sent out with the waves
+  roleCounts(team) {
+    const c = { garrison: 0, army: 0, lane: 0 };
+    for (const u of this.units) {
+      if (!u.alive || u.team !== team || u.isHero || u.isGiant || u.isCrew) continue;
+      c[u.lane ? 'lane' : u.army ? 'army' : 'garrison']++;
+    }
+    return c;
+  }
+  siegeCount(team) { return this.siege.filter((s) => s.alive && !s.abandoned && s.team === team).length; }
 
   // The castle a house's army is marching on: the one it was told to attack, otherwise its lane partner.
   // Odd waves pair Blue-Green and Red-Gold, even waves Blue-Gold and Red-Green, so every wave meets one
@@ -306,7 +375,52 @@ export class Game {
     const d = SIEGE_TYPES[type];
     const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f), { dmg: Math.round(d.dmg * grow), hp: Math.round(d.hp * Math.min(2, 1 + 0.015 * this.round)) });
     this.siege.push(s);
+    s.spawnCrew();
     return s;
+  }
+
+  // The engine this hero could climb aboard: any empty one, or an engine of their own side.
+  engineNear(p) {
+    if (!p.alive || p.drive || p.mounted) return null;
+    let best = null, bd = 5.5;
+    for (const e of this.siege) {
+      if (!e.alive || e.driver || e.driven || !(e.abandoned || allied(e.team, p.team))) continue;
+      const d = Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z);
+      if (d < bd && Math.abs(e.pos.y - p.pos.y) < 3) { bd = d; best = e; }
+    }
+    return best;
+  }
+
+  localBoard(e) {
+    if (this.mode === 'client') { this.net.toHost({ a: 'board', id: e.id }); return; }
+    this.boardEngine(this.player, e);
+  }
+  localLeave() {
+    if (this.mode === 'client') { this.net.toHost({ a: 'unboard' }); return; }
+    this.leaveEngine(this.player);
+  }
+
+  boardEngine(p, e) {
+    if (!e || !p.alive || p.drive || p.mounted) return false;
+    if (!e.alive || e.driver || !(e.abandoned || allied(e.team, p.team)) || Math.hypot(e.pos.x - p.pos.x, e.pos.z - p.pos.z) > 8) {
+      p.notify('You cannot take that engine.');
+      return false;
+    }
+    e.setDriver(p);
+    p.beginDrive(e);
+    p.notify(e.type === 'ram' ? 'You take the ram: W/S roll, A/D turn, hold the left button to batter, E to climb out.' : 'You take the catapult: W/S roll, A/D turn, left button looses a boulder where you look, E to climb out.');
+    return true;
+  }
+
+  leaveEngine(p, forced = false) {
+    const e = p.drive;
+    if (!e) return;
+    p.endDrive();   // steps out behind the engine
+    if (e.driver === p) e.clearDriver();
+    if (forced) {
+      p.hp = Math.max(1, p.hp - p.maxHp * 0.15);
+      p.notify('Your engine is wrecked! You are thrown clear.', true);
+    }
   }
 
   // ---------------- queries ----------------
@@ -335,13 +449,15 @@ export class Game {
   findEnemy(unit, radius, anchor, leash) {
     let best = null, bd = Infinity;
     const consider = (o) => {
-      if (!o.alive || allied(o.team, unit.team)) return;
+      if (!o.alive || allied(o.team, unit.team) || o.drive) return;
+      if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
       if (!unit.ranged && o.pos.y - unit.pos.y > 2.4) return; // up on a wall: unreachable
       if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;
       let score = d;
-      if (o.isSiege) score -= 4;
+      if (o.isSiege) score -= 1;
+      if (o.crewOf) score -= 3;   // cut down the crew
       if (unit.ranged && o.post) score += 6;
       if (score < bd) { bd = score; best = o; }
     };
@@ -483,7 +599,7 @@ export class Game {
           }
           return;
         }
-        dmg *= 1 - target.shield.block;
+        dmg *= 1 - target.blockPower;
         target.stamina = Math.max(0, target.stamina - 8);
         this.fx.sparks(at, 8);
         this.audio.play('block', target.pos);
@@ -497,6 +613,10 @@ export class Game {
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
     target.takeDamage(dmg, attacker, info);
     if (attacker && attacker.gainXp) attacker.gainXp(Math.min(dmg, 60) * 0.05);
+    if (attacker && attacker.isPlayer && !info.ranged) {
+      const steal = attacker.buffs.get('lifesteal');
+      if (steal) attacker.heal(dmg * steal);
+    }
   }
 
   credit(team, gold, at) {
@@ -663,8 +783,11 @@ export class Game {
     const f = this.factions[team];
     const p = f.player;
     const inGroup = (u) => group === 'all' || (group === 'infantry' && u.kind === 'infantry') || (group === 'archers' && u.kind === 'archer') || (group === 'cavalry' && u.kind === 'cavalry');
-    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && inGroup(u)));
-    if (!troops.length) { p.notify('You have no troops in that group. Recruit some in the shop (B).'); return; }
+    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && u.army && !u.crewOf && inGroup(u)));
+    if (!troops.length) {
+      p.notify(this.roleCounts(team).army ? 'Nobody in that group is in your army.' : 'Your army is empty. Press B → Army to choose who marches with you.');
+      return;
+    }
     let data = null;
     let label = '';
     if (cmd === 'hold') {
@@ -675,9 +798,10 @@ export class Game {
       if (!data) return;
       label = `Assault ${this.factions[data.team].name}!`;
     } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
-    // ordered home, wave soldiers join the garrison
-    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; if (cmd === 'defend') u.lane = false; });
-    p.notify(`${GROUP_NAMES[group]}: ${label}`);
+    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
+    // soldiers drafted into the army later take up the standing order
+    if (group === 'all') f.armyOrder = { cmd, data: cmd === 'hold' || cmd === 'assault' ? data : null };
+    p.notify(`${group === 'all' ? 'Army' : GROUP_NAMES[group]}: ${label}`);
     p.lastOrder = cmd;
     p.sound('order');
   }
@@ -692,8 +816,7 @@ export class Game {
     const f = this.factions[team];
     if (!FORMATIONS[formation]) return;
     f.formation = formation;
-    const troops = this.sortForFormation(this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && (u.order === 'follow' || u.order === 'hold')));
-    troops.forEach((u, i) => { u.slot = i; u.thinkTimer = 0; });
+    this.reslot(team);
     if (f.player) {
       const tips = { line: 'balanced ranks.', shieldwall: 'tight ranks, shields locked; they hold their ground and block far more.', loose: 'spread out, harder to hit with arrows and fire.' };
       f.player.notify(`Formation: ${FORMATIONS[formation].name}, ${tips[formation]}`);
@@ -739,7 +862,7 @@ export class Game {
   }
 
   promotable(team) {
-    return this.units.filter((u) => u.alive && u.team === team && PROMOTIONS[u.type] && u.rank >= RANKS.promoteAt);
+    return this.units.filter((u) => u.alive && u.team === team && !u.crewOf && PROMOTIONS[u.type] && u.rank >= RANKS.promoteAt);
   }
 
   // Swap the most experienced eligible veteran for its elite type, keeping rank and orders.
@@ -755,6 +878,8 @@ export class Game {
     u.homeCastle = old.homeCastle;
     u.slot = old.slot;
     u.yaw = old.yaw;
+    u.lane = old.lane;
+    u.army = old.army;
     u.setOrder(old.order, old.orderData);
     if (old.order === 'hold') u.orderData = old.orderData;
     u.xp = old.xp;
@@ -918,6 +1043,7 @@ export class Game {
   // A remote player left an online game: their house is taken over by an AI lord.
   dropHuman(p) {
     const f = this.factions[p.team];
+    if (p.drive) this.leaveEngine(p);
     this.humans = this.humans.filter((h) => h !== p);
     p.removeBody();
     f.isPlayer = false;
@@ -971,7 +1097,7 @@ export class Game {
     // spatial grid
     this.grid.clear();
     for (const u of this.units) if (u.alive) this.grid.insert(u);
-    for (const h of this.humans) if (h.alive) this.grid.insert(h);
+    for (const h of this.humans) if (h.alive && !h.drive) this.grid.insert(h);
 
     const p = this.player;
     if (p.alive) p.update(dt, controlling && !this.ui.shopOpen ? this.input : this.input.idle);
@@ -985,6 +1111,7 @@ export class Game {
     if (this.simulating) {
       for (const u of this.units) u.update(dt);
       for (const s of this.siege) s.update(dt);
+      this.abilities.update(dt);
     } else {
       this.sync.update(dt);
     }

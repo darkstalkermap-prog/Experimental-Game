@@ -1,6 +1,5 @@
 // Arrows and catapult boulders with ballistic flight, hit detection and sticking.
 import * as THREE from 'three';
-import { SPELLS } from './config.js';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { allied } from './teams.js';
 
@@ -42,19 +41,16 @@ export class Projectiles {
     this.rockMat = new THREE.MeshStandardMaterial({ color: 0x77726a, roughness: 1, flatShading: true });
     this.fireGeo = new THREE.SphereGeometry(0.32, 12, 8);
     this.fireMat = new THREE.MeshBasicMaterial({ color: 0xffb050, fog: false });
-    this.iceGeo = new THREE.ConeGeometry(0.12, 0.9, 6);
-    this.iceGeo.rotateX(Math.PI / 2);
-    this.iceMat = new THREE.MeshStandardMaterial({ color: 0xcfefff, emissive: 0x4aa8ff, emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.1, transparent: true, opacity: 0.9 });
   }
 
-  // Straight-line magic projectile (no gravity). kind: 'fireball' | 'ice'
+  // Straight-line fireball (no gravity) that bursts on the first thing it meets.
   fireSpell(kind, from, vel, team, dmg, owner, radius = 0) {
-    const mesh = new THREE.Mesh(kind === 'fireball' ? this.fireGeo : this.iceGeo, kind === 'fireball' ? this.fireMat : this.iceMat);
+    const mesh = new THREE.Mesh(this.fireGeo, this.fireMat);
     mesh.position.copy(from);
-    if (kind === 'fireball') mesh.scale.setScalar(0.8 + radius / 6);
+    mesh.scale.setScalar(0.8 + radius / 6);
     this.game.scene.add(mesh);
-    this.list.push({ kind, spell: true, pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh, life: 3, radius,
-      pierce: kind === 'ice' ? SPELLS.ice.pierce : 0, hitSet: new Set() });
+    this.list.push({ kind: 'fireball', spell: true, pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh, life: 3, radius,
+      hitSet: new Set() });
   }
 
   makeArrowMesh() {
@@ -120,16 +116,8 @@ export class Projectiles {
           const col = phys.pointHit(next.x, next.y, next.z, p.team);
           const hit = !col && (this.hitCharacter(next, p.team, 0.35, p.hitSet) || g.siegeAt(next, p.team));
           const ground = !hit && !col && next.y <= phys.terrainHeight(next.x, next.z);
-          if (hit && p.kind === 'ice') {
-            g.damage(hit, p.dmg, p.owner, { magic: true, ranged: true });
-            if (hit.slowT !== undefined) hit.slowT = SPELLS.ice.slow;
-            g.fx.frost(next, 12);
-            g.audio.play('ice', next);
-            p.hitSet.add(hit);
-            if (--p.pierce <= 0) { this.kill(i, p); done = true; break; }
-          } else if (hit || col || ground) {
-            if (p.kind === 'fireball') this.explode(p, hit ? next : p.pos.clone(), col); // burst on the near side of walls
-            else { g.fx.frost(next, 18); g.audio.play('ice', next); }
+          if (hit || col || ground) {
+            this.explode(p, hit ? next : p.pos.clone(), col); // burst on the near side of walls
             this.kill(i, p);
             done = true;
             break;
@@ -176,10 +164,9 @@ export class Projectiles {
       if (done) continue;
       if (p.life <= 0) { this.kill(i, p); continue; }
       p.mesh.position.copy(p.pos);
-      if (p.kind === 'arrow' || p.kind === 'ice') p.mesh.lookAt(next.copy(p.pos).add(p.vel));
+      if (p.kind === 'arrow') p.mesh.lookAt(next.copy(p.pos).add(p.vel));
       else p.mesh.rotation.x += dt * 3;
       if (p.kind === 'fireball') { g.fx.fireTrail(p.pos); g.fx.fireTrail(p.pos); }
-      else if (p.kind === 'ice') g.fx.frostTrail(p.pos);
     }
   }
 

@@ -1,12 +1,13 @@
-// The hero: first-person movement, sword & shield, bow, potions, and the view-model.
+// The hero: first-person movement, sword & shield, bow, class abilities, potions, and the view-model.
 import * as THREE from 'three';
-import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, SPELLS, MANA } from './config.js';
+import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
 import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
+import { CLASSES, classOf, Buffs } from './classes.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -50,14 +51,16 @@ export class Player {
     this.pitch = 0;
     this.onGround = true;
     this.alive = true;
-    this.lv = { vitality: 0, strength: 0, armor: 0, sword: 0, shield: 0, bow: 0, magic: 0, mana: 0, regen: 0, spells: [] };
-    this.mana = MANA.base;
-    this.spell = null;      // selected spell
-    this.castT = 0;         // how long the cast button has been held
-    this.lastCast = -99;
-    this.spellCd = 0;
-    this.castFlash = 0;
-    this.maxHp = PLAYER.hp;
+    this.lv = { sword: 0, shield: 0, bow: 0 };
+    // class: stat mods and two abilities (Q attacks, R defends)
+    this.classId = opts.cls || 'knight';
+    this.buffs = new Buffs();
+    this.abilCd = { q: 0, r: 0 };
+    this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
+    this.castFlash = 0;        // the spell hand is raised while this runs down
+    this.castColor = 0xff8a2a;
+    this.drive = null;         // the siege engine this hero is steering
+    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
     this.hp = this.maxHp;
     this.stamina = 100;
     this.arrows = PLAYER.arrows;
@@ -96,7 +99,10 @@ export class Player {
     this.rideSpeed = 0;
     this.trampled = new Map();
     if (this.camera) this.buildViewModel();
-    if (this.remote) this.buildBody();
+    if (this.remote) {
+      this.buildBody();
+      if (this.cls.mods.horse) this.giveHorse();   // a Cavalier starts with a warhorse (the real hero's comes from setClass)
+    }
   }
 
   // ---------- third-person body for other people's heroes ----------
@@ -104,19 +110,24 @@ export class Player {
     this.body = buildSoldier('lord', this.team, 2);
     this.game.scene.add(this.body.root);
     const c = document.createElement('canvas');
-    c.width = 256; c.height = 48;
+    c.width = 256; c.height = 72;
     const ctx = c.getContext('2d');
-    ctx.font = 'bold 28px Georgia, serif';
     ctx.textAlign = 'center';
     ctx.lineWidth = 5;
     ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-    ctx.strokeText(this.name, 128, 34);
+    ctx.font = 'bold 28px Georgia, serif';
+    ctx.strokeText(this.name, 128, 32);
     ctx.fillStyle = '#' + TEAM_COLORS[this.team].toString(16).padStart(6, '0');
-    ctx.fillText(this.name, 128, 34);
+    ctx.fillText(this.name, 128, 32);
+    ctx.font = '600 22px Georgia, serif';
+    ctx.lineWidth = 4;
+    ctx.strokeText(this.cls.name, 128, 60);
+    ctx.fillStyle = this.cls.color;
+    ctx.fillText(this.cls.name, 128, 60);
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     this.tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
-    this.tag.scale.set(2.4, 0.45, 1);
+    this.tag.scale.set(2.4, 0.675, 1);
     this.tag.renderOrder = 10;
     this.game.scene.add(this.tag);
   }
@@ -130,9 +141,9 @@ export class Player {
   updateBody(dt) {
     if (!this.body) return;
     const b = this.body;
-    b.root.visible = this.alive;
-    this.tag.visible = this.alive;
-    if (!this.alive) return;
+    b.root.visible = this.alive && !this.drive;
+    this.tag.visible = this.alive && !this.drive;
+    if (!this.alive || this.drive) return;
     const sp = Math.hypot(this.vel.x, this.vel.z);
     this.walkPhase += dt * sp * 2.1;
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
@@ -177,8 +188,9 @@ export class Player {
     if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.62) this.swingT = -1; }
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
-      if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
+      if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
       if (this.mounted) this.trample(dt);
+      this.tickAbilities(dt);
     }
     this.updateBody(dt);
   }
@@ -198,25 +210,35 @@ export class Player {
   get isLocal() { return this === this.game.player; }
   get netClient() { return this.isLocal && this.game.mode === 'client'; }
 
-  get armor() { return PLAYER.armor + this.lv.armor * 3; }
-  get dmgMult() { return 1 + this.lv.strength * 0.12; }
+  get cls() { return classOf(this.classId); }
+  get armor() { return PLAYER.armor + this.cls.mods.armor; }
+  get dmgMult() { return this.cls.mods.melee * (this.buffs.get('rage') || 1) * (this.hp < this.maxHp * 0.5 ? 1 + (this.cls.mods.bloodied || 0) : 1); }
+  get blockPower() { return Math.min(0.97, this.shield.block + (this.cls.mods.block || 0)); }
+  get drawTime() { return this.bow.draw * (this.cls.mods.draw || 1); }
   get sword() { return SWORDS[this.lv.sword]; }
   get shield() { return SHIELDS[this.lv.shield]; }
   get bow() { return BOWS[this.lv.bow]; }
-  get manaMax() { return MANA.base + MANA.perLevel * (this.lv.mana || 0); }
-  get manaRegen() { return MANA.regen * (1 + MANA.regenPerLevel * (this.lv.regen || 0)); }
-  get spellMult() { return 1 + 0.25 * (this.lv.magic || 0); }
-  get spells() { return this.lv.spells || []; }
-
-  learnSpell(id) {
-    if (!this.lv.spells.includes(id)) this.lv.spells = [...this.lv.spells, id];
-    if (!this.spell) this.spell = id;
-  }
+  get meleeDmg() { return this.sword.dmg * this.dmgMult; }
+  get bowDmg() { return this.bow.dmg * this.cls.mods.bow; }
+  // walking pace: the class, a rallying cry, and being caught mid-whirlwind
+  get speedMult() { return this.cls.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 0.7 : 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + 1.25, this.pos.z); }
+
+  heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
+
+  // Choose the hero's class (once, before the battle): health and abilities follow from it.
+  setClass(id) {
+    this.classId = CLASSES[id] ? id : 'knight';
+    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.hp = this.maxHp;
+    this.abilCd = { q: 0, r: 0 };
+    this.buffs.clear();
+    if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
+  }
 
   recalc() {
     const old = this.maxHp;
-    this.maxHp = PLAYER.hp + this.lv.vitality * 30;
+    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
     this.hp += this.maxHp - old;
     this.rebuildWeapons();
   }
@@ -232,7 +254,10 @@ export class Player {
     this.stamina = 100;
     this.alive = true;
     this.swingT = -1;
-    this.mana = this.manaMax;
+    this.buffs.clear();
+    this.abilCd = { q: 0, r: 0 };
+    this.dash = null;
+    this.drive = null;
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
@@ -467,29 +492,23 @@ export class Player {
 
   updateViewModel(dt, moving, sprint) {
     const vm = this.viewModel;
-    const swordMode = this.weapon === 'sword';
-    const magicMode = this.weapon === 'magic';
-    this.vmMagic.visible = magicMode;
-    if (magicMode) {
-      const s = SPELLS[this.spell];
-      const ready = s && this.mana >= s.cost;
-      this.vmOrbMat.color.setHex(s ? s.color : 0x888888);
-      const charge = this.spell === 'fireball' ? Math.min(1, Math.max(0, (this.castT - 0.15) / SPELLS.fireball.charge)) : 0;
-      const pulse = 1 + Math.sin(this.game.time * 14) * 0.06;
-      this.vmOrb.scale.setScalar((ready ? 0.045 + charge * 0.06 : 0.025) * pulse);
-      this.vmOrbMat.opacity = ready ? 0.9 : 0.35;
-      this.vmMagic.position.set(0.24 - charge * 0.05, -0.3 + charge * 0.04, -0.48 + this.castFlash * 0.12);
-      if (ready && Math.random() < dt * 30) {
-        const wp = this.vmOrb.getWorldPosition(new THREE.Vector3());
-        if (this.spell === 'fireball') this.game.fx.orb(wp, new THREE.Color(0xff8a2a), 0.05 + charge * 0.06);
-        else if (this.spell === 'ice') this.game.fx.orb(wp, new THREE.Color(0xbfe8ff), 0.04);
-        else this.game.fx.orb(wp, new THREE.Color(0xcfeaff), 0.03);
-      }
-      this.castFlash = Math.max(0, (this.castFlash || 0) - dt * 5);
+    // the spell hand comes up while a spell-like ability is cast
+    const casting = this.castFlash > 0;
+    this.vmMagic.visible = casting;
+    if (casting) {
+      const k = this.castFlash;
+      const reach = Math.sin(Math.min(1, (1 - k) * 3) * Math.PI / 2);   // thrust out, then hold
+      this.vmOrbMat.color.setHex(this.castColor);
+      this.vmOrb.scale.setScalar((0.04 + 0.05 * reach) * (1 + Math.sin(this.game.time * 30) * 0.08));
+      this.vmOrbMat.opacity = 0.9 * Math.min(1, k * 3);
+      this.vmMagic.position.set(0.24, -0.3 + 0.03 * reach, -0.48 - 0.12 * reach);
+      if (Math.random() < dt * 40) this.game.fx.orb(this.vmOrb.getWorldPosition(new THREE.Vector3()), new THREE.Color(this.castColor), 0.05);
+      this.castFlash = Math.max(0, this.castFlash - dt * 2.2);
     }
+    const swordMode = this.weapon === 'sword' && !casting;
     this.vmSword.visible = swordMode;
     this.vmShield.visible = swordMode;
-    this.vmBow.visible = this.weapon === 'bow';
+    this.vmBow.visible = this.weapon === 'bow' && !casting;
     this.bob += dt * (moving ? (sprint ? 13 : 9) : 2);
     const bobAmt = moving ? (sprint ? 0.03 : 0.018) : 0.004;
     vm.position.set(Math.sin(this.bob * 0.5) * bobAmt, -Math.abs(Math.sin(this.bob)) * bobAmt, 0);
@@ -512,6 +531,10 @@ export class Player {
         // raise the sword out of the way of the shield
         S.position.x += 0.1; S.position.y -= 0.08; S.rotation.z -= 0.3;
       }
+      if (this.buffs.has('whirl')) {
+        const w = this.game.time * 24;
+        S.position.x -= 0.3 + Math.cos(w) * 0.25; S.position.y += 0.1 + Math.sin(w) * 0.1; S.rotation.z += w;
+      }
       if (this.staggerT > 0) { S.position.y -= 0.12 * Math.min(1, this.staggerT * 3); S.rotation.x -= 0.4 * Math.min(1, this.staggerT * 3); }
       const sb = this.vmShieldBase;
       const guard = { left: [-0.3, -0.2, 0.35], right: [0.02, -0.2, -0.2], over: [-0.14, -0.05, 0.05], thrust: [-0.14, -0.3, 0.05] }[this.blockDir];
@@ -527,7 +550,7 @@ export class Player {
       const b = this.vmBowBase;
       this.vmBow.position.copy(b.pos);
       this.vmBow.rotation.copy(b.rot);
-      const draw = Math.min(1, this.drawT / this.bow.draw);
+      const draw = Math.min(1, this.drawT / this.drawTime);
       this.vmArrow.visible = this.arrows > 0;
       this.vmArrow.position.z = 0.22 * draw;
       this.vmString.position.z = 0.22 * draw;
@@ -548,25 +571,22 @@ export class Player {
     this.yaw -= m.dx * this.sensitivity * (this.zoomed ? 0.5 : 1);
     this.pitch = clamp(this.pitch - m.dy * this.sensitivity * (this.zoomed ? 0.5 : 1), -1.45, 1.45);
 
+    this.tickAbilities(dt);
+    // steering a siege engine: the engine moves, the hero only looks around and gives orders
+    if (this.drive) { this.updateDrive(dt, input); return; }
+
     // weapon switching
     if (input.hit('Digit1')) this.setWeapon('sword');
     if (input.hit('Digit2')) this.setWeapon('bow');
-    if (input.hit('Digit3')) {
-      if (this.weapon === 'magic') this.cycleSpell();
-      else this.setWeapon('magic');
-    }
-    if (input.hit('KeyR') && this.weapon === 'magic') this.cycleSpell();
-    if (m.wheel) {
-      const order = ['sword', 'bow'].concat(this.spells.length ? ['magic'] : []);
-      this.setWeapon(order[(order.indexOf(this.weapon) + (m.wheel > 0 ? 1 : order.length - 1)) % order.length]);
-    }
-    // mana comes back after a short pause in casting
-    if (g.time - this.lastCast > MANA.delay) this.mana = Math.min(this.manaMax, this.mana + this.manaRegen * dt);
-    this.spellCd = Math.max(0, this.spellCd - dt);
-    if (input.hit('KeyQ')) this.drinkPotion();
+    if (m.wheel) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
+    if (input.hit('KeyH')) this.drinkPotion();
+    if (input.hit('KeyQ')) this.useAbility('q', input);
+    if (input.hit('KeyR')) this.useAbility('r', input);
 
     if (input.hit('KeyE')) {
+      const engine = g.engineNear(this);
       if (g.leverNear(this)) g.localToggleGate();
+      else if (engine) g.localBoard(engine);
       else this.toggleMount();
     }
 
@@ -577,7 +597,8 @@ export class Player {
       // the horse has momentum and turns toward where you look
       let target = 0;
       sprint = input.down('ShiftLeft') && this.stamina > 5;
-      if (input.down('KeyW')) target = sprint ? HORSE.gallop : HORSE.walk;
+      const haste = this.buffs.get('haste') || 1;
+      if (input.down('KeyW')) target = (sprint ? HORSE.gallop : HORSE.walk) * haste;
       if (input.down('KeyS')) target = -HORSE.back;
       const dv = target - this.rideSpeed;
       this.rideSpeed += clamp(dv, -HORSE.brake * dt, HORSE.accel * dt);
@@ -605,7 +626,7 @@ export class Player {
       const ml = Math.hypot(mx, mz);
       moving = ml > 0.01;
       sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0;
-      let speed = sprint ? PLAYER.sprint : PLAYER.speed;
+      let speed = (sprint ? PLAYER.sprint : PLAYER.speed) * this.speedMult;
       if (this.blocking) speed *= 0.55;
       if (this.drawT > 0) speed *= 0.6;
       if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18);
@@ -614,6 +635,16 @@ export class Player {
       const acc = this.onGround ? 12 : 2.5;
       this.vel.x += (tx - this.vel.x) * Math.min(1, dt * acc);
       this.vel.z += (tz - this.vel.z) * Math.min(1, dt * acc);
+    }
+
+    if (this.dash) {
+      const d = this.dash;
+      d.t -= dt;
+      if (d.t <= 0) this.dash = null;
+      else {
+        this.vel.x = d.x * d.v; this.vel.z = d.z * d.v;
+        if (this.mounted) { this.heading = Math.atan2(d.x, d.z); this.rideSpeed = d.v; }
+      }
     }
 
     if (input.hit('Space') && this.onGround && this.stamina > 8 && !this.mounted) {
@@ -655,12 +686,9 @@ export class Player {
       this.blocking = false;
       this.drawT = 0;
     } else if (this.weapon === 'sword') {
-      this.swordInput(dt, m, aimDir);
+      if (this.buffs.has('whirl')) { this.atk = null; this.blocking = false; }
+      else this.swordInput(dt, m, aimDir);
       this.zoomed = false;
-    } else if (this.weapon === 'magic') {
-      this.blocking = false;
-      this.zoomed = false;
-      this.magicInput(dt, m);
     } else {
       this.blocking = false;
       if (m.left && this.arrows > 0) this.drawT += dt;
@@ -674,7 +702,7 @@ export class Player {
     this.shake = Math.max(0, this.shake - dt);
 
     // regen when out of combat (the host decides this in online games)
-    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4);
+    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
     this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
 
     // camera
@@ -741,6 +769,7 @@ export class Player {
 
   // knocked off balance (e.g. your blow was parried)
   stagger(sec) {
+    if (this.buffs.has('steady')) return;
     this.staggerT = Math.max(this.staggerT, sec);
     this.atk = null;
     this.swingT = -1;
@@ -755,61 +784,129 @@ export class Player {
     if (this.game.mode === 'single') this.game.hitStop = heavy ? 0.09 : 0.05;
   }
 
-  // Fireball: hold to charge, release to cast. Ice and lightning cast on click.
-  magicInput(dt, m) {
-    const s = SPELLS[this.spell];
-    if (!s) return;
-    if (this.spell === 'fireball') {
-      if (m.left) this.castT += dt;
-      if (m.leftReleased && this.castT > 0) {
-        if (this.castT >= 0.15) this.castSpell(Math.min(1, (this.castT - 0.15) / s.charge));
-        this.castT = 0;
-      }
-      if (!m.left && !m.leftReleased) this.castT = 0;
-    } else if (m.leftPressed) this.castSpell(0);
-  }
-
-  castSpell(charge) {
-    const g = this.game;
-    const s = SPELLS[this.spell];
-    if (this.mana < s.cost || this.spellCd > 0) { g.audio.play('deny'); return; }
-    this.mana -= s.cost;
-    this.lastCast = g.time;
-    this.spellCd = s.cd || 0.35;
-    this.castFlash = 1;
-    const dir = this.lookDir();
-    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
-    const from = this.camera.position.clone().addScaledVector(dir, 0.8).addScaledVector(right, -0.18);
-    from.y -= 0.15;
-    // aim from the hand at the point under the crosshair so the spell lands where you look
-    const aimPt = this.camera.position.clone().addScaledVector(dir, 40);
-    const d = aimPt.sub(from).normalize();
-    this.attackDir = 'thrust';
-    this.swingT = 0.25;
-    if (this.netClient) {
-      g.net.toHost({ a: 'cast', s: this.spell, f: [from.x, from.y, from.z].map(r2), d: [d.x, d.y, d.z].map((x) => Math.round(x * 1e4) / 1e4), ch: r2(charge) });
-      return;
-    }
-    g.magic.cast(this, this.spell, from, d, charge, this.spellMult);
-  }
-
-  cycleSpell() {
-    const list = this.spells;
-    if (!list.length) return;
-    this.spell = list[(list.indexOf(this.spell) + 1) % list.length];
-    this.castT = 0;
-    this.notify(`Spell: ${SPELLS[this.spell].name}`);
-  }
-
   setWeapon(w) {
-    if (w === 'magic' && !this.spells.length) { this.notify('You know no spells yet. Learn them in the shop (B → Magic).'); return; }
-    if (w === 'magic' && !this.spell) this.spell = this.spells[0];
-    this.castT = 0;
     if (this.weapon === w) return;
     this.weapon = w;
     this.swingT = -1;
     this.atk = null;
     this.drawT = 0;
+  }
+
+  // ---------- class abilities ----------
+  tickAbilities(dt) {
+    this.abilCd.q = Math.max(0, this.abilCd.q - dt);
+    this.abilCd.r = Math.max(0, this.abilCd.r - dt);
+    this.buffs.update(dt);
+  }
+
+  // Press Q (attack) or R (defence). The movement part happens here on your own screen at once; the rest is
+  // worked out by whoever runs the battle.
+  useAbility(slot, input) {
+    const g = this.game;
+    const def = this.cls[slot];
+    if (!def || !this.alive || this.drive) return;
+    if (this.staggerT > 0) { g.audio.play('deny'); return; }
+    if (this.abilCd[slot] > 0) { g.audio.play('deny'); return; }
+    const dir = this.lookDir();
+    const fl = Math.hypot(dir.x, dir.z) || 1;
+    const fx = dir.x / fl, fz = dir.z / fl;
+    switch (def.id) {
+      case 'bash': this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break;
+      case 'lancecharge': this.dash = { x: fx, z: fz, v: this.mounted ? 20 : 13, t: 1.1 }; break;
+      case 'evade': {
+        // the way you are moving, or straight back when standing still
+        let mx = 0, mz = 0;
+        const sx = Math.sin(this.yaw), sz = Math.cos(this.yaw);
+        if (input.down('KeyW')) { mx += sx; mz += sz; }
+        if (input.down('KeyS')) { mx -= sx; mz -= sz; }
+        if (input.down('KeyA')) { mx += sz; mz -= sx; }
+        if (input.down('KeyD')) { mx -= sz; mz += sx; }
+        const ml = Math.hypot(mx, mz);
+        if (ml < 0.01) { mx = -sx; mz = -sz; } else { mx /= ml; mz /= ml; }
+        this.dash = { x: mx, z: mz, v: 32, t: 0.28 };
+        break;
+      }
+      case 'fireball': this.castFlash = 1; this.castColor = 0xff8a2a; break;
+      case 'smite': this.castFlash = 1; this.castColor = 0xffe9a0; break;
+      case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
+      case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
+      default: break;
+    }
+    const cam = this.camera.position.clone();
+    if (this.netClient) {
+      this.abilCd[slot] = def.cd * (this.cls.mods.cd || 1);
+      g.net.toHost({ a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 });
+      return;
+    }
+    if (!g.abilities.use(this, slot, cam, dir)) { this.dash = null; this.castFlash = 0; }   // (use() starts the cooldown)
+  }
+
+  // ---------- steering a siege engine ----------
+  beginDrive(e) {
+    this.drive = e;
+    this.atk = null; this.blocking = false; this.drawT = 0; this.dash = null; this.zoomed = false;
+    this.swingT = -1;
+    this.vel.set(0, 0, 0);
+    this.driveInput = null;
+    this.yaw = e.yaw;      // look the way the engine faces
+    this.pitch = 0.12;
+    if (this.viewModel) this.viewModel.visible = false;
+  }
+
+  // Climb out: step down behind the engine (everyone works this out for themselves, since each screen moves its own hero).
+  endDrive() {
+    const e = this.drive;
+    this.drive = null;
+    this.driveInput = null;
+    if (this.viewModel) this.viewModel.visible = true;
+    if (!e) return;
+    const g = this.game;
+    this.pos.set(e.pos.x - Math.sin(e.yaw) * 4, e.pos.y, e.pos.z - Math.cos(e.yaw) * 4);
+    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team);
+    this.pos.y = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y + 2);
+    this.vel.set(0, 0, 0);
+  }
+
+  // The hero looks around from behind the engine; W/S roll it, A/D turn it, the left button batters (ram) or looses
+  // a boulder at the spot under the crosshair (catapult), E climbs out.
+  updateDrive(dt, input) {
+    const g = this.game, e = this.drive, m = input.mouse;
+    if (input.hit('KeyE')) {
+      g.localLeave();
+      if (!this.drive) return;   // climbed out (a guest waits for the host to confirm)
+    }
+    const inp = { f: 0, t: 0, fire: !!m.left };
+    if (input.down('KeyW')) inp.f += 1;
+    if (input.down('KeyS')) inp.f -= 1;
+    if (input.down('KeyA')) inp.t += 1;
+    if (input.down('KeyD')) inp.t -= 1;
+    this.yaw += inp.t * ENGINE_TURN * dt;   // the view turns with the engine
+    const dir = this.lookDir();
+    const pivot = new THREE.Vector3(e.pos.x, e.pos.y + (e.type === 'ram' ? 3.4 : 4.2), e.pos.z);
+    const cam = pivot.clone().addScaledVector(dir, -9);
+    cam.y = Math.max(cam.y, g.physics.terrainHeight(cam.x, cam.z) + 0.8);
+    this.camera.position.copy(cam);
+    this.camera.rotation.set(this.pitch, this.yaw + Math.PI, 0, 'YXZ');
+    if (Math.abs(this.camera.fov - this.baseFov) > 0.1) {
+      this.camera.fov += (this.baseFov - this.camera.fov) * Math.min(1, dt * 10);
+      this.camera.updateProjectionMatrix();
+    }
+    inp.cam = cam;
+    inp.dir = dir;
+    this.driveInput = inp;
+    this.pos.set(e.pos.x, e.pos.y + 1, e.pos.z);
+    this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
+    if (g.simulating) e.input = inp;
+  }
+
+  driveMsg() {
+    const i = this.driveInput || { f: 0, t: 0, fire: false };
+    const m = { f: i.f, t: i.t, fire: i.fire ? 1 : 0 };
+    if (i.cam) {
+      m.c = [i.cam.x, i.cam.y, i.cam.z].map(r2);
+      m.d = [i.dir.x, i.dir.y, i.dir.z].map((x) => Math.round(x * 1e4) / 1e4);
+    }
+    return m;
   }
 
   drinkPotion() {
@@ -876,7 +973,7 @@ export class Player {
   }
 
   shoot() {
-    const draw = Math.min(1, this.drawT / this.bow.draw);
+    const draw = Math.min(1, this.drawT / this.drawTime);
     const dir = this.lookDir();
     const from = this.camera.position.clone().addScaledVector(dir, 0.6);
     from.y -= 0.08;
@@ -896,7 +993,7 @@ export class Player {
   fireFrom(from, dir, draw) {
     if (this.arrows <= 0) return;
     const speed = 30 + 32 * draw;
-    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bow.dmg * this.dmgMult * (0.4 + 0.6 * draw), this);
+    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bowDmg * (0.4 + 0.6 * draw), this);
     this.arrows--;
   }
 
@@ -913,7 +1010,7 @@ export class Player {
       const d = Math.hypot(dx, dz);
       if (d > 1.6 || (dx * fx + dz * fz) / (d || 1) < 0.3) return;
       this.trampled.set(u, 0.8);
-      g.damage(u, 6 + sp * 1.6, this, { melee: true });
+      g.damage(u, (6 + sp * 1.6) * (this.cls.mods.trample || 1), this, { melee: true });
       u.vel.x += fx * 6; u.vel.z += fz * 6;
       this.rideSpeed *= 0.85;
     });
@@ -921,11 +1018,19 @@ export class Player {
 
   takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
+    if (this.buffs.has('ghost')) return;              // mid-roll: nothing touches you
+    const guard = this.buffs.get('guard');
+    if (guard) amount *= guard;
+    if (this.buffs.has('ward')) {
+      amount = this.buffs.absorb(amount);
+      this.game.fx.frost(this.chest(new THREE.Vector3()), 6);
+      if (amount <= 0) return;
+    }
     if (info.melee && amount > this.maxHp * 0.15) this.stagger(0.25);
     if (this.mounted) {
       // the horse takes half the blows
       this.horseHp -= amount * 0.5;
-      amount *= 0.5;
+      amount *= 0.5 * (this.cls.mods.rider || 1);
       if (this.horseHp <= 0) this.loseHorse();
     }
     this.hp -= amount;

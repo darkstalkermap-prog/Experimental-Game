@@ -1,7 +1,8 @@
 // Entry point: renderer, main loop and menu wiring.
 import * as THREE from 'three';
 import { Game } from './game.js';
-import { UI } from './ui.js';
+import { UI, renderClassPicker } from './ui.js';
+import { CLASSES } from './classes.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Net } from './net.js';
@@ -121,12 +122,36 @@ function begin(diff, setup = null, map = mapSize) {
   input.lock();
 }
 
-$('play').addEventListener('click', () => begin(difficulty));
+// hero class (remembered per browser)
+let heroClass = 'knight';
+try { heroClass = localStorage.getItem('cw-class') || 'knight'; } catch (e) { /* storage unavailable */ }
+if (!CLASSES[heroClass]) heroClass = 'knight';
+const rememberClass = (id) => {
+  heroClass = id;
+  try { localStorage.setItem('cw-class', id); } catch (e) { /* ignore */ }
+};
+renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
+
+$('play').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }] }));
 
 // ---------------- online play ----------------
 let net = null;
-let lobby = [];      // [{ team, name, netId }]
+let lobby = [];      // [{ team, name, netId, cls }]
 let coop = false;    // lobby game mode chosen by the host
+let lobbyBroadcast = null;
+
+// the class buttons in the lobby: the host updates the list itself, a guest tells the host
+function showLobbyClassPicker() {
+  renderClassPicker($('lobbyClassPick'), $('lobbyClassInfo'), heroClass, (id) => {
+    rememberClass(id);
+    if (!net) return;
+    if (net.role === 'client') net.toHost({ k: 'cls', cls: id });
+    else {
+      const me = lobby.find((p) => p.netId === null);
+      if (me && me.cls !== id) { me.cls = id; if (lobbyBroadcast) lobbyBroadcast(); }
+    }
+  });
+}
 const playerName = () => ($('pname').value.trim() || 'Lord').slice(0, 16);
 try { $('pname').value = localStorage.getItem('cw-name') || ''; } catch (e) { /* storage unavailable */ }
 const rememberName = () => { try { localStorage.setItem('cw-name', playerName()); } catch (e) { /* ignore */ } };
@@ -196,17 +221,24 @@ $('hostBtn').addEventListener('click', async () => {
   rememberName();
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  lobby = [{ team: 0, name: playerName(), netId: null }];
+  lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass }];
   const broadcast = () => { ui.renderLobby(lobby, 0, coop); net.toAll({ k: 'lobby', players: lobby, coop }); };
+  lobbyBroadcast = broadcast;
+  // guests report the class they pick
+  net.on('data', ({ from, d }) => {
+    if (!d || d.k !== 'cls' || !CLASSES[d.cls]) return;
+    const p = lobby.find((x) => x.netId === from);
+    if (p && p.cls !== d.cls) { p.cls = d.cls; broadcast(); }
+  });
   for (const b of document.querySelectorAll('#lobbyModes button')) {
     b.onclick = () => { coop = b.dataset.mode === 'coop'; broadcast(); };
   }
-  net.on('created', (m) => { ui.showLobby(m.code, true); broadcast(); });
+  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); broadcast(); });
   net.on('peer', (m) => {
     const used = new Set(lobby.map((p) => p.team));
     const team = [1, 2, 3].find((t) => !used.has(t));
     if (team === undefined) return;
-    lobby.push({ team, name: m.name, netId: m.id });
+    lobby.push({ team, name: m.name, netId: m.id, cls: 'knight' });
     broadcast();
   });
   net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); broadcast(); });
@@ -224,13 +256,13 @@ $('joinBtn').addEventListener('click', async () => {
   const code = $('joinCode').value.trim().toUpperCase();
   if (code.length !== 4) { ui.lobbyError('Enter the 4-letter room code from the host.'); return; }
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  net.on('joined', (m) => ui.showLobby(m.code, false));
+  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); });
   net.on('data', ({ d }) => {
     if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop);
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name })), coop: !!d.coop }, d.map || 'medium');
+      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop }, d.map || 'medium');
     }
   });
   net.join(code, playerName());

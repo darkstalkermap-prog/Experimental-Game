@@ -1,15 +1,13 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, SPELLS, MANA, PROMOTIONS, RANKS, GIANT_COST } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
-
-const heroLv = (g, f) => (f.isPlayer ? f.player.lv : f.heroLv);
 
 function recruit(type) {
   return {
     id: 'recruit_' + type, tab: 'army', name: UNIT_TYPES[type].name,
-    desc: () => {
+    desc: (g, f) => {
       const t = UNIT_TYPES[type];
-      return `Joins your garrison. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
+      return `Joins your ${f.recruitRole === 'army' ? 'army and follows you' : 'garrison and defends the castle'}. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
     },
     cost: () => UNIT_TYPES[type].cost,
     can: (g, f) => {
@@ -25,7 +23,7 @@ export const SHOP = [
   recruit('swordsman'), recruit('spearman'), recruit('archer'), recruit('knight'), recruit('horseman'), recruit('lancer'),
   {
     id: 'barracks', tab: 'army', name: 'Expand Barracks',
-    desc: (g, f) => `Garrison and army limit ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}, and one more soldier in every wave`,
+    desc: (g, f) => `Barracks limit (garrison + army) ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}, and one more soldier in every wave`,
     cost: (g, f) => 200 + 120 * ((f.troopCap - TROOP_CAP.start) / TROOP_CAP.step),
     can: (g, f) => (f.troopCap >= TROOP_CAP.max ? 'Maximum size' : true),
     apply: (g, f) => { f.troopCap = Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step); },
@@ -114,28 +112,6 @@ export const SHOP = [
   },
 
   {
-    id: 'vitality', tab: 'hero', name: 'Vitality',
-    desc: (g, f) => `Max HP +30 (level ${heroLv(g, f).vitality}/6)`,
-    cost: (g, f) => 150 * (heroLv(g, f).vitality + 1),
-    can: (g, f) => (heroLv(g, f).vitality >= 6 ? 'Maximum' : true),
-    apply: (g, f) => { heroLv(g, f).vitality++; g.refreshHero(f); },
-  },
-  {
-    id: 'strength', tab: 'hero', name: 'Strength',
-    desc: (g, f) => `All damage +12% (level ${heroLv(g, f).strength}/6)`,
-    cost: (g, f) => 150 * (heroLv(g, f).strength + 1),
-    can: (g, f) => (heroLv(g, f).strength >= 6 ? 'Maximum' : true),
-    apply: (g, f) => { heroLv(g, f).strength++; g.refreshHero(f); },
-  },
-  {
-    id: 'armor', tab: 'hero', name: 'Heavy Armour',
-    desc: (g, f) => `Armour +3 (level ${heroLv(g, f).armor}/6)`,
-    cost: (g, f) => 160 * (heroLv(g, f).armor + 1),
-    can: (g, f) => (heroLv(g, f).armor >= 6 ? 'Maximum' : true),
-    apply: (g, f) => { heroLv(g, f).armor++; g.refreshHero(f); },
-  },
-
-  {
     id: 'sword', tab: 'items', name: 'Better Sword', playerOnly: true,
     desc: (g, f) => {
       const lv = f.player.lv.sword;
@@ -175,54 +151,12 @@ export const SHOP = [
   },
   {
     id: 'potion', tab: 'items', name: 'Healing Draught', playerOnly: true,
-    desc: (g, f) => `Restores 130 HP – press Q (${f.player.potions}/3)`,
+    desc: (g, f) => `Restores 130 HP – press H (${f.player.potions}/3)`,
     cost: () => 60,
     can: (g, f) => (f.player.potions >= 3 ? 'Carrying the maximum' : true),
     apply: (g, f) => { f.player.potions++; },
   },
 
-  {
-    id: 'spell_fireball', tab: 'magic', name: SPELLS.fireball.name, playerOnly: true,
-    desc: () => `${SPELLS.fireball.desc} ${SPELLS.fireball.cost} mana.`,
-    cost: () => SPELLS.fireball.price,
-    can: (g, f) => (f.player.spells.includes('fireball') ? 'Learned' : true),
-    apply: (g, f) => f.player.learnSpell('fireball'),
-  },
-  {
-    id: 'spell_lightning', tab: 'magic', name: SPELLS.lightning.name, playerOnly: true,
-    desc: () => `${SPELLS.lightning.desc} ${SPELLS.lightning.cost} mana.`,
-    cost: () => SPELLS.lightning.price,
-    can: (g, f) => (f.player.spells.includes('lightning') ? 'Learned' : true),
-    apply: (g, f) => f.player.learnSpell('lightning'),
-  },
-  {
-    id: 'spell_ice', tab: 'magic', name: SPELLS.ice.name, playerOnly: true,
-    desc: () => `${SPELLS.ice.desc} ${SPELLS.ice.cost} mana.`,
-    cost: () => SPELLS.ice.price,
-    can: (g, f) => (f.player.spells.includes('ice') ? 'Learned' : true),
-    apply: (g, f) => f.player.learnSpell('ice'),
-  },
-  {
-    id: 'arcane', tab: 'magic', name: 'Destruction Mastery', playerOnly: true,
-    desc: (g, f) => `All spells deal +25% damage (level ${f.player.lv.magic || 0}/4)`,
-    cost: (g, f) => 250 * ((f.player.lv.magic || 0) + 1),
-    can: (g, f) => (!f.player.spells.length ? 'Learn a spell first' : (f.player.lv.magic || 0) >= 4 ? 'Maximum' : true),
-    apply: (g, f) => { f.player.lv.magic = (f.player.lv.magic || 0) + 1; },
-  },
-  {
-    id: 'mana_pool', tab: 'magic', name: 'Deep Mana Well', playerOnly: true,
-    desc: (g, f) => `Max mana ${f.player.manaMax} → ${f.player.manaMax + MANA.perLevel} (level ${f.player.lv.mana || 0}/4)`,
-    cost: (g, f) => 200 * ((f.player.lv.mana || 0) + 1),
-    can: (g, f) => ((f.player.lv.mana || 0) >= 4 ? 'Maximum' : true),
-    apply: (g, f) => { f.player.lv.mana = (f.player.lv.mana || 0) + 1; f.player.mana += MANA.perLevel; },
-  },
-  {
-    id: 'mana_regen', tab: 'magic', name: 'Arcane Recovery', playerOnly: true,
-    desc: (g, f) => `Mana regenerates ${Math.round(MANA.regenPerLevel * 100)}% faster (level ${f.player.lv.regen || 0}/3)`,
-    cost: (g, f) => 200 * ((f.player.lv.regen || 0) + 1),
-    can: (g, f) => ((f.player.lv.regen || 0) >= 3 ? 'Maximum' : true),
-    apply: (g, f) => { f.player.lv.regen = (f.player.lv.regen || 0) + 1; },
-  },
   {
     id: 'giant', tab: 'siege', name: 'Summon a Giant',
     desc: (g, f) => `A 6-metre giant (${UNIT_TYPES.giant.hp} HP) marches on ${g.targetName(f)}, smashing gates and keeps and flattening anyone near its club. One at a time.`,
@@ -232,14 +166,14 @@ export const SHOP = [
   },
   {
     id: 'ram', tab: 'siege', name: SIEGE_TYPES.ram.name,
-    desc: (g, f) => `${SIEGE_TYPES.ram.hp} HP. Rolls to the target's gate and smashes it, then the keep. Target: ${g.targetName(f)}`,
+    desc: (g, f) => `${SIEGE_TYPES.ram.hp} HP, two engineers push it. Rolls to the target's gate and smashes it, then the keep. If its crew falls, anyone can take it. Target: ${g.targetName(f)}`,
     cost: () => SIEGE_TYPES.ram.cost,
     can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : !g.siegeTarget(f) ? 'No target' : g.siegeCount(f.team) >= 4 ? 'Too many engines' : true),
     apply: (g, f) => g.buildSiege(f, 'ram'),
   },
   {
     id: 'catapult', tab: 'siege', name: SIEGE_TYPES.catapult.name,
-    desc: (g, f) => `${SIEGE_TYPES.catapult.hp} HP. Bombards walls from ${SIEGE_TYPES.catapult.range}m to open breaches. Target: ${g.targetName(f)}`,
+    desc: (g, f) => `${SIEGE_TYPES.catapult.hp} HP, two engineers load it. Bombards walls from ${SIEGE_TYPES.catapult.range}m to open breaches. If its crew falls, anyone can take it. Target: ${g.targetName(f)}`,
     cost: () => SIEGE_TYPES.catapult.cost,
     can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : !g.siegeTarget(f) ? 'No target' : g.siegeCount(f.team) >= 4 ? 'Too many engines' : true),
     apply: (g, f) => g.buildSiege(f, 'catapult'),

@@ -1,14 +1,53 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES } from './config.js';
+import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS } from './config.js';
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
-import { SPELLS, FORMATIONS } from './config.js';
 import { allied } from './teams.js';
+import { CLASSES, CLASS_IDS, BUFF_NAMES } from './classes.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// The three jobs a soldier can have (see Game.assignRole)
+const ROLES = [
+  { id: 'garrison', icon: '🏰', label: 'Garrison', tip: 'Stays home and defends the castle; archers man the walls' },
+  { id: 'army', icon: '⚔', label: 'Army', tip: 'Follows you and takes your orders (F1–F4, T)' },
+  { id: 'lane', icon: '➤', label: 'Lane', tip: 'Marches out with the waves to attack the enemy' },
+];
+const ROSTER_TYPES = ['swordsman', 'spearman', 'archer', 'knight', 'longbowman', 'horseman', 'lancer'];
+const pct = (x) => `${Math.round(x * 100)}%`;
+
+// Six hero-class buttons plus a panel describing the chosen class (main menu and lobby).
+export function renderClassPicker(root, info, selected, onPick) {
+  root.innerHTML = '';
+  const buttons = {};
+  const describe = (id) => {
+    const c = CLASSES[id], m = c.mods;
+    info.style.borderLeftColor = c.color;
+    info.innerHTML = `<b>${esc(c.icon)} ${esc(c.name)}</b> · ${esc(c.role)}. ${esc(c.blurb)}
+      <div class="ab"><b>Q · ${esc(c.q.icon)} ${esc(c.q.name)}</b> (${c.q.cd} s): ${esc(c.q.desc)}</div>
+      <div class="ab"><b>R · ${esc(c.r.icon)} ${esc(c.r.name)}</b> (${c.r.cd} s): ${esc(c.r.desc)}</div>
+      <div class="ab"><b>Passive:</b> ${esc(c.passive)}</div>
+      <div class="st">Health ${Math.round(PLAYER.hp * m.hp)} · armour ${PLAYER.armor + m.armor} · speed ${pct(m.speed)} · sword ${pct(m.melee)} · bow ${pct(m.bow)}${m.spell !== 1 ? ` · spells ${pct(m.spell)}` : ''}${m.horse ? ' · starts with a warhorse' : ''}</div>`;
+  };
+  const pick = (id) => {
+    for (const k in buttons) buttons[k].classList.toggle('active', k === id);
+    describe(id);
+    onPick(id);
+  };
+  for (const id of CLASS_IDS) {
+    const c = CLASSES[id];
+    const b = document.createElement('button');
+    b.dataset.cls = id;
+    b.innerHTML = `<span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small>`;
+    b.addEventListener('click', () => pick(id));
+    root.appendChild(b);
+    buttons[id] = b;
+  }
+  pick(selected);
+}
 
 export class UI {
   constructor() {
@@ -83,9 +122,15 @@ export class UI {
     const p = g.player;
     let text = null;
     if (p.alive && !this.shopOpen) {
-      const c = g.leverNear(p);
-      if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
-      else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
+      if (p.drive) {
+        text = p.drive.type === 'ram' ? 'Climb out · W/S roll · A/D turn · hold left click to batter' : 'Climb out · W/S roll · A/D turn · left click fires where you look';
+      } else {
+        const c = g.leverNear(p);
+        const e = g.engineNear(p);
+        if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
+        else if (e) text = e.abandoned ? `Take over the abandoned ${e.name.toLowerCase()}` : `Take the controls of your ${e.name.toLowerCase()}`;
+        else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
+      }
     }
     if (text !== this.lastPrompt) {
       this.lastPrompt = text;
@@ -179,11 +224,13 @@ export class UI {
     this.targetBtns = [];
     this.orderBtns = [];
     $('shopTitle').textContent = this.tab === 'orders' ? 'Orders' : 'Quartermaster';
+    this.roster = null;
     if (this.tab === 'orders') { this.buildOrders(grid); this.refreshShop(); return; }
+    if (this.tab === 'army') this.buildRoster(grid);
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
-      sel.innerHTML = '<div class="label">Where your armies march. Auto alternates between your two neighbours so each wave meets one coming the other way. Pick a castle to send every wave and engine there (T orders your troops to attack it).</div>';
+      sel.innerHTML = '<div class="label">Where your armies march. Auto alternates between your two neighbours so each wave meets one coming the other way. Pick a castle to send every wave and engine there (T orders your army to attack it). Engines are worked by two engineers: when both fall, the engine stands empty and any marching soldier, or you (E), can take it over.</div>';
       const auto = document.createElement('button');
       auto.addEventListener('click', () => { g.setSiegeTarget(null); g.audio.play('order'); this.refreshShop(); });
       sel.appendChild(auto);
@@ -214,6 +261,115 @@ export class UI {
     this.refreshShop();
   }
 
+  // Who garrisons the castle, who marches with you, who goes out with the waves.
+  buildRoster(grid) {
+    const g = this.game;
+    const box = document.createElement('div');
+    box.className = 'roster';
+    box.innerHTML = `<h5>Your soldiers</h5>
+      <p class="help"><b>Garrison</b> soldiers stay home and defend the castle (archers man the walls). <b>Army</b> soldiers follow you and take your orders (F1–F4, T). <b>Lane</b> soldiers march out with the waves. Click to move them.</p>
+      <div class="rbar" data-r="counts"></div>
+      <div class="rbar"><span class="lbl">New recruits join the</span><span data-r="recruit"></span></div>
+      <div class="rbar"><span class="lbl">Move everyone to</span><span data-r="all"></span></div>
+      <div class="rbar" data-r="types"></div>
+      <div class="rlist" data-r="list"></div>`;
+    grid.appendChild(box);
+    const q = (k) => box.querySelector(`[data-r="${k}"]`);
+    const r = this.roster = { box, counts: q('counts'), list: q('list'), rows: new Map(), types: {}, recruitBtns: [] };
+    const roleButtons = (host, act, withIcon = true) => {
+      const btns = [];
+      for (const role of ROLES) {
+        const b = document.createElement('button');
+        b.textContent = withIcon ? `${role.icon} ${role.label}` : role.icon;
+        b.title = `${role.label}: ${role.tip}`;
+        b.dataset.role = role.id;
+        b.addEventListener('click', () => { act(role.id); g.audio.play('order'); this.refreshShop(); });
+        host.appendChild(b);
+        btns.push(b);
+      }
+      return btns;
+    };
+    // recruits go to the garrison or straight into the army
+    for (const role of ROLES.slice(0, 2)) {
+      const b = document.createElement('button');
+      b.textContent = `${role.icon} ${role.label}`;
+      b.title = role.tip;
+      b.dataset.role = role.id;
+      b.addEventListener('click', () => { g.localRecruitRole(role.id); g.audio.play('order'); this.refreshShop(); });
+      q('recruit').appendChild(b);
+      r.recruitBtns.push(b);
+    }
+    roleButtons(q('all'), (role) => g.localRoles({ role }));
+    // one line per type of soldier you have
+    for (const t of ROSTER_TYPES) {
+      const span = document.createElement('span');
+      span.className = 'rtype hidden';
+      const label = document.createElement('span');
+      span.appendChild(label);
+      roleButtons(span, (role) => g.localRoles({ role, type: t }), false);
+      q('types').appendChild(span);
+      r.types[t] = { span, label };
+    }
+    const empty = document.createElement('div');
+    empty.className = 'rempty';
+    empty.textContent = 'You have no soldiers yet. Recruit some below.';
+    r.empty = empty;
+    r.list.appendChild(empty);
+  }
+
+  makeRosterRow(u) {
+    const g = this.game;
+    const el = document.createElement('div');
+    el.className = 'rrow';
+    el.innerHTML = '<span class="nm"></span><span class="hpbar"><b></b></span><span class="rb"></span>';
+    const btns = {};
+    for (const role of ROLES) {
+      const b = document.createElement('button');
+      b.textContent = role.icon;
+      b.title = `${role.label}: ${role.tip}`;
+      b.addEventListener('click', () => { g.localRoles({ role: role.id, ids: [u.id] }); g.audio.play('order'); this.refreshShop(); });
+      el.querySelector('.rb').appendChild(b);
+      btns[role.id] = b;
+    }
+    return { el, nm: el.querySelector('.nm'), hp: el.querySelector('.hpbar b'), btns, last: '' };
+  }
+
+  refreshRoster() {
+    const r = this.roster;
+    if (!r) return;
+    const g = this.game, f = g.localFaction;
+    const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant && !u.isCrew).sort((a, b) => a.id - b.id);
+    const c = g.roleCounts(g.localTeam);
+    const counts = `🏰 Garrison ${c.garrison} · ⚔ Army ${c.army} · ➤ Lane ${c.lane} · barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap}`;
+    if (r.counts.textContent !== counts) r.counts.textContent = counts;
+    for (const b of r.recruitBtns) b.classList.toggle('active', b.dataset.role === (f.recruitRole || 'garrison'));
+    const perType = {};
+    for (const u of mine) perType[u.type] = (perType[u.type] || 0) + 1;
+    for (const t of ROSTER_TYPES) {
+      const n = perType[t] || 0;
+      const o = r.types[t];
+      o.span.classList.toggle('hidden', !n);
+      const txt = `${UNIT_TYPES[t].name} ×${n}`;
+      if (o.label.textContent !== txt) o.label.textContent = txt;
+    }
+    const seen = new Set();
+    for (const u of mine) {
+      seen.add(u.id);
+      let row = r.rows.get(u.id);
+      if (!row) {
+        row = this.makeRosterRow(u);
+        r.rows.set(u.id, row);
+        r.list.appendChild(row.el);
+      }
+      const name = `${u.name}${u.rank > 1 ? ' ' + '★'.repeat(u.rank) : ''}`;
+      if (row.last !== name) { row.nm.textContent = name; row.last = name; }
+      row.hp.style.width = `${Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100))}%`;
+      for (const role of ROLES) row.btns[role.id].classList.toggle('active', u.role === role.id);
+    }
+    for (const [id, row] of r.rows) if (!seen.has(id)) { row.el.remove(); r.rows.delete(id); }
+    r.empty.classList.toggle('hidden', mine.length > 0);
+  }
+
   // Clickable troop commands (the same as the keys shown on the command bar).
   buildOrders(grid) {
     const g = this.game;
@@ -238,8 +394,8 @@ export class UI {
     };
     const p = g.player;
     const setGroup = (grp) => () => { p.group = grp; };
-    section('Who gets the order', [
-      { key: 'G', label: 'Everyone', act: setGroup('all'), active: () => (p.group || 'all') === 'all' },
+    section('Who gets the order (only soldiers in your army obey)', [
+      { key: 'G', label: 'Whole army', act: setGroup('all'), active: () => (p.group || 'all') === 'all' },
       { key: 'G', label: 'Infantry', act: setGroup('infantry'), active: () => p.group === 'infantry' },
       { key: 'G', label: 'Archers', act: setGroup('archers'), active: () => p.group === 'archers' },
       { key: 'G', label: 'Cavalry', act: setGroup('cavalry'), active: () => p.group === 'cavalry' },
@@ -291,7 +447,9 @@ export class UI {
     const g = this.game;
     const f = g.localFaction;
     $('shopGold').textContent = Math.floor(f.gold);
-    $('shopTroops').textContent = `garrison ${g.garrisonCount(g.localTeam)}/${f.troopCap} · army ${g.laneCount(g.localTeam)}`;
+    const rc = g.roleCounts(g.localTeam);
+    $('shopTroops').textContent = `garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane} (barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap})`;
+    this.refreshRoster();
     if (this.autoBtn && this.tab === 'siege') {
       const now = g.siegeTarget(f);
       const txt = f.siegeTarget ? 'Auto lanes' : `✓ Auto lanes · now ${now ? g.factions[now.team].name : 'no target'}`;
@@ -307,9 +465,11 @@ export class UI {
     }
     for (const o of this.orderBtns || []) o.b.classList.toggle('active', !!o.active());
     if ($('troopSummary')) {
-      const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant);
+      const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && u.army && !u.isCrew);
       const n = (k) => mine.filter((u) => u.kind === k).length;
-      $('troopSummary').textContent = `Your troops: ${n('infantry')} infantry, ${n('archer')} archers, ${n('cavalry')} cavalry · ${mine.filter((u) => u.rank >= 3).length} veterans`;
+      $('troopSummary').textContent = mine.length
+        ? `Your army: ${n('infantry')} infantry, ${n('archer')} archers, ${n('cavalry')} cavalry · ${mine.filter((u) => u.rank >= 3).length} veterans`
+        : 'Your army is empty. Open the Army tab to choose who marches with you.';
     }
     for (const c of this.shopCards || []) {
       const can = c.item.can(g, f);
@@ -343,6 +503,7 @@ export class UI {
   }
 
   renderLobby(players, myTeam = -1, coop = false) {
+    const clsName = (p) => (CLASSES[p.cls] ? ` · ${CLASSES[p.cls].icon} ${CLASSES[p.cls].name}` : '');
     $('lobbyMode').textContent = coop
       ? (players.length >= 4
         ? 'Co-op: four players make two teams of two: Blue + Red against Green + Gold.'
@@ -353,7 +514,7 @@ export class UI {
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
       <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {
@@ -402,13 +563,12 @@ export class UI {
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
-    $('mnbar').classList.toggle('hidden', !p.spells.length);
-    $('mnFill').style.width = `${(p.mana / p.manaMax) * 100}%`;
+    this.updateAbilities(dt);
     $('crosshair').classList.toggle('block', p.blocking);
     this.updateDirs();
     this.updatePrompt();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
-    $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.bow.draw) * 100}%` : '0%';
+    $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.drawTime) * 100}%` : '0%';
 
     this.hudT -= dt;
     if (this.hudT <= 0) {
@@ -419,15 +579,18 @@ export class UI {
       if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${Math.ceil(g.phaseT)}s${g.simulating ? ' · Enter to start now' : ''}`;
       else $('phase').textContent = `Next wave in ${Math.max(0, Math.ceil(g.phaseT))}s`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
-      $('weapon').textContent = p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
-        : p.weapon === 'bow' ? `${p.bow.name} · ${p.arrows} arrows`
-        : `${SPELLS[p.spell] ? SPELLS[p.spell].name : 'Magic'} · ${Math.floor(p.mana)}/${p.manaMax} mana${p.spells.length > 1 ? ' (R: next)' : ''}`;
-      $('potions').textContent = `Potions ${p.potions} (Q)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
-      const grp = { all: 'All troops', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
+      $('weapon').textContent = p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
+        : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
+        : `${p.bow.name} · ${p.arrows} arrows`;
+      $('potions').textContent = `Potions ${p.potions} (H)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
+      const grp = { all: 'Whole army', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
       const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
       const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
       const form = FORMATIONS[f.formation || 'line'].name;
-      $('army').textContent = `Garrison ${g.garrisonCount(g.localTeam)}/${f.troopCap} · army ${g.laneCount(g.localTeam)}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
+      const rc = g.roleCounts(g.localTeam);
+      $('army').textContent = `Garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
+      $('cls').textContent = `${p.cls.icon} ${p.cls.name}`;
+      $('cls').style.color = p.cls.color;
       this.renderFactions();
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
@@ -440,6 +603,39 @@ export class UI {
     if (this.targetT <= 0) { this.targetT = 0.15; this.updateTarget(); }
     this.mapT -= dt;
     if (this.mapT <= 0) { this.mapT = 0.1; this.drawMinimap(); }
+  }
+
+  // Q and R: icon, name, cooldown sweep and the effects running on you
+  updateAbilities(dt) {
+    const p = this.game.player;
+    if (!this.abilEls) {
+      const mk = (id) => { const r = $(id); return { r, ic: r.querySelector('.ic'), nm: r.querySelector('.nm'), cd: r.querySelector('.cd'), sec: r.querySelector('.sec') }; };
+      this.abilEls = { q: mk('abilQ'), r: mk('abilR') };
+    }
+    if (this.abilClass !== p.classId) {
+      this.abilClass = p.classId;
+      for (const slot of ['q', 'r']) {
+        const d = p.cls[slot], e = this.abilEls[slot];
+        e.ic.textContent = d.icon;
+        e.nm.textContent = d.name;
+        e.r.title = `${d.name} (${d.cd} s): ${d.desc}`;
+      }
+    }
+    for (const slot of ['q', 'r']) {
+      const e = this.abilEls[slot], d = p.cls[slot], cd = p.abilCd[slot];
+      const k = cd > 0 ? Math.min(1, cd / d.cd) : 0;
+      const t = `scaleY(${k.toFixed(3)})`;
+      if (e.cd.style.transform !== t) e.cd.style.transform = t;
+      const sec = cd > 0 ? String(Math.ceil(cd)) : '';
+      if (e.sec.textContent !== sec) e.sec.textContent = sec;
+      e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
+    }
+    this.buffT = (this.buffT || 0) - dt;
+    if (this.buffT <= 0) {
+      this.buffT = 0.12;
+      const html = p.buffs.list().filter(([id]) => BUFF_NAMES[id]).map(([id, t, v]) => `<span>${esc(BUFF_NAMES[id])} ${id === 'ward' ? Math.ceil(v) + ' left' : t.toFixed(1) + 's'}</span>`).join('');
+      if (html !== this.buffHtml) { this.buffHtml = html; $('buffs').innerHTML = html; }
+    }
   }
 
   renderFactions() {
@@ -468,8 +664,10 @@ export class UI {
     let rows = '';
     for (const f of g.factions) {
       const c = f.castle;
-      rows += `<tr style="color:${TEAM_CSS[f.team]}"><td>${esc(f.name)}</td><td>${esc(f.lord)}</td><td>${Math.floor(f.gold)}</td>
-        <td>${g.garrisonCount(f.team)}/${f.troopCap} + ${g.laneCount(f.team)}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
+      const rc = g.roleCounts(f.team);
+      const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)})` : '';
+      rows += `<tr style="color:${TEAM_CSS[f.team]}"><td>${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
+        <td>${rc.garrison + rc.army}/${f.troopCap} · ${rc.army} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
         <td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
     }
     $('scoreRows').innerHTML = rows;
@@ -503,8 +701,8 @@ export class UI {
     const house = (g.factions[team] || { name: 'Unknown' }).name;
     let name;
     if (o.kind === 'gate') name = `${house} – Gate`;
-    else if (o.isSiege) name = `${o.name} – ${house}`;
-    else name = `${o.name}${!o.isHero && o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''} – ${house}`;
+    else if (o.isSiege) name = `${o.name} – ${house}${o.abandoned ? ' (abandoned: E to take it)' : ''}`;
+    else name = `${o.name}${!o.isHero && o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''} – ${house}${team === g.localTeam && !o.isHero && !o.isGiant && !o.isCrew ? ` · ${o.role}` : ''}`;
     el.classList.remove('hidden');
     $('targetName').textContent = name;
     $('targetName').style.color = TEAM_CSS[team] || NEUTRAL_CSS;
@@ -552,18 +750,24 @@ export class UI {
       ctx.beginPath(); ctx.arc(X(gp.x), X(gp.z), 2.5, 0, Math.PI * 2); ctx.stroke();
     }
     for (const u of g.units) {
-      if (!u.alive) continue;
+      if (!u.alive || u.crewOf) continue;   // an engine's crew is shown by the engine
       ctx.fillStyle = TEAM_CSS[u.team];
       const r = u.isGiant ? 5 : u.isHero ? 3 : 1.6;
       ctx.fillRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2);
-      if (u.isHero) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2); }
+      // heroes, and the soldiers of your own army, get a white edge
+      if (u.isHero || (u.army && u.team === g.localTeam)) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2); }
     }
     for (const s of g.siege) {
       if (!s.alive) continue;
       ctx.fillStyle = '#000';
       ctx.fillRect(X(s.pos.x) - 3, X(s.pos.z) - 3, 6, 6);
-      ctx.fillStyle = TEAM_CSS[s.team];
-      ctx.fillRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+      if (s.abandoned) {   // nobody's: an empty box
+        ctx.strokeStyle = TEAM_CSS[s.team]; ctx.lineWidth = 1.5;
+        ctx.strokeRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+      } else {
+        ctx.fillStyle = TEAM_CSS[s.team];
+        ctx.fillRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+      }
     }
     for (const h of g.humans) {
       if (h === g.player || !h.alive) continue;
