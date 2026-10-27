@@ -232,6 +232,30 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   position too, and everyone sees the new class on your name tag.
 
   The two ability tiles and any effects running on you sit above your health bar.
+- **Hero levels**: your hero earns **experience** and rises from level 1 to **level 5**. The host pays it out for
+  what the hero, or the army fighting beside them, brings down:
+
+  | For | Experience |
+  | --- | --- |
+  | A swordsman, spearman or archer / a longbowman | 8 / 14 |
+  | A knight or cavalryman / a lancer | 18 / 26 |
+  | A giant / a rival lord's hero / a rival player's hero | 150 / 70 / 80 |
+  | A ram / a catapult | 30 / 40 |
+  | Veterans (per rank above the first) / rival heroes (per level above the first) | +12% / +15% |
+  | A kill by one of your allies within 28 m of you | 40% of the above |
+  | Every wave you live through | 10 |
+  | Breaking an enemy gate / opening a breach / breaking a keep | 40 / 15 / 250 |
+  | Taking the hill (King of the Hill) while standing on it | 25 |
+
+  It takes 120, 320, 640 and 1100 experience in all to reach levels 2 to 5. **Every level** adds health (+7% of the
+  class's), armour, a little speed, faster healing out of combat, abilities that recharge sooner and more damage with
+  the sword, the bow and spells, and mends 30% of your health. The damage is sized so that **at level 5 a hero's
+  best weapon hits a little harder than the best veteran soldier** (a rank-5 Lancer hits for 42): a Knight's sword
+  goes from 34 to about 46, a Berserker's from 44 to 50 and a Ranger's arrow from 42 to 47 (the classes that already
+  hit hard grow less in damage), while the casters' spells grow by a third. Your level stays through death and when
+  you change class, and begins again in a new match. The bar under your health shows the way to the next level
+  (purple, gold at level 5), `+XP` floats up under the crosshair, a banner and a flare mark each level-up, and your
+  level shows on your name tag and the scoreboard. All the numbers are in `src/heroes.js`.
 - **Siege crews**: every ram and catapult is worked by two engineers. They are real soldiers: they push the engine to
   its target, and enemies (and your own arrows) can cut them down one at a time. A short-handed engine is slower, and
   when both have fallen it stands **abandoned**, drawn as an empty box on the minimap. **Anyone can take over an
@@ -357,6 +381,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs |
+| `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
 | `src/combat.js` | Shared rules for attack and guard directions |
 | `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |
