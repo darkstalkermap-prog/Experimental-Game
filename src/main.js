@@ -6,6 +6,7 @@ import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
+import { PeerNet } from './peernet.js';
 import { setMapSize, WORLD, MAP_SIZES } from './config.js';
 
 const $ = (id) => document.getElementById(id);
@@ -120,9 +121,12 @@ const rememberName = () => { try { localStorage.setItem('cw-name', playerName())
 // Online play goes through the Castle Wars server when the page comes from one, otherwise through
 // the claude.ai live room when the game is opened as an artifact there.
 let liveRoom = null;
+let direct = false;
 const onlineReady = Net.available().then(async (ok) => {
   if (!ok) liveRoom = await RoomNet.open();
-  return ok || !!liveRoom;
+  // served as plain files (GitHub Pages and the like): players connect browser to browser
+  if (!ok && !liveRoom) direct = PeerNet.available();
+  return ok || !!liveRoom || direct;
 });
 
 // Multiplayer panel on the main menu
@@ -162,7 +166,7 @@ $('copyInvite').addEventListener('click', async () => {
 
 async function connect() {
   if (!(await onlineReady)) throw new Error('Online play is not available here.');
-  net = liveRoom ? new RoomNet(liveRoom) : new Net();
+  net = liveRoom ? new RoomNet(liveRoom) : direct ? new PeerNet() : new Net();
   game.net = net;
   await net.connect();
   net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });

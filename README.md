@@ -13,8 +13,9 @@ standing wins.**
 
 This link works once GitHub Pages is switched on (a one-time setting): go to the repository's **Settings → Pages**,
 under **Build and deployment** choose **Deploy from a branch**, pick **main** and **/ (root)**, then **Save**. After
-a minute or two the game is live at the address above, and every push to `main` updates it. GitHub Pages
-serves static files only, so that link is single player. Online play needs the server described below.
+a minute or two the game is live at the address above, and every push to `main` updates it. Multiplayer works on
+this link too, with no server (see **Online** below): one person clicks **Multiplayer → Host Online Game**, copies the
+invite link and sends it to friends.
 
 ### Single player
 
@@ -27,6 +28,19 @@ python3 -m http.server 8080
 ```
 
 ### Online (up to 4 players)
+
+**On the GitHub Pages link (or any plain web hosting): no server needed.** One person hosts, the others join:
+
+1. The host opens the link, clicks **Multiplayer**, types a name and clicks **Host Online Game**.
+2. The host clicks **Copy Invite** and sends the link (it looks like `.../?join=ABCD`) to friends.
+3. Friends open it, type a name and press Enter. If they only have the code, they can use **Multiplayer** and
+   type it in.
+4. The host picks **Versus** or **Co-op** and clicks **Start the Battle**.
+
+Players' browsers connect straight to each other (WebRTC, using the free PeerJS matchmaking service only to
+introduce them), and the host's browser runs the battle. Everyone needs internet access. On rare strict networks
+(some mobile data or corporate Wi-Fi) a direct connection can't be made; the claude.ai link or your own server
+below work around that.
 
 **Easiest: the claude.ai link.** When the game is opened from its claude.ai artifact link, online play works
 with no server: the host clicks **Host Online Game** and gets a 4-letter invite code, and friends open the same
@@ -191,7 +205,7 @@ Stairs on both sides of the courtyard lead up to the wall walk, which goes all t
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/world.js`, `src/textures.js` | Terrain, sky, forests and procedural textures |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus and lobby |
-| `src/net.js`, `src/netsync.js` | Online play: connection, snapshots from the host, and pose/actions from clients |
+| `src/net.js`, `src/peernet.js`, `src/roomnet.js`, `src/netsync.js` | Online play: connection (own server, browser-to-browser, or claude.ai live room), snapshots from the host, and pose/actions from clients |
 | `server/server.js` | Node server: serves the game and relays messages between players in a room |
 
 Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.
