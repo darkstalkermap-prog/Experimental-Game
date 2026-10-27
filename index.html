@@ -42,7 +42,10 @@
   .controls { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 14px; font-size: 15px; margin: 18px 0 8px; }
   .controls b { font-family: 'Cinzel', serif; font-size: 13px; white-space: nowrap; }
   .howto { font-size: 15.5px; line-height: 1.4; }
-  #play { font-size: 22px; padding: 12px 48px; }
+  #play, #mpBtn { font-size: 22px; padding: 12px 48px; }
+  #invite { display: flex; gap: 6px; max-width: 460px; margin: 10px auto 0; }
+  #invite input { flex: 1; min-width: 0; font-size: 14px; padding: 6px 8px; }
+  #inviteBanner { font-weight: bold; color: #5a1d12; }
   #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-family: Cinzel, serif; font-size: 28px; z-index: 30; background: #111; }
 
   /* ---------- HUD ---------- */
@@ -269,9 +272,10 @@
       <button data-d="normal" class="active">Normal</button>
       <button data-d="hard">Hard</button>
     </div>
-    <div class="row"><button id="play">Single Player</button></div>
+    <div class="row"><button id="play">Single Player</button><button id="mpBtn">Multiplayer</button></div>
     <div id="online" class="hidden">
-      <h3 class="section">Online (up to 4 players)</h3>
+      <h3 class="section">Multiplayer (up to 4 players)</h3>
+      <div id="inviteBanner" class="note hidden"></div>
       <div class="row">
         <label class="field">Your name <input id="pname" maxlength="16" autocomplete="off"></label>
       </div>
@@ -282,14 +286,15 @@
       </div>
       <div id="netMsg" class="note"></div>
     </div>
-    <div id="offlineNote" class="note">To play online with friends, open the game from its claude.ai link while signed in, or run the Castle Wars server (<code>npm install</code>, then <code>npm start</code>) and open the address it prints.</div>
+    <div id="offlineNote" class="note hidden">To play online with friends, open the game from its claude.ai link while signed in, or run the Castle Wars server (<code>npm install</code>, then <code>npm start</code>) and open the address it prints.</div>
   </div>
 </div>
 
 <div id="lobby" class="screen hidden">
   <div class="scroll">
     <h1 style="font-size:44px">War Council</h1>
-    <div class="sub">Room code <b id="roomCode" class="code"></b><br>Friends open <span id="roomUrl"></span>, enter the code and press Join.</div>
+    <div class="sub">Room code <b id="roomCode" class="code"></b><br><span id="inviteHelp"></span></div>
+    <div id="invite"><input id="inviteLink" readonly aria-label="Invite link"><button id="copyInvite">Copy Invite</button></div>
     <div class="row" id="lobbyModes"><button data-mode="versus" class="active">Versus</button><button data-mode="coop">Co-op</button></div>
     <div class="note" id="lobbyMode">Versus: every castle for itself.</div>
     <ul id="lobbyList"></ul>

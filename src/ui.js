@@ -317,7 +317,15 @@ export class UI {
     $('menu').classList.add('hidden');
     $('lobby').classList.remove('hidden');
     $('roomCode').textContent = code;
-    $('roomUrl').textContent = this.game.net && this.game.net.constructor.name === 'RoomNet' ? 'this same game link' : location.origin;
+    // the invite link opens the game with the code filled in; inside claude.ai the page can't see its own
+    // share link, so friends get the code and open the same game link
+    const viaRoom = this.game.net && this.game.net.viaRoom;
+    const link = viaRoom ? '' : `${location.origin}${location.pathname}?join=${code}`;
+    $('inviteLink').value = viaRoom ? `Join my Castle Wars game with code ${code}` : link;
+    $('inviteHelp').textContent = viaRoom
+      ? 'Send friends this game\'s link and the code. They press Multiplayer, enter it and press Join.'
+      : 'Send friends the invite link. It opens the game with your code filled in.';
+    $('invite').classList.toggle('hidden', !isHost);
     $('lobbyHostCtl').classList.toggle('hidden', !isHost);
     $('lobbyWait').classList.toggle('hidden', isHost);
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;

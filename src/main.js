@@ -122,13 +122,46 @@ const rememberName = () => { try { localStorage.setItem('cw-name', playerName())
 let liveRoom = null;
 const onlineReady = Net.available().then(async (ok) => {
   if (!ok) liveRoom = await RoomNet.open();
-  const can = ok || !!liveRoom;
+  return ok || !!liveRoom;
+});
+
+// Multiplayer panel on the main menu
+const showMultiplayer = async () => {
+  const can = await onlineReady;
   $('online').classList.toggle('hidden', !can);
   $('offlineNote').classList.toggle('hidden', can);
+  $('mpBtn').classList.add('active');
+  if (can) ($('pname').value ? $('joinCode').value ? $('joinBtn') : $('hostBtn') : $('pname')).focus();
+};
+$('mpBtn').addEventListener('click', showMultiplayer);
+
+// opened from an invite link (?join=CODE): open the panel with the code filled in
+const invited = (new URLSearchParams(location.search).get('join') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+if (invited.length === 4) {
+  $('joinCode').value = invited;
+  $('inviteBanner').textContent = `You're invited to game ${invited}. Enter your name and press Join.`;
+  $('inviteBanner').classList.remove('hidden');
+  showMultiplayer();
+}
+
+for (const id of ['pname', 'joinCode']) {
+  $(id).addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    $($('joinCode').value.trim().length === 4 ? 'joinBtn' : 'hostBtn').click();
+  });
+}
+
+$('copyInvite').addEventListener('click', async () => {
+  const el = $('inviteLink');
+  try { await navigator.clipboard.writeText(el.value); }
+  catch (e) { el.select(); try { document.execCommand('copy'); } catch (e2) { /* ignore */ } }
+  $('copyInvite').textContent = 'Copied!';
+  setTimeout(() => { $('copyInvite').textContent = 'Copy Invite'; }, 1500);
 });
 
 async function connect() {
-  await onlineReady;
+  if (!(await onlineReady)) throw new Error('Online play is not available here.');
   net = liveRoom ? new RoomNet(liveRoom) : new Net();
   game.net = net;
   await net.connect();

@@ -16,6 +16,7 @@ const roomName = (code, i) => `cw-${code.toLowerCase()}${i ? '-' + i : ''}`;
 export class RoomNet {
   constructor(room) {
     this.room = room;
+    this.viaRoom = true;
     this.role = null;
     this.id = null;
     this.code = null;
