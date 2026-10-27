@@ -189,7 +189,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
     spin for a second and cut everyone around you three times. **R Blood Rage**: for 7 s you heal for half the
     damage you deal, can't be staggered and hit 25% harder.
-  - **Ranger** (140% bow damage, draws 20% faster, quick, frail). **Q Arrow Volley**: nine free arrows in a fan.
+  - **Ranger** (140% bow damage, draws 20% faster, quick, frail). **Q Arrow Volley**: hold Q and a circle appears on
+    the ground where your crosshair points (up to 62 m away; it turns amber when that is as far as it reaches); let go
+    and 18 free arrows come down out of the sky on it, spread over the men standing inside. Walls don't stop it, so it
+    reaches men behind them. A quick tap looses it at once; Esc or R cancels.
     **R Evasive Roll**: throw yourself nine metres the way you are moving (back when standing still); nothing
     can hurt you for a moment.
   - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
@@ -283,12 +286,14 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Key | Action |
 | --- | --- |
 | WASD / Shift / Space | Move / sprint / jump |
+| Space (at a castle wall) | Jump at a wall from outside, or at the edge of the wall walk from the courtyard, to climb up and stand on the wall walk (a prompt shows when you can) |
+| C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
 | Left click | Hold to wind up, release to strike; with the bow, hold and release to shoot |
 | Right click | Guard with your shield; feint while winding up; zoom with the bow |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
-| Q | Class ability: attack |
+| Q | Class ability: attack (Ranger: hold to place the volley circle, let go to loose it) |
 | R | Class ability: defence |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
@@ -299,7 +304,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | Tab | Scoreboard |
 | F1 or Z | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
-| F3 or C | Army: charge |
+| F3 | Army: charge |
 | F4 or V | Army: defend the castle |
 | T | Army: assault the selected target castle |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
@@ -308,12 +313,21 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 
 Stairs on both sides of the courtyard lead up to the wall walk, which goes all the way around the castle and into the corner towers.
 
+**Climbing and ducking.** The walls are 8 m high, far past a jump, so a hero who stands at the foot of a wall on the outside
+and jumps at it (Space, facing it, within about a metre and a half) scrambles up it: about a second, 20 stamina, and the hero
+ends up on the wall walk behind the battlements. From the courtyard the same jump takes you up onto the edge of the wall walk
+(not from underneath its planking). It works on any wall of any castle that is still standing, enemy ones included (not on a
+breach, not while ducking), a "Space: Climb the wall" prompt shows when it will work, and other players see the climb. Holding **C** ducks: the head and the hitbox
+drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
+walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
+
 ## Code layout
 
 | File | Purpose |
 | --- | --- |
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
+| `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |

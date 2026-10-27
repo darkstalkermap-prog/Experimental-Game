@@ -2,7 +2,8 @@
 // Q is an attack, R is a defence. The abilities are simulated where the world is (single player or host);
 // their look and sound is replayed on every screen.
 import * as THREE from 'three';
-import { SPELLS } from './config.js';
+import { SPELLS, VOLLEY } from './config.js';
+import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
 
 export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'cavalier'];
@@ -30,7 +31,7 @@ export const CLASSES = {
     blurb: 'Quick and deadly at range, but fragile when caught in melee.',
     mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8 },
     passive: 'Draws the bow 20% faster.',
-    q: { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, desc: 'Loose nine arrows in a fan, for free. Good against packed ranks.' },
+    q: { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' },
     r: { id: 'evade', icon: '💨', name: 'Evasive Roll', cd: 7, desc: 'Throw yourself nine metres the way you are moving (back if standing still). Nothing can hurt you for under a second.' },
   },
   mage: {
@@ -107,6 +108,7 @@ export const BUFF_NAMES = {
 };
 
 const ZERO = new THREE.Vector3();
+const SEE_THROUGH = new Set(['tree']);   // a trunk does not stop you putting a volley on the ground behind it
 const v3 = (p) => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100];
 const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
 const C = {
@@ -122,16 +124,18 @@ const C = {
 export class Abilities {
   constructor(game) {
     this.g = game;
-    this.active = [];   // effects that carry on for a moment: whirlwind, lance charge
+    this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a volley coming down
+    this.rising = [];   // the arrows of a volley on their way up (looks only: on every screen)
   }
 
-  // Use an ability. cam: the hero's eye position, dir: where they look. Returns false when it is refused.
-  use(p, slot, cam, dir) {
+  // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
+  // Ranger's volley). Returns false when it is refused.
+  use(p, slot, cam, dir, at = null) {
     const def = p.cls[slot];
     if (!def || !p.alive || p.drive) return false;
     if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
     p.abilCd[slot] = def.cd * (p.cls.mods.cd || 1);
-    this[def.id](p, cam, dir.clone().normalize());
+    this[def.id](p, cam, dir.clone().normalize(), at);
     return true;
   }
 
@@ -140,10 +144,27 @@ export class Abilities {
       const e = this.active[i];
       const p = e.p;
       e.t += dt;
+      if (e.kind === 'rain') {   // already loosed: it comes down even if the Ranger has fallen since
+        this.rain(e);
+        if (e.n >= e.shots.length) this.active.splice(i, 1);
+        continue;
+      }
       if (!p.alive || e.t > e.dur) { this.active.splice(i, 1); continue; }
       if (e.kind === 'whirl') {
         while (e.n < 3 && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n); e.n++; }
       } else this.chargeSweep(p, e);
+    }
+  }
+
+  // Looks that run on every screen: the arrows of a volley climbing out of sight.
+  updateFx(dt) {
+    for (let i = this.rising.length - 1; i >= 0; i--) {
+      const r = this.rising[i];
+      r.t += dt;
+      if (r.t > 0.9) { this.g.scene.remove(r.mesh); this.rising.splice(i, 1); continue; }
+      r.vel.y -= 9.8 * dt;
+      r.mesh.position.addScaledVector(r.vel, dt);
+      r.mesh.lookAt(r.mesh.position.clone().add(r.vel));
     }
   }
 
@@ -240,19 +261,79 @@ export class Abilities {
   }
 
   // ---------- Ranger ----------
-  volley(p, cam, dir) {
-    const g = this.g;
-    const base = Math.atan2(dir.x, dir.z);
-    const pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)));
-    const cp = Math.cos(pitch), n = 9, dmg = p.bowDmg * 0.7;
-    for (let i = 0; i < n; i++) {
-      const a = base + (i - (n - 1) / 2) * 0.085;
-      const v = new THREE.Vector3(Math.sin(a) * cp, Math.sin(pitch) + (Math.random() - 0.5) * 0.02, Math.cos(a) * cp).normalize();
-      const from = cam.clone().addScaledVector(v, 0.7);
-      from.y -= 0.08;
-      g.projectiles.fireArrow(from, v.multiplyScalar(58), p.team, dmg, p);
+  // The volley falls on the circle the Ranger placed: arrows go up from the bow, and a moment later they come down
+  // out of the sky over about a second, most of them picking a foe standing inside the circle.
+  volley(p, cam, dir, at) {
+    const g = this.g, V = VOLLEY;
+    const c = at ? at.clone() : this.aimPoint(cam, dir, V.range, p.team).pos;
+    const dx = c.x - p.pos.x, dz = c.z - p.pos.z, dist = Math.hypot(dx, dz);
+    if (dist > V.range + 6) {   // a guest's request is held to the Ranger's reach
+      const k = (V.range + 6) / dist;
+      c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k;
+      c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
     }
-    g.audio.play('bow', p.pos);
+    const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
+    const shots = [];
+    for (let i = 0; i < V.arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / V.arrows);
+    this.active.push({ kind: 'rain', p, t: 0, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg });
+    this.emit('volley', cam, f, [c]);
+  }
+
+  // The arrows that are due: each one falls steeply from above and behind the target onto a foe in the circle (a
+  // little ahead of where it is walking), or onto a random spot in the circle.
+  rain(e) {
+    const g = this.g, V = VOLLEY;
+    while (e.n < e.shots.length && e.t >= e.shots[e.n]) {
+      e.n++;
+      const from = new THREE.Vector3(0, 0, 0);
+      const T = Math.hypot(V.fallBack, V.fallH) / ARROW_SPEED;   // every arrow takes about the same time to come down
+      let L = null;
+      if (Math.random() < V.aimed) {
+        // the foe the volley has picked least so far, so the arrows spread over everyone in the circle
+        let o = null, least = Infinity;
+        this.eachFoe(e.p.team, e.c.x, e.c.z, V.radius, (f) => {
+          const k = (e.picked.get(f) || 0) + Math.random() * 0.5;
+          if (k < least) { least = k; o = f; }
+        }, e.c.y, 12);
+        if (o) {
+          e.picked.set(o, (e.picked.get(o) || 0) + 1);
+          L = o.chest ? o.chest(new THREE.Vector3()) : new THREE.Vector3(o.pos.x, o.pos.y + 1.5, o.pos.z);   // (engines have no chest)
+          if (o.vel) { L.x += o.vel.x * T; L.z += o.vel.z * T; }
+          L.x += (Math.random() - 0.5) * 0.7; L.z += (Math.random() - 0.5) * 0.7;
+        }
+      }
+      if (!L) {
+        const a = Math.random() * Math.PI * 2, r = V.radius * Math.sqrt(Math.random());
+        L = new THREE.Vector3(e.c.x + Math.cos(a) * r, 0, e.c.z + Math.sin(a) * r);
+        L.y = g.physics.groundHeight(L.x, L.z, e.c.y + 3);
+      }
+      from.set(L.x - e.f.x * V.fallBack, L.y + V.fallH, L.z - e.f.z * V.fallBack);
+      const v = new THREE.Vector3((L.x - from.x) / T, (L.y - from.y) / T + 0.5 * G_ARROW * T, (L.z - from.z) / T);
+      g.projectiles.fireArrow(from, v, e.p.team, e.dmg, e.p, true);
+    }
+  }
+
+  // Where the crosshair meets the world, for abilities that are placed on the ground: the first soldier, engine, wall
+  // or hill along the line of sight within range (the spot on the ground there). If the sight line reaches nothing (the
+  // sky), the ground at full range straight ahead, and far is true.
+  aimPoint(from, dir, range, team) {
+    const g = this.g, phys = g.physics;
+    const q = new THREE.Vector3(), last = from.clone();
+    for (let d = 1; d <= range; d += 0.5) {
+      q.copy(from).addScaledVector(dir, d);
+      const unit = g.projectiles.hitCharacter(q, team, 0.35) || g.siegeAt(q, team);
+      if (unit) {
+        const x = unit.pos.x, z = unit.pos.z;
+        return { pos: new THREE.Vector3(x, phys.groundHeight(x, z, unit.pos.y + 0.5), z), far: false };
+      }
+      if (phys.pointHit(q.x, q.y, q.z, team, SEE_THROUGH) || q.y < phys.terrainHeight(q.x, q.z)) {
+        return { pos: new THREE.Vector3(last.x, phys.groundHeight(last.x, last.z, last.y), last.z), far: false };
+      }
+      last.copy(q);
+    }
+    const f = flat(dir);
+    const x = from.x + f.x * range, z = from.z + f.z * range;
+    return { pos: new THREE.Vector3(x, phys.groundHeight(x, z, from.y), z), far: true };
   }
 
   evade(p) {
@@ -389,6 +470,19 @@ export class Abilities {
         fx.dust(at.clone().setY(at.y + 0.2), 8, 1.2);
         snd('swing');
         break;
+      case 'volley': {
+        // a flight of arrows leaves the bow; the circle stays marked on the ground until they land
+        snd('bow');
+        const c = targets && targets[0];
+        if (c) g.aimRing.flash(c, VOLLEY.radius, 1.9);
+        for (let i = 0; i < 9; i++) {
+          const mesh = g.projectiles.makeArrowMesh();
+          mesh.position.copy(at).addScaledVector(dir, 0.6);
+          const vel = new THREE.Vector3(dir.x * 9 + (Math.random() - 0.5) * 5, 44 + Math.random() * 8, dir.z * 9 + (Math.random() - 0.5) * 5);
+          this.rising.push({ mesh, vel, t: 0 });
+        }
+        break;
+      }
       case 'ward':
         fx.frost(chest, 26);
         fx.ring(at, 5.5, C.frost, 38, { speed: 4, up: 0.8 });

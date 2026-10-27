@@ -75,6 +75,7 @@ export class FX {
   gold(p) { this.burst(p, 8, C.gold, 2, 0.15, 0.8, { grav: 4 }); }
 
   stomp(p) { this.burst(p, 10, C.dust, 3, 1.2, 1.2, { grow: 1.2, alpha: 0.4 }); }
+  thud(p) { this.burst(p, 4, C.dust, 1.6, 0.4, 0.55, { grav: 3, alpha: 0.65 }); }   // an arrow driving into the ground
 
   // --- magic ---
   fireTrail(p) {

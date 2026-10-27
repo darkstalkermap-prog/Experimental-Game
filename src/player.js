@@ -1,6 +1,6 @@
 // The hero: first-person movement, sword & shield, bow, class abilities, potions, and the view-model.
 import * as THREE from 'three';
-import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN } from './config.js';
+import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
@@ -42,8 +42,17 @@ export class Player {
     this.netPose = null;
     this.walkPhase = 0;
     this.radius = 0.4;
-    this.height = 1.8;
-    this.eye = 1.68;
+    this.height = BODY.height;
+    this.eye = BODY.eye;
+    this.duck = 0;             // 0 standing .. 1 fully ducked (eases in and out)
+    this.ducking = false;
+    this.climb = null;         // a scramble up a castle wall: { t, dur, ... }
+    this.climbing = false;     // (what other screens are told)
+    this.climbCd = 0;
+    this.climbHint = false;    // a wall is right in front and a jump would climb it (for the on-screen prompt)
+    this.hintT = 0;
+    this.vmDown = 0;           // how far the weapons are lowered (while climbing)
+    this.aiming = null;        // holding Q to place the Ranger's volley: { slot, t, at, far }
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.vy = 0;
@@ -159,8 +168,8 @@ export class Player {
     this.walkPhase += dt * sp * 2.1;
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
     b.root.rotation.y = this.mounted ? this.heading : this.yaw;
-    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking });
-    this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4), this.pos.z);
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time });
+    this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4 - 0.7 * this.duck), this.pos.z);
   }
 
   // apply the latest pose received over the network (smoothed)
@@ -192,6 +201,8 @@ export class Player {
       this.weapon = n.w ? 'bow' : 'sword';
       this.mounted = !!n.m && this.hasHorse;
       this.radius = this.mounted ? 0.8 : 0.4;
+      this.climbing = !!n.cl;
+      this.setDuck(!!n.dk && !this.mounted, dt);
       this.heading = interpolated && n.m ? s.yaw : n.h;
       this.rideSpeed = n.rs;
       if (!this.mounted && n.hx !== undefined) { this.horsePos.set(n.hx, n.hy, n.hz); this.horseYaw = n.hyaw; }
@@ -211,7 +222,7 @@ export class Player {
     const m = { x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z), yaw: r2(this.yaw), pitch: r2(this.pitch),
       vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
       bd: DIR_IDX[this.blockDir], ba: r2(Math.max(0, this.game.time - this.blockStart)),
-      m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed) };
+      m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed), dk: this.ducking ? 1 : 0, cl: this.climb ? 1 : 0 };
     if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
     return m;
   }
@@ -233,7 +244,7 @@ export class Player {
   get bowDmg() { return this.bow.dmg * this.cls.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
   get speedMult() { return this.cls.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 0.7 : 1); }
-  chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + 1.25, this.pos.z); }
+  chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
 
@@ -266,6 +277,7 @@ export class Player {
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
     this.dash = null;
     this.castFlash = 0;
+    this.cancelAim();
     if (this.body) this.buildTag();
   }
 
@@ -304,6 +316,9 @@ export class Player {
     this.abilCd = { q: 0, r: 0 };
     this.dash = null;
     this.drive = null;
+    this.climb = null; this.climbing = false; this.climbCd = 0;
+    this.duck = 0; this.ducking = false; this.height = BODY.height; this.eye = BODY.eye;
+    this.cancelAim();
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
@@ -573,6 +588,8 @@ export class Player {
     this.bob += dt * (moving ? (sprint ? 13 : 9) : 2);
     const bobAmt = moving ? (sprint ? 0.03 : 0.018) : 0.004;
     vm.position.set(Math.sin(this.bob * 0.5) * bobAmt, -Math.abs(Math.sin(this.bob)) * bobAmt, 0);
+    this.vmDown += ((this.climb ? 1 : 0) - this.vmDown) * Math.min(1, dt * 8);   // out of the way while both hands climb
+    vm.position.y -= 0.55 * this.vmDown;
 
     if (swordMode) {
       const b = this.vmSwordBase;
@@ -611,7 +628,8 @@ export class Player {
       const b = this.vmBowBase;
       this.vmBow.position.copy(b.pos);
       this.vmBow.rotation.copy(b.rot);
-      const draw = Math.min(1, this.drawT / this.drawTime);
+      const draw = this.aiming ? Math.min(1, this.aiming.t / 0.4) : Math.min(1, this.drawT / this.drawTime);
+      if (this.aiming) { this.vmBow.rotation.x -= 0.3 * draw; this.vmBow.position.y += 0.05 * draw; }   // a lob: the bow tips up
       this.vmArrow.visible = this.arrows > 0;
       this.vmArrow.position.z = 0.22 * draw;
       this.vmString.position.z = 0.22 * draw;
@@ -641,8 +659,9 @@ export class Player {
     if (input.hit('Digit2')) this.setWeapon('bow');
     if (m.wheel) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyH')) this.drinkPotion();
-    if (input.hit('KeyQ')) this.useAbility('q', input);
-    if (input.hit('KeyR')) this.useAbility('r', input);
+    // Q: most abilities go off at once; the Ranger's volley is aimed with a circle (hold it, let go to loose it)
+    if (input.hit('KeyQ')) { if (this.cls.q.aimed) this.beginAim('q'); else this.useAbility('q', input); }
+    if (input.hit('KeyR')) { this.cancelAim(); this.useAbility('r', input); }
 
     if (input.hit('KeyE')) {
       const engine = g.engineNear(this);
@@ -651,7 +670,73 @@ export class Player {
       else this.toggleMount();
     }
 
-    // movement
+    // duck: hold C
+    this.setDuck(input.down('KeyC') && !this.mounted && !this.climb, dt);
+
+    // movement (a climb carries the hero up a wall instead)
+    let moving = false, sprint = false;
+    if (!this.climb && input.hit('Space') && !this.mounted) this.tryClimb();
+    if (this.climb) this.updateClimb(dt);
+    else ({ moving, sprint } = this.move(dt, input));
+    if (this.climbCd > 0) this.climbCd -= dt;
+    this.climbing = !!this.climb;
+    if ((this.hintT -= dt) <= 0) {
+      this.hintT = 0.15;
+      this.climbHint = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround && this.stamina >= BODY.climbStamina &&
+        !!g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height);
+    }
+    if (this.aiming) this.updateAim(dt, input);
+
+    // combat
+    const decay = Math.pow(0.0004, dt);
+    this.aim.x = this.aim.x * decay + m.dx;
+    this.aim.y = this.aim.y * decay + m.dy;
+    const aimDir = dirFromAim(this.aim.x, this.aim.y, null);
+    if (this.staggerT > 0) {
+      this.staggerT -= dt;
+      this.atk = null;
+      this.blocking = false;
+      this.drawT = 0;
+    } else if (this.climb) {
+      this.atk = null; this.blocking = false; this.drawT = 0; this.zoomed = false;
+      this.shake = Math.max(this.shake, 0.1);   // hands full: the view judders as you haul yourself up
+    } else if (this.weapon === 'sword') {
+      if (this.buffs.has('whirl')) { this.atk = null; this.blocking = false; }
+      else this.swordInput(dt, m, aimDir);
+      this.zoomed = false;
+    } else {
+      this.blocking = false;
+      if (m.left && this.arrows > 0 && !this.aiming) this.drawT += dt;
+      if (m.leftReleased && this.drawT > 0) {
+        if (this.drawT > 0.15 && this.arrows > 0) this.shoot();
+        this.drawT = 0;
+      }
+      if (!m.left && !m.leftReleased) this.drawT = 0;
+      this.zoomed = m.right;
+    }
+    this.shake = Math.max(0, this.shake - dt);
+
+    // regen when out of combat (the host decides this in online games)
+    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
+    this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
+
+    // camera
+    this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
+    const sk = this.shake * 0.06;
+    // (hauling yourself up a wall, the view tips up toward the top of it)
+    this.camera.rotation.set(this.pitch + 0.4 * this.vmDown + (Math.random() - 0.5) * sk, this.yaw + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
+    const fov = this.zoomed ? 42 : this.baseFov;
+    if (Math.abs(this.camera.fov - fov) > 0.1) {
+      this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 10);
+      this.camera.updateProjectionMatrix();
+    }
+    this.updateViewModel(dt, moving && this.onGround, sprint);
+  }
+
+  // Walking, riding, jumping and falling for this frame. Returns whether the hero is moving and sprinting (for the
+  // weapon bob).
+  move(dt, input) {
+    const g = this.game;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     let moving, sprint = false;
     if (this.mounted) {
@@ -686,10 +771,12 @@ export class Player {
       if (input.down('KeyD')) { mx -= fz; mz += fx; }
       const ml = Math.hypot(mx, mz);
       moving = ml > 0.01;
-      sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0;
+      sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0 && !this.ducking && !this.aiming;
       let speed = (sprint ? PLAYER.sprint : PLAYER.speed) * this.speedMult;
       if (this.blocking) speed *= 0.55;
       if (this.drawT > 0) speed *= 0.6;
+      if (this.aiming) speed *= 0.7;
+      speed *= 1 - (1 - BODY.duckSpeed) * this.duck;
       if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18);
       else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16));
       const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
@@ -708,7 +795,7 @@ export class Player {
       }
     }
 
-    if (input.hit('Space') && this.onGround && this.stamina > 8 && !this.mounted) {
+    if (input.hit('Space') && this.onGround && this.stamina > 8 && !this.mounted && !this.ducking) {
       this.vy = PLAYER.jump;
       this.onGround = false;
       this.stamina -= 8;
@@ -735,47 +822,7 @@ export class Player {
       this.onGround = false;
     }
     this.pos.y = ny;
-
-    // combat
-    const decay = Math.pow(0.0004, dt);
-    this.aim.x = this.aim.x * decay + m.dx;
-    this.aim.y = this.aim.y * decay + m.dy;
-    const aimDir = dirFromAim(this.aim.x, this.aim.y, null);
-    if (this.staggerT > 0) {
-      this.staggerT -= dt;
-      this.atk = null;
-      this.blocking = false;
-      this.drawT = 0;
-    } else if (this.weapon === 'sword') {
-      if (this.buffs.has('whirl')) { this.atk = null; this.blocking = false; }
-      else this.swordInput(dt, m, aimDir);
-      this.zoomed = false;
-    } else {
-      this.blocking = false;
-      if (m.left && this.arrows > 0) this.drawT += dt;
-      if (m.leftReleased && this.drawT > 0) {
-        if (this.drawT > 0.15 && this.arrows > 0) this.shoot();
-        this.drawT = 0;
-      }
-      if (!m.left && !m.leftReleased) this.drawT = 0;
-      this.zoomed = m.right;
-    }
-    this.shake = Math.max(0, this.shake - dt);
-
-    // regen when out of combat (the host decides this in online games)
-    if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.cls.mods.regen || 1));
-    this.hurtFlash = Math.max(0, this.hurtFlash - dt * 2);
-
-    // camera
-    this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
-    const sk = this.shake * 0.06;
-    this.camera.rotation.set(this.pitch + (Math.random() - 0.5) * sk, this.yaw + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
-    const fov = this.zoomed ? 42 : this.baseFov;
-    if (Math.abs(this.camera.fov - fov) > 0.1) {
-      this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 10);
-      this.camera.updateProjectionMatrix();
-    }
-    this.updateViewModel(dt, moving && this.onGround, sprint);
+    return { moving, sprint };
   }
 
   // Hold left to wind up in the direction you last moved the mouse, release to strike.
@@ -846,11 +893,109 @@ export class Player {
   }
 
   setWeapon(w) {
+    if (w !== 'bow') this.cancelAim();   // the volley is loosed with the bow
     if (this.weapon === w) return;
     this.weapon = w;
     this.swingT = -1;
     this.atk = null;
     this.drawT = 0;
+  }
+
+  // ---------- ducking and climbing ----------
+  // Hold C to duck: the head drops, the hitbox shrinks (arrows fly over it and a merlon covers it) and you slow down.
+  setDuck(on, dt) {
+    this.ducking = on;
+    const want = on ? 1 : 0;
+    this.duck += (want - this.duck) * Math.min(1, dt * 12);
+    if (Math.abs(this.duck - want) < 0.01) this.duck = want;
+    this.height = BODY.height - (BODY.height - BODY.duckHeight) * this.duck;
+    this.eye = BODY.eye - (BODY.eye - BODY.duckEye) * this.duck;
+  }
+
+  // Jump at a castle wall from outside and the hero scrambles up it: about a second and some stamina, and then they
+  // stand on the wall walk. Returns whether a climb began (false: nothing to climb, so the jump goes ahead).
+  tryClimb() {
+    const g = this.game;
+    if (this.mounted || this.drive || this.climb || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
+    const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
+    if (!this.onGround && this.pos.y - ground > 2.2) return false;
+    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height);
+    if (!l) return false;
+    if (this.stamina < BODY.climbStamina) { this.notify('Too tired to climb.'); this.sound('deny'); return true; }
+    this.stamina -= BODY.climbStamina;
+    this.climb = { t: 0, dur: 0.5 + (l.top - this.pos.y) * 0.08, x0: this.pos.x, y0: this.pos.y, z0: this.pos.z,
+      hx: l.hang.x, hz: l.hang.z, lx: l.land.x, lz: l.land.z, top: l.top, puff: 0 };
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.onGround = false;
+    this.dash = null;
+    this.cancelAim();
+    g.audio.play('thud', this.pos);
+    return true;
+  }
+
+  // In to the foot of the wall, up its face, then over the edge and onto the top.
+  updateClimb(dt) {
+    const g = this.game, c = this.climb;
+    c.t += dt;
+    const k = Math.min(1, c.t / c.dur);
+    const ease = (v) => v * v * (3 - 2 * v);
+    const peak = c.top + 0.35;
+    const slide = ease(Math.min(1, c.t / 0.18));
+    const up = ease(Math.min(1, k / 0.82));
+    let x = c.x0 + (c.hx - c.x0) * slide, z = c.z0 + (c.hz - c.z0) * slide;
+    let y = c.y0 + (peak - c.y0) * up;
+    if (k > 0.82) {
+      const o = ease((k - 0.82) / 0.18);
+      x = c.hx + (c.lx - c.hx) * o; z = c.hz + (c.lz - c.hz) * o;
+      y = peak + (c.top - peak) * o;
+    }
+    this.pos.set(x, y, z);
+    this.vel.set(0, 0, 0);
+    if ((c.puff -= dt) <= 0 && k < 0.85) {   // scrabbling at the stone
+      c.puff = 0.16;
+      g.fx.dust(new THREE.Vector3(c.hx, y - 0.4, c.hz), 2, 0.35);
+    }
+    if (k >= 1) {
+      this.pos.set(c.lx, c.top, c.lz);
+      this.vy = 0;
+      this.onGround = true;
+      this.climb = null;
+      this.climbCd = BODY.climbCooldown;
+      g.audio.play('thud', this.pos);
+    }
+  }
+
+  // ---------- placing the Ranger's volley ----------
+  // Hold Q: a circle on the ground follows the crosshair. Let go and the volley is loosed at it.
+  beginAim(slot) {
+    const g = this.game;
+    if (!this.alive || this.drive || this.climb || this.aiming) return;
+    if (this.staggerT > 0 || this.abilCd[slot] > 0) { g.audio.play('deny'); return; }
+    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false };
+    this.setWeapon('bow');
+  }
+
+  updateAim(dt, input) {
+    const g = this.game, a = this.aiming;
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || this.cls.q.id !== 'volley') { this.cancelAim(); return; }
+    a.t += dt;
+    const eyePos = new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z);
+    const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
+    a.at.copy(r.pos);
+    a.far = r.far;
+    g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
+    if (input.release('KeyQ')) {
+      const at = a.at.clone();
+      this.cancelAim();
+      this.useAbility(a.slot, input, at);
+    } else if (!input.down('KeyQ')) this.cancelAim();   // the menu opened or the window lost focus: never loose a volley by accident
+  }
+
+  cancelAim() {
+    if (!this.aiming) return;
+    this.aiming = null;
+    if (this.isLocal && this.game.aimRing) this.game.aimRing.hide();
   }
 
   // ---------- class abilities ----------
@@ -862,7 +1007,7 @@ export class Player {
 
   // Press Q (attack) or R (defence). The movement part happens here on your own screen at once; the rest is
   // worked out by whoever runs the battle.
-  useAbility(slot, input) {
+  useAbility(slot, input, at = null) {
     const g = this.game;
     const def = this.cls[slot];
     if (!def || !this.alive || this.drive) return;
@@ -896,16 +1041,21 @@ export class Player {
     const cam = this.camera.position.clone();
     if (this.netClient) {
       this.abilCd[slot] = def.cd * (this.cls.mods.cd || 1);
-      g.net.toHost({ a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 });
+      const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
+      if (at) msg.at = [at.x, at.y, at.z].map(r2);
+      g.net.toHost(msg);
       return;
     }
-    if (!g.abilities.use(this, slot, cam, dir)) { this.dash = null; this.castFlash = 0; }   // (use() starts the cooldown)
+    if (!g.abilities.use(this, slot, cam, dir, at)) { this.dash = null; this.castFlash = 0; }   // (use() starts the cooldown)
   }
 
   // ---------- steering a siege engine ----------
   beginDrive(e) {
     this.drive = e;
     this.atk = null; this.blocking = false; this.drawT = 0; this.dash = null; this.zoomed = false;
+    this.climb = null; this.climbing = false; this.climbHint = false;
+    this.cancelAim();
+    this.setDuck(false, 1);
     this.swingT = -1;
     this.vel.set(0, 0, 0);
     this.driveInput = null;
@@ -1104,6 +1254,8 @@ export class Player {
       this.hp = 0;
       this.alive = false;
       this.deaths++;
+      this.climb = null; this.climbing = false; this.climbHint = false;
+      this.cancelAim();
       if (this.viewModel) this.viewModel.visible = false;
       if (this.mounted) { this.mounted = false; this.horsePos.copy(this.pos); this.horseYaw = this.heading; this.rideSpeed = 0; this.radius = 0.4; }
       this.game.onPlayerKilled(attacker, this);

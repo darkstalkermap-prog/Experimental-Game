@@ -415,8 +415,11 @@ const END = {
 const lerp = (a, b, k) => a + (b - a) * k;
 const ease = (k) => k * k * (3 - 2 * k);
 
+// How deep a crouch goes (hips back, thighs forward, knees folded, body lowered and leaning in), at full crouch.
+const CROUCH = { hip: -1.45, knee: 2.0, drop: 0.5, back: 0.3, lean: 0.4, hipFwd: 0.25 };
+
 // Pose a soldier for this frame.
-// st: { phase, speed, moving, swingT, attackDir, stagger, mounted, blocking }
+// st: { phase, speed, moving, swingT, attackDir, stagger, mounted, blocking, crouch (0..1), climb (hauling up a wall), time }
 export function poseSoldier(m, st) {
   const sp = st.speed || 0;
   if (st.mounted) {
@@ -435,6 +438,19 @@ export function poseSoldier(m, st) {
     m.body.position.y = st.moving ? -Math.abs(Math.sin(st.phase)) * 0.04 : Math.sin((st.idle || 0) * 1.6) * 0.006;
     m.torso.rotation.x = st.moving ? Math.min(0.12, sp * 0.015) : 0;
   }
+  // ducking: hips dropped and set back, thighs forward, knees folded, leaning in. Walking crouched is a shuffle.
+  const cr = st.mounted ? 0 : st.crouch || 0, sc = m.body.scale.y;
+  if (cr > 0) {
+    const shuffle = st.moving ? Math.sin(st.phase) * Math.min(0.35, sp * 0.25) : 0;
+    m.hipL.rotation.x += (CROUCH.hip + shuffle - m.hipL.rotation.x) * cr;
+    m.hipR.rotation.x += (CROUCH.hip - shuffle - m.hipR.rotation.x) * cr;
+    m.kneeL.rotation.x += (CROUCH.knee - m.kneeL.rotation.x) * cr;
+    m.kneeR.rotation.x += (CROUCH.knee - m.kneeR.rotation.x) * cr;
+    m.body.position.y -= CROUCH.drop * cr * sc;
+    m.torso.rotation.x += CROUCH.lean * cr;
+  }
+  m.body.position.z = -CROUCH.back * cr * sc;
+  m.hipL.position.z = m.hipR.position.z = CROUCH.hipFwd * cr;
   const armSwing = st.moving && !st.mounted ? Math.sin(st.phase) * Math.min(0.5, sp * 0.1) : 0;
   // left arm: shield up in front, bow arm relaxed
   if (m.ranged) { m.shL.rotation.set(-0.25 + armSwing * 0.4, 0, 0.1); m.elL.rotation.x = -0.35; }
@@ -476,6 +492,19 @@ export function poseSoldier(m, st) {
   if (m.weapon) m.weapon.rotation.x = m.weaponTilt + tiltOff;
   m.shR.rotation.set(sh, 0, rz);
   m.elR.rotation.x = el;
+  if (st.climb && !st.mounted) {
+    // hauling up a wall: hands over each other above the head, feet scrabbling at the stone
+    const w = (st.time || 0) * 9;
+    m.shL.rotation.set(-2.7 + Math.sin(w) * 0.4, 0, 0.1);
+    m.shR.rotation.set(-2.7 - Math.sin(w) * 0.4, 0, -0.1);
+    m.elL.rotation.x = -0.3 - Math.max(0, Math.sin(w)) * 0.5;
+    m.elR.rotation.x = -0.3 - Math.max(0, -Math.sin(w)) * 0.5;
+    m.hipL.rotation.x = -0.5 + Math.sin(w + Math.PI) * 0.7;
+    m.hipR.rotation.x = -0.5 + Math.sin(w) * 0.7;
+    m.kneeL.rotation.x = 0.9 + Math.sin(w + Math.PI) * 0.6;
+    m.kneeR.rotation.x = 0.9 + Math.sin(w) * 0.6;
+    m.torso.rotation.x = 0.12;
+  }
 }
 
 // ---------------------------------------------------------------- horse

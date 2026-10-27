@@ -337,6 +337,7 @@ input.onLockChange = (locked) => {
     return;
   }
   lastUnlockAt = performance.now();
+  game.player.cancelAim();   // a volley being placed is dropped when the menu comes up
   if (!ui.shopOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
 };
 

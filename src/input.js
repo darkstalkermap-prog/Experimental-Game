@@ -4,6 +4,7 @@ export class Input {
     this.canvas = canvas;
     this.keys = new Set();
     this.pressed = new Set();   // keys pressed since last frame
+    this.up = new Set();        // keys let go since last frame
     this.mouse = { dx: 0, dy: 0, left: false, right: false, leftPressed: false, leftReleased: false, rightPressed: false, wheel: 0 };
     this.locked = false;
     this.enabled = true;
@@ -13,6 +14,7 @@ export class Input {
       mouse: { dx: 0, dy: 0, left: false, right: false, leftPressed: false, leftReleased: false, rightPressed: false, wheel: 0 },
       down: () => false,
       hit: () => false,
+      release: () => false,
     };
 
     window.addEventListener('keydown', (e) => {
@@ -22,7 +24,7 @@ export class Input {
       if (!this.keys.has(e.code)) this.pressed.add(e.code);
       this.keys.add(e.code);
     });
-    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => { if (this.keys.delete(e.code)) this.up.add(e.code); });
     window.addEventListener('blur', () => { this.keys.clear(); this.mouse.left = this.mouse.right = false; });
     window.addEventListener('mousemove', (e) => {
       if (!this.locked) return;
@@ -69,9 +71,11 @@ export class Input {
 
   down(code) { return this.keys.has(code); }
   hit(code) { return this.pressed.has(code); }
+  release(code) { return this.up.has(code); }
 
   endFrame() {
     this.pressed.clear();
+    this.up.clear();
     this.mouse.dx = this.mouse.dy = 0;
     this.mouse.leftPressed = this.mouse.leftReleased = this.mouse.rightPressed = false;
     this.mouse.wheel = 0;

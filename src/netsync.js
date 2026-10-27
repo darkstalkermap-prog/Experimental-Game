@@ -77,9 +77,11 @@ export class HostSync {
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
-    g.projectiles.fireArrow = (from, vel, team, dmg, owner) => {
-      fire(from, vel, team, dmg, owner);
-      this.shared.push({ k: 'arrow', p: v3(from), v: v3(vel), t: team });
+    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false) => {
+      fire(from, vel, team, dmg, owner, big);
+      const ev = { k: 'arrow', p: v3(from), v: v3(vel), t: team };
+      if (big) ev.b = 1;
+      this.shared.push(ev);
     };
     const spell = g.projectiles.fireSpell.bind(g.projectiles);
     g.projectiles.fireSpell = (kind, from, vel, team, dmg, owner, radius = 0) => {
@@ -126,7 +128,7 @@ export class HostSync {
         // class ability: the client has already moved itself; the host works out the rest
         if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r') && !p.drive) {
           p.mounted = !!d.m && p.hasHorse;
-          g.abilities.use(p, d.s, vec(d.f), vec(d.d));
+          g.abilities.use(p, d.s, vec(d.f), vec(d.d), Array.isArray(d.at) && d.at.length === 3 ? vec(d.at) : null);
         }
         break;
       case 'class': g.switchClass(p, String(d.cls)); break;
@@ -176,7 +178,7 @@ export class HostSync {
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
         r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
-        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0]),
+        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0, (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0)]),
       ev: this.shared,
     };
     this.shared = [];
@@ -330,7 +332,7 @@ export class ClientSync {
       if (CLASS_IDS[a[24]] && CLASS_IDS[a[24]] !== h.classId) h.adoptClass(CLASS_IDS[a[24]]);   // they changed class
       if (!h.interp) h.interp = new Interp();
       h.interp.push(a[1], a[2], a[3], a[11] ? a[12] : a[4], a[4]); // riders turn by their horse's heading
-      h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18] };
+      h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18], dk: a[26] & 1, cl: (a[26] >> 1) & 1 };
       const mv = a[11] ? a[13] : 0;
       h.netPose.vx = Math.sin(a[11] ? a[12] : a[4]) * mv;
       h.netPose.vz = Math.cos(a[11] ? a[12] : a[4]) * mv;
@@ -404,7 +406,7 @@ export class ClientSync {
     switch (ev.k) {
       case 'fx': if (g.fx[ev.f]) g.fx[ev.f](vec(ev.p), ...(ev.a || [])); break;
       case 'snd': g.audio.play(ev.n, ev.p ? vec(ev.p) : null); break;
-      case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null); break;
+      case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null, !!ev.b); break;
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;
       case 'spell': g.projectiles.fireSpell(ev.s, vec(ev.p), vec(ev.v), ev.t, 0, null, ev.r); break;
       case 'bolt': g.magic.showBolt(ev.pts.map(vec), ev.c); break;

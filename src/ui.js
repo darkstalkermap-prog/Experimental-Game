@@ -124,7 +124,7 @@ export class UI {
   updatePrompt() {
     const g = this.game;
     const p = g.player;
-    let text = null;
+    let text = null, promptKey = 'E';
     if (p.alive && !this.shopOpen) {
       if (p.drive) {
         text = p.drive.type === 'ram' ? 'Climb out · W/S roll · A/D turn · hold left click to batter' : 'Climb out · W/S roll · A/D turn · left click fires where you look';
@@ -134,12 +134,14 @@ export class UI {
         if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
         else if (e) text = e.abandoned ? `Take over the abandoned ${e.name.toLowerCase()}` : `Take the controls of your ${e.name.toLowerCase()}`;
         else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
+        else if (p.climbHint) { text = 'Climb the wall'; promptKey = 'Space'; }
       }
     }
-    if (text !== this.lastPrompt) {
+    if (text !== this.lastPrompt || promptKey !== this.lastPromptKey) {
       this.lastPrompt = text;
+      this.lastPromptKey = promptKey;
       $('prompt').classList.toggle('hidden', !text);
-      if (text) $('promptText').textContent = text;
+      if (text) { $('promptText').textContent = text; $('promptKey').textContent = promptKey; }
     }
     // command bar
     const grp = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
@@ -208,6 +210,7 @@ export class UI {
     this.shopOpen = open;
     $('shop').classList.toggle('hidden', !open);
     if (open) {
+      g.player.cancelAim();   // (a volley being placed is dropped, not loosed)
       this.toggleMap(false);
       this.showPause(false); // the shop always sits on top and takes the clicks
       g.paused = false;
@@ -683,7 +686,10 @@ export class UI {
       const sec = cd > 0 ? String(Math.ceil(cd)) : '';
       if (e.sec.textContent !== sec) e.sec.textContent = sec;
       e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
+      e.r.classList.toggle('aiming', !!p.aiming && p.aiming.slot === slot);
     }
+    const aim = !!p.aiming;
+    if (aim !== this.aimShown) { this.aimShown = aim; $('aimhint').classList.toggle('hidden', !aim); }
     this.buffT = (this.buffT || 0) - dt;
     if (this.buffT <= 0) {
       this.buffT = 0.12;

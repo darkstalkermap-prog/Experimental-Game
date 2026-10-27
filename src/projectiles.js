@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { allied } from './teams.js';
 
-const ARROW_SPEED = 52;
-const G_ARROW = 9.8;
+export const ARROW_SPEED = 52;
+export const G_ARROW = 9.8;
 const G_ROCK = 9.8;
 const MAX_STUCK = 240;
 
@@ -76,10 +76,12 @@ export class Projectiles {
     this.fireArrow(from, v, team, dmg, owner);
   }
 
-  fireArrow(from, vel, team, dmg, owner) {
+  // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands
+  fireArrow(from, vel, team, dmg, owner, big = false) {
     const mesh = this.makeArrowMesh();
     mesh.position.copy(from);
-    this.list.push({ kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh, life: 6 });
+    if (big) mesh.scale.setScalar(2.2);
+    this.list.push({ kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh, life: 6, big });
   }
 
   // Boulder that lands on `to` after `time` seconds.
@@ -194,6 +196,7 @@ export class Projectiles {
     this.game.scene.remove(p.mesh);
     this.list.splice(i, 1);
     this.game.audio.play('arrowHit', at);
+    if (p.big) this.game.fx.thud(at);
   }
 
   kill(i, p) {

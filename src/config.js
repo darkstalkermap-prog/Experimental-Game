@@ -143,6 +143,31 @@ export const PLAYER = {
   respawnPerDeath: 6,
 };
 
+// How a hero stands, ducks and climbs. A duck lowers the head and the hitbox (arrows fly over it, merlons cover it)
+// at the cost of speed. A hero scrambles up a wall from outside by jumping at it: the walls are 8 m high, far past a
+// jump, so the jump becomes a climb that takes about a second (and some stamina).
+export const BODY = {
+  height: 1.8, eye: 1.68,
+  duckHeight: 1.2, duckEye: 1.08, duckSpeed: 0.5,
+  climbMin: 2.0,      // a ledge this much higher than your feet is climbed rather than jumped (a jump gets you ~1.9 m)
+  climbMax: 9.6,
+  climbReach: 1.1,    // you must be this close to the wall face (from your edge)
+  climbStamina: 20,
+  climbCooldown: 0.7,
+};
+
+// The Ranger's Arrow Volley: hold Q to put a circle on the ground, let go and the arrows fall on it.
+export const VOLLEY = {
+  range: 62,          // how far away the circle can be put
+  radius: 6.5,
+  arrows: 18,
+  dmg: 0.6,           // of the Ranger's bow damage, per arrow
+  delay: 0.6,         // from letting go until the first arrow comes down out of the sky
+  span: 0.8,          // over how many seconds the arrows keep coming
+  fallH: 34, fallBack: 14,   // where the arrows start above and behind the target
+  aimed: 0.7,         // share of the arrows that pick a foe inside the circle (the rest fall at random)
+};
+
 export const TROOP_CAP = { start: 12, step: 6, max: 36 };
 
 // Formations for your troops when they follow you or hold a position.

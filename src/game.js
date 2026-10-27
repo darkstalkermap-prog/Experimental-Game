@@ -22,6 +22,7 @@ import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
+import { AimRing } from './aimring.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
 
@@ -77,6 +78,7 @@ export class Game {
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
     this.abilities = new Abilities(this);
+    this.aimRing = new AimRing(this);
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
@@ -991,7 +993,7 @@ export class Game {
     if (i.hit('KeyM')) this.ui.toggleMap();
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
-    if (i.hit('F3') || i.hit('KeyC')) this.localOrder('charge');
+    if (i.hit('F3')) this.localOrder('charge');
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
     if (i.hit('KeyF')) this.localFormation();
@@ -1162,6 +1164,8 @@ export class Game {
       if (this.simulating) this.updateTowers(c, dt);
     }
     this.fx.update(dt);
+    this.abilities.updateFx(dt);
+    this.aimRing.update(dt);
     this.magic.update(dt);
     this.grass.update(dt, this.camera.position);
     for (const c of this.castles) if (this.factions[c.team]) c.syncUpgrades(this.factions[c.team]);

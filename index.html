@@ -46,6 +46,8 @@
   @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
   .controls { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 14px; font-size: 15px; margin: 18px 0 8px; }
   .controls b { font-family: 'Cinzel', serif; font-size: 13px; white-space: nowrap; }
+  #controls .scroll { padding-bottom: 0; }
+  #controls .scroll > .row:last-child { position: sticky; bottom: 0; margin: 0; padding: 12px 0 22px; background: #d9c79c; }   /* Back stays in view however long the list grows */
   .howto { font-size: 15.5px; line-height: 1.4; }
   #play, #mpBtn { font-size: 22px; padding: 12px 48px; }
   #invite { display: flex; gap: 6px; max-width: 460px; margin: 10px auto 0; }
@@ -128,6 +130,8 @@
   .abil .cd { position: absolute; inset: 0; background: rgba(0,0,0,0.62); transform-origin: bottom; transform: scaleY(0); }
   .abil .sec { position: absolute; right: 6px; top: 4px; font-family: Cinzel, serif; font-size: 17px; color: #fff; text-shadow: 0 1px 3px #000; }
   .abil.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(224,180,76,0.35); }
+  .abil.aiming { border-color: #8fe88a; box-shadow: 0 0 12px rgba(143,232,138,0.7); }
+  #aimhint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 5px 14px; background: var(--panel); border: 1px solid #8fe88a; border-radius: 4px; font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; color: #d8ffd4; pointer-events: none; }
   #buffs { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
   #buffs span { background: rgba(0,0,0,0.5); border-left: 3px solid var(--gold); padding: 1px 8px; white-space: nowrap; }
 
@@ -166,7 +170,7 @@
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 58px; font-size: 13px; text-align: right; padding: 2px 8px; background: rgba(0,0,0,0.4); border-radius: 3px; text-shadow: 0 1px 2px #000; }
+  #hint { position: absolute; right: 16px; top: 58px; max-width: 280px; line-height: 1.35; font-size: 13px; text-align: right; padding: 2px 8px; background: rgba(0,0,0,0.4); border-radius: 3px; text-shadow: 0 1px 2px #000; }
 
   #factions { position: absolute; left: 16px; top: 12px; width: 350px; font-size: 13px; }
   .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 38px; gap: 6px; align-items: center; padding: 2px 0; }
@@ -397,12 +401,13 @@
   <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
-  <div id="hint">Esc: menu · B: shop · M: map · Q / R: abilities · O: orders · Tab: scores</div>
+  <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
+  <div id="hint">Esc: menu · B: shop · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
   <div id="banner"><h2></h2><p></p></div>
   <div id="toasts"></div>
-  <div id="prompt" class="hidden"><kbd>E</kbd> <span id="promptText"></span></div>
+  <div id="prompt" class="hidden"><kbd id="promptKey">E</kbd> <span id="promptText"></span></div>
   <div id="command" class="panel">
     <span class="cg"><kbd>G</kbd> <b id="cmdGroup">Everyone</b></span>
     <span class="cg"><kbd>F</kbd> <b id="cmdForm">Line</b></span>
@@ -502,13 +507,15 @@
     <div class="controls">
       <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
       <b>WASD</b><span>Move · Shift sprint · Space jump</span>
+      <b>Space at a wall</b><span>Jump at a castle wall to climb onto the wall walk</span>
+      <b>C (hold)</b><span>Duck: harder to hit, slower</span>
       <b>Mouse</b><span>Look</span>
       <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
       <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
       <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
       <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
-      <b>Q</b><span>Class ability: attack</span>
+      <b>Q</b><span>Class ability: attack (Ranger: hold to aim the circle, let go to fire)</span>
       <b>R</b><span>Class ability: defence</span>
       <b>H</b><span>Healing draught</span>
       <b>E</b><span>Gate lever · take over an empty siege engine · mount / call your horse</span>
@@ -520,7 +527,7 @@
       <b>Tab</b><span>Scoreboard</span>
       <b>F1 / Z</b><span>Your army: follow me</span>
       <b>F2 / X</b><span>Your army: hold here</span>
-      <b>F3 / C</b><span>Your army: charge</span>
+      <b>F3</b><span>Your army: charge</span>
       <b>F4 / V</b><span>Your army: defend castle</span>
       <b>T</b><span>Your army: assault target castle</span>
       <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
