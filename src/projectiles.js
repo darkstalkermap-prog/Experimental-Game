@@ -108,7 +108,8 @@ export class Projectiles {
       const p = this.list[i];
       p.life -= dt;
       const grav = p.spell ? 0 : p.kind === 'arrow' ? G_ARROW : G_ROCK;
-      const steps = p.kind === 'arrow' || p.spell ? 3 : 2;
+      // short enough steps that a fast arrow can never jump over a 0.5 m merlon, even on a slow frame
+      const steps = Math.min(12, Math.max(p.kind === 'arrow' || p.spell ? 3 : 2, Math.ceil(p.vel.length() * dt / 0.25)));
       const h = dt / steps;
       let done = false;
       for (let s = 0; s < steps && !done; s++) {

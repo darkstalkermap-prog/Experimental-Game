@@ -8,6 +8,7 @@ import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
 import { setMapSize, WORLD, MAP_SIZES } from './config.js';
+import { settings, saveSettings, sensitivityOf } from './settings.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,6 +31,16 @@ try { mapSize = localStorage.getItem('cw-map') || 'medium'; } catch (e) { /* sto
 if (!MAP_SIZES[mapSize]) mapSize = 'medium';
 
 let game;
+// push the saved sensitivity and field of view into a freshly built game
+function applySettings() {
+  if (!game) return;
+  game.player.sensitivity = sensitivityOf(settings.sens);
+  game.player.baseFov = settings.fov;
+}
+audio.vol.master = settings.master / 100;
+audio.vol.music = settings.music / 100;
+audio.vol.sfx = settings.sfx / 100;
+
 function buildGame(size) {
   setMapSize(size);
   game = new Game(renderer, ui, audio, input);
@@ -37,6 +48,7 @@ function buildGame(size) {
   game.mapBuiltFor = size;
   ui.mapBg = null;
   window.__game = game; // handy for debugging from the console
+  applySettings();
 }
 try {
   buildGame(mapSize);
@@ -101,6 +113,7 @@ function begin(diff, setup = null, map = mapSize) {
   ensureMap(map);
   if (net) game.net = net;
   audio.init();
+  audio.startMusic();
   $('menu').classList.add('hidden');
   $('lobby').classList.add('hidden');
   ui.showHud();
@@ -225,48 +238,112 @@ $('joinBtn').addEventListener('click', async () => {
 
 $('leaveLobby').addEventListener('click', () => location.reload());
 
-// clicking anywhere on the pause screen resumes
-$('pause').addEventListener('click', (e) => {
-  if (e.target.closest('input, label, .quality')) return;
+// ---------------- game menu (Esc), options and controls ----------------
+const shown = (id) => !$(id).classList.contains('hidden');
+let lastUnlockAt = -1e9;
+
+function openPause(hint = '') {
+  if (game.state !== 'playing') return;
+  game.paused = true;
+  $('pauseNote').textContent = game.mode === 'single' ? '' : 'The battle goes on while you are in the menu.';
+  $('pauseHint').textContent = hint;
+  $('quitConfirm').classList.add('hidden');
+  ui.showPause(true);
+  input.unlock();
+}
+function closePause() {
+  $('options').classList.add('hidden');
+  $('controls').classList.add('hidden');
   $('pauseHint').textContent = '';
+  ui.showPause(false);
+  game.paused = false;
   input.lock();
-});
+}
+
+$('resume').addEventListener('click', closePause);
+$('pauseOptions').addEventListener('click', () => $('options').classList.remove('hidden'));
+$('pauseControls').addEventListener('click', () => $('controls').classList.remove('hidden'));
+$('menuOptions').addEventListener('click', () => $('options').classList.remove('hidden'));
+$('menuControls').addEventListener('click', () => $('controls').classList.remove('hidden'));
+$('optionsBack').addEventListener('click', () => $('options').classList.add('hidden'));
+$('controlsBack').addEventListener('click', () => $('controls').classList.add('hidden'));
+$('quitBtn').addEventListener('click', () => $('quitConfirm').classList.remove('hidden'));
+$('quitNo').addEventListener('click', () => $('quitConfirm').classList.add('hidden'));
+$('quitYes').addEventListener('click', () => location.reload());
+
+// sliders in the options panel
+const SLIDERS = [
+  ['optMaster', 'master', (v) => audio.setVolume('master', v / 100), '%'],
+  ['optMusic', 'music', (v) => audio.setVolume('music', v / 100), '%'],
+  ['optSfx', 'sfx', (v) => audio.setVolume('sfx', v / 100), '%'],
+  ['optSens', 'sens', (v) => { game.player.sensitivity = sensitivityOf(v); }, '%'],
+  ['optFov', 'fov', (v) => { game.player.baseFov = v; }, '°'],
+];
+for (const [id, key, apply, unit] of SLIDERS) {
+  const el = $(id), out = el.nextElementSibling;
+  el.value = settings[key];
+  out.textContent = settings[key] + unit;
+  el.addEventListener('input', () => {
+    settings[key] = Number(el.value);
+    out.textContent = settings[key] + unit;
+    apply(settings[key]);
+    saveSettings();
+  });
+}
+
 input.onLockFail = () => {
   if (game.state !== 'playing' || ui.shopOpen) return;
-  game.paused = true;
-  ui.showPause(true);
-  $('pauseHint').textContent = 'The browser needs one more click to capture the mouse. Click anywhere to continue.';
+  openPause('Your browser needs one more click to capture the mouse. Press Resume.');
 };
-$('shopClose').addEventListener('click', () => ui.toggleShop(false));
-$('again').addEventListener('click', () => location.reload());
-$('sens').addEventListener('input', (e) => { game.player.sensitivity = 0.0008 + (e.target.value / 100) * 0.004; });
-$('vol').addEventListener('input', (e) => { audio.volume = e.target.value / 100; if (audio.master) audio.master.gain.value = audio.volume; });
-
 input.onLockChange = (locked) => {
   if (game.state !== 'playing') return;
-  if (game.mode !== 'single' && !locked && !ui.shopOpen) { game.paused = true; ui.showPause(true); return; }
   if (locked) {
+    $('options').classList.add('hidden');
+    $('controls').classList.add('hidden');
     game.paused = false;
     ui.showPause(false);
-  } else if (!ui.shopOpen) {
-    game.paused = true;
-    ui.showPause(true);
+    return;
   }
+  lastUnlockAt = performance.now();
+  if (!ui.shopOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
 };
+
+$('shopClose').addEventListener('click', () => ui.toggleShop(false));
+$('again').addEventListener('click', () => location.reload());
 
 // Clicking the game view while playing re-captures the mouse.
 renderer.domElement.addEventListener('click', () => {
-  if (game.state === 'playing' && !input.locked && !ui.shopOpen) input.lock();
+  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !shown('pause')) input.lock();
 });
 
-// While the shop is open, B / Escape closes it.
+// Escape: close whatever is open on top, else open or close the game menu.
+// (Browsers hide Esc from the page while the mouse is captured; they release it, which opens the menu above.)
 addEventListener('keydown', (e) => {
-  if (ui.shopOpen && (e.code === 'KeyB' || e.code === 'Escape' || e.code === 'KeyO')) {
+  if (e.code === 'Escape' && !e.repeat) {
+    if (shown('options')) { $('options').classList.add('hidden'); return; }
+    if (shown('controls')) { $('controls').classList.add('hidden'); return; }
+    if (ui.shopOpen) { input.pressed.delete(e.code); ui.toggleShop(false); return; }
+    if (game.state !== 'playing') return;
+    if (performance.now() - lastUnlockAt < 350) return;   // the release of the mouse has just opened the menu
+    if (shown('pause')) closePause(); else openPause();
+    return;
+  }
+  if (ui.shopOpen && (e.code === 'KeyB' || e.code === 'KeyO')) {
     e.preventDefault();
     input.pressed.delete(e.code); // don't let the game loop re-open it this frame
     ui.toggleShop(false);
   }
 });
+
+// Browsers only allow sound after a click or key press: the music starts with the first one.
+function wakeAudio() {
+  audio.init();
+  audio.startMusic();
+  removeEventListener('pointerdown', wakeAudio);
+  removeEventListener('keydown', wakeAudio);
+}
+addEventListener('pointerdown', wakeAudio);
+addEventListener('keydown', wakeAudio);
 
 const clock = new THREE.Clock();
 let frameErrors = 0;

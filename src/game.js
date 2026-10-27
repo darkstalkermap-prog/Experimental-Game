@@ -3,14 +3,14 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, ROUNDS, START_GOLD, DIFFICULTY, BOUNTY,
-  UNIT_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
 import { materials } from './materials.js';
 import { Castle } from './castle.js';
-import { Unit, makeRaiderStats } from './units.js';
+import { Unit } from './units.js';
 import { SiegeEngine } from './siege.js';
 import { Projectiles } from './projectiles.js';
 import { Player } from './player.js';
@@ -22,7 +22,7 @@ import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { prewarmSoldier } from './models.js';
-import { allied, alliance, setAlliance } from './teams.js';
+import { allied, setSides } from './teams.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -116,16 +116,19 @@ export class Game {
   start(difficulty = 'normal', setup = null) {
     setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
     this.mode = setup.mode;
-    // co-op: every human house fights on one side against the AI lords and the raiders
+    // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
+    // so the game becomes two teams of two: Blue + Red against Green + Gold.
     this.coop = !!setup.coop && setup.players.length > 1;
-    setAlliance(this.coop ? setup.players.map((p) => p.team) : []);
+    const humanTeams = setup.players.map((p) => p.team);
+    this.sides = !this.coop ? [] : humanTeams.length >= 4 ? [[0, 1], [2, 3]] : [humanTeams];
+    setSides(this.sides);
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
     this.state = 'playing';
     this.round = 0;
     this.phase = 'prep';
-    this.phaseT = ROUNDS.firstPrep;
-    this.waveT = 0;
+    this.phaseT = WAVES.firstPrep;
+    this.spawnQueue = [];
 
     const lp = this.player;
     lp.team = setup.localTeam;
@@ -144,7 +147,7 @@ export class Game {
         team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         heroLv: { vitality: 0, strength: 0, armor: 0 }, hero: human, heroDeaths: 0, respawnT: 0,
-        eliminated: false, kills: 0, siegeTarget: null, formation: 'line',
+        eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
       };
     });
     if (this.mode !== 'single') {
@@ -168,18 +171,15 @@ export class Game {
     }
     if (this.mode === 'host') this.sync = new HostSync(this);
     if (this.mode === 'client') this.sync = new ClientSync(this);
-    this.localFaction.siegeTarget = this.castles[(lp.team + 2) % 4];
     this.warmup();
     // prepare every soldier look in the background (a few ms per frame) so new arrivals never stutter
     this.warmQueue = [];
     const factionTypes = ['swordsman', 'spearman', 'archer', 'knight', 'horseman', 'lancer', 'longbowman', 'giant'];
-    const raiderTypes = ['raider', 'raiderArcher', 'brute', 'raiderRider', 'shaman', 'warlord', 'giant'];
     for (let v = 0; v < 6; v++) {
-      for (const t of raiderTypes) this.warmQueue.push([t, RAIDER_TEAM, v]);
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
     this.audio.play('horn');
-    this.ui.banner('Prepare for battle', `${ROUNDS.firstPrep} seconds to recruit and upgrade. B opens the shop${this.mode === 'client' ? '' : ', Enter starts early'}.`);
+    this.ui.banner('Prepare for battle', `${WAVES.firstPrep} seconds to upgrade. Then a new army marches from every castle every ${WAVES.interval} seconds. B opens the shop${this.mode === 'client' ? '' : ', Enter starts early'}.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -229,15 +229,18 @@ export class Game {
 
   trainMult(f) { return 1 + 0.15 * f.training; }
 
-  recruit(f, type) {
+  // Bought troops join the castle garrison (they defend and man the walls). Wave soldiers (lane = true) march out.
+  recruit(f, type, lane = null) {
     const c = f.castle;
     const p = c.spawnPoint.clone();
     p.x += (Math.random() - 0.5) * 6;
     p.z += (Math.random() - 0.5) * 6;
     const t = UNIT_TYPES[type];
-    const k = this.trainMult(f);
+    const k = lane ? this.waveScale(f) : this.trainMult(f);
     const u = new Unit(this, type, f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
     u.homeCastle = c;
+    u.lane = !!lane;
+    if (lane) u.structMult *= 1 + WAVES.siegeGrowth * Math.max(0, this.round - 1);   // later armies break gates faster
     u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
     u.setOrder('defend');
     this.units.push(u);
@@ -259,26 +262,49 @@ export class Game {
     for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant) n++;
     return n;
   }
+  // soldiers marching out with the waves, and bought troops staying home
+  laneCount(team) {
+    let n = 0;
+    for (const u of this.units) if (u.alive && u.team === team && u.lane) n++;
+    return n;
+  }
+  garrisonCount(team) {
+    let n = 0;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.lane) n++;
+    return n;
+  }
   siegeCount(team) { return this.siege.filter((s) => s.alive && s.team === team).length; }
 
+  // The castle a house's army is marching on: the one it was told to attack, otherwise its lane partner.
+  // Odd waves pair Blue-Green and Red-Gold, even waves Blue-Gold and Red-Green, so every wave meets one
+  // coming the other way and the fronts rotate round the map. Fallen or allied partners are skipped.
   siegeTarget(f) {
     if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
+    f.siegeTarget = null;
+    const pairs = (this.round || 1) % 2 ? [[0, 2], [1, 3]] : [[0, 3], [1, 2]];
+    const partner = pairs.find((pr) => pr.includes(f.team)).find((t) => t !== f.team);
+    const open = (c) => c && !c.fallen && !allied(c.team, f.team);
+    if (open(this.castles[partner])) return this.castles[partner];
     let best = null, bd = Infinity;
     for (const c of this.castles) {
-      if (c.fallen || allied(c.team, f.team)) continue;
+      if (!open(c)) continue;
       const d = c.center.distanceTo(f.castle.center);
-      if (d < bd) { bd = d; best = c; }
+      if (d < bd - 0.01) { bd = d; best = c; }
     }
-    f.siegeTarget = best;
     return best;
   }
-  targetName(f) { const t = this.siegeTarget(f); return t ? this.factions[t.team].name : 'none'; }
+  targetName(f) {
+    const t = this.siegeTarget(f);
+    return t ? this.factions[t.team].name + (f.siegeTarget ? '' : ' (auto)') : 'none';
+  }
 
   buildSiege(f, type) {
     const c = f.castle;
     const p = c.gateOut.clone().add(c.dirToWorld(0, 4));
     p.x += (Math.random() - 0.5) * 4;
-    const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f));
+    const grow = 1 + WAVES.siegeGrowth * Math.max(0, this.round - 3);   // engines built later hit harder
+    const d = SIEGE_TYPES[type];
+    const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f), { dmg: Math.round(d.dmg * grow), hp: Math.round(d.hp * Math.min(2, 1 + 0.015 * this.round)) });
     this.siege.push(s);
     return s;
   }
@@ -295,12 +321,6 @@ export class Game {
       if (!found && u.alive && !allied(u.team, team) && Math.hypot(u.pos.x - p.x, u.pos.z - p.z) < r) found = true;
     });
     return found;
-  }
-
-  raidersNear(castle, r) {
-    let n = 0;
-    for (const u of this.units) if (u.alive && u.team === RAIDER_TEAM && Math.hypot(u.pos.x - castle.center.x, u.pos.z - castle.center.z) < r) n++;
-    return n;
   }
 
   siegeAt(p, team, pad = 0.3) {
@@ -495,7 +515,7 @@ export class Game {
   onUnitKilled(u, attacker) {
     const by = attacker && attacker.team !== undefined ? attacker.team : -1;
     const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
-    if (by >= 0 && !allied(by, u.team)) this.credit(by, u.team === RAIDER_TEAM ? Math.round(bounty * (1 + this.round * 0.08)) : bounty, u.chest(new THREE.Vector3()));
+    if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
     if (attacker && attacker.gainXp && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
@@ -546,45 +566,72 @@ export class Game {
     for (const p of castle.posts) if (p.occupant) p.occupant.leavePost();
   }
 
-  // ---------------- rounds ----------------
+  // ---------------- army waves ----------------
+  // Like the creep waves of a MOBA: once the preparation time is over, every castle that still stands sends a new
+  // wave of soldiers marching out on a fixed timer, for the rest of the game.
+
+  // how tough this house's wave soldiers are: drill upgrades, and a little more with every wave
+  waveScale(f) {
+    return this.trainMult(f) * (1 + WAVES.growth * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
+  }
+
+  waveList(f) {
+    const w = this.round;
+    // four soldiers at first, one more every two waves, in a steady mix of swordsmen, spearmen and archers
+    const mix = ['swordsman', 'swordsman', 'spearman', 'archer', 'archer', 'swordsman', 'spearman', 'archer'];
+    const n = Math.min(14, 4 + Math.floor((w - 1) / 2));
+    const list = [];
+    for (let i = 0; i < n; i++) list.push(mix[i % mix.length]);
+    if (w >= 7 && w % 2 === 1) list.push('horseman');
+    if (w >= 12 && w % 2 === 0) list.push('knight');
+    // upgrades: bigger barracks send more men, elite levies add knights and riders
+    const barracks = Math.round((f.troopCap - TROOP_CAP.start) / TROOP_CAP.step);
+    for (let i = 0; i < barracks; i++) list.push(i % 2 ? 'archer' : 'swordsman');
+    if (f.levies >= 1) list.push('knight');
+    if (f.levies >= 2) list.push('horseman');
+    if (f.levies >= 3) list.push('lancer');
+    if (!f.isPlayer) {
+      // difficulty decides how big the rival lords' waves are
+      const m = Math.max(3, Math.round(list.length * this.diff.wave));
+      while (list.length > m) list.pop();
+      while (list.length < m) list.push(list[Math.floor(Math.random() * 4)]);
+    }
+    return list;
+  }
+
+  queueWave(f) {
+    const free = Math.max(0, f.troopCap - this.laneCount(f.team) - this.spawnQueue.filter((q) => q.lane && q.team === f.team).length);
+    this.waveList(f).slice(0, free).forEach((type, i) => {
+      this.spawnQueue.push({ t: i * WAVES.spread + Math.random() * 0.25, lane: true, type, team: f.team });
+    });
+    // battering rams and catapults roll out with some of the waves
+    const r = this.round;
+    if (r >= WAVES.ramEvery && r % WAVES.ramEvery === 0) this.spawnQueue.push({ t: 2, engine: 'ram', team: f.team });
+    if (r >= 5 && r % WAVES.catapultEvery === 5 % WAVES.catapultEvery) this.spawnQueue.push({ t: 3, engine: 'catapult', team: f.team });
+  }
+
   startWave() {
     this.round++;
     this.phase = 'wave';
-    this.waveT = 0;
-    this.audio.play('horn', this.camera.position);
+    this.phaseT = WAVES.interval;
     const r = this.round;
-    const boss = r % 5 === 0;
-    this.bannerAll(`Round ${r}`, r % 10 === 0 ? 'The raiders have brought GIANTS!' : boss ? 'A Raider Warlord leads this horde!' : r === ROUNDS.warRound ? 'The rival lords declare war!' : 'Raiders approach!');
-    for (const c of this.castles) {
-      if (c.fallen) continue;
-      const n = Math.round(Math.min(28, 3 + r * 2.2) * this.diff.wave);
-      const list = [];
-      const archers = r >= 2 ? Math.floor(n * 0.25) : 0;
-      const brutes = r >= 4 ? Math.floor(n * 0.12) + Math.floor((r - 4) / 3) : 0;
-      const riders = r >= 5 ? Math.floor(n * 0.15) : 0;
-      const shamans = r >= 6 ? 1 + Math.floor(n * 0.06) : 0;
-      for (let i = 0; i < n; i++) {
-        const k = i - archers - brutes - riders;
-        list.push(i < archers ? 'raiderArcher' : i < archers + brutes ? 'brute' : i < archers + brutes + riders ? 'raiderRider' : k < shamans ? 'shaman' : 'raider');
-      }
-      if (boss) list.push('warlord');
-      if (r % 10 === 0) list.push('giant');
-      const ang = Math.atan2(c.center.x, c.center.z);
-      list.forEach((type, i) => {
-        const side = i % 2 ? 1 : -1;
-        const a = ang + side * (0.55 + Math.random() * 0.15);
-        const rad = WORLD.half - 34 + Math.random() * 10;
-        const p = new THREE.Vector3(Math.sin(a) * rad + (Math.random() - 0.5) * 8, 0, Math.cos(a) * rad + (Math.random() - 0.5) * 8);
-        this.spawnQueue.push({ t: i * 0.35 + Math.random() * 0.5, type, pos: p, castle: c });
-      });
-      if (r >= 4 && r % 3 === 1) this.spawnQueue.push({ t: 2, siege: 'ram', pos: this.edgePoint(ang, 0.6), castle: c });
-      if (r >= 7 && r % 2 === 1) this.spawnQueue.push({ t: 3, siege: 'catapult', pos: this.edgePoint(ang, -0.6), castle: c });
+    for (const f of this.factions) {
+      if (f.eliminated || f.castle.fallen) continue;
+      this.credit(f.team, WAVES.wage(r));
+      this.queueWave(f);
     }
-  }
-
-  edgePoint(ang, off) {
-    const a = ang + off;
-    return new THREE.Vector3(Math.sin(a) * (WORLD.half - 40), 0, Math.cos(a) * (WORLD.half - 40));
+    // soldiers who are still alive learn from every wave they live through
+    for (const u of this.units) if (u.alive && !u.isHero && !u.isGiant) u.gainXp(3);
+    for (const h of this.humans) h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5);
+    if (r === 1) {
+      this.audio.play('horn', this.camera.position);
+      this.bannerAll('The battle begins!', `A new army marches from every castle every ${WAVES.interval} seconds.`);
+    } else if (r % 10 === 0) {
+      this.audio.play('horn', this.camera.position);
+      this.bannerAll(`Wave ${r}`, 'The armies grow stronger. Hold your castle, break theirs.');
+    } else if (r % WAVES.ramEvery === 0) {
+      this.announce('Battering rams roll out with the armies.');
+    }
   }
 
   processSpawns(dt) {
@@ -593,39 +640,21 @@ export class Game {
       s.t -= dt;
       if (s.t > 0) continue;
       this.spawnQueue.splice(i, 1);
-      if (s.castle.fallen) continue;
-      if (s.siege) {
-        const k = 1 + 0.1 * this.round;
-        const e = new SiegeEngine(this, s.siege, RAIDER_TEAM, s.pos, s.castle, { hp: Math.round((s.siege === 'ram' ? 700 : 450) * k) });
-        this.siege.push(e);
+      const f = this.factions[s.team];
+      if (f.castle.fallen || f.eliminated) continue;
+      if (s.engine) {
+        if (this.siegeCount(f.team) < WAVES.siegeLimit && this.siegeTarget(f)) this.buildSiege(f, s.engine);
         continue;
       }
-      const u = new Unit(this, s.type, RAIDER_TEAM, s.pos, makeRaiderStats(s.type, this.round, this.diff));
-      u.setOrder('assault', s.castle);
-      this.units.push(u);
+      const u = this.recruit(f, s.type, true);
+      const target = this.siegeTarget(f);
+      if (target) u.setOrder('assault', target);
     }
   }
 
-  endWave() {
-    this.phase = 'prep';
-    this.phaseT = ROUNDS.prep;
-    const bonus = ROUNDS.survivalBonus(this.round);
-    for (const f of this.factions) if (!f.eliminated) this.credit(f.team, bonus);
-    this.bannerAll(`Round ${this.round} survived`, `+${bonus} gold. Next wave in ${ROUNDS.prep}s`);
-    for (const h of this.humans) h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 10);
-    // every soldier who lived through the wave learns from it
-    for (const u of this.units) if (u.alive && u.team !== RAIDER_TEAM && !u.isHero) u.gainXp(10);
-  }
-
-  updateRounds(dt) {
-    if (this.phase === 'prep') {
-      this.phaseT -= dt;
-      if (this.phaseT <= 0) this.startWave();
-    } else {
-      this.waveT += dt;
-      const raiders = this.units.some((u) => u.alive && u.team === RAIDER_TEAM) || this.siege.some((s) => s.alive && s.team === RAIDER_TEAM);
-      if ((!raiders && this.spawnQueue.length === 0) || this.waveT > ROUNDS.maxWaveTime) this.endWave();
-    }
+  updateWaves(dt) {
+    this.phaseT -= dt;
+    if (this.phaseT <= 0) this.startWave();
   }
 
   // ---------------- orders ----------------
@@ -646,7 +675,8 @@ export class Game {
       if (!data) return;
       label = `Assault ${this.factions[data.team].name}!`;
     } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
-    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
+    // ordered home, wave soldiers join the garrison
+    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; if (cmd === 'defend') u.lane = false; });
     p.notify(`${GROUP_NAMES[group]}: ${label}`);
     p.lastOrder = cmd;
     p.sound('order');
@@ -675,7 +705,7 @@ export class Game {
     const f = this.localFaction;
     const keys = Object.keys(FORMATIONS);
     const next = keys[(keys.indexOf(f.formation || 'line') + 1) % keys.length];
-    if (this.mode === 'client') { f.formation = next; this.net.toHost({ a: 'formation', f: next }); this.ui.toast(`Formation: ${FORMATIONS[next].name}`); return; }
+    if (this.mode === 'client') { f.formation = next; this.localPickUntil = this.time + 2; this.net.toHost({ a: 'formation', f: next }); this.ui.toast(`Formation: ${FORMATIONS[next].name}`); return; }
     this.setFormation(this.localTeam, next);
   }
 
@@ -781,8 +811,8 @@ export class Game {
   }
 
   setSiegeTarget(castle) {
-    this.localFaction.siegeTarget = castle;
-    if (this.mode === 'client') this.net.toHost({ a: 'target', team: castle.team });
+    this.localFaction.siegeTarget = castle;   // null = let the lanes decide
+    if (this.mode === 'client') { this.localPickUntil = this.time + 2; this.net.toHost({ a: 'target', team: castle ? castle.team : -1 }); }
   }
 
   handleInput() {
@@ -858,17 +888,10 @@ export class Game {
     if (this.state !== 'playing') return;
     const left = this.factions.filter((f) => !f.eliminated);
     const humansLeft = left.filter((f) => f.isPlayer);
-    if (this.coop) {
-      const allies = this.factions.filter((f) => alliance.has(f.team));
-      const rivals = this.factions.filter((f) => !alliance.has(f.team));
-      if (allies.every((f) => f.eliminated)) this.endGame(-1, 'coop-lost');
-      else if (rivals.length && rivals.every((f) => f.eliminated)) this.endGame('alliance');
-    } else if (this.mode === 'single') {
-      if (this.localFaction.eliminated) this.endGame(left.length === 1 ? left[0].team : -1);
-      else if (left.length === 1) this.endGame(left[0].team);
-    } else if (left.length <= 1 || humansLeft.length === 0) {
-      this.endGame(left.length === 1 ? left[0].team : -1);
-    }
+    if (!left.length) this.endGame(-1);
+    else if (left.every((f) => allied(f.team, left[0].team))) this.endGame(left[0].team); // one side is left standing
+    else if (this.coop && !humansLeft.length) this.endGame(-1, `Your alliance has fallen. You held out for ${this.round} waves together.`);
+    else if (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length) this.endGame(-1);
   }
 
   eliminate(f) {
@@ -886,8 +909,7 @@ export class Game {
   finish(winner, reason = '') {
     if (this.state === 'over') return;
     this.state = 'over';
-    if (reason === 'coop-lost') reason = `All allied castles have fallen. You held out for ${this.round} rounds together.`;
-    const won = winner === this.localTeam || (winner === 'alliance' && alliance.has(this.localTeam));
+    const won = winner >= 0 && allied(winner, this.localTeam);
     this.audio.play(won ? 'victory' : 'defeat');
     this.input.unlock();
     this.ui.gameOver(won, winner, reason);
@@ -909,8 +931,26 @@ export class Game {
     this.announce(`${p.name} left. An AI lord takes over ${f.name}.`, f.team);
   }
 
+  // How tense the music should be: calm while preparing, building as enemies come close.
+  musicMood() {
+    if (this.state === 'menu' || this.state === 'loading') return 0.12;
+    if (this.state === 'over') return 0.05;
+    const p = this.player;
+    let mood = this.phase === 'prep' ? 0.1 : 0.3;
+    if (p.alive) {
+      let enemies = 0;
+      this.grid.query(p.pos.x, p.pos.z, 45, (u) => { if (u.alive && !allied(u.team, p.team)) enemies++; });
+      mood += Math.min(0.5, enemies * 0.07);
+      if (this.time - p.lastHurt < 5) mood += 0.2;
+    }
+    if (this.enemyNear(this.localFaction.castle.gatePos, 25, this.localTeam)) mood += 0.2;   // an army at your gate
+    return Math.min(1, mood);
+  }
+
   // ---------------- main loop ----------------
   update(dt) {
+    this.moodT = (this.moodT || 0) - dt;
+    if (this.moodT <= 0) { this.moodT = 0.4; this.audio.setMusicIntensity(this.musicMood()); }
     if (this.state === 'loading' || this.state === 'menu') {
       this.menuCamera(dt);
       this.grass.update(dt, this.camera.position);
@@ -958,7 +998,7 @@ export class Game {
     this.grass.update(dt, this.camera.position);
 
     if (this.simulating && this.state === 'playing') {
-      this.updateRounds(dt);
+      this.updateWaves(dt);
       this.processSpawns(dt);
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       this.updateHeroes(dt);
@@ -1021,7 +1061,7 @@ export class Game {
     const t = this.menuCamT;
     this.camera.position.set(c.center.x + Math.sin(t) * 48, c.center.y + 30, c.center.z + Math.cos(t) * 48);
     this.camera.lookAt(c.center.x, c.center.y + 4, c.center.z);
-    if (this.camera.fov !== 75) { this.camera.fov = 75; this.camera.updateProjectionMatrix(); }
+    if (this.camera.fov !== this.player.baseFov) { this.camera.fov = this.player.baseFov; this.camera.updateProjectionMatrix(); }
   }
 
   menuCamera(dt) {

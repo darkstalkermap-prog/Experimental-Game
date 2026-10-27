@@ -130,7 +130,7 @@ export class HostSync {
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
-      case 'target': if (g.castles[d.team]) f.siegeTarget = g.castles[d.team]; break;
+      case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
         if (d.target >= 0 && g.castles[d.target]) f.siegeTarget = g.castles[d.target];
         if (['follow', 'hold', 'charge', 'defend', 'assault'].includes(d.cmd) && (d.cmd !== 'hold' || d.hold)) g.order(p.team, d.cmd, d.group || 'all', d.hold);
@@ -149,7 +149,7 @@ export class HostSync {
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
-          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0, u.rank];
+          DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0, u.rank | (u.lane ? 8 : 0)];
         if (u.isHero) a.push(u.name);
         return a;
       }),
@@ -158,7 +158,7 @@ export class HostSync {
       c: g.castles.map((c) => c.netState()),
       f: g.factions.map((f) => [Math.floor(f.gold), f.troopCap, f.training, f.eliminated ? 1 : 0, f.kills, f.heroDeaths,
         r1(f.respawnT), f.siegeTarget ? f.siegeTarget.team : -1, f.heroLv.vitality, f.heroLv.strength, f.heroLv.armor,
-        f.earned, f.isPlayer ? 1 : 0, f.lord, f.name, f.formation]),
+        f.earned, f.isPlayer ? 1 : 0, f.lord, f.name, f.formation, f.levies]),
       h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
         h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
         r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
@@ -209,7 +209,8 @@ export class ClientSync {
     // units
     const seen = new Set();
     for (const a of s.u) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, rank, name] = a;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, rankLane, name] = a;
+      const rank = rankLane & 7;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
@@ -232,6 +233,7 @@ export class ClientSync {
       if (stag && u.staggerT <= 0) { u.staggerT = 0.4; u.staggerMax = 0.5; }
       if (blk) u.blockFlash = 0.2;
       if (rank !== u.rank) u.setRankVisual(rank);
+      u.lane = !!(rankLane & 8);
       u.hp = (hpPct / 100) * u.maxHp;
     }
     for (const [id, u] of this.units) {
@@ -276,11 +278,14 @@ export class ClientSync {
       [f.gold, f.troopCap, f.training] = a;
       f.eliminated = !!a[3];
       f.kills = a[4]; f.heroDeaths = a[5]; f.respawnT = a[6];
-      if (i !== g.localTeam || !f.siegeTarget) f.siegeTarget = a[7] >= 0 ? g.castles[a[7]] : null;
+      // your own pick shows at once and the host's word wins again after a moment (a late snapshot must not undo it)
+      const mine = i === g.localTeam && g.time < (g.localPickUntil || 0);
+      if (!mine) f.siegeTarget = a[7] >= 0 ? g.castles[a[7]] : null;
       f.heroLv = { vitality: a[8], strength: a[9], armor: a[10] };
       f.earned = a[11];
       f.lord = a[13]; f.name = a[14];
-      if (i !== g.localTeam || !f.formation) f.formation = a[15];
+      if (!mine) f.formation = a[15];
+      f.levies = a[16] || 0;
       if (!a[12] && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);

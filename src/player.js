@@ -81,6 +81,7 @@ export class Player {
     this.kills = 0;
     this.deaths = 0;
     this.sensitivity = 0.0022;
+    this.baseFov = 75;   // field of view setting
     this.bob = 0;
     this.hurtFlash = 0;
     // warhorse
@@ -680,7 +681,7 @@ export class Player {
     this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
     const sk = this.shake * 0.06;
     this.camera.rotation.set(this.pitch + (Math.random() - 0.5) * sk, this.yaw + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
-    const fov = this.zoomed ? 42 : 75;
+    const fov = this.zoomed ? 42 : this.baseFov;
     if (Math.abs(this.camera.fov - fov) > 0.1) {
       this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 10);
       this.camera.updateProjectionMatrix();

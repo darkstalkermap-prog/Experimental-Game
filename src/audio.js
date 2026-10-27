@@ -1,27 +1,67 @@
-// Tiny synthesized sound effects via WebAudio (no audio files needed).
+// Sound effects synthesized with WebAudio (no audio files needed), plus the medieval music (see music.js).
+import { Music } from './music.js';
+
 export class Audio {
   constructor() {
     this.ctx = null;
     this.listener = null;
-    this.volume = 0.5;
+    this.vol = { master: 1, music: 0.6, sfx: 0.7 };   // the three volume sliders, 0..1
     this.last = {};
+    this.music = null;
+    this.when = 0;     // seconds from now at which play() is scheduling (0 = immediately)
   }
 
-  init() {
-    if (this.ctx) return;
+  // ctx: tests pass an OfflineAudioContext to render the whole graph (music and effects) ahead of time
+  init(ctx = null) {
+    if (this.ctx) { this.resume(); return; }     // idempotent: later gestures just make sure the sound is running
     try {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.master = this.ctx.createGain();
-      this.master.gain.value = this.volume;
-      this.master.connect(this.ctx.destination);
+      this.ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+      this.resume();                              // some browsers create the context suspended even inside a gesture
+      this.out = this.ctx.createGain();
+      // a limiter before the speakers: drums and battle effects never clip, however loud the music is set
+      const limiter = this.ctx.createDynamicsCompressor();
+      limiter.threshold.value = -4; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.003; limiter.release.value = 0.12;
+      this.out.connect(limiter);
+      limiter.connect(this.ctx.destination);
+      this.master = this.ctx.createGain();      // sound effects
+      this.master.connect(this.out);
+      this.musicBus = this.ctx.createGain();
+      this.musicBus.connect(this.out);
+      this.applyVolumes();
       const len = this.ctx.sampleRate;
       this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.music = new Music(this.ctx, this.musicBus);
+      this.music.muted = this.vol.music * this.vol.master < 0.005;
     } catch (e) {
       this.ctx = null;
     }
   }
+
+  // Wake a context the browser left suspended (not an offline one: that only runs when rendering).
+  resume() {
+    const c = this.ctx;
+    if (!c || typeof c.startRendering === 'function' || c.state === 'running' || c.state === 'closed') return;
+    try { const r = c.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ }
+  }
+
+  setVolume(kind, v) {
+    this.vol[kind] = Math.min(1, Math.max(0, v));
+    this.applyVolumes();
+    if (this.music) this.music.muted = this.vol.music * this.vol.master < 0.005;
+  }
+
+  applyVolumes() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.out.gain.setTargetAtTime(this.vol.master, t, 0.03);
+    this.master.gain.setTargetAtTime(this.vol.sfx * 0.7, t, 0.03);
+    this.musicBus.gain.setTargetAtTime(this.vol.music * 1.2, t, 0.03);
+  }
+
+  startMusic() { if (this.music) this.music.start(); }
+  setMusicIntensity(x) { if (this.music) this.music.setIntensity(x); }
 
   setListener(pos) { this.listener = pos; }
 
@@ -38,7 +78,7 @@ export class Audio {
     const f = c.createBiquadFilter();
     f.type = type; f.frequency.value = freq; f.Q.value = q;
     const g = c.createGain();
-    const t = c.currentTime + t0;
+    const t = c.currentTime + this.when + t0;
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
     src.connect(f); f.connect(g); g.connect(this.master);
@@ -49,7 +89,7 @@ export class Audio {
     const c = this.ctx;
     const o = c.createOscillator();
     o.type = type;
-    const t = c.currentTime + t0;
+    const t = c.currentTime + this.when + t0;
     o.frequency.setValueAtTime(freq, t);
     if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(20, freq * slide), t + dur);
     const g = c.createGain();
@@ -60,14 +100,21 @@ export class Audio {
     o.start(t); o.stop(t + dur + 0.05);
   }
 
-  play(name, pos = null) {
+  // when: play the sound that many seconds from now (tests use it to lay effects over the music)
+  play(name, pos = null, when = 0) {
     if (!this.ctx) return;
     const k = this.gainFor(pos);
     if (k < 0.02) return;
     // throttle very frequent sounds
-    const now = this.ctx.currentTime;
+    const now = this.ctx.currentTime + when;
     if (this.last[name] && now - this.last[name] < 0.04) return;
     this.last[name] = now;
+    this.when = when;
+    this.playNow(name, k);
+    this.when = 0;
+  }
+
+  playNow(name, k) {
     switch (name) {
       case 'swing': this.noise(0.18, 900, 0.8, 0.25 * k, 'bandpass'); break;
       case 'hit': this.noise(0.12, 500, 1.5, 0.5 * k, 'lowpass'); this.tone(120, 0.1, 0.3 * k, 'triangle', 0.5); break;

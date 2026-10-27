@@ -5,6 +5,7 @@ import { makeNoise, smoothstep, clamp } from './noise.js';
 import { allied } from './teams.js';
 
 export const STEP = 0.65; // max height a character can step up
+const STEER_KINDS = new Set(['tree', 'stone']);   // obstacles soldiers walk round (trunks and the standing stones)
 
 // Castle sites: index = team. rot turns castle-local +Z (gate side) toward the map centre.
 export const CASTLE_SITES = [];
@@ -72,9 +73,18 @@ export class Physics {
   }
 
   addBucket(cx, cz, r) {
-    const b = { cx, cz, r, list: [] };
+    const b = { cx, cz, r, list: [], shots: [] };
     this.buckets.push(b);
     return b;
+  }
+
+  // Something that only stops arrows and spells (battlement merlons): soldiers walk through it, and the side it
+  // belongs to (c.team) shoots through it. Keeps the movement checks cheap.
+  addShotBlocker(c, bucket) {
+    if (c.bottom === undefined) c.bottom = -100;
+    if (c.active === undefined) c.active = true;
+    bucket.shots.push(c);
+    return c;
   }
 
   // c: { minX,maxX,minZ,maxZ, top, bottom=0, heightFn?, passTeam?, active, kind, ref }
@@ -102,6 +112,12 @@ export class Physics {
     if (cell) yield* cell;
   }
 
+  *nearShots(x, z, pad) {
+    for (const b of this.buckets) {
+      if (Math.abs(x - b.cx) < b.r + pad && Math.abs(z - b.cz) < b.r + pad) yield* b.shots;
+    }
+  }
+
   topAt(c, x, z) {
     return c.heightFn ? c.heightFn(x, z) : c.top;
   }
@@ -118,9 +134,10 @@ export class Physics {
     return g;
   }
 
-  // Bend a walking direction around tree trunks ahead, so soldiers flow around them instead of
-  // pushing into them. side (+1/-1) picks which way to go round when a trunk is dead ahead.
-  steerAroundTrees(x, z, dx, dz, radius, side = 1) {
+  // Bend a walking direction around tree trunks and standing stones ahead, so soldiers flow around them instead
+  // of pushing into them. side (+1/-1) picks which way to go round when one is dead ahead. `only` limits it to
+  // one obstacle kind (siege engines roll through trunks but must go round stones).
+  steerAroundTrees(x, z, dx, dz, radius, side = 1, only = null) {
     const look = 3.5;
     let ox = 0, oz = 0;
     const seen = new Set();
@@ -128,7 +145,7 @@ export class Physics {
       const cell = this.grid.get(this.gridKey(Math.floor(px / this.cell), Math.floor(pz / this.cell)));
       if (!cell) continue;
       for (const c of cell) {
-        if (c.kind !== 'tree' || seen.has(c)) continue;
+        if ((only ? c.kind !== only : !STEER_KINDS.has(c.kind)) || seen.has(c)) continue;
         seen.add(c);
         const cx = (c.minX + c.maxX) / 2 - x, cz = (c.minZ + c.maxZ) / 2 - z;
         const along = cx * dx + cz * dz;
@@ -149,12 +166,13 @@ export class Physics {
   }
 
   // Push a circle out of blocking colliders. Returns true if anything was hit.
-  // ignoreTrees lets a stuck soldier (or a wheeled engine) slip past trunks.
-  resolve(pos, radius, footY, height, team, ignoreTrees = false) {
+  // ignoreTrees lets a stuck soldier (or a wheeled engine) slip past trunks; ignoreStones also lets a soldier that
+  // has been wedged for seconds slip past a standing stone (engines never do: they steer round them).
+  resolve(pos, radius, footY, height, team, ignoreTrees = false, ignoreStones = false) {
     let hit = false;
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.near(pos.x, pos.z, radius + 1)) {
-        if (!c.active || (c.passTeam >= 0 && allied(c.passTeam, team)) || (ignoreTrees && c.kind === 'tree')) continue;
+        if (!c.active || (c.passTeam >= 0 && allied(c.passTeam, team)) || (ignoreTrees && c.kind === 'tree') || (ignoreStones && c.kind === 'stone')) continue;
         const qx = clamp(pos.x, c.minX, c.maxX);
         const qz = clamp(pos.z, c.minZ, c.maxZ);
         const dx = pos.x - qx, dz = pos.z - qz;
@@ -190,13 +208,21 @@ export class Physics {
       if (c.kind === 'gate' && c.passTeam >= 0 && allied(c.passTeam, ignoreTeam)) continue;
       if (y < this.topAt(c, x, z) && y > c.bottom) return c;
     }
+    // battlement merlons: the defenders' own arrows fly through the slots and over the stone
+    if (y > 1) {
+      for (const c of this.nearShots(x, z, 0.5)) {
+        if (!c.active || allied(c.team, ignoreTeam)) continue;
+        if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+        if (y < c.top && y > c.bottom) return c;
+      }
+    }
     return null;
   }
 
   // Is the straight line between two points free of tall structures? (sampled)
   lineClear(ax, ay, az, bx, by, bz, ignoreTeam = -99) {
     const d = Math.hypot(bx - ax, bz - az);
-    const steps = Math.ceil(Math.hypot(d, by - ay) / 0.5); // fine enough not to skip a battlement
+    const steps = Math.ceil(Math.hypot(d, by - ay) / 0.25); // fine enough not to skip a merlon or clip a wall corner
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       const x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;

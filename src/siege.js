@@ -5,7 +5,6 @@ import { materials, box, shadowed } from './materials.js';
 import { buildSoldier, poseSoldier } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
-import { RAIDER_TEAM } from './config.js';
 import { allied } from './teams.js';
 
 let NEXT_ID = 1;
@@ -39,9 +38,13 @@ export class SiegeEngine {
     this.nav = null;
     this.thinkT = 0;
     this.waypoint = null;
+    this.lastPos = pos.clone();   // for noticing an engine that has stopped dead
+    this.stuckT = 0;
+    this.detourT = 0;
+    this.detourSide = 1;
     this.mesh = type === 'ram' ? this.buildRam() : this.buildCatapult();
     this.crew = [];
-    const crewType = team === RAIDER_TEAM ? 'raider' : 'swordsman';
+    const crewType = 'swordsman';
     for (const [x, z] of type === 'ram' ? [[-1.4, -1.5], [1.4, -1.5]] : [[-1.6, -2.6], [1.6, -2.6]]) {
       const s = buildSoldier(crewType, team);
       s.root.position.set(x, 0, z);
@@ -226,19 +229,38 @@ export class SiegeEngine {
       const wp = this.waypoint || goal;
       const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;
       const d = Math.hypot(dx, dz) || 1;
-      this.vel.set((dx / d) * this.speed, 0, (dz / d) * this.speed);
+      let ux = dx / d, uz = dz / d;
+      // engines roll through tree trunks but go round the standing stones
+      const around = g.physics.steerAroundTrees(this.pos.x, this.pos.z, ux, uz, 1.9, this.id % 2 ? 1 : -1, 'stone');
+      if (around) { ux = around.x; uz = around.z; }
+      // an engine that has stopped dead for a few seconds swings out sideways for a moment
+      this.stuckT += dt;
+      if (this.stuckT > 2.5) {
+        if (Math.hypot(this.pos.x - this.lastPos.x, this.pos.z - this.lastPos.z) < 0.6) { this.detourT = 2.5; this.detourSide = Math.random() < 0.5 ? 1 : -1; }
+        this.lastPos.copy(this.pos);
+        this.stuckT = 0;
+      }
+      if (this.detourT > 0) {
+        this.detourT -= dt;
+        const sx = -uz * this.detourSide, sz = ux * this.detourSide;
+        const l = Math.hypot(sx + ux * 0.4, sz + uz * 0.4) || 1;
+        ux = (sx + ux * 0.4) / l; uz = (sz + uz * 0.4) / l;
+      }
+      this.vel.set(ux * this.speed, 0, uz * this.speed);
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
       const L = WORLD.playHalf;
       this.pos.x = clamp(this.pos.x, -L, L);
       this.pos.z = clamp(this.pos.z, -L, L);
       g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true); // engines roll past trunks
-      this.turn(Math.atan2(dx, dz), dt);
+      this.turn(Math.atan2(ux, uz), dt);
       for (const w of this.wheels) w.rotation.x += dt * this.speed * 1.7;
       this.anim += dt * this.speed * 2;
       this.poseCrew(true);
     } else {
       this.vel.set(0, 0, 0);
+      this.stuckT = 0;
+      this.lastPos.copy(this.pos);
       this.poseCrew(false);
       if (faceTo) this.turn(Math.atan2(faceTo.x - this.pos.x, faceTo.z - this.pos.z), dt);
     }

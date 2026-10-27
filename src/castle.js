@@ -9,6 +9,8 @@ const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff
 const TC = H + towerOff; // corner tower centres
 const GW = gateW / 2;
 const KEEP_Z = -6;
+const MERLON_H = 1.3;   // merlons stand chest-high: they cover a soldier's body and leave the head showing
+const POST_LEAN = 0.95; // an archer at a slot leans out to the wall's outer face, so he can shoot at the foot of the wall
 
 function merlonGeos(len, alongX, outer) {
   const geos = [];
@@ -73,6 +75,23 @@ export class Castle {
     return Math.abs(p.x - this.center.x) < H + margin && Math.abs(p.z - this.center.z) < H + margin;
   }
 
+  // One shot-blocking box per merlon, matching the stone ones drawn by merlonGeos.
+  addMerlons(cx, cz, len, alongX, outer, ref) {
+    const list = [];
+    const n = Math.floor(len / 2);
+    for (let i = 0; i < n; i++) {
+      const t = -len / 2 + 1 + i * 2;
+      const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
+      const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
+      const a = this.toWorld(lx - hx, lz - hz), b = this.toWorld(lx + hx, lz + hz);
+      list.push(this.game.physics.addShotBlocker({
+        minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
+        top: this.center.y + wallH + MERLON_H, bottom: this.center.y + wallH - 0.05, kind: 'merlon', team: this.team, ref,
+      }, this.bucket));
+    }
+    return list;
+  }
+
   addCollider(lx0, lx1, lz0, lz1, top, extra = {}) {
     const a = this.toWorld(lx0, lz0), b = this.toWorld(lx1, lz1);
     return this.game.physics.add({
@@ -126,22 +145,28 @@ export class Castle {
         posts: [],
       };
       seg.collider = this.addCollider(x0, x1, z0, z1, wallH, { kind: 'wall', ref: seg });
-      // the battlements: a solid parapet along the outer edge that shelters soldiers on the wall walk
-      const PT = 0.55, PH = 1.3; // chest-high: covers a soldier's body, leaves the head showing
+      // the battlements: an invisible rail along the outer edge keeps soldiers from stepping off the wall walk,
+      // and every merlon stops arrows and spells. The gaps between the merlons are the firing slots.
+      const PT = 0.55; // rail thickness
       const px0 = alongX ? x0 : nx > 0 ? x1 - PT : x0, px1 = alongX ? x1 : nx > 0 ? x1 : x0 + PT;
       const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
-      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + PH, { kind: 'parapet', ref: seg, noWalk: true, bottom: this.center.y + wallH - 0.05 });
+      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
+      seg.merlons = this.addMerlons(cx, cz, len, alongX, outer, seg);
       seg.takeDamage = (amt, attacker) => this.damageWall(seg, amt, attacker);
       this.walls.push(seg);
-      // archer posts along the wall walk
+      // archer posts along the wall walk, each one standing behind a gap between two merlons
+      const nMerlons = Math.floor(len / 2);
+      const gaps = Math.max(1, nMerlons - 1);
       const n = Math.max(1, Math.floor(len / 4.5));
       for (let i = 0; i < n; i++) {
-        const t = -len / 2 + len * (i + 0.5) / n;
+        const gap = Math.min(gaps - 1, Math.max(0, Math.round((i + 0.5) * gaps / n - 0.5)));
+        const t = -len / 2 + 2 + 2 * gap;
         const lx = alongX ? cx + t : cx, lz = alongX ? cz : cz + t;
         seg.posts.push({
           seg, occupant: null,
           pos: this.toWorld(lx, lz, wallH),
           base: this.toWorld(lx - nx * 4, lz - nz * 4),
+          lean: this.dirToWorld(nx, nz).multiplyScalar(POST_LEAN),
           front: nz === 1,
         });
       }
@@ -153,7 +178,8 @@ export class Castle {
     const lintelMesh = new THREE.Mesh(mergeGeometries([lintel, ...merlonGeos(gateW, true, T / 2 - 0.25).map((m) => m.translate(0, 0, H - T / 2))]), M.stone);
     g.add(shadowed(lintelMesh));
     this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
-    this.addCollider(-GW, GW, H - 0.55, H, wallH + 1.3, { kind: 'parapet', noWalk: true, bottom: this.center.y + wallH - 0.05 });
+    this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
+    this.addMerlons(0, H - T / 2, gateW, true, T / 2 - 0.25, null);
     // arch trim
     const trim = new THREE.Mesh(box(0.6, gateH, T + 0.4), M.stoneDark);
     for (const s of [-1, 1]) {
@@ -320,8 +346,8 @@ export class Castle {
     // front posts first
     this.posts.sort((a, b) => (b.front ? 1 : 0) - (a.front ? 1 : 0));
     // lintel posts
-    for (const x of [-1.5, 1.5]) {
-      this.posts.unshift({ seg: null, occupant: null, pos: this.toWorld(x, H - T / 2, wallH), base: this.toWorld(x * 3, H - T - 6), front: true });
+    for (const x of [-1, 1]) {
+      this.posts.unshift({ seg: null, occupant: null, pos: this.toWorld(x, H - T / 2, wallH), base: this.toWorld(x * 4.5, H - T - 6), lean: this.dirToWorld(0, 1).multiplyScalar(POST_LEAN), front: true });
     }
   }
 
@@ -427,7 +453,9 @@ export class Castle {
   // --- visual / collider state (shared by the simulation and by network clients) ---
   applyWallVisual(seg) {
     // the battlements go with the merlons: gone once the wall is badly damaged or breached
-    seg.parapet.active = seg.alive && seg.hp > seg.maxHp * 0.5;
+    const on = seg.alive && seg.hp > seg.maxHp * 0.5;
+    seg.parapet.active = on;
+    for (const m of seg.merlons) m.active = on;
     if (!seg.alive) {
       seg.collider.top = this.center.y + 0.5;
       seg.mesh.visible = false;

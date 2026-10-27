@@ -117,22 +117,23 @@
   #top { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); text-align: center; min-width: 260px; }
   #round { font-family: Cinzel, serif; font-size: 22px; color: var(--gold); }
   #phase { font-size: 15px; }
-  #war { font-size: 12px; opacity: 0.75; }
+  #war { font-size: 13px; opacity: 0.9; }
   #goldbox { position: absolute; right: 16px; top: 12px; font-family: Cinzel, serif; font-size: 24px; color: var(--gold); display: flex; align-items: center; gap: 8px; }
   .coin { color: var(--gold); }
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 58px; font-size: 13px; opacity: 0.75; text-align: right; }
+  #hint { position: absolute; right: 16px; top: 58px; font-size: 13px; text-align: right; padding: 2px 8px; background: rgba(0,0,0,0.4); border-radius: 3px; text-shadow: 0 1px 2px #000; }
 
-  #factions { position: absolute; left: 16px; top: 12px; width: 330px; font-size: 13px; }
-  .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 34px 70px 54px 36px; gap: 6px; align-items: center; padding: 2px 0; }
+  #factions { position: absolute; left: 16px; top: 12px; width: 350px; font-size: 13px; }
+  .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 38px; gap: 6px; align-items: center; padding: 2px 0; }
   .fac i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .fac .bar { height: 7px; margin: 0; }
   .fac .bar b { display: block; height: 100%; background: #b9a46a; }
   .fac.dead { opacity: 0.4; text-decoration: line-through; }
   .fac .g, .fac .t, .fac .h { text-align: right; }
-  .fac .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fac .n { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+  .fac .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
   #minimapWrap { position: absolute; right: 16px; bottom: 16px; padding: 4px; }
   #minimap { display: block; width: 180px; height: 180px; image-rendering: auto; }
@@ -157,12 +158,13 @@
   #respawn { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%); text-align: center; }
   #respawn h2 { font-size: 46px; margin: 0; color: #d55; text-shadow: 0 3px 10px #000; }
   #respawnT { font-size: 22px; text-shadow: 0 2px 6px #000; }
-  #fps { position: absolute; right: 200px; bottom: 16px; font-size: 11px; opacity: 0.5; }
+  #fps { position: absolute; right: 214px; bottom: 16px; font-size: 11px; opacity: 0.6; text-shadow: 0 1px 2px #000; }
 
-  #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(760px, calc(100% - 32px)); }
+  #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(840px, calc(100% - 32px)); max-width: calc(100% - 32px); max-height: calc(100% - 32px); overflow: auto; }
   #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 12px; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 8px; }
+  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 12px; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 8px; white-space: nowrap; }
   #scoreboard td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  #scoreboard td:nth-child(n+3) { white-space: nowrap; }
 
   /* ---------- shop ---------- */
   #shop { position: fixed; inset: 0; z-index: 15; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
@@ -207,8 +209,17 @@
   .code { font-family: Cinzel, serif; font-size: 30px; letter-spacing: 0.2em; color: #5a1d12; }
   #lobbyList { list-style: none; padding: 0; margin: 16px auto; max-width: 420px; display: grid; gap: 6px; }
   #lobbyList li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 12px; background: rgba(255,255,255,0.35); border-left: 5px solid; font-size: 17px; }
-  #factions em.ally { font-style: normal; font-size: 10px; color: #4fd17a; border: 1px solid #4fd17a; border-radius: 3px; padding: 0 3px; margin-left: 4px; }
+  #factions em.ally { flex: none; font-style: normal; font-size: 10px; line-height: 13px; color: #4fd17a; border: 1px solid #4fd17a; border-radius: 3px; padding: 0 3px; margin-right: 5px; }
   #lobbyList b { font-family: Cinzel, serif; font-size: 14px; }
+  #lobbyList b small { font-family: 'EB Garamond', Georgia, serif; font-size: 13px; font-weight: 400; opacity: 0.8; }
+  .screen.overlay { z-index: 25; }
+  .menu-buttons { display: grid; gap: 10px; max-width: 320px; margin: 18px auto; }
+  .menu-buttons button { font-size: 18px; padding: 12px; }
+  .row.small button { padding: 6px 18px; font-size: 14px; }
+  .opt-grid { display: grid; gap: 14px; max-width: 560px; margin: 20px auto 10px; }
+  .opt-grid label { display: grid; grid-template-columns: 170px 1fr 46px; align-items: center; gap: 12px; font-family: Cinzel, serif; font-size: 14px; text-align: left; }
+  .opt-grid output { font-family: 'EB Garamond', Georgia, serif; font-size: 15px; text-align: right; }
+  input[type=range] { accent-color: #8a2a18; width: 100%; }
   .settings { display: flex; gap: 20px; justify-content: center; align-items: center; flex-wrap: wrap; font-size: 15px; }
   @media (max-width: 760px) {
     #factions { width: 250px; font-size: 11px; }
@@ -230,38 +241,13 @@
 <div id="menu" class="screen hidden">
   <div class="scroll">
     <h1>CASTLE WARS</h1>
-    <div class="sub">Four lords. Four castles. Endless raiders. Only one keep will stand.</div>
+    <div class="sub">Four lords. Four castles. Armies that never stop marching.</div>
     <div class="howto">
-      You are the lord of the blue castle. Each round, waves of raiders attack every castle, and every wave is harder than the last.
-      Kill enemies to earn gold. Spend it on troops, castle defences, your hero and siege engines.
-      From round 4 the rival lords go to war too. Break their <b>gates</b> with swords or rams, breach their <b>walls</b> with catapults,
-      and destroy their <b>keep</b>. If you die you respawn at your keep after a delay, but only while your keep stands.
-      The last castle and hero standing wins.
-    </div>
-    <div class="controls">
-      <b>WASD</b><span>Move · Shift sprint · Space jump</span>
-      <b>Mouse</b><span>Look</span>
-      <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
-      <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
-      <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
-      <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
-      <b>1 / 2 / 3 / wheel</b><span>Sword &amp; shield / bow / magic</span>
-      <b>R (or 3 again)</b><span>Next spell · fireball: hold to charge</span>
-      <b>Q</b><span>Healing draught</span>
-      <b>E</b><span>Use the gate lever · mount / call your horse</span>
-      <b>O</b><span>Orders menu (click to command troops)</span>
-      <b>B</b><span>Shop &amp; upgrades</span>
-      <b>Tab</b><span>Scoreboard</span>
-      <b>F1 / Z</b><span>Troops: follow me</span>
-      <b>F2 / X</b><span>Troops: hold here</span>
-      <b>F3 / C</b><span>Troops: charge</span>
-      <b>F4 / V</b><span>Troops: defend castle</span>
-      <b>T</b><span>Troops: assault target castle</span>
-      <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
-      <b>F</b><span>Formation: line / shield wall / loose</span>
-    </div>
-    <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
-      <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
+      You are the lord of the blue castle. Once the preparation time is over, every castle sends a fresh army marching out every 30 seconds,
+      for as long as it stands. The armies meet in the field, fight, and push on to the enemy gates.
+      Kill enemies to earn gold, and spend it on your army, your castle, your hero, siege engines and magic.
+      Break their <b>gates</b> with swords or rams, breach their <b>walls</b> with catapults, and destroy their <b>keep</b>.
+      If you die you respawn at your keep after a delay, but only while your keep stands. The last castle and hero standing wins.
     </div>
     <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
       <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
@@ -273,6 +259,7 @@
       <button data-d="hard">Hard</button>
     </div>
     <div class="row"><button id="play">Single Player</button><button id="mpBtn">Multiplayer</button></div>
+    <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
     <div id="online" class="hidden">
       <h3 class="section">Multiplayer (up to 4 players)</h3>
       <div id="inviteBanner" class="note hidden"></div>
@@ -316,7 +303,7 @@
   <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
-  <div id="hint">B: shop · O: orders · Tab: scores</div>
+  <div id="hint">Esc: menu · B: shop · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
   <div id="banner"><h2></h2><p></p></div>
@@ -344,7 +331,7 @@
 </div>
 
 <div id="scoreboard" class="panel hidden">
-  <table><thead><tr><th>House</th><th>Lord</th><th>Gold</th><th>Troops</th><th>Kills</th><th>Hero deaths</th><th>Keep</th><th>Status</th></tr></thead>
+  <table><thead><tr><th>House</th><th>Lord</th><th>Gold</th><th>Garrison + army</th><th>Kills</th><th>Hero deaths</th><th>Keep</th><th>Status</th></tr></thead>
   <tbody id="scoreRows"></tbody></table>
 </div>
 
@@ -370,17 +357,67 @@
 
 <div id="pause" class="screen hidden">
   <div class="scroll" style="text-align:center">
-    <h1 style="font-size:44px">Paused</h1>
-    <div class="settings">
-      <label>Mouse sensitivity <input id="sens" type="range" min="0" max="100" value="35"></label>
-      <label>Volume <input id="vol" type="range" min="0" max="100" value="50"></label>
+    <h1 style="font-size:44px">Game Menu</h1>
+    <div id="pauseNote" class="note"></div>
+    <div class="menu-buttons">
+      <button id="resume">Resume</button>
+      <button id="pauseOptions">Options</button>
+      <button id="pauseControls">Controls</button>
+      <button id="quitBtn">Quit to Main Menu</button>
+    </div>
+    <div id="quitConfirm" class="hidden">
+      <div class="note">Leave this battle? Your progress will be lost.</div>
+      <div class="row"><button id="quitYes">Leave</button><button id="quitNo">Stay</button></div>
+    </div>
+    <div id="pauseHint" class="note"></div>
+  </div>
+</div>
+
+<div id="options" class="screen overlay hidden">
+  <div class="scroll" style="text-align:center">
+    <h1 style="font-size:44px">Options</h1>
+    <div class="opt-grid">
+      <label>Master volume <input id="optMaster" type="range" min="0" max="100"><output></output></label>
+      <label>Music <input id="optMusic" type="range" min="0" max="100"><output></output></label>
+      <label>Sound effects <input id="optSfx" type="range" min="0" max="100"><output></output></label>
+      <label>Mouse sensitivity <input id="optSens" type="range" min="0" max="100"><output></output></label>
+      <label>Field of view <input id="optFov" type="range" min="60" max="110"><output></output></label>
     </div>
     <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
       <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
     </div>
-    <div class="row" style="margin-top:20px"><button id="resume">Resume</button></div>
-    <div id="pauseHint" class="note"></div>
-    <div class="note">Click anywhere to resume.</div>
+    <div class="note">Low turns off shadows and grass for the smoothest play.</div>
+    <div class="row"><button id="optionsBack">Back</button></div>
+  </div>
+</div>
+
+<div id="controls" class="screen overlay hidden">
+  <div class="scroll">
+    <h1 style="font-size:44px">Controls</h1>
+    <div class="controls">
+      <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
+      <b>WASD</b><span>Move · Shift sprint · Space jump</span>
+      <b>Mouse</b><span>Look</span>
+      <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
+      <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
+      <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
+      <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
+      <b>1 / 2 / 3 / wheel</b><span>Sword &amp; shield / bow / magic</span>
+      <b>R (or 3 again)</b><span>Next spell · fireball: hold to charge</span>
+      <b>Q</b><span>Healing draught</span>
+      <b>E</b><span>Use the gate lever · mount / call your horse</span>
+      <b>O</b><span>Orders menu (click to command troops)</span>
+      <b>B</b><span>Shop &amp; upgrades</span>
+      <b>Tab</b><span>Scoreboard</span>
+      <b>F1 / Z</b><span>Troops: follow me</span>
+      <b>F2 / X</b><span>Troops: hold here</span>
+      <b>F3 / C</b><span>Troops: charge</span>
+      <b>F4 / V</b><span>Troops: defend castle</span>
+      <b>T</b><span>Troops: assault target castle</span>
+      <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
+      <b>F</b><span>Formation: line / shield wall / loose</span>
+    </div>
+    <div class="row"><button id="controlsBack">Back</button></div>
   </div>
 </div>
 

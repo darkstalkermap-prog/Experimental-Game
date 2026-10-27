@@ -73,6 +73,7 @@ export class Unit {
     this.stuckT = 0;
     this.lastPos = this.pos.clone();
     this.homeCastle = null;
+    this.lane = false;     // a wave soldier marching on the enemy, rather than a bought troop in the garrison
     this.kills = 0;
 
     const m = buildSoldier(type, team, this.variant);
@@ -366,16 +367,47 @@ export class Unit {
 
     // ranged line-of-sight check
     if (this.ranged && this.target) {
-      const c = this.shotOrigin(new THREE.Vector3());
+      const c = this.shotOrigin(new THREE.Vector3(), this.target.pos);
       const tc = this.target.isStructure ? this.target.pos : this.target.aimPoint ? this.target.aimPoint(new THREE.Vector3()) : this.target.chest(new THREE.Vector3());
       this.los = g.physics.lineClear(c.x, c.y, c.z, tc.x, tc.y, tc.z, this.team) || this.target.isStructure;
+      // an archer at a wall slot can't walk round whatever hides his target: he picks an enemy he can see instead
+      if (!this.los && this.post && !this.target.isStructure) {
+        const seen = this.visibleEnemy();
+        if (seen) { this.target = seen; this.los = true; }
+      }
     }
+  }
+
+  // The nearest enemy in range that this archer has a clear shot at (the six nearest are checked).
+  visibleEnemy() {
+    const g = this.game;
+    const from = new THREE.Vector3();
+    const cands = [];
+    g.grid.query(this.pos.x, this.pos.z, this.range, (o) => {
+      if (o.alive && o !== this.target && !allied(o.team, this.team)) cands.push(o);
+    });
+    const dist = (o) => Math.hypot(o.pos.x - this.pos.x, o.pos.z - this.pos.z);
+    cands.sort((a, b) => dist(a) - dist(b));
+    const p = new THREE.Vector3();
+    for (let i = 0; i < cands.length && i < 6; i++) {
+      const o = cands[i];
+      if (dist(o) > this.range) break;
+      if (o.aimPoint) o.aimPoint(p); else o.chest(p);
+      this.shotOrigin(from, o.pos);
+      if (g.physics.lineClear(from.x, from.y, from.z, p.x, p.y, p.z, this.team)) return o;
+    }
+    return null;
   }
 
   assaultThink() {
     const g = this.game;
-    const tc = this.orderData;
-    if (!tc || tc.fallen) { this.setOrder('charge'); return; }
+    let tc = this.orderData;
+    if (!tc || tc.fallen || allied(tc.team, this.team)) {
+      // that castle is finished: wave soldiers swing round to the next front, anyone else hunts what is left
+      const next = this.lane ? g.siegeTarget(g.factions[this.team]) : null;
+      if (!next) { this.setOrder('charge'); return; }
+      tc = this.orderData = next;
+    }
     if (tc.isInside(this.pos, 0.5) || (!tc.gate.alive && tc.inFootprint(this.pos, 4))) {
       this.target = tc.keep;
       this.goal = tc.keepDoor;
@@ -392,9 +424,16 @@ export class Unit {
   }
 
   // Where arrows leave from: chest height, or head height when leaning over the battlements.
-  shotOrigin(out) {
+  // An archer at a wall slot leans toward his target to the face of the wall (outward for an enemy outside,
+  // inward for one in the courtyard), so he can shoot straight down the foot of the wall on either side.
+  shotOrigin(out, at = null) {
     this.chest(out);
     out.y += this.post ? this.height * 0.27 : 0.25;
+    if (this.post && this.post.lean) {
+      const l = this.post.lean;
+      const k = at && (at.x - this.pos.x) * l.x + (at.z - this.pos.z) * l.z < 0 ? -1 : 1;
+      out.x += l.x * k; out.z += l.z * k;
+    }
     return out;
   }
 
@@ -526,7 +565,7 @@ export class Unit {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0);
+    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0, this.ghostT > 0);
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (ground < this.pos.y - 0.05) this.pos.y = Math.max(ground, this.pos.y - 12 * dt);
     else this.pos.y = ground;
@@ -602,7 +641,7 @@ export class Unit {
           if (t.vel) aim.addScaledVector(t.vel, lead * 0.8);
           this.game.magic.cast(this, this.def.spell, from, aim.sub(from).normalize(), 0, this.dmg / 55);
         } else if (this.ranged && !t.isStructure) {
-          const from = this.shotOrigin(new THREE.Vector3());
+          const from = this.shotOrigin(new THREE.Vector3(), t.pos);
           // a head peeking over battlements is a small target: harder to hit
           this.game.projectiles.shootArrow(from, t, this.team, this.dmg, this, t.post ? 0.07 : 0.035);
           this.game.audio.play('bow', this.pos);
@@ -685,18 +724,6 @@ export class Unit {
     this.mesh.position.y = this.pos.y + 0.15 * t;
     if (this.deathT > 9) this.mesh.position.y = this.pos.y - (this.deathT - 9) * 0.4;
   }
-}
-
-export function makeRaiderStats(type, round, diff) {
-  const t = UNIT_TYPES[type];
-  const k = diff.enemyStat;
-  const hpScale = (1 + 0.11 * (round - 1)) * k;
-  const dmgScale = (1 + 0.065 * (round - 1)) * k;
-  return {
-    hp: Math.round(t.hp * hpScale),
-    dmg: t.dmg * dmgScale,
-    armor: t.armor + Math.floor(round / 4),
-  };
 }
 
 export function isEnemy(a, b) {

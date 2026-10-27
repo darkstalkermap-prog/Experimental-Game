@@ -49,12 +49,17 @@ export const CASTLE = {
   keepHp: 3000,
 };
 
-export const ROUNDS = {
+// Army waves, MOBA style: every castle sends a fresh wave marching out on a fixed timer, for as long as it stands.
+export const WAVES = {
   firstPrep: 60,      // preparation time before the first wave (buy and upgrade before the match)
-  prep: 25,           // seconds between waves
-  maxWaveTime: 210,   // a wave is force-ended after this long
-  warRound: 4,        // rival lords start assaulting castles from this round
-  survivalBonus: (round) => 80 + round * 25,
+  interval: 30,       // seconds between waves
+  spread: 0.5,        // seconds between soldiers leaving the barracks
+  wage: (wave) => Math.min(130, 30 + wave * 4),   // gold every standing house is paid with each wave
+  siegeGrowth: 0.03,  // wave soldiers and engines hit gates and walls this much harder with every wave
+  growth: 0.04,       // wave soldiers get this much tougher with every wave
+  ramEvery: 3,        // a battering ram joins every 3rd wave (from wave 3)
+  catapultEvery: 6,   // a catapult joins every 6th wave (from wave 5)
+  siegeLimit: 3,      // wave engines alive at once, per house
 };
 
 export const START_GOLD = 500;
@@ -68,8 +73,7 @@ export const DIFFICULTY = {
 
 // Gold rewards for kills, by victim kind.
 export const BOUNTY = {
-  raider: 10, raiderArcher: 12, brute: 35, warlord: 250,
-  raiderRider: 30, shaman: 30, longbowman: 30, giant: 600, horseman: 50, lancer: 65,
+  longbowman: 30, giant: 600, horseman: 50, lancer: 65,
   swordsman: 18, spearman: 20, archer: 20, knight: 45, lord: 120, hero: 120,
   ram: 120, catapult: 180,
   gate: 200,
@@ -103,20 +107,8 @@ export const UNIT_TYPES = {
   lord: { name: 'Lord', hp: 340, dmg: 30, armor: 7, speed: 5.0, range: 2.2, cd: 1.0,
     weapon: 'sword', shield: 'kite', helmet: 'crown', body: 'plate', scale: 1.12, cape: true, kind: 'hero', structMult: 1.2 },
 
-  raider: { name: 'Raider', hp: 75, dmg: 10, armor: 1, speed: 4.3, range: 1.9, cd: 1.2,
-    weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'infantry' },
-  raiderArcher: { name: 'Raider Archer', hp: 55, dmg: 9, armor: 0, speed: 4.4, range: 38, cd: 2.6,
-    weapon: 'bow', helmet: 'hood', body: 'leather', kind: 'archer', ranged: true },
-  raiderRider: { name: 'Raider Rider', hp: 150, dmg: 15, armor: 2, speed: 8.2, range: 2.5, cd: 1.4,
-    weapon: 'axe', shield: 'round', helmet: 'none', body: 'leather', kind: 'cavalry', mounted: true },
-  shaman: { name: 'Raider Shaman', hp: 70, dmg: 26, armor: 0, speed: 4.2, range: 34, cd: 3.4,
-    weapon: 'staff', helmet: 'hood', body: 'fur', kind: 'archer', ranged: true, spell: 'fireball' },
   giant: { name: 'Giant', hp: 3200, dmg: 90, armor: 6, speed: 3.4, range: 4.4, cd: 2.6,
     weapon: 'club', helmet: 'none', body: 'fur', scale: 3.2, kind: 'giant', giant: true, structMult: 4, siegeBonus: 2.5 },
-  brute: { name: 'Brute', hp: 260, dmg: 22, armor: 4, speed: 3.8, range: 2.4, cd: 1.6,
-    weapon: 'greataxe', helmet: 'horned', body: 'fur', scale: 1.25, kind: 'infantry', siegeBonus: 1.5, structMult: 1.5 },
-  warlord: { name: 'Raider Warlord', hp: 1000, dmg: 36, armor: 8, speed: 4.2, range: 2.6, cd: 1.3,
-    weapon: 'greataxe', helmet: 'horned', body: 'plate', scale: 1.4, cape: true, kind: 'hero', boss: true, siegeBonus: 2, structMult: 2.5 },
 };
 
 export const SIEGE_TYPES = {

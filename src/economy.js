@@ -9,12 +9,12 @@ function recruit(type) {
     id: 'recruit_' + type, tab: 'army', name: UNIT_TYPES[type].name,
     desc: () => {
       const t = UNIT_TYPES[type];
-      return `${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
+      return `Joins your garrison. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
     },
     cost: () => UNIT_TYPES[type].cost,
     can: (g, f) => {
       if (f.castle.fallen) return 'Castle has fallen';
-      if (g.troopCount(f.team) >= f.troopCap) return 'Barracks full';
+      if (g.garrisonCount(f.team) >= f.troopCap) return 'Barracks full';
       return true;
     },
     apply: (g, f) => g.recruit(f, type),
@@ -25,14 +25,21 @@ export const SHOP = [
   recruit('swordsman'), recruit('spearman'), recruit('archer'), recruit('knight'), recruit('horseman'), recruit('lancer'),
   {
     id: 'barracks', tab: 'army', name: 'Expand Barracks',
-    desc: (g, f) => `Troop limit ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}`,
+    desc: (g, f) => `Garrison and army limit ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}, and one more soldier in every wave`,
     cost: (g, f) => 200 + 120 * ((f.troopCap - TROOP_CAP.start) / TROOP_CAP.step),
     can: (g, f) => (f.troopCap >= TROOP_CAP.max ? 'Maximum size' : true),
     apply: (g, f) => { f.troopCap = Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step); },
   },
   {
+    id: 'levies', tab: 'army', name: 'Elite Levies',
+    desc: (g, f) => `Every wave gains an elite: ${['a Knight', 'a Knight and a Cavalry rider', 'a Knight, a Cavalry rider and a Lancer', 'the finest levies'][f.levies]} (level ${f.levies} → ${Math.min(3, f.levies + 1)}/3)`,
+    cost: (g, f) => 300 * (f.levies + 1),
+    can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : f.levies >= 3 ? 'Maximum' : true),
+    apply: (g, f) => { f.levies++; },
+  },
+  {
     id: 'training', tab: 'army', name: 'Drill Sergeants',
-    desc: (g, f) => `Troop HP & damage +15% (level ${f.training} → ${f.training + 1}). Applies to all troops.`,
+    desc: (g, f) => `Troop HP & damage +15% (level ${f.training} → ${f.training + 1}). Applies to all troops, waves included.`,
     cost: (g, f) => 250 * (f.training + 1),
     can: (g, f) => (f.training >= 5 ? 'Fully trained' : true),
     apply: (g, f) => { f.training++; g.applyTraining(f); },

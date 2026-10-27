@@ -1,12 +1,13 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, PLAYER_TEAM, RAIDER_TEAM, WORLD, CASTLE, ROUNDS } from './config.js';
+import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES } from './config.js';
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
 import { SPELLS, FORMATIONS } from './config.js';
 import { allied } from './teams.js';
 
 const $ = (id) => document.getElementById(id);
+const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 export class UI {
@@ -52,7 +53,7 @@ export class UI {
   kill(a, v) {
     const el = document.createElement('div');
     el.className = 'kill';
-    el.innerHTML = `<span style="color:${TEAM_CSS[a[1]] || TEAM_CSS[RAIDER_TEAM]}">${esc(a[0])}</span> <span class="x">⚔</span> <span style="color:${TEAM_CSS[v[1]] || TEAM_CSS[RAIDER_TEAM]}">${esc(v[0])}</span>`;
+    el.innerHTML = `<span style="color:${TEAM_CSS[a[1]] || NEUTRAL_CSS}">${esc(a[0])}</span> <span class="x">⚔</span> <span style="color:${TEAM_CSS[v[1]] || NEUTRAL_CSS}">${esc(v[0])}</span>`;
     $('killfeed').prepend(el);
     setTimeout(() => el.remove(), 6000);
     while ($('killfeed').children.length > 6) $('killfeed').lastChild.remove();
@@ -182,7 +183,11 @@ export class UI {
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
-      sel.innerHTML = '<div class="label">Siege & assault target (T orders your troops to attack it):</div>';
+      sel.innerHTML = '<div class="label">Where your armies march. Auto alternates between your two neighbours so each wave meets one coming the other way. Pick a castle to send every wave and engine there (T orders your troops to attack it).</div>';
+      const auto = document.createElement('button');
+      auto.addEventListener('click', () => { g.setSiegeTarget(null); g.audio.play('order'); this.refreshShop(); });
+      sel.appendChild(auto);
+      this.autoBtn = auto;
       for (const c of g.castles) {
         if (allied(c.team, g.localTeam)) continue;
         const b = document.createElement('button');
@@ -286,9 +291,15 @@ export class UI {
     const g = this.game;
     const f = g.localFaction;
     $('shopGold').textContent = Math.floor(f.gold);
-    $('shopTroops').textContent = `${g.troopCount(g.localTeam)}/${f.troopCap}`;
+    $('shopTroops').textContent = `garrison ${g.garrisonCount(g.localTeam)}/${f.troopCap} · army ${g.laneCount(g.localTeam)}`;
+    if (this.autoBtn && this.tab === 'siege') {
+      const now = g.siegeTarget(f);
+      const txt = f.siegeTarget ? 'Auto lanes' : `✓ Auto lanes · now ${now ? g.factions[now.team].name : 'no target'}`;
+      if (this.autoBtn.textContent !== txt) this.autoBtn.textContent = txt;
+      this.autoBtn.classList.toggle('active', !f.siegeTarget);
+    }
     for (const t of this.targetBtns || []) {
-      const chosen = g.siegeTarget(f) === t.c;
+      const chosen = !!f.siegeTarget && g.siegeTarget(f) === t.c;
       const txt = (chosen ? '✓ ' : '') + g.factions[t.c.team].name + (t.c.fallen ? ' (fallen)' : '');
       if (t.b.textContent !== txt) t.b.textContent = txt;
       t.b.disabled = t.c.fallen;
@@ -333,12 +344,15 @@ export class UI {
 
   renderLobby(players, myTeam = -1, coop = false) {
     $('lobbyMode').textContent = coop
-      ? 'Co-op: all players are allies against the AI lords and the raiders.'
+      ? (players.length >= 4
+        ? 'Co-op: four players make two teams of two: Blue + Red against Green + Gold.'
+        : 'Co-op: all players are allies against the AI lords.')
       : 'Versus: every castle for itself.';
     for (const b of document.querySelectorAll('#lobbyModes button')) b.classList.toggle('active', (b.dataset.mode === 'coop') === coop);
     const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
+    const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
-      <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle</b>
+      <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
       <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
   }
 
@@ -353,16 +367,17 @@ export class UI {
     const g = this.game;
     const f = g.localFaction;
     const wf = g.factions[winner];
+    const team = won && g.coop;
     $('gameover').classList.remove('hidden');
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
-    $('goText').textContent = reason || (winner === 'alliance'
-      ? 'Every rival house has fallen. The alliance holds the realm together.'
+    $('goText').textContent = reason || (team
+      ? 'Every rival house has fallen. Your alliance rules the realm.'
       : won
       ? 'Yours is the last castle standing. The realm bows to you.'
       : wf ? `${wf.name} is the last castle standing.` : 'No castle is left standing.');
     $('goStats').innerHTML = `
-      <div><b>${g.round}</b><span>rounds</span></div>
+      <div><b>${g.round}</b><span>waves</span></div>
       <div><b>${g.player.kills}</b><span>your kills</span></div>
       <div><b>${f.kills}</b><span>army kills</span></div>
       <div><b>${f.earned}</b><span>gold earned</span></div>
@@ -400,24 +415,19 @@ export class UI {
       this.hudT = 0.12;
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
-      $('round').textContent = g.round ? `Round ${g.round}` : 'Preparation';
-      if (g.phase === 'prep' && g.round === 0) $('phase').textContent = `Battle begins in ${Math.ceil(g.phaseT)}s${g.simulating ? ' · Enter to start now' : ''}`;
-      else if (g.phase === 'prep') $('phase').textContent = `Next wave in ${Math.ceil(g.phaseT)}s`;
-      else {
-        const left = g.units.filter((u) => u.alive && u.team === RAIDER_TEAM).length + g.spawnQueue.length;
-        $('phase').textContent = `${left} raiders remain`;
-      }
-      $('war').textContent = g.round < ROUNDS.warRound ? `Rival lords attack from round ${ROUNDS.warRound}` : 'War: rival lords are attacking!';
+      $('round').textContent = g.round ? `Wave ${g.round}` : 'Preparation';
+      if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${Math.ceil(g.phaseT)}s${g.simulating ? ' · Enter to start now' : ''}`;
+      else $('phase').textContent = `Next wave in ${Math.max(0, Math.ceil(g.phaseT))}s`;
+      $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
       $('weapon').textContent = p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
         : p.weapon === 'bow' ? `${p.bow.name} · ${p.arrows} arrows`
         : `${SPELLS[p.spell] ? SPELLS[p.spell].name : 'Magic'} · ${Math.floor(p.mana)}/${p.manaMax} mana${p.spells.length > 1 ? ' (R: next)' : ''}`;
       $('potions').textContent = `Potions ${p.potions} (Q)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
-      const troops = g.troopCount(g.localTeam);
       const grp = { all: 'All troops', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
       const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
       const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
       const form = FORMATIONS[f.formation || 'line'].name;
-      $('army').textContent = `${troops}/${f.troopCap} troops${vets ? ` (${vets}★)` : ''} · ${form} · ${grp} · ${ord}`;
+      $('army').textContent = `Garrison ${g.garrisonCount(g.localTeam)}/${f.troopCap} · army ${g.laneCount(g.localTeam)}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
       this.renderFactions();
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
@@ -441,8 +451,10 @@ export class UI {
       const gate = c.gate.alive ? Math.round((c.gate.hp / c.gate.maxHp) * 100) + '%' : 'BROKEN';
       const heroAlive = f.isPlayer && f.player ? f.player.alive : f.hero && f.hero.alive;
       const hero = f.eliminated ? '☠' : heroAlive ? '♚' : `⟳${Math.ceil(Math.max(0, f.respawnT))}`;
+      // the 'ally' tag comes first so a long house name can't push it out of sight
+      const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${esc(f.team === g.localTeam ? 'You' : f.name)}${g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam) ? ' <em class="ally">ally</em>' : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span></span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -457,7 +469,7 @@ export class UI {
     for (const f of g.factions) {
       const c = f.castle;
       rows += `<tr style="color:${TEAM_CSS[f.team]}"><td>${esc(f.name)}</td><td>${esc(f.lord)}</td><td>${Math.floor(f.gold)}</td>
-        <td>${g.troopCount(f.team)}/${f.troopCap}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
+        <td>${g.garrisonCount(f.team)}/${f.troopCap} + ${g.laneCount(f.team)}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
         <td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
     }
     $('scoreRows').innerHTML = rows;
@@ -488,14 +500,14 @@ export class UI {
     if (!best) { el.classList.add('hidden'); return; }
     const o = best.ref || best;
     const team = o.team;
-    const fac = g.factions[team];
+    const house = (g.factions[team] || { name: 'Unknown' }).name;
     let name;
-    if (o.kind === 'gate') name = `${fac.name} – Gate`;
-    else if (o.isSiege) name = `${o.name}${team === RAIDER_TEAM ? ' (Raiders)' : ' – ' + fac.name}`;
-    else name = o.isHero ? `${o.name} – ${fac ? fac.name : 'Raiders'}` : `${o.name}${o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''}${team === RAIDER_TEAM ? '' : ' – ' + fac.name}`;
+    if (o.kind === 'gate') name = `${house} – Gate`;
+    else if (o.isSiege) name = `${o.name} – ${house}`;
+    else name = `${o.name}${!o.isHero && o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''} – ${house}`;
     el.classList.remove('hidden');
     $('targetName').textContent = name;
-    $('targetName').style.color = TEAM_CSS[team];
+    $('targetName').style.color = TEAM_CSS[team] || NEUTRAL_CSS;
     $('targetFill').style.width = `${(o.hp / o.maxHp) * 100}%`;
     $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : allied(team, g.localTeam) ? '#4fd17a' : '#d33';
   }
