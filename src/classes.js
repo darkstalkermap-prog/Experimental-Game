@@ -61,6 +61,13 @@ export const CLASSES = {
 
 export function classOf(id) { return CLASSES[id] || CLASSES.knight; }
 
+// Changing class in the field (shop → Class). Free during the preparation and while waiting to respawn.
+export const SWITCH = {
+  cooldown: 15,   // seconds before a hero may change class again
+  combat: 4,      // not within this long of being hit
+  ready: 6,       // the new abilities need this long to ready
+};
+
 // Timed effects on a hero. Each has a remaining time and a value (the damage multiplier for 'guard', the
 // damage still to absorb for 'ward', ...). Weaker effects never replace stronger ones.
 const LOWER_IS_STRONGER = new Set(['guard']);

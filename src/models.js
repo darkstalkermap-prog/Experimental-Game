@@ -197,8 +197,39 @@ export function lookFor(seed) {
   return { skin: SKINS[r(1) % SKINS.length], hair: HAIR[r(2) % HAIR.length], beard: r(3) % 3 !== 0 };
 }
 
-export function getModelGeos(type, team, variant = 0) {
-  const key = `${type}:${team}:${variant}`;
+// Drill Sergeants: every level of training puts a soldier in better kit. 1 steel pauldrons and a white cross, 2 a cloak in the house
+// colour, 3 gold at the throat, on the cloak and on the shield, 4 gold wings on the helm and gold pauldrons,
+// 5 a gilded breastplate and a long cloak (and the man stands a little taller).
+export const TIER_SCALE = (tier) => 1 + 0.012 * tier;
+function tierKit(torso, tier, cloth) {
+  const p = prims();
+  const bright = 0xd8dce4;
+  torso.push(part(p.box, TRIM, [0, 1.12, 0.142], [0, 0, 0], [0.1, 0.78, 0.012]));                         // a broad white cross on the tabard
+  torso.push(part(p.box, TRIM, [0, 1.32, 0.142], [0, 0, 0], [0.38, 0.1, 0.012]));
+  torso.push(part(p.sphere, tier >= 4 ? GOLD : bright, [-0.27, 1.47, 0], [0, 0, 0.35], [0.25, 0.17, 0.27]));
+  torso.push(part(p.sphere, tier >= 4 ? GOLD : bright, [0.27, 1.47, 0], [0, 0, -0.35], [0.25, 0.17, 0.27]));
+  if (tier >= 2) {
+    const long = tier >= 5;
+    torso.push(part(p.box, cloth, [0, long ? 0.92 : 1.02, -0.185], [0.08, 0, 0], [0.54, long ? 1.2 : 0.95, 0.03]));
+    torso.push(part(p.box, TRIM, [0, 1.5, -0.17], [0, 0, 0], [0.54, 0.05, 0.04]));
+  }
+  if (tier >= 3) {
+    torso.push(part(p.cyl, GOLD, [0, 1.5, 0.01], [0, 0, 0], [0.26, 0.06, 0.26]));                          // gorget
+    torso.push(part(p.box, GOLD, [0, tier >= 5 ? 0.33 : 0.46, -0.2], [0.08, 0, 0], [0.54, 0.06, 0.04]));   // the cloak's hem
+    torso.push(part(p.box, GOLD, [0, 0.74, 0.135], [0, 0, 0], [0.4, 0.05, 0.024]));                        // a gold band on the tabard
+  }
+  if (tier >= 4) {
+    torso.push(part(p.cone, GOLD, [-0.19, 1.8, 0], [0, 0, 1.05], [0.06, 0.34, 0.05]));                     // wings on the helm
+    torso.push(part(p.cone, GOLD, [0.19, 1.8, 0], [0, 0, -1.05], [0.06, 0.34, 0.05]));
+  }
+  if (tier >= 5) {
+    torso.push(part(p.box, GOLD, [0, 1.27, 0.16], [0.12, 0, 0], [0.32, 0.4, 0.035]));                      // gilded breastplate
+    torso.push(part(p.box, 0xb8862a, [0, 1.27, 0.18], [0.12, 0, 0], [0.06, 0.34, 0.012]));
+  }
+}
+
+export function getModelGeos(type, team, variant = 0, tier = 0) {
+  const key = `${type}:${team}:${variant}:${tier}`;
   if (cache.has(key)) return cache.get(key);
   const t = UNIT_TYPES[type];
   const p = prims();
@@ -259,6 +290,7 @@ export function getModelGeos(type, team, variant = 0) {
     for (let i = 0; i < 4; i++) torso.push(part(p.box, 0xe8e0d0, [0.21 + i * 0.012, 1.55, -0.17 + (i % 2) * 0.03], [0, 0, 0.35], [0.02, 0.1, 0.005]));
   }
   if (t.weapon === 'sword' || t.weapon === 'lance') torso.push(part(p.box, LEATHER, [-0.2, 0.82, 0.02], [0.15, 0, 0.12], [0.05, 0.42, 0.05])); // scabbard
+  if (tier > 0 && !raider && !t.giant) tierKit(torso, tier, cloth);
 
   const legs = t.body === 'plate' ? metal : t.body === 'mail' ? mailCol : PANTS;
   const thigh = mergeGeometries([
@@ -286,6 +318,16 @@ export function getModelGeos(type, team, variant = 0) {
   ];
   const foreL = foreParts();
   shieldParts(t.shield, cloth, raider, foreL);
+  if (tier >= 3 && t.shield && !raider) {
+    // gilded shield: a gold rim and boss
+    if (t.shield === 'round') {
+      foreL.push(part(new THREE.TorusGeometry(0.4, 0.032, 4, 22), GOLD, [-0.02, -0.15, 0.135], [0, 0, 0]));
+      foreL.push(part(p.hemi, GOLD, [-0.02, -0.15, 0.172], [Math.PI / 2, 0, 0], [0.12, 0.06, 0.12]));
+    } else {
+      foreL.push(part(p.box, GOLD, [-0.02, -0.12, 0.172], [0, 0, 0], [0.5, 0.035, 0.012]));
+      foreL.push(part(p.box, GOLD, [-0.02, -0.32, 0.172], [0, 0, 0], [0.035, 0.46, 0.012]));
+    }
+  }
   if (t.weapon === 'bow') {
     foreL.push(part(p.bow, WOOD, [0, 0, 0]));
     foreL.push(part(p.string, 0xddd5c0, [0, -0.27, 0], [Math.PI / 2, 0, 0]));
@@ -327,12 +369,12 @@ const mk = (g) => { const m = new THREE.Mesh(g, unitMaterial()); m.castShadow = 
 function joint(x, y, z, geo) { const j = new THREE.Group(); j.position.set(x, y, z); if (geo) j.add(mk(geo)); return j; }
 
 // Build a posable soldier. Returns the root group and its joints.
-export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)) {
-  const geos = getModelGeos(type, team, variant);
+export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0) {
+  const geos = getModelGeos(type, team, variant, tier);
   const t = UNIT_TYPES[type];
   const root = new THREE.Group();
   const body = new THREE.Group();
-  body.scale.setScalar(t.scale || 1);
+  body.scale.setScalar((t.scale || 1) * (t.giant ? 1 : TIER_SCALE(tier)));
   root.add(body);
   const torso = new THREE.Group();
   torso.add(mk(geos.torso));
@@ -511,9 +553,9 @@ export function poseHorse(h, speed, dt) {
 export const SADDLE_Y = 1.0;
 
 // Build (and cache) everything a soldier of this look needs, without adding it to a scene.
-export function prewarmSoldier(type, team, variant) {
+export function prewarmSoldier(type, team, variant, tier = 0) {
   const t = UNIT_TYPES[type];
-  const m = buildSoldier(type, team, variant);
+  const m = buildSoldier(type, team, variant, tier);
   let root = m.root;
   if (t.mounted) {
     const h = buildHorse(team, variant, team !== RAIDER_TEAM);
@@ -524,7 +566,7 @@ export function prewarmSoldier(type, team, variant) {
     poseHorse(h, 0, 0);
   }
   poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: !!t.mounted });
-  bakedMesh(`${type}:${team}:${variant}:${t.mounted ? 1 : 0}`, root);
+  return bakedMesh(`${type}:${team}:${variant}:${t.mounted ? 1 : 0}:${tier}`, root);
 }
 
 // ---------------------------------------------------------------- distant soldiers

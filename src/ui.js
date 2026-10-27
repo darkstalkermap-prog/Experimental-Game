@@ -1,10 +1,11 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS } from './config.js';
+import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, clock } from './config.js';
 import { SHOP } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
-import { CLASSES, CLASS_IDS, BUFF_NAMES } from './classes.js';
+import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
+import { roadDist } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -56,6 +57,9 @@ export class UI {
     this.tab = 'army';
     this.hudT = 0;
     this.mapT = 0;
+    this.mapOpen = false;
+    this.bigBg = null;
+    this.bigT = 0;
     this.targetT = 0;
     this.goldShown = null;
     this.mini = $('minimap');
@@ -63,7 +67,7 @@ export class UI {
     this.mapBg = null;
     this.raycaster = new THREE.Raycaster();
     document.querySelectorAll('#shop .tabs button').forEach((b) => {
-      b.addEventListener('click', () => { this.tab = b.dataset.tab; this.renderShop(); });
+      b.addEventListener('click', () => { if (b.disabled) return; this.tab = b.dataset.tab; this.renderShop(); });
     });
   }
 
@@ -204,6 +208,7 @@ export class UI {
     this.shopOpen = open;
     $('shop').classList.toggle('hidden', !open);
     if (open) {
+      this.toggleMap(false);
       this.showPause(false); // the shop always sits on top and takes the clicks
       g.paused = false;
       this.renderShop();
@@ -217,6 +222,7 @@ export class UI {
   // never replaced under the cursor and every click lands.
   renderShop() {
     const g = this.game;
+    if (document.querySelector(`#shop .tabs button[data-tab="${this.tab}"]`)?.disabled) this.tab = 'army';   // a greyed-out tab can't be shown
     document.querySelectorAll('#shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
     const grid = $('shopGrid');
     grid.innerHTML = '';
@@ -225,8 +231,10 @@ export class UI {
     this.orderBtns = [];
     $('shopTitle').textContent = this.tab === 'orders' ? 'Orders' : 'Quartermaster';
     this.roster = null;
+    this.classCards = null;
     if (this.tab === 'orders') { this.buildOrders(grid); this.refreshShop(); return; }
     if (this.tab === 'army') this.buildRoster(grid);
+    if (this.tab === 'class') this.buildClassTab(grid);
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
@@ -259,6 +267,38 @@ export class UI {
       this.shopCards.push({ item, card, p, btn, last: '' });
     }
     this.refreshShop();
+  }
+
+  // Change class in the field: one card per class, the current one marked.
+  buildClassTab(grid) {
+    const g = this.game;
+    const note = document.createElement('div');
+    note.className = 'classnote';
+    note.textContent = `Take up another class at any time: your health keeps its proportion and the new abilities are ready after ${SWITCH.ready} s. You can't change in the middle of a fight, or again within ${SWITCH.cooldown} s. It is free before the first wave, and while you wait to respawn.`;
+    grid.appendChild(note);
+    this.classCards = [];
+    for (const id of CLASS_IDS) {
+      const c = CLASSES[id], m = c.mods;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.borderTop = `3px solid ${c.color}`;
+      const h = document.createElement('h4');
+      h.innerHTML = `${esc(c.icon)} ${esc(c.name)}<small>${esc(c.role)}</small>`;
+      const p = document.createElement('p');
+      p.innerHTML = `${esc(c.blurb)}
+        <div class="ab"><b>Q · ${esc(c.q.icon)} ${esc(c.q.name)}</b>: ${esc(c.q.desc)}</div>
+        <div class="ab"><b>R · ${esc(c.r.icon)} ${esc(c.r.name)}</b>: ${esc(c.r.desc)}</div>
+        <div class="st">Health ${Math.round(PLAYER.hp * m.hp)} · armour ${PLAYER.armor + m.armor} · speed ${pct(m.speed)} · sword ${pct(m.melee)} · bow ${pct(m.bow)}${m.spell !== 1 ? ` · spells ${pct(m.spell)}` : ''}</div>`;
+      const btn = document.createElement('button');
+      btn.addEventListener('click', () => {
+        if (g.localSwitchClass(id)) { card.classList.remove('bought'); void card.offsetWidth; card.classList.add('bought'); }
+        else { card.classList.remove('nope'); void card.offsetWidth; card.classList.add('nope'); }
+        this.refreshShop();
+      });
+      card.append(h, p, btn);
+      grid.appendChild(card);
+      this.classCards.push({ id, card, btn, last: '' });
+    }
   }
 
   // Who garrisons the castle, who marches with you, who goes out with the waves.
@@ -471,6 +511,13 @@ export class UI {
         ? `Your army: ${n('infantry')} infantry, ${n('archer')} archers, ${n('cavalry')} cavalry · ${mine.filter((u) => u.rank >= 3).length} veterans`
         : 'Your army is empty. Open the Army tab to choose who marches with you.';
     }
+    for (const c of this.classCards || []) {
+      const pl = g.player, why = pl.classBlock(c.id), mine = c.id === pl.classId;
+      const label = mine ? '✓ Your class' : why || 'Switch to this class';
+      if (c.last !== label) { c.btn.textContent = label; c.last = label; }
+      c.btn.classList.toggle('unavailable', !!why);
+      c.card.classList.toggle('current', mine);
+    }
     for (const c of this.shopCards || []) {
       const can = c.item.can(g, f);
       const cost = Math.round(c.item.cost(g, f));
@@ -522,7 +569,10 @@ export class UI {
   }
 
   // ---------- menus ----------
-  showPause(show) { $('pause').classList.toggle('hidden', !show); }
+  showPause(show) {
+    $('pause').classList.toggle('hidden', !show);
+    if (show) this.toggleMap(false);
+  }
 
   gameOver(won, winner = -1, reason = '') {
     const g = this.game;
@@ -576,8 +626,8 @@ export class UI {
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
       $('round').textContent = g.round ? `Wave ${g.round}` : 'Preparation';
-      if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${Math.ceil(g.phaseT)}s${g.simulating ? ' · Enter to start now' : ''}`;
-      else $('phase').textContent = `Next wave in ${Math.max(0, Math.ceil(g.phaseT))}s`;
+      if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
+      else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
       $('weapon').textContent = p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
@@ -589,8 +639,8 @@ export class UI {
       const form = FORMATIONS[f.formation || 'line'].name;
       const rc = g.roleCounts(g.localTeam);
       $('army').textContent = `Garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
-      $('cls').textContent = `${p.cls.icon} ${p.cls.name}`;
-      $('cls').style.color = p.cls.color;
+      $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
+      $('clsName').style.color = p.cls.color;
       this.renderFactions();
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
@@ -603,6 +653,10 @@ export class UI {
     if (this.targetT <= 0) { this.targetT = 0.15; this.updateTarget(); }
     this.mapT -= dt;
     if (this.mapT <= 0) { this.mapT = 0.1; this.drawMinimap(); }
+    if (this.mapOpen) {
+      this.bigT -= dt;
+      if (this.bigT <= 0) { this.bigT = 0.1; this.drawBigMap(); }
+    }
   }
 
   // Q and R: icon, name, cooldown sweep and the effects running on you
@@ -710,71 +764,160 @@ export class UI {
     $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : allied(team, g.localTeam) ? '#4fd17a' : '#d33';
   }
 
-  // ---------- minimap ----------
-  buildMapBg() {
-    const g = this.game;
-    const S = 180;
+  // ---------- maps ----------
+  // The terrain picture behind a map of S pixels. The big map (M) is detailed: hill shading, roads, forests and rocks.
+  buildMapBg(S, detailed = false) {
+    const g = this.game, P = g.physics;
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const ctx = c.getContext('2d');
     const img = ctx.createImageData(S, S);
+    const span = WORLD.half * 2, d = span / S;
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const wx = (x / S) * 2 * WORLD.half - WORLD.half;
-      const wz = (y / S) * 2 * WORLD.half - WORLD.half;
-      const h = g.physics.terrainHeight(wx, wz);
+      const wx = (x / S) * span - WORLD.half;
+      const wz = (y / S) * span - WORLD.half;
+      const h = P.terrainHeight(wx, wz);
       const k = Math.min(1, Math.max(0, (h - 0) / 30));
+      let r = 70 + k * 70, gr = 92 + k * 50, b = 50 + k * 50;
+      if (detailed) {
+        r = 66 + k * 50; gr = 90 + k * 34; b = 52 + k * 30;   // the hills round the edge fade to dry grass, not sand
+        // light from the upper left, and roads worn into the grass
+        const sx = (P.terrainHeight(wx + d, wz) - P.terrainHeight(wx - d, wz)) / (2 * d);
+        const sz = (P.terrainHeight(wx, wz + d) - P.terrainHeight(wx, wz - d)) / (2 * d);
+        const lit = Math.min(1.3, Math.max(0.7, 1 + (sx + sz) * 0.55));
+        r *= lit; gr *= lit; b *= lit;
+        const road = Math.max(0, 1 - roadDist(wx, wz) / 3) * 0.9;
+        r += (158 - r) * road; gr += (132 - gr) * road; b += (92 - b) * road;
+      }
       const i = (y * S + x) * 4;
-      img.data[i] = 70 + k * 70; img.data[i + 1] = 92 + k * 50; img.data[i + 2] = 50 + k * 50; img.data[i + 3] = 255;
+      img.data[i] = r; img.data[i + 1] = gr; img.data[i + 2] = b; img.data[i + 3] = 255;
     }
     ctx.putImageData(img, 0, 0);
-    this.mapBg = c;
+    if (detailed) {
+      const k = S / span;
+      const seen = new Set();
+      const trees = [], rocks = [];
+      for (const list of P.grid.values()) {
+        for (const o of list) {
+          if (seen.has(o)) continue;
+          seen.add(o);
+          if (o.kind === 'tree') trees.push(o); else if (o.kind === 'stone') rocks.push(o);
+        }
+      }
+      const dot = (o, rad) => {
+        ctx.beginPath();
+        ctx.arc(((o.minX + o.maxX) / 2 + WORLD.half) * k, ((o.minZ + o.maxZ) / 2 + WORLD.half) * k, rad, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      ctx.fillStyle = 'rgba(28,56,30,0.6)';
+      for (const o of trees) dot(o, Math.max(1.6, 2.6 * k));
+      ctx.fillStyle = 'rgba(128,126,118,0.95)';
+      for (const o of rocks) dot(o, Math.max(1.4, (o.maxX - o.minX) * 0.7 * k));
+    }
+    return c;
   }
 
-  drawMinimap() {
+  // One painter for both maps. big: the M map, with house names, the roads armies take and bigger markers.
+  paintMap(ctx, S, bg, big) {
     const g = this.game;
-    if (!this.mapBg) this.buildMapBg();
-    const ctx = this.miniCtx;
-    const S = this.mini.width;
     const k = S / (WORLD.half * 2);
+    const m = big ? S / 180 * 0.55 : 1;       // marker scale
     const X = (x) => (x + WORLD.half) * k;
-    ctx.drawImage(this.mapBg, 0, 0, S, S);
+    ctx.drawImage(bg, 0, 0, S, S);
+    // where each house's armies are marching
+    if (big) {
+      ctx.save();
+      for (const f of g.factions) {
+        if (f.eliminated || f.castle.fallen) continue;
+        const t = g.siegeTarget(f);
+        if (!t) continue;
+        const a = f.castle.gatePos, b = t.gatePos;
+        const ax = X(a.x), az = X(a.z), bx = X(b.x), bz = X(b.z);
+        const mine = f.team === g.localTeam;
+        ctx.strokeStyle = ctx.fillStyle = TEAM_CSS[f.team];
+        ctx.globalAlpha = mine ? 0.9 : 0.5;
+        ctx.lineWidth = mine ? 3.2 : 2;
+        ctx.setLineDash([9, 7]);
+        ctx.beginPath(); ctx.moveTo(ax, az); ctx.lineTo(bx, bz); ctx.stroke();
+        ctx.setLineDash([]);
+        const ang = Math.atan2(bz - az, bx - ax), hx = ax + (bx - ax) * 0.6, hz = az + (bz - az) * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(hx + Math.cos(ang) * 9, hz + Math.sin(ang) * 9);
+        ctx.lineTo(hx + Math.cos(ang + 2.5) * 8, hz + Math.sin(ang + 2.5) * 8);
+        ctx.lineTo(hx + Math.cos(ang - 2.5) * 8, hz + Math.sin(ang - 2.5) * 8);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    }
     for (const c of g.castles) {
       const s = CASTLE.H * 2 * k;
+      const cx = X(c.center.x), cz = X(c.center.z);
       ctx.fillStyle = c.fallen ? '#333' : TEAM_CSS[c.team];
       ctx.globalAlpha = 0.85;
-      ctx.fillRect(X(c.center.x) - s / 2, X(c.center.z) - s / 2, s, s);
+      ctx.fillRect(cx - s / 2, cz - s / 2, s, s);
       ctx.globalAlpha = 1;
+      if (big) {
+        ctx.strokeStyle = '#0008'; ctx.lineWidth = 2;
+        ctx.strokeRect(cx - s / 2, cz - s / 2, s, s);
+        ctx.fillStyle = '#e8e2d0';
+        const tc = (CASTLE.H + CASTLE.towerOff) * k, tr = CASTLE.towerR * k;
+        for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+          ctx.fillRect(cx + sx * tc - tr, cz + sz * tc - tr, tr * 2, tr * 2);                                // the corner towers
+          ctx.strokeRect(cx + sx * tc - tr, cz + sz * tc - tr, tr * 2, tr * 2);
+        }
+        const kp = c.keep.pos;
+        ctx.fillStyle = c.fallen ? '#555' : '#f4efe0';
+        ctx.fillRect(X(kp.x) - 5, X(kp.z) - 5, 10, 10);                                                 // the keep
+      }
       ctx.strokeStyle = c.gate.alive ? '#fff' : '#f33';
       ctx.lineWidth = 2;
       const gp = c.gatePos;
-      ctx.beginPath(); ctx.arc(X(gp.x), X(gp.z), 2.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(X(gp.x), X(gp.z), 2.5 * m, 0, Math.PI * 2); ctx.stroke();
+      if (big) {
+        const f = g.factions[c.team];
+        const label = `${f.name}${c.team === g.localTeam ? ' (you)' : ''}${c.fallen ? ' · fallen' : ''}`;
+        ctx.font = '600 15px Cinzel, Georgia, serif';
+        ctx.textAlign = 'center';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+        ctx.strokeText(label, cx, cz - s / 2 - 9);
+        ctx.fillStyle = '#fff';
+        ctx.fillText(label, cx, cz - s / 2 - 9);
+      }
     }
     for (const u of g.units) {
       if (!u.alive || u.crewOf) continue;   // an engine's crew is shown by the engine
       ctx.fillStyle = TEAM_CSS[u.team];
-      const r = u.isGiant ? 5 : u.isHero ? 3 : 1.6;
+      const r = (u.isGiant ? 5 : u.isHero ? 3 : 1.6) * m;
       ctx.fillRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2);
       // heroes, and the soldiers of your own army, get a white edge
       if (u.isHero || (u.army && u.team === g.localTeam)) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(X(u.pos.x) - r, X(u.pos.z) - r, r * 2, r * 2); }
     }
     for (const s of g.siege) {
       if (!s.alive) continue;
+      const e = 3 * m;
       ctx.fillStyle = '#000';
-      ctx.fillRect(X(s.pos.x) - 3, X(s.pos.z) - 3, 6, 6);
+      ctx.fillRect(X(s.pos.x) - e, X(s.pos.z) - e, e * 2, e * 2);
       if (s.abandoned) {   // nobody's: an empty box
         ctx.strokeStyle = TEAM_CSS[s.team]; ctx.lineWidth = 1.5;
-        ctx.strokeRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+        ctx.strokeRect(X(s.pos.x) - e * 0.66, X(s.pos.z) - e * 0.66, e * 1.33, e * 1.33);
       } else {
         ctx.fillStyle = TEAM_CSS[s.team];
-        ctx.fillRect(X(s.pos.x) - 2, X(s.pos.z) - 2, 4, 4);
+        ctx.fillRect(X(s.pos.x) - e * 0.66, X(s.pos.z) - e * 0.66, e * 1.33, e * 1.33);
       }
     }
     for (const h of g.humans) {
       if (h === g.player || !h.alive) continue;
+      const e = 3.5 * m;
       ctx.fillStyle = TEAM_CSS[h.team];
-      ctx.fillRect(X(h.pos.x) - 3.5, X(h.pos.z) - 3.5, 7, 7);
+      ctx.fillRect(X(h.pos.x) - e, X(h.pos.z) - e, e * 2, e * 2);
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-      ctx.strokeRect(X(h.pos.x) - 3.5, X(h.pos.z) - 3.5, 7, 7);
+      ctx.strokeRect(X(h.pos.x) - e, X(h.pos.z) - e, e * 2, e * 2);
+      if (big) {
+        ctx.font = '600 13px Cinzel, Georgia, serif'; ctx.textAlign = 'center'; ctx.lineJoin = 'round';
+        ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(h.name, X(h.pos.x), X(h.pos.z) - e - 5);
+        ctx.fillStyle = '#fff'; ctx.fillText(h.name, X(h.pos.x), X(h.pos.z) - e - 5);
+      }
     }
     const p = g.player;
     if (p.alive) {
@@ -783,8 +926,38 @@ export class UI {
       ctx.translate(px, pz);
       ctx.rotate(-p.yaw + Math.PI);
       ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(4.5, 5); ctx.lineTo(-4.5, 5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#000'; ctx.lineWidth = big ? 1.5 : 0;
+      ctx.beginPath(); ctx.moveTo(0, -7 * m); ctx.lineTo(4.5 * m, 5 * m); ctx.lineTo(-4.5 * m, 5 * m); ctx.closePath(); ctx.fill();
+      if (big) ctx.stroke();
       ctx.restore();
+    }
+  }
+
+  drawMinimap() {
+    if (!this.mapBg) this.mapBg = this.buildMapBg(this.mini.width);
+    this.paintMap(this.miniCtx, this.mini.width, this.mapBg, false);
+  }
+
+  // The big map (M): a live overlay over the battle. You can keep playing while it is up.
+  toggleMap(force) {
+    const open = force !== undefined ? force : !this.mapOpen;
+    if (open === !!this.mapOpen) return;
+    this.mapOpen = open;
+    $('bigmap').classList.toggle('hidden', !open);
+    if (open) { this.bigT = 0; this.drawBigMap(); }
+  }
+
+  drawBigMap() {
+    const cv = $('bigmapCanvas');
+    if (!this.bigBg) this.bigBg = this.buildMapBg(cv.width, true);
+    this.paintMap(cv.getContext('2d'), cv.width, this.bigBg, true);
+    const g = this.game;
+    const key = g.factions.map((f) => `${f.name}${f.castle.fallen}`).join('|') + g.localTeam;
+    if (key !== this.legendKey) {
+      this.legendKey = key;
+      $('bigmapLegend').innerHTML = g.factions.map((f) =>
+        `<span><i style="background:${TEAM_CSS[f.team]}"></i>${esc(f.name)}${f.team === g.localTeam ? ' (you)' : ''}${f.castle.fallen ? ' · fallen' : ''}</span>`).join('')
+        + '<span class="sym">▲ you · ■ heroes · ▪ soldiers (white edge: your army) · ▣ siege engines · ◯ gates · dashed line: where each house marches</span>';
     }
   }
 }

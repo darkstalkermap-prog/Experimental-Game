@@ -5,7 +5,8 @@ import { makeNoise, smoothstep, clamp } from './noise.js';
 import { allied } from './teams.js';
 
 export const STEP = 0.65; // max height a character can step up
-const STEER_KINDS = new Set(['tree', 'stone']);   // obstacles soldiers walk round (trunks and the standing stones)
+const STEER_KINDS = new Set(['tree', 'stone']);   // obstacles soldiers walk round (trunks, rocks and the standing stones)
+export const GATE_OPEN = 0.7;   // how far a gate must have swung open (0 shut, 1 wide) before anyone can pass it
 
 // Castle sites: index = team. rot turns castle-local +Z (gate side) toward the map centre.
 export const CASTLE_SITES = [];
@@ -165,6 +166,12 @@ export class Physics {
     return { x: nx / l, z: nz / l };
   }
 
+  // Does this collider let someone of `team` through? A gate lets its own side (and their allies) pass, but only
+  // while it stands open: shut, it is solid for everybody.
+  lets(c, team) {
+    return c.passTeam >= 0 && allied(c.passTeam, team) && (c.kind !== 'gate' || c.ref.openAmt >= GATE_OPEN);
+  }
+
   // Push a circle out of blocking colliders. Returns true if anything was hit.
   // ignoreTrees lets a stuck soldier (or a wheeled engine) slip past trunks; ignoreStones also lets a soldier that
   // has been wedged for seconds slip past a standing stone (engines never do: they steer round them).
@@ -172,7 +179,7 @@ export class Physics {
     let hit = false;
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.near(pos.x, pos.z, radius + 1)) {
-        if (!c.active || (c.passTeam >= 0 && allied(c.passTeam, team)) || (ignoreTrees && c.kind === 'tree') || (ignoreStones && c.kind === 'stone')) continue;
+        if (!c.active || this.lets(c, team) || (ignoreTrees && c.kind === 'tree') || (ignoreStones && c.kind === 'stone')) continue;
         const qx = clamp(pos.x, c.minX, c.maxX);
         const qz = clamp(pos.z, c.minZ, c.maxZ);
         const dx = pos.x - qx, dz = pos.z - qz;
@@ -205,7 +212,7 @@ export class Physics {
     for (const c of this.near(x, z, 0.5)) {
       if (!c.active || c.noProjectile) continue;
       if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
-      if (c.kind === 'gate' && c.passTeam >= 0 && allied(c.passTeam, ignoreTeam)) continue;
+      if (c.kind === 'gate' && this.lets(c, ignoreTeam)) continue;
       if (y < this.topAt(c, x, z) && y > c.bottom) return c;
     }
     // battlement merlons: the defenders' own arrows fly through the slots and over the stone

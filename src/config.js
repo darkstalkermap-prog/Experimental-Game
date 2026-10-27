@@ -37,8 +37,8 @@ export const CASTLE = {
   wallT: 2,       // wall thickness
   gateW: 6,
   gateH: 6,
-  towerR: 3.2,
-  towerOff: 1.8,  // corner towers sit this far outside the wall corners so the wall walk passes them
+  towerR: 4.5,    // corner towers are square: this is half their width
+  towerOff: 2.5,  // a tower's centre sits this far outside the wall corner, so its inner corner meets the wall walk
   walk: 3.5,      // width of the wooden walkway along the inside of the walls
   towerH: 13,
   keepW: 11,
@@ -60,6 +60,12 @@ export const WAVES = {
   ramEvery: 3,        // a battering ram joins every 3rd wave (from wave 3)
   catapultEvery: 6,   // a catapult joins every 6th wave (from wave 5)
   siegeLimit: 3,      // wave engines alive at once, per house
+};
+
+// A countdown as m:ss (65 -> "1:05").
+export const clock = (sec) => {
+  const s = Math.max(0, Math.ceil(sec));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
 export const START_GOLD = 500;

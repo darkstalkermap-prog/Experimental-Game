@@ -82,6 +82,9 @@ export class LordAI {
       const a = this.assault;
       const attackers = troops.filter((u) => u.order === 'assault');
       if (a.castle.fallen) {
+        // the push worked: with enough men left the army marches on to the next castle, otherwise it goes home
+        const next = attackers.length >= 3 ? this.weakest() : null;
+        if (next) { this.march(next, attackers); return; }
         this.recall(troops);
         this.cooldown = 20;
         return;
@@ -95,7 +98,20 @@ export class LordAI {
     if (this.cooldown > 0) return;
     if (troops.length < 8 + Math.floor(stage / 3)) return;
 
-    // choose the weakest reachable castle
+    const best = this.weakest();
+    if (!best) return;
+    const send = troops.filter((u) => u.kind === 'infantry' || u.kind === 'cavalry' || Math.random() < 0.5);
+    this.march(best, send);
+    if (f.hero && f.hero.alive && f.hero.setOrder && Math.random() < 0.6) f.hero.setOrder('assault', best);
+    if (best.gate.alive && f.gold >= 450) this.try('ram');
+    if (stage >= 3 && f.gold >= 800) this.try('catapult');
+    if (stage >= 4 && f.gold >= 2000) this.try('giant');
+    g.announce(`${f.name} marches on ${g.factions[best.team].name}!`, f.team, best.team);
+  }
+
+  // the weakest reachable castle, or null when every other house has fallen or is an ally
+  weakest() {
+    const g = this.g, f = this.f;
     let best = null, bestScore = Infinity;
     for (const c of g.castles) {
       if (c.fallen || allied(c.team, f.team)) continue;
@@ -104,16 +120,14 @@ export class LordAI {
       const score = enemyTroops * 25 + c.gate.hp / 20 + c.keep.hp / 40 + dist * 0.5 + Math.random() * 60;
       if (score < bestScore) { bestScore = score; best = c; }
     }
-    if (!best) return;
-    f.siegeTarget = best;   // the waves and the engines follow the push
-    this.assault = { castle: best, since: g.time };
-    const send = troops.filter((u) => u.kind === 'infantry' || u.kind === 'cavalry' || Math.random() < 0.5);
-    for (const u of send) u.setOrder('assault', best);
-    if (f.hero && f.hero.alive && f.hero.setOrder && Math.random() < 0.6) f.hero.setOrder('assault', best);
-    if (best.gate.alive && f.gold >= 450) this.try('ram');
-    if (stage >= 3 && f.gold >= 800) this.try('catapult');
-    if (stage >= 4 && f.gold >= 2000) this.try('giant');
-    g.announce(`${f.name} marches on ${g.factions[best.team].name}!`, f.team, best.team);
+    return best;
+  }
+
+  // send these troops at a castle; the waves and the engines follow the push
+  march(castle, units) {
+    this.f.siegeTarget = castle;
+    this.assault = { castle, since: this.g.time };
+    for (const u of units) u.setOrder('assault', castle);
   }
 
   recall(troops) {

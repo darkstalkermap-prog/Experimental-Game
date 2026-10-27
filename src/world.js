@@ -236,6 +236,16 @@ export function createForest(scene, physics) {
     const r = 0.4 * t.s;
     physics.add({ minX: t.x - r, maxX: t.x + r, minZ: t.z - r, maxZ: t.z + r, top: t.y + 8, kind: 'tree', noWalk: true });
   }
+  // Rocks are solid too: nobody walks through them, and soldiers steer round them like the standing stones. Only the
+  // knee-high ones are low enough to step onto.
+  for (const r of rocks) {
+    if (Math.max(Math.abs(r.x), Math.abs(r.z)) > WORLD.playHalf) continue;
+    const h = 0.8 * r.s;
+    // it stands on the highest ground around it, so someone coming up the slope behind it can't just step over
+    let base = r.y;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) base = Math.max(base, physics.terrainHeight(r.x + sx * (h + 0.4), r.z + sz * (h + 0.4)));
+    physics.add({ minX: r.x - h, maxX: r.x + h, minZ: r.z - h, maxZ: r.z + h, top: base + 1.1 * r.s, kind: 'stone', noWalk: r.s > 0.58 });
+  }
 }
 
 // Standing stones in the middle of the battlefield.

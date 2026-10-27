@@ -129,6 +129,7 @@ export class HostSync {
           g.abilities.use(p, d.s, vec(d.f), vec(d.d));
         }
         break;
+      case 'class': g.switchClass(p, String(d.cls)); break;
       case 'role': g.setRoles(p.team, d); break;
       case 'recruitRole': f.recruitRole = d.role === 'army' ? 'army' : 'garrison'; break;
       case 'board': g.boardEngine(p, g.siege.find((e) => e.id === d.id)); break;
@@ -185,7 +186,7 @@ export class HostSync {
         hp: r1(h.hp), maxHp: h.maxHp, alive: h.alive ? 1 : 0, arrows: h.arrows, potions: h.potions, lv: h.lv,
         bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
-        order: h.lastOrder || 'defend',
+        order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId),
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -326,6 +327,7 @@ export class ClientSync {
         g.humans.push(h);
         g.factions[team].player = h; g.factions[team].isPlayer = true;
       }
+      if (CLASS_IDS[a[24]] && CLASS_IDS[a[24]] !== h.classId) h.adoptClass(CLASS_IDS[a[24]]);   // they changed class
       if (!h.interp) h.interp = new Interp();
       h.interp.push(a[1], a[2], a[3], a[11] ? a[12] : a[4], a[4]); // riders turn by their horse's heading
       h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18] };
@@ -353,7 +355,12 @@ export class ClientSync {
     const p = g.player;
     const me = d.me;
     if (me) {
-      if (me.hp < p.hp - 0.5 && p.alive) { p.hurtFlash = Math.min(1, p.hurtFlash + 0.4 + (p.hp - me.hp) / 60); g.audio.play('hurt'); }
+      if (CLASS_IDS[me.cls] && CLASS_IDS[me.cls] !== p.classId) {   // the host confirmed a class change: not a wound
+        p.adoptClass(CLASS_IDS[me.cls]);
+        p.classAt = g.phase === 'prep' && g.round === 0 ? -99 : g.time;   // for the shop's "Wait 12 s"
+        p.hp = me.hp;
+      }
+      if (me.hp < p.hp - 0.5 && p.alive) { p.hurtFlash = Math.min(1, p.hurtFlash + 0.4 + (p.hp - me.hp) / 60); g.audio.play('hurt'); p.lastHurt = g.time; }
       const lvChanged = JSON.stringify(me.lv) !== JSON.stringify(p.lv);
       p.lv = me.lv;
       if (lvChanged) p.rebuildWeapons();

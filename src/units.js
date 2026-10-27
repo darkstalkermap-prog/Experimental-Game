@@ -1,7 +1,7 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS } from './config.js';
-import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh } from './models.js';
+import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh, getModelGeos, prewarmSoldier, TIER_SCALE } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
@@ -60,6 +60,7 @@ export class Unit {
     this.goal = null;
     this.waypoint = null;
     this.nav = null;
+    this.avoid = {};       // which corner of a castle this soldier is going round by (see nav.avoidCastles)
     this.blockedBy = null;
     this.attackTimer = Math.random() * this.cd;
     this.swingT = -1;
@@ -99,7 +100,8 @@ export class Unit {
     // resting pose, then bake the distant version
     poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: this.mounted });
     if (this.horse) poseHorse(this.horse, 0, 0);
-    this.far = bakedMesh(`${type}:${team}:${this.variant}:${this.mounted ? 1 : 0}`, this.mesh);
+    this.tier = 0;         // Drill Sergeants: the house's training level shows in the soldier's kit (see setTier)
+    this.far = bakedMesh(`${type}:${team}:${this.variant}:${this.mounted ? 1 : 0}:0`, this.mesh);
     this.mesh.add(this.far);
     this.lod = 0;
     this.mesh.position.copy(this.pos);
@@ -191,6 +193,19 @@ export class Unit {
     this.dmg *= 1 + RANKS.dmg;
     this.armor += RANKS.armor;
     this.setRankVisual(this.rank);
+  }
+
+  // Better training, better kit: swap the soldier's torso (and shield) for the look of this training level, and the
+  // distant, baked version with it. Heroes, giants and engineers don't train.
+  setTier(tier) {
+    if (tier === this.tier || this.isHero || this.isGiant || this.isCrew || this.team === RAIDER_TEAM) return;
+    this.tier = tier;
+    const m = this.model;
+    const geos = getModelGeos(this.type, this.team, this.variant, tier);
+    m.torso.children[0].geometry = geos.torso;
+    m.elL.children[0].geometry = geos.foreL;
+    m.body.scale.setScalar((this.def.scale || 1) * TIER_SCALE(tier));
+    this.far.geometry = prewarmSoldier(this.type, this.team, this.variant, tier).geometry;
   }
 
   // veterans wear a plume: team colour from rank 3, gold at rank 5
@@ -344,8 +359,13 @@ export class Unit {
       const unreachable = !this.ranged && this.target.pos.y - this.pos.y > 2.4;
       if (tooFar || unreachable) this.target = null;
     }
-    if (!this.target || this.target.isStructure) {
-      const t = g.findEnemy(this, engage, anchor, leash);
+    if (this.ignore && g.time > this.ignoreT) this.ignore = null;
+    // an archer defending the castle goes up onto the walls first, even with the enemy in sight: from a slot in the
+    // battlements he can shoot and can't be hit. Only someone right on top of him makes him fight where he stands.
+    if (order === 'defend' && this.ranged && !this.post && home && !home.fallen && g.freePost(home, this)
+        && !(this.target && !this.target.isStructure && this.distTo(this.target) < 7)) this.target = null;
+    else if (!this.target || this.target.isStructure) {
+      const t = g.findEnemy(this, engage, anchor, leash, this.ignore);
       if (t) this.target = t;
     }
 
@@ -385,7 +405,7 @@ export class Unit {
       if (this.blockedBy && this.blockedBy.alive && !allied(this.blockedBy.team, this.team)) {
         // sealed castle in the way: bash the gate
         if (!this.target || (!this.target.isStructure && !this.ranged)) this.target = this.blockedBy;
-        if (this.target === this.blockedBy) this.waypoint = avoidCastles(g, this.pos, this.blockedBy.castle.gateOut.clone().lerp(this.blockedBy.pos, 0.55));
+        if (this.target === this.blockedBy) this.waypoint = avoidCastles(g, this.pos, this.blockedBy.castle.gateOut.clone().lerp(this.blockedBy.pos, 0.55), this.avoid);
       }
     } else this.waypoint = null;
 
@@ -394,10 +414,16 @@ export class Unit {
       const c = this.shotOrigin(new THREE.Vector3(), this.target.pos);
       const tc = this.target.isStructure ? this.target.pos : this.target.aimPoint ? this.target.aimPoint(new THREE.Vector3()) : this.target.chest(new THREE.Vector3());
       this.los = g.physics.lineClear(c.x, c.y, c.z, tc.x, tc.y, tc.z, this.team) || this.target.isStructure;
-      // an archer at a wall slot can't walk round whatever hides his target: he picks an enemy he can see instead
-      if (!this.los && this.post && !this.target.isStructure) {
+      if (this.los || this.target.isStructure) this.noLosT = 0;
+      else {
+        // an archer who can't see his target (a wall, a tower, a rock in the way) picks an enemy he can see instead;
+        // if there is none he gives that one up for a few seconds and gets on with his orders rather than stand there
         const seen = this.visibleEnemy();
-        if (seen) { this.target = seen; this.los = true; }
+        if (seen) { this.target = seen; this.los = true; this.noLosT = 0; }
+        else if (!this.post && (this.noLosT = (this.noLosT || 0) + 0.34) > 3.5) {
+          this.ignore = this.target; this.ignoreT = g.time + 6;
+          this.target = null; this.noLosT = 0;
+        }
       }
     }
   }
@@ -427,8 +453,9 @@ export class Unit {
     const g = this.game;
     let tc = this.orderData;
     if (!tc || tc.fallen || allied(tc.team, this.team)) {
-      // that castle is finished: wave soldiers swing round to the next front, anyone else hunts what is left
-      const next = this.lane ? g.siegeTarget(g.factions[this.team]) : null;
+      // that castle is finished: everyone assaulting it (waves, the army, giants) marches on to the house's next
+      // target by themselves; with nothing left to attack they hunt what is left
+      const next = g.siegeTarget(g.factions[this.team]);
       if (!next) { this.setOrder('charge'); return; }
       tc = this.orderData = next;
     }

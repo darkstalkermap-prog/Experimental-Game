@@ -13,6 +13,7 @@ export function materials() {
   M = {
     stone: new THREE.MeshStandardMaterial({ map: stone, color: 0xe2dccf, roughness: 0.93 }),
     stoneDark: new THREE.MeshStandardMaterial({ map: stone, color: 0x8f8a80, roughness: 0.98 }),
+    stoneFine: new THREE.MeshStandardMaterial({ map: stone, color: 0xf6e6c4, roughness: 0.82 }),   // dressed sandstone (level 3 walls)
     stoneBurnt: new THREE.MeshStandardMaterial({ map: stone, color: 0x4a4540, roughness: 1 }),
     wood: new THREE.MeshStandardMaterial({ map: wood, color: 0xffffff, roughness: 0.85 }),
     plank: new THREE.MeshStandardMaterial({ map: plank, color: 0xd8c8b0, roughness: 0.9 }),

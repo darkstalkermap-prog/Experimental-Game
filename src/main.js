@@ -47,7 +47,7 @@ function buildGame(size) {
   game = new Game(renderer, ui, audio, input);
   game.state = 'menu';
   game.mapBuiltFor = size;
-  ui.mapBg = null;
+  ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
   applySettings();
 }

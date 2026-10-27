@@ -3,7 +3,7 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY, clock,
   UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
@@ -183,7 +183,7 @@ export class Game {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
     this.audio.play('horn');
-    this.ui.banner('Prepare for battle', `${WAVES.firstPrep} seconds to get ready. Then a new army marches from every castle every ${WAVES.interval} seconds. B: shop and soldier roster · Q / R: your abilities${this.mode === 'client' ? '' : ' · Enter starts early'}.`);
+    this.ui.banner('Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds. B: shop and roster · M: map · Q / R: your abilities.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -347,13 +347,16 @@ export class Game {
   // The castle a house's army is marching on: the one it was told to attack, otherwise its lane partner.
   // Odd waves pair Blue-Green and Red-Gold, even waves Blue-Gold and Red-Green, so every wave meets one
   // coming the other way and the fronts rotate round the map. Fallen or allied partners are skipped.
+  lanePartner(f) {
+    const pairs = (this.round || 1) % 2 ? [[0, 2], [1, 3]] : [[0, 3], [1, 2]];
+    return this.castles[pairs.find((pr) => pr.includes(f.team)).find((t) => t !== f.team)];
+  }
   siegeTarget(f) {
     if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
     f.siegeTarget = null;
-    const pairs = (this.round || 1) % 2 ? [[0, 2], [1, 3]] : [[0, 3], [1, 2]];
-    const partner = pairs.find((pr) => pr.includes(f.team)).find((t) => t !== f.team);
     const open = (c) => c && !c.fallen && !allied(c.team, f.team);
-    if (open(this.castles[partner])) return this.castles[partner];
+    const partner = this.lanePartner(f);
+    if (open(partner)) return partner;
     let best = null, bd = Infinity;
     for (const c of this.castles) {
       if (!open(c)) continue;
@@ -446,10 +449,10 @@ export class Game {
   }
 
   // Nearest hostile character or siege engine for an AI unit.
-  findEnemy(unit, radius, anchor, leash) {
+  findEnemy(unit, radius, anchor, leash, skip = null) {
     let best = null, bd = Infinity;
     const consider = (o) => {
-      if (!o.alive || allied(o.team, unit.team) || o.drive) return;
+      if (o === skip || !o.alive || allied(o.team, unit.team) || o.drive) return;
       if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
@@ -480,17 +483,29 @@ export class Game {
     return null;
   }
 
+  // The gate swings open for friends and shuts when an enemy is at it. Shut, it is solid for everybody (Physics.resolve),
+  // so nobody walks through a closed gate. It never shuts on a friend standing in the gateway, the lord (a hero)
+  // standing near it can always call it open to lead a sally, and so can soldiers who have been ordered out (charge or
+  // assault) and have reached it: a command to march out is obeyed, besieged or not.
   gateShouldOpen(castle) {
     if (this.state !== 'playing') return false;
-    let friend = false, foe = false;
+    let friend = false, foe = false, hold = false;
     const p = castle.gatePos;
     this.grid.query(p.x, p.z, 9, (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
-      if (allied(u.team, castle.team) && d < 7) friend = true;
-      else if (!allied(u.team, castle.team) && d < 9) foe = true;
+      if (allied(u.team, castle.team)) {
+        if (u.pos.y - castle.center.y > 3.5) return;   // archers up on the wall walk don't work the gate
+        if (d < 8) friend = true;
+        if (u.isHero && d < 6) hold = true;
+        else if (!u.isPlayer && d < 4.5 && (u.order === 'assault' || u.order === 'charge')) hold = true;   // ordered out: the gate yields
+        else if (d < 3) {
+          const l = castle.toLocal(u.pos.x, u.pos.z);   // standing in the gateway itself
+          if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) hold = true;
+        }
+      } else if (d < 5.5) foe = true;
     });
-    return friend && !foe;
+    return friend && (hold || !foe);
   }
 
   pushOutOfWalls(castle) {
@@ -684,6 +699,15 @@ export class Game {
     this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
     for (const p of castle.posts) if (p.occupant) p.occupant.leavePost();
+    // the armies that were besieging it roll on by themselves: waves, engines and anyone on assault orders pick the
+    // house's next target (see Unit.assaultThink and SiegeEngine.pickTarget)
+    for (const o of this.factions) {
+      if (!o.isPlayer || o.eliminated || o.castle.fallen || allied(o.team, castle.team)) continue;
+      const wasMarching = o.siegeTarget ? o.siegeTarget === castle : this.lanePartner(o) === castle;
+      if (!wasMarching) continue;
+      const next = this.siegeTarget(o);
+      o.player.notify(next ? `${f.name} is finished. Your armies march on ${this.factions[next.team].name}.` : `${f.name} is finished.`);
+    }
   }
 
   // ---------------- army waves ----------------
@@ -935,6 +959,26 @@ export class Game {
     this.toggleGate(this.localTeam);
   }
 
+  // A hero takes up another class (their own choice, or a guest's request), if the rules allow it (Player.classBlock).
+  switchClass(p, id) {
+    const why = p.classBlock(id);
+    if (why) { p.notify(why); p.sound('deny'); return false; }
+    p.changeClass(id);
+    p.notify(p.alive ? `You are now a ${p.cls.name}. Your abilities are ready in a few seconds.` : `You will respawn as a ${p.cls.name}.`);
+    p.sound('order');
+    if (this.mode !== 'single') this.announce((t) => (t === p.team ? null : `${p.name} is now a ${p.cls.name}.`), p.team);
+    return true;
+  }
+
+  localSwitchClass(id) {
+    const p = this.player;
+    if (this.mode !== 'client') return this.switchClass(p, id);
+    const why = p.classBlock(id);
+    if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }
+    this.net.toHost({ a: 'class', cls: id });   // the host's next update confirms it
+    return true;
+  }
+
   setSiegeTarget(castle) {
     this.localFaction.siegeTarget = castle;   // null = let the lanes decide
     if (this.mode === 'client') { this.localPickUntil = this.time + 2; this.net.toHost({ a: 'target', team: castle ? castle.team : -1 }); }
@@ -944,6 +988,7 @@ export class Game {
     const i = this.input;
     if (i.hit('KeyB')) { if (this.ui.tab === 'orders') this.ui.tab = 'army'; this.ui.toggleShop(); return; }
     if (this.ui.shopOpen) return;
+    if (i.hit('KeyM')) this.ui.toggleMap();
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
     if (i.hit('F3') || i.hit('KeyC')) this.localOrder('charge');
@@ -951,10 +996,6 @@ export class Game {
     if (i.hit('KeyT')) this.localOrder('assault');
     if (i.hit('KeyF')) this.localFormation();
     if (i.hit('KeyO')) { this.ui.openOrders(); return; }
-    if (i.hit('Enter') && this.round === 0 && this.phase === 'prep' && this.simulating && this.phaseT > 3) {
-      this.phaseT = 3;
-      this.announce('The battle begins!');
-    }
     if (i.hit('KeyG')) {
       const p = this.player;
       p.group = GROUPS[(GROUPS.indexOf(p.group || 'all') + 1) % GROUPS.length];
@@ -1123,6 +1164,7 @@ export class Game {
     this.fx.update(dt);
     this.magic.update(dt);
     this.grass.update(dt, this.camera.position);
+    for (const c of this.castles) if (this.factions[c.team]) c.syncUpgrades(this.factions[c.team]);
 
     if (this.simulating && this.state === 'playing') {
       this.updateWaves(dt);
@@ -1145,7 +1187,10 @@ export class Game {
   // Pick each soldier's level of detail by distance to the camera (giants stay detailed further out).
   updateLod() {
     const c = this.camera.position;
+    let retier = 4;   // soldiers whose house has trained them further change into their new kit a few at a time
     for (const u of this.units) {
+      const f = this.factions[u.team];
+      if (f && retier > 0 && u.alive && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
       const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
       const s = u.isGiant ? 3 : 1;
       u.setLod(d2 < (32 * s) ** 2 ? 0 : d2 < (85 * s) ** 2 ? 1 : d2 < 260 * 260 ? 2 : 3);

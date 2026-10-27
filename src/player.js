@@ -7,7 +7,7 @@ import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './mo
 import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
-import { CLASSES, classOf, Buffs } from './classes.js';
+import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -56,6 +56,7 @@ export class Player {
     this.classId = opts.cls || 'knight';
     this.buffs = new Buffs();
     this.abilCd = { q: 0, r: 0 };
+    this.classAt = -99;        // when this hero last changed class
     this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
     this.castFlash = 0;        // the spell hand is raised while this runs down
     this.castColor = 0xff8a2a;
@@ -109,6 +110,16 @@ export class Player {
   buildBody() {
     this.body = buildSoldier('lord', this.team, 2);
     this.game.scene.add(this.body.root);
+    this.buildTag();
+  }
+
+  // The floating name and class above another person's hero (drawn again when they change class).
+  buildTag() {
+    if (this.tag) {
+      this.game.scene.remove(this.tag);
+      this.tag.material.map.dispose();
+      this.tag.material.dispose();
+    }
     const c = document.createElement('canvas');
     c.width = 256; c.height = 72;
     const ctx = c.getContext('2d');
@@ -226,13 +237,48 @@ export class Player {
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
 
-  // Choose the hero's class (once, before the battle): health and abilities follow from it.
+  // Choose the hero's class before the battle: health and abilities follow from it.
   setClass(id) {
     this.classId = CLASSES[id] ? id : 'knight';
     this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
     this.hp = this.maxHp;
     this.abilCd = { q: 0, r: 0 };
     this.buffs.clear();
+    if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
+  }
+
+  // Why this hero can't take up another class right now (null when they can). In the field it is not allowed in
+  // the middle of a fight or again straight away; before the first wave, or while waiting to respawn, it is free.
+  classBlock(id) {
+    const g = this.game;
+    if (!CLASSES[id]) return 'No such class';
+    if (id === this.classId) return 'Your class';
+    if (!this.alive || (g.phase === 'prep' && g.round === 0)) return null;
+    if (this.drive) return 'Climb out of the siege engine first';
+    if (g.time - this.lastHurt < SWITCH.combat) return 'Not in the middle of a fight';
+    const wait = Math.ceil(SWITCH.cooldown - (g.time - this.classAt));
+    return wait > 0 ? `Wait ${wait} s` : null;
+  }
+
+  // The class itself and what hangs off it on every screen (the abilities need a moment to ready).
+  adoptClass(id) {
+    this.classId = id;
+    this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
+    this.dash = null;
+    this.castFlash = 0;
+    if (this.body) this.buildTag();
+  }
+
+  // Take up another class where the battle is run: health keeps its proportion, buffs end, a Cavalier gets a horse.
+  changeClass(id) {
+    const g = this.game;
+    const frac = this.alive ? this.hp / this.maxHp : 1;
+    this.adoptClass(id);
+    this.maxHp = Math.round(PLAYER.hp * this.cls.mods.hp);
+    this.hp = this.alive ? Math.max(1, Math.round(this.maxHp * frac)) : this.maxHp;
+    this.buffs.clear();
+    this.classAt = g.phase === 'prep' && g.round === 0 ? -99 : g.time;
+    g.abilities.active = g.abilities.active.filter((e) => e.p !== this);   // a whirlwind or charge ends with the class
     if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
   }
 
@@ -263,6 +309,7 @@ export class Player {
     this.mounted = false;
     this.rideSpeed = 0;
     this.radius = 0.4;
+    if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();   // a Cavalier always rides out on a fresh horse (the shop's Items are off for now)
     if (this.hasHorse) {
       this.horsePos.set(at.x + 2.5, 0, at.z);
       this.horsePos.y = this.game.physics.groundHeight(this.horsePos.x, this.horsePos.z, at.y + 3);
@@ -292,7 +339,7 @@ export class Player {
 
   toggleMount() {
     const g = this.game;
-    if (!this.hasHorse) { this.notify('You have no horse. Buy a Warhorse in the shop (B → Items).'); return; }
+    if (!this.hasHorse) { this.notify('You have no horse.'); return; }
     if (this.mounted) {
       this.mounted = false;
       this.radius = 0.4;
@@ -363,13 +410,13 @@ export class Player {
       const d = Math.hypot(this.pos.x - this.horsePos.x, this.pos.z - this.horsePos.z);
       if (d < 2.6) this.horseComing = false;
       else {
-        const wp = avoidCastles(g, this.horsePos, this.pos);
+        const wp = avoidCastles(g, this.horsePos, this.pos, this.horseAvoid || (this.horseAvoid = {}));
         const dx = wp.x - this.horsePos.x, dz = wp.z - this.horsePos.z;
         const dl = Math.hypot(dx, dz) || 1;
         sp = d > 12 ? 11 : 5;
         this.horsePos.x += (dx / dl) * sp * dt;
         this.horsePos.z += (dz / dl) * sp * dt;
-        g.physics.resolve(this.horsePos, 0.8, this.horsePos.y, 2.6, this.team, true);
+        g.physics.resolve(this.horsePos, 0.8, this.horsePos.y, 2.6, this.team, true, true);   // a riderless horse slips past trunks and rocks
         let dy = Math.atan2(dx, dz) - this.horseYaw;
         while (dy > Math.PI) dy -= Math.PI * 2;
         while (dy < -Math.PI) dy += Math.PI * 2;
@@ -424,9 +471,16 @@ export class Player {
     for (const g of [this.vmSword, this.vmShield, this.vmBow]) g.clear();
 
     // sword: blade points up the local +y axis from the grip
-    const sw = this.sword;
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05, sw.len, 0.012), steel);
+    const sw = this.sword, ls = this.lv.sword;
+    // every sword level is plainly better to look at: longer and wider, then a dark fuller, then gilded steel
+    const gilt = new THREE.MeshStandardMaterial({ color: 0xf2e4b4, metalness: 0.95, roughness: 0.2, emissive: 0x3a2a08 });
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05 + 0.01 * ls, sw.len, 0.012), ls >= 2 ? gilt : steel);
     blade.position.y = 0.12 + sw.len / 2;
+    if (ls >= 1) {
+      const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, sw.len * 0.78, 0.016), ls >= 2 ? gold : dark);
+      fuller.position.y = 0.12 + sw.len * 0.5;
+      this.vmSword.add(fuller);
+    }
     const tip = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 4), steel);
     tip.position.y = 0.12 + sw.len + 0.06;
     tip.scale.z = 0.3;
@@ -473,7 +527,14 @@ export class Player {
     // bow
     const bw = this.bow;
     const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0.62, 0), new THREE.Vector3(0, 0, -0.3), new THREE.Vector3(0, -0.62, 0));
-    const limb = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, this.lv.bow ? 0.022 : 0.017, 6, false), this.lv.bow ? dark : wood);
+    const limb = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, this.lv.bow ? 0.026 : 0.017, 6, false), this.lv.bow ? dark : wood);
+    if (this.lv.bow) {   // the war bow has gold tips and a thicker, darker stave
+      for (const y of [0.62, -0.62]) {
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), gold);
+        tip.position.set(0, y, 0);
+        this.vmBow.add(tip);
+      }
+    }
     const string = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1.24, 4), trim);
     this.vmString = string;
     const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.8, 4), wood);

@@ -39,6 +39,7 @@ export class SiegeEngine {
     this.deadT = 0;
     this.targetCastle = targetCastle;
     this.nav = null;
+    this.avoid = {};          // the corner it is going round a castle by (see nav.avoidCastles)
     this.thinkT = 0;
     this.waypoint = null;
     this.lastPos = pos.clone();   // for noticing an engine that has stopped dead
@@ -275,6 +276,9 @@ export class SiegeEngine {
   pickTarget() {
     const g = this.game;
     if (this.targetCastle && !this.targetCastle.fallen && !allied(this.targetCastle.team, this.team)) return;
+    // its castle is finished: roll on to the next front the house's armies are marching on
+    const next = g.siegeTarget(g.factions[this.team]);
+    if (next) { this.targetCastle = next; return; }
     let best = null, bd = Infinity;
     for (const c of g.castles) {
       if (c.fallen || allied(c.team, this.team)) continue;
@@ -366,7 +370,7 @@ export class SiegeEngine {
     }
     if (this.thinkT <= 0) {
       this.thinkT = 0.4;
-      this.waypoint = this.type === 'ram' ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal);
+      this.waypoint = this.type === 'ram' ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal, this.avoid);
     }
     const wp = this.waypoint || goal;
     const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;
