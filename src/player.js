@@ -342,7 +342,7 @@ export class Player {
         sp = d > 12 ? 11 : 5;
         this.horsePos.x += (dx / dl) * sp * dt;
         this.horsePos.z += (dz / dl) * sp * dt;
-        g.physics.resolve(this.horsePos, 0.8, this.horsePos.y, 2.6, this.team);
+        g.physics.resolve(this.horsePos, 0.8, this.horsePos.y, 2.6, this.team, true);
         let dy = Math.atan2(dx, dz) - this.horseYaw;
         while (dy > Math.PI) dy -= Math.PI * 2;
         while (dy < -Math.PI) dy += Math.PI * 2;

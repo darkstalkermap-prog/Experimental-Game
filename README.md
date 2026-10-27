@@ -7,6 +7,15 @@ standing wins.**
 
 ## Play
 
+### Play in your browser (GitHub Pages)
+
+**https://darkstalkermap-prog.github.io/Experimental-Game/**
+
+This link works once GitHub Pages is switched on (a one-time setting): go to the repository's **Settings → Pages**,
+under **Build and deployment** choose **Deploy from a branch**, pick **main** and **/ (root)**, then **Save**. After
+a minute or two the game is live at the address above, and every push to `main` updates it. GitHub Pages
+serves static files only, so that link is single player. Online play needs the server described below.
+
 ### Single player
 
 The game is plain static files with no build step. Serve the folder with any static web server and open it

@@ -15,8 +15,8 @@ function merlonGeos(len, alongX, outer) {
   const n = Math.floor(len / 2);
   for (let i = 0; i < n; i++) {
     const t = -len / 2 + 1 + i * 2;
-    const g = box(alongX ? 1.1 : 0.5, 1.1, alongX ? 0.5 : 1.1);
-    g.translate(alongX ? t : outer, wallH + 0.55, alongX ? outer : t);
+    const g = box(alongX ? 1.1 : 0.5, 1.3, alongX ? 0.5 : 1.1);
+    g.translate(alongX ? t : outer, wallH + 0.65, alongX ? outer : t);
     geos.push(g);
   }
   return geos;
@@ -126,6 +126,11 @@ export class Castle {
         posts: [],
       };
       seg.collider = this.addCollider(x0, x1, z0, z1, wallH, { kind: 'wall', ref: seg });
+      // the battlements: a solid parapet along the outer edge that shelters soldiers on the wall walk
+      const PT = 0.55, PH = 1.3; // chest-high: covers a soldier's body, leaves the head showing
+      const px0 = alongX ? x0 : nx > 0 ? x1 - PT : x0, px1 = alongX ? x1 : nx > 0 ? x1 : x0 + PT;
+      const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
+      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + PH, { kind: 'parapet', ref: seg, noWalk: true, bottom: this.center.y + wallH - 0.05 });
       seg.takeDamage = (amt, attacker) => this.damageWall(seg, amt, attacker);
       this.walls.push(seg);
       // archer posts along the wall walk
@@ -148,6 +153,7 @@ export class Castle {
     const lintelMesh = new THREE.Mesh(mergeGeometries([lintel, ...merlonGeos(gateW, true, T / 2 - 0.25).map((m) => m.translate(0, 0, H - T / 2))]), M.stone);
     g.add(shadowed(lintelMesh));
     this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
+    this.addCollider(-GW, GW, H - 0.55, H, wallH + 1.3, { kind: 'parapet', noWalk: true, bottom: this.center.y + wallH - 0.05 });
     // arch trim
     const trim = new THREE.Mesh(box(0.6, gateH, T + 0.4), M.stoneDark);
     for (const s of [-1, 1]) {
@@ -420,6 +426,8 @@ export class Castle {
 
   // --- visual / collider state (shared by the simulation and by network clients) ---
   applyWallVisual(seg) {
+    // the battlements go with the merlons: gone once the wall is badly damaged or breached
+    seg.parapet.active = seg.alive && seg.hp > seg.maxHp * 0.5;
     if (!seg.alive) {
       seg.collider.top = this.center.y + 0.5;
       seg.mesh.visible = false;

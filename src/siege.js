@@ -231,7 +231,7 @@ export class SiegeEngine {
       const L = WORLD.playHalf;
       this.pos.x = clamp(this.pos.x, -L, L);
       this.pos.z = clamp(this.pos.z, -L, L);
-      g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team);
+      g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true); // engines roll past trunks
       this.turn(Math.atan2(dx, dz), dt);
       for (const w of this.wheels) w.rotation.x += dt * this.speed * 1.7;
       this.anim += dt * this.speed * 2;

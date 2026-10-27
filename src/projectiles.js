@@ -64,7 +64,7 @@ export class Projectiles {
 
   // Aim at a moving target with lead and gravity compensation.
   shootArrow(from, target, team, dmg, owner, spread = 0.03) {
-    const aim = target.isStructure ? target.pos.clone() : target.chest(new THREE.Vector3());
+    const aim = target.isStructure ? target.pos.clone() : target.aimPoint ? target.aimPoint(new THREE.Vector3()) : target.chest(new THREE.Vector3());
     const tv = target.vel || new THREE.Vector3();
     let t = from.distanceTo(aim) / ARROW_SPEED;
     for (let i = 0; i < 2; i++) {
@@ -115,8 +115,8 @@ export class Projectiles {
         next.copy(p.pos).addScaledVector(p.vel, h);
         // magic flies straight and stops at whatever it meets first
         if (p.spell) {
-          const hit = this.hitCharacter(next, p.team, 0.35, p.hitSet) || g.siegeAt(next, p.team);
-          const col = !hit && phys.pointHit(next.x, next.y, next.z, p.team);
+          const col = phys.pointHit(next.x, next.y, next.z, p.team);
+          const hit = !col && (this.hitCharacter(next, p.team, 0.35, p.hitSet) || g.siegeAt(next, p.team));
           const ground = !hit && !col && next.y <= phys.terrainHeight(next.x, next.z);
           if (hit && p.kind === 'ice') {
             g.damage(hit, p.dmg, p.owner, { magic: true, ranged: true });
@@ -134,6 +134,11 @@ export class Projectiles {
           }
           p.pos.copy(next);
           continue;
+        }
+        // stone first: nobody can be hit through a wall or battlement
+        if (p.kind === 'arrow') {
+          const wall = phys.pointHit(next.x, next.y, next.z, p.team);
+          if (wall) { this.stick(i, p, next); done = true; break; }
         }
         // characters
         if (p.kind === 'arrow') {

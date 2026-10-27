@@ -40,6 +40,8 @@ export class Unit {
     this.strafeT = 0;
     this.hasShield = !!t.shield;
     this.isGiant = !!t.giant;
+    this.stuckCount = 0;
+    this.ghostT = 0;
     this.xp = 0;
     this.rank = 1;
     this.slowT = 0;
@@ -363,9 +365,9 @@ export class Unit {
 
     // ranged line-of-sight check
     if (this.ranged && this.target) {
-      const c = this.chest(new THREE.Vector3());
-      const tc = this.target.isStructure ? this.target.pos : this.target.chest(new THREE.Vector3());
-      this.los = g.physics.lineClear(c.x, c.y + 0.2, c.z, tc.x, tc.y, tc.z, this.team) || this.target.isStructure;
+      const c = this.shotOrigin(new THREE.Vector3());
+      const tc = this.target.isStructure ? this.target.pos : this.target.aimPoint ? this.target.aimPoint(new THREE.Vector3()) : this.target.chest(new THREE.Vector3());
+      this.los = g.physics.lineClear(c.x, c.y, c.z, tc.x, tc.y, tc.z, this.team) || this.target.isStructure;
     }
   }
 
@@ -382,6 +384,19 @@ export class Unit {
     this.goal = tc.keepDoor;
   }
 
+  // Where an enemy should aim: the head for someone sheltering behind battlements, else the chest.
+  aimPoint(out) {
+    if (!this.post) return this.chest(out);
+    return out.set(this.pos.x, this.pos.y + this.height * 0.9, this.pos.z);
+  }
+
+  // Where arrows leave from: chest height, or head height when leaning over the battlements.
+  shotOrigin(out) {
+    this.chest(out);
+    out.y += this.post ? this.height * 0.27 : 0.25;
+    return out;
+  }
+
   distTo(t) {
     return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) - (t.radius || 0.4);
   }
@@ -393,6 +408,7 @@ export class Unit {
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;
     if (this.blockFlash > 0) this.blockFlash -= dt;
+    if (this.ghostT > 0) this.ghostT -= dt;
     if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 6) g.fx.frost(this.chest(new THREE.Vector3()), 1); }
 
     let moving = false;
@@ -457,7 +473,9 @@ export class Unit {
         if (this.pos.distanceTo(this.lastPos) < 0.6) {
           this.vel.x += (Math.random() - 0.5) * 8; this.vel.z += (Math.random() - 0.5) * 8;
           this.nav = null;
-        }
+          // still wedged against something after a nudge: let it slip past tree trunks for a moment
+          if (++this.stuckCount >= 2) this.ghostT = 1.5;
+        } else this.stuckCount = 0;
         this.lastPos.copy(this.pos);
         this.stuckT = 0;
       }
@@ -477,8 +495,11 @@ export class Unit {
     if (this.slowT > 0) sp *= 0.5;
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;
     const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
-    this.vel.x += ((dx / d) * sp - this.vel.x) * k;
-    this.vel.z += ((dz / d) * sp - this.vel.z) * k;
+    let ux = dx / d, uz = dz / d;
+    const steer = this.game.physics.steerAroundTrees(this.pos.x, this.pos.z, ux, uz, this.radius, this.id % 2 ? 1 : -1);
+    if (steer) { ux = steer.x; uz = steer.z; }
+    this.vel.x += (ux * sp - this.vel.x) * k;
+    this.vel.z += (uz * sp - this.vel.z) * k;
     this.applyMovement(dt, false);
     return true;
   }
@@ -504,7 +525,7 @@ export class Unit {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team);
+    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0);
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (ground < this.pos.y - 0.05) this.pos.y = Math.max(ground, this.pos.y - 12 * dt);
     else this.pos.y = ground;
@@ -580,9 +601,9 @@ export class Unit {
           if (t.vel) aim.addScaledVector(t.vel, lead * 0.8);
           this.game.magic.cast(this, this.def.spell, from, aim.sub(from).normalize(), 0, this.dmg / 55);
         } else if (this.ranged && !t.isStructure) {
-          const from = this.chest(new THREE.Vector3());
-          from.y += 0.25;
-          this.game.projectiles.shootArrow(from, t, this.team, this.dmg, this, 0.035);
+          const from = this.shotOrigin(new THREE.Vector3());
+          // a head peeking over battlements is a small target: harder to hit
+          this.game.projectiles.shootArrow(from, t, this.team, this.dmg, this, t.post ? 0.07 : 0.035);
           this.game.audio.play('bow', this.pos);
         } else if (this.distTo(t) <= (this.ranged ? 2.2 : this.range) + 1.0) {
           const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1);

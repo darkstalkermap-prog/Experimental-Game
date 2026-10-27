@@ -117,12 +117,43 @@ export class Physics {
     return g;
   }
 
+  // Bend a walking direction around tree trunks ahead, so soldiers flow around them instead of
+  // pushing into them. side (+1/-1) picks which way to go round when a trunk is dead ahead.
+  steerAroundTrees(x, z, dx, dz, radius, side = 1) {
+    const look = 3.5;
+    let ox = 0, oz = 0;
+    const seen = new Set();
+    for (const [px, pz] of [[x, z], [x + dx * 2.5, z + dz * 2.5]]) {
+      const cell = this.grid.get(this.gridKey(Math.floor(px / this.cell), Math.floor(pz / this.cell)));
+      if (!cell) continue;
+      for (const c of cell) {
+        if (c.kind !== 'tree' || seen.has(c)) continue;
+        seen.add(c);
+        const cx = (c.minX + c.maxX) / 2 - x, cz = (c.minZ + c.maxZ) / 2 - z;
+        const along = cx * dx + cz * dz;
+        if (along < -0.2 || along > look) continue;
+        const lateral = cx * -dz + cz * dx;          // + means the trunk is to our left
+        const clear = (c.maxX - c.minX) / 2 + radius + 0.4;
+        if (Math.abs(lateral) >= clear) continue;
+        const w = ((clear - Math.abs(lateral)) / clear) * (1 - (along / look) * 0.5);
+        const away = Math.abs(lateral) < 0.05 ? side : -Math.sign(lateral);
+        ox += -dz * away * w * 1.6;
+        oz += dx * away * w * 1.6;
+      }
+    }
+    if (!ox && !oz) return null;
+    const nx = dx + ox, nz = dz + oz;
+    const l = Math.hypot(nx, nz) || 1;
+    return { x: nx / l, z: nz / l };
+  }
+
   // Push a circle out of blocking colliders. Returns true if anything was hit.
-  resolve(pos, radius, footY, height, team) {
+  // ignoreTrees lets a stuck soldier (or a wheeled engine) slip past trunks.
+  resolve(pos, radius, footY, height, team, ignoreTrees = false) {
     let hit = false;
     for (let iter = 0; iter < 2; iter++) {
       for (const c of this.near(pos.x, pos.z, radius + 1)) {
-        if (!c.active || c.passTeam === team) continue;
+        if (!c.active || c.passTeam === team || (ignoreTrees && c.kind === 'tree')) continue;
         const qx = clamp(pos.x, c.minX, c.maxX);
         const qz = clamp(pos.z, c.minZ, c.maxZ);
         const dx = pos.x - qx, dz = pos.z - qz;
@@ -164,7 +195,7 @@ export class Physics {
   // Is the straight line between two points free of tall structures? (sampled)
   lineClear(ax, ay, az, bx, by, bz, ignoreTeam = -99) {
     const d = Math.hypot(bx - ax, bz - az);
-    const steps = Math.ceil(d / 1.5);
+    const steps = Math.ceil(Math.hypot(d, by - ay) / 0.5); // fine enough not to skip a battlement
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
       const x = ax + (bx - ax) * t, y = ay + (by - ay) * t, z = az + (bz - az) * t;
