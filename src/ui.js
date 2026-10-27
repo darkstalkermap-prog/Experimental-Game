@@ -129,7 +129,7 @@ export class UI {
   levelUp(n) {
     const p = this.game.player;
     this.banner(`Level ${n}`, n >= MAX_LEVEL ? 'The height of your power.' : 'Stronger and tougher.', 'level');
-    this.toast(`You reached level ${n}${p.talentPoints > 0 ? ': a talent point to spend (N)' : ''}.`, p.team, true);
+    this.toast(`You reached level ${n}.`, p.team, true);
     const bar = $('xpbar');
     bar.classList.remove('glow'); void bar.offsetWidth; bar.classList.add('glow');
   }
