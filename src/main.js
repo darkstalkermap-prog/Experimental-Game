@@ -11,6 +11,7 @@ import { PeerNet } from './peernet.js';
 import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
+import { initPerf } from './perf.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -62,6 +63,8 @@ try {
 }
 $('loading').classList.add('hidden');
 $('menu').classList.remove('hidden');
+// the profiler overlay (` or ?perf) and the benchmark (window.__bench): nothing is hooked until the overlay is switched on
+initPerf({ renderer, getGame: () => game, render: () => renderer.render(game.scene, game.camera) });
 
 function resize() {
   renderer.setSize(innerWidth, innerHeight);
