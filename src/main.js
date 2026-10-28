@@ -338,6 +338,14 @@ for (const [id, key, apply, unit] of SLIDERS) {
   });
 }
 
+// switches in the options panel (alerts.js looks at the settings as it goes)
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips']]) {
+  const el = $(id), out = el.nextElementSibling;
+  const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
+  show();
+  el.addEventListener('change', () => { settings[key] = el.checked ? 1 : 0; show(); saveSettings(); });
+}
+
 input.onLockFail = () => {
   if (game.state !== 'playing' || ui.shopOpen) return;
   openPause('Your browser needs one more click to capture the mouse. Press Resume.');

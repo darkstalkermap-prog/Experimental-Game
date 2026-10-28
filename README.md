@@ -334,8 +334,49 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 - **Game menu**: **Esc** opens the standard menu: **Resume**, **Options**, **Controls** and **Quit to Main
   Menu**. In single player the world freezes; online, the battle goes on while you are in the menu. Esc again
   resumes (it closes the shop, Options or Controls first). **Options** has master, music and sound-effects
-  volume, mouse sensitivity, field of view and graphics quality, all remembered in your browser. The main menu
-  has the same Options and Controls.
+  volume, mouse sensitivity, field of view, the **Alerts and sounds** and **Tips** switches (below) and graphics
+  quality, all remembered in your browser. The main menu has the same Options and Controls.
+
+## Alerts and tips
+
+The game tells you what needs you, even when you are looking somewhere else. All of it is worked out on your own screen
+from what every player's screen already knows (castle parts, soldiers, engines, the hill, the wave clock and your own hero),
+so it works the same in single player, as the host and as a guest.
+
+- **Callouts** come down the left of the screen, each with an icon, a coloured edge (red danger, orange warning, green good
+  news, gold information) and, when it happened somewhere, a pointer and the distance. "Your north gate is under attack!"
+  (the gate, a wall or the keep losing health, named by the side of your castle it is on; once per part every 20 s),
+  "Breach!" (a gate or wall falls), "Enemy army approaching from the north-east!" (five or more enemy soldiers or engines
+  within 80 m of your castle, once, when they arrive, with the war horn), "Enemy battering ram spotted" (an enemy engine
+  within 70 m), "Wave 4 marches in 10 s" with a tick for each of the last three seconds of the preparation and wave countdowns,
+  "Low health" (under 30%, with a heartbeat that quickens; it mentions the potion, H, while you hold one), "Running low on
+  arrows", "You have 400 gold to spend (B)" (250 or more unspent for 40 s while you are at your castle) and a faint tick
+  when an ability with a long cooldown (14 s or more) is ready again. In King of the Hill the game's own messages about
+  the hill (taken, lost, 60, 30 and 10 seconds to a win) get their sounds, and "The hill is contested!" a callout.
+  North is up on the maps.
+- **Kill streaks**: 3, 5 and 8 kills of your own within 12 seconds show "Killing spree", "Rampage" and "Unstoppable" with a brass fanfare.
+- **Tips**: a slim hint line at the bottom of the screen (clear of the crosshair, the minimap and the health bars) shows
+  one tip for nine seconds after about 25 calm seconds (nothing has hurt you for ten), and never more than one every 40
+  seconds. There are about thirty: controls, tricks for each of the six classes, climbing and ducking, the maps, orders and
+  the Army tab, King of the Hill, upgrades and the shop. Tips about things you have already done are skipped, none comes
+  round twice until every one that applies has been shown, and what you have seen is remembered in this browser. The
+  respawn screen and the game-over screen show one too. The list is the `TIPS` array at the top of `src/alerts.js`.
+- **While you look away**: when the tab is hidden or the window loses focus the game keeps a log. Something important (an
+  attack, a breach, an army at the gate) flashes the browser tab's title ("⚔ (3) Castle under attack!") and sounds its
+  alert, and when you come back a "While you were away" panel lists what happened for a few seconds: attacks, waves, kills,
+  deaths and gold earned. Browsers stop the render loop of a hidden tab, so an online game (host or guest) is stepped from a
+  timer in 1/20 s slices meanwhile: a host who looks at another tab does not freeze the match for everybody. Single player
+  simply waits for you.
+- **Idle nudge**: after 25 seconds without touching anything while you are alive, "Still with us? Wave 4 marches in 0:21."
+  and a soft chime, once per idle spell.
+- **Options** has two switches: *Alerts and sounds* (callouts and their sounds, kill streaks, the nudge, the away panel and
+  title flash) and *Tips* (the hint line and the tips on the respawn and game-over screens).
+
+Code that wants to add an alert calls `game.alerts.raise(key, { text, icon, tone, sound, cooldown, away, pos })`: the same
+`key` never fires twice within `cooldown` seconds, `tone` is `info`, `good`, `warn` or `danger`, `away` also puts it in the
+away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, and `game.alerts.learn(flag)` tells the tips
+that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
+`alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
 
 ## Controls
 
@@ -407,7 +448,9 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/world.js`, `src/textures.js` | Terrain, sky, forests and procedural textures |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby |
-| `src/settings.js` | Volume, sensitivity and field-of-view settings, kept in the browser |
+| `src/settings.js` | Volume, sensitivity, field-of-view and alerts/tips settings, kept in the browser |
+| `src/alerts.js` | Callouts, kill streaks, tips, the idle nudge, the away log and the background ticker for hidden tabs; `raise(key, {...})` is the way in |
+| `src/alertsounds.js` | The sounds of the alerts (bells, brass, ticks, heartbeat), added to the registry in `audio.js` |
 | `src/audio.js` | Sound effects and the volume buses |
 | `src/music.js` | The procedural medieval music: lute, recorder, drone, drums and horn |
 | `src/physics.js`, `src/projectiles.js` | Terrain and colliders (including the merlons), arrows and boulders |
