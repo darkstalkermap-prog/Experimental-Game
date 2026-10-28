@@ -79,7 +79,7 @@ with no server: the host clicks **Host Online Game** and gets a 4-letter invite 
 link, enter the code and click **Join**. Friends must be signed in to claude.ai and have access to the
 artifact (invite them from the artifact's **Share** menu). Visitors who are signed out, or who arrived through a
 public link only, can play single player but can't join a room. The players' pages talk through claude.ai's
-live room, so updates are a little less frequent than with the server (about 7 per second instead of 10).
+live room, so updates are a little less frequent than with the server (about 7 per second instead of 10, and slower for large battles).
 
 **Or run your own server:**
 
@@ -472,6 +472,13 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `server/server.js` | Node server: serves the game and relays messages between players in a room |
 
 Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.
+
+## Validation
+
+Run `npm ci` and `npm test` with Node.js 18 or newer. The tests exercise malformed requests,
+normal WebSocket room flows, and complete live-room snapshot reassembly, including large battles,
+Unicode payloads, reordered updates and missing chunks. The live-room transport is tested with a
+mock room API; testing the claude.ai integration itself requires an authenticated artifact session.
 
 ## Performance
 

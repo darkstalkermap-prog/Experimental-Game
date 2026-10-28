@@ -115,7 +115,7 @@ selectObjective(objective);
 function ensureMap(size) {
   if (WORLD.size === size && game.mapBuiltFor === size) return;
   const net0 = game.net;
-  renderer.renderLists.dispose();
+  game.dispose();
   buildGame(size);
   game.net = net0;
   game.setQuality(quality);

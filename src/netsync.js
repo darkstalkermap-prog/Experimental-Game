@@ -8,6 +8,9 @@ import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
 import { DIRS, DIR_IDX } from './combat.js';
 import { mirrorTalents } from './talents.js';
+import { Interp, setInterpDelay } from './interpolation.js';
+import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
+export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
 const TYPE_IDX = Object.fromEntries(TYPE_NAMES.map((t, i) => [t, i]));
@@ -18,36 +21,6 @@ const r2 = (x) => Math.round(x * 100) / 100;
 const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
-
-// Snapshot interpolation: keep the two latest samples and show the world slightly in the past,
-// blending between them, so movement is smooth even though updates arrive ~10 times a second.
-let DELAY = 0.12;
-export function setInterpDelay(d) { DELAY = d; }
-const now = () => performance.now() / 1000;
-export class Interp {
-  constructor() { this.a = null; this.b = null; }
-  push(x, y, z, yaw, extra = 0) {
-    const s = { t: now(), x, y, z, yaw, extra };
-    if (this.b && Math.hypot(x - this.b.x, z - this.b.z) > 12) this.a = null; // teleport: don't slide
-    this.a = this.b || s;
-    this.b = s;
-  }
-  sample(out) {
-    const { a, b } = this;
-    if (!b) return false;
-    const span = Math.max(0.03, b.t - a.t);
-    const k = a === b ? 1 : Math.max(0, Math.min(1.25, (now() - DELAY - a.t) / span));
-    out.x = a.x + (b.x - a.x) * k;
-    out.y = a.y + (b.y - a.y) * k;
-    out.z = a.z + (b.z - a.z) * k;
-    let dy = b.yaw - a.yaw;
-    while (dy > Math.PI) dy -= Math.PI * 2;
-    while (dy < -Math.PI) dy += Math.PI * 2;
-    out.yaw = a.yaw + dy * Math.min(1, k);
-    out.extra = b.extra;
-    return true;
-  }
-}
 
 export class HostSync {
   constructor(game) {
@@ -176,13 +149,53 @@ export class HostSync {
         s.alive ? 1 : 0, Math.round((s.hp / s.maxHp) * 100), r2(s.timer), s.vel.lengthSq() > 0.01 ? 1 : 0,
         (s.abandoned ? 1 : 0) | (s.driver ? 2 : 0), s.crewAlive()]),
       c: g.castles.map((c) => c.netState()),
-      f: g.factions.map((f) => [Math.floor(f.gold), f.troopCap, f.training, f.eliminated ? 1 : 0, f.kills, f.heroDeaths,
-        r1(f.respawnT), f.siegeTarget ? f.siegeTarget.team : -1, f.recruitRole === 'army' ? 1 : 0,
-        f.earned, f.isPlayer ? 1 : 0, f.lord, f.name, f.formation, f.levies]),
-      h: g.humans.map((h) => [h.team, r2(h.pos.x), r2(h.pos.y), r2(h.pos.z), r2(h.yaw), h.alive ? 1 : 0, Math.round(h.hp), h.maxHp,
-        h.blocking ? 1 : 0, h.swingT >= 0 ? r2(h.swingT) : -1, h.weapon === 'bow' ? 1 : 0, h.mounted ? 1 : 0, r2(h.heading),
-        r2(h.rideSpeed), h.hasHorse ? 1 : 0, r2(h.horsePos.x), r2(h.horsePos.y), r2(h.horsePos.z), r2(h.horseYaw), h.name, r2(h.pitch),
-        DIR_IDX[h.attackDir] || 0, DIR_IDX[h.blockDir] || 0, h.staggerT > 0 ? 1 : 0, CLASS_IDS.indexOf(h.classId), h.drive ? 1 : 0, (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0), h.level]),
+      f: g.factions.map((f) => packFaction({
+        gold: Math.floor(f.gold),
+        troopCap: f.troopCap,
+        training: f.training,
+        eliminated: f.eliminated ? 1 : 0,
+        kills: f.kills,
+        heroDeaths: f.heroDeaths,
+        respawnT: r1(f.respawnT),
+        siegeTarget: f.siegeTarget ? f.siegeTarget.team : -1,
+        recruitRole: f.recruitRole === 'army' ? 1 : 0,
+        earned: f.earned,
+        isPlayer: f.isPlayer ? 1 : 0,
+        lord: f.lord,
+        name: f.name,
+        formation: f.formation,
+        levies: f.levies,
+      })),
+      h: g.humans.map((h) => packHero({
+        team: h.team,
+        x: r2(h.pos.x),
+        y: r2(h.pos.y),
+        z: r2(h.pos.z),
+        yaw: r2(h.yaw),
+        alive: h.alive ? 1 : 0,
+        hp: Math.round(h.hp),
+        maxHp: h.maxHp,
+        blocking: h.blocking ? 1 : 0,
+        swingT: h.swingT >= 0 ? r2(h.swingT) : -1,
+        weapon: h.weapon === 'bow' ? 1 : 0,
+        mounted: h.mounted ? 1 : 0,
+        heading: r2(h.heading),
+        rideSpeed: r2(h.rideSpeed),
+        hasHorse: h.hasHorse ? 1 : 0,
+        horseX: r2(h.horsePos.x),
+        horseY: r2(h.horsePos.y),
+        horseZ: r2(h.horsePos.z),
+        horseYaw: r2(h.horseYaw),
+        name: h.name,
+        pitch: r2(h.pitch),
+        attackDir: DIR_IDX[h.attackDir] || 0,
+        blockDir: DIR_IDX[h.blockDir] || 0,
+        staggered: h.staggerT > 0 ? 1 : 0,
+        classId: CLASS_IDS.indexOf(h.classId),
+        driving: h.drive ? 1 : 0,
+        movementFlags: (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0),
+        level: h.level,
+      })),
       ev: this.shared,
     };
     this.shared = [];
@@ -306,18 +319,19 @@ export class ClientSync {
     s.c.forEach((a, i) => g.castles[i].applyNet(a));
     s.f.forEach((a, i) => {
       const f = g.factions[i];
-      [f.gold, f.troopCap, f.training] = a;
-      f.eliminated = !!a[3];
-      f.kills = a[4]; f.heroDeaths = a[5]; f.respawnT = a[6];
+      const state = unpackFaction(a);
+      f.gold = state.gold; f.troopCap = state.troopCap; f.training = state.training;
+      f.eliminated = !!state.eliminated;
+      f.kills = state.kills; f.heroDeaths = state.heroDeaths; f.respawnT = state.respawnT;
       // your own pick shows at once and the host's word wins again after a moment (a late snapshot must not undo it)
       const mine = i === g.localTeam && g.time < (g.localPickUntil || 0);
-      if (!mine) f.siegeTarget = a[7] >= 0 ? g.castles[a[7]] : null;
-      if (i !== g.localTeam || g.time >= (g.localRolePickUntil || 0)) f.recruitRole = a[8] ? 'army' : 'garrison';
-      f.earned = a[9];
-      f.lord = a[11]; f.name = a[12];
-      if (!mine) f.formation = a[13];
-      f.levies = a[14] || 0;
-      if (!a[10] && f.isPlayer && f.player !== g.player) {
+      if (!mine) f.siegeTarget = state.siegeTarget >= 0 ? g.castles[state.siegeTarget] : null;
+      if (i !== g.localTeam || g.time >= (g.localRolePickUntil || 0)) f.recruitRole = state.recruitRole ? 'army' : 'garrison';
+      f.earned = state.earned;
+      f.lord = state.lord; f.name = state.name;
+      if (!mine) f.formation = state.formation;
+      f.levies = state.levies || 0;
+      if (!state.isPlayer && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);
         f.player.removeBody();
@@ -327,37 +341,38 @@ export class ClientSync {
 
     // other people's heroes
     for (const a of s.h) {
-      const team = a[0];
+      const state = unpackHero(a);
+      const team = state.team;
       if (team === g.localTeam) continue;
       let h = g.humans.find((o) => o.team === team);
       if (!h) {
-        h = new Player(g, null, { remote: true, team, name: a[19], cls: CLASS_IDS[a[24]] });
+        h = new Player(g, null, { remote: true, team, name: state.name, cls: CLASS_IDS[state.classId] });
         g.humans.push(h);
         g.factions[team].player = h; g.factions[team].isPlayer = true;
       }
-      if (CLASS_IDS[a[24]] && CLASS_IDS[a[24]] !== h.classId) h.adoptClass(CLASS_IDS[a[24]]);   // they changed class
-      if (a[27] && a[27] !== h.level) { h.level = a[27]; if (h.body) h.buildTag(); }               // or reached a new level
+      if (CLASS_IDS[state.classId] && CLASS_IDS[state.classId] !== h.classId) h.adoptClass(CLASS_IDS[state.classId]);   // they changed class
+      if (state.level && state.level !== h.level) { h.level = state.level; if (h.body) h.buildTag(); }               // or reached a new level
       if (!h.interp) h.interp = new Interp();
-      h.interp.push(a[1], a[2], a[3], a[11] ? a[12] : a[4], a[4]); // riders turn by their horse's heading
-      h.netPose = { x: a[1], y: a[2], z: a[3], yaw: a[4], pitch: a[20], vx: 0, vz: 0, b: a[8], w: a[10], m: a[11], h: a[12], rs: a[13], hx: a[15], hy: a[16], hz: a[17], hyaw: a[18], dk: a[26] & 1, cl: (a[26] >> 1) & 1 };
-      const mv = a[11] ? a[13] : 0;
-      h.netPose.vx = Math.sin(a[11] ? a[12] : a[4]) * mv;
-      h.netPose.vz = Math.cos(a[11] ? a[12] : a[4]) * mv;
-      if (!a[11]) {
+      h.interp.push(state.x, state.y, state.z, state.mounted ? state.heading : state.yaw, state.yaw); // riders turn by their horse's heading
+      h.netPose = { x: state.x, y: state.y, z: state.z, yaw: state.yaw, pitch: state.pitch, vx: 0, vz: 0, b: state.blocking, w: state.weapon, m: state.mounted, h: state.heading, rs: state.rideSpeed, hx: state.horseX, hy: state.horseY, hz: state.horseZ, hyaw: state.horseYaw, dk: state.movementFlags & 1, cl: (state.movementFlags >> 1) & 1 };
+      const mv = state.mounted ? state.rideSpeed : 0;
+      h.netPose.vx = Math.sin(state.mounted ? state.heading : state.yaw) * mv;
+      h.netPose.vz = Math.cos(state.mounted ? state.heading : state.yaw) * mv;
+      if (!state.mounted) {
         // infer walking speed from movement between snapshots
-        const dx = a[1] - (h.lastNetX ?? a[1]), dz = a[3] - (h.lastNetZ ?? a[3]);
+        const dx = state.x - (h.lastNetX ?? state.x), dz = state.z - (h.lastNetZ ?? state.z);
         h.netPose.vx = dx / SNAP_EVERY; h.netPose.vz = dz / SNAP_EVERY;
       }
-      h.lastNetX = a[1]; h.lastNetZ = a[3];
-      h.alive = !!a[5];
-      h.hp = a[6]; h.maxHp = a[7];
-      if (a[9] >= 0 && h.swingT < 0) h.swingT = a[9];
-      h.attackDir = DIRS[a[21]] || 'right';
-      h.blockDir = DIRS[a[22]] || 'right';
-      h.staggerT = a[23] ? 0.3 : 0;
-      h.drive = a[25] ? true : null;   // inside a siege engine
-      if (a[14] && !h.hasHorse) { h.hasHorse = true; h.horseHp = 320; h.ensureHorseModel(); h.horseDeadT = undefined; }
-      if (!a[14] && h.hasHorse) { h.hasHorse = false; h.mounted = false; h.horseDeadT = 0; }
+      h.lastNetX = state.x; h.lastNetZ = state.z;
+      h.alive = !!state.alive;
+      h.hp = state.hp; h.maxHp = state.maxHp;
+      if (state.swingT >= 0 && h.swingT < 0) h.swingT = state.swingT;
+      h.attackDir = DIRS[state.attackDir] || 'right';
+      h.blockDir = DIRS[state.blockDir] || 'right';
+      h.staggerT = state.staggered ? 0.3 : 0;
+      h.drive = state.driving ? true : null;   // inside a siege engine
+      if (state.hasHorse && !h.hasHorse) { h.hasHorse = true; h.horseHp = 320; h.ensureHorseModel(); h.horseDeadT = undefined; }
+      if (!state.hasHorse && h.hasHorse) { h.hasHorse = false; h.mounted = false; h.horseDeadT = 0; }
     }
 
     // my hero

@@ -26,7 +26,8 @@ import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
 import { Pings } from './pings.js';
-import { prewarmSoldier } from './models.js';
+import { prewarmSoldier, sharedModelResources } from './models.js';
+import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
@@ -101,6 +102,19 @@ export class Game {
     this.phaseT = 0;
     this.hitStop = 0;
     this.pings = new Pings(this);
+  }
+
+  // Map replacement keeps the renderer, network connection and shared asset caches.
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];
+    // These resources may not currently be attached to a visible scene object.
+    const extra = [this.grass.geo, this.grass.material, this.magic.boltMat,
+      ...Object.values(this.projectiles).filter((v) => v && (v.isBufferGeometry || v.isMaterial))];
+    disposeWorld(this.scene, shared, extra);
+    this.warmQueue = [];
+    this.renderer.renderLists.dispose();
   }
 
   // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'
