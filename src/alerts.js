@@ -23,7 +23,8 @@
 // Options has a switch for the alerts (callouts, sounds, the away panel, nudges) and one for the tips.
 import { settings } from './settings.js';
 import { allied } from './teams.js';
-import { HILL } from './config.js';
+import { HILL, WAVES } from './config.js';
+import { HERO } from './herogame.js';
 import './alertsounds.js';
 
 // The hint bar. One short sentence each; [X] shows a key. Add yours anywhere in the list:
@@ -33,8 +34,21 @@ import './alertsounds.js';
 //          hillorder; anything else you pass to game.alerts.learn())
 //   cls    only for this hero class · koth  true / false: only in King of the Hill / only in Conquest
 //   at     'death' (the respawn screen) or 'over' (the game-over screen); everything else rotates while you play
+//   hero   only in the Hero Game Mode: true for any way to win, or 'kills' / 'castle' / 'timed' for that one (HERO_OFF lists the
+//          war tips that make no sense there)
 // They come round in this order, none twice until all of the ones that fit have been seen.
 export const TIPS = [
+  // Hero Game Mode (first in the list, so they come first there)
+  { id: 'h-kills', hero: 'kills', get text() { return `The first side to ${HERO.killTarget} hero kills wins. A hero falls to anything: a rival hero, a soldier or an engine. Stay close to your allies.`; } },
+  { id: 'h-castle', hero: 'castle', text: 'Destroy the enemy keep to win. Hero kills only count on the scoreboard, so help your own armies hold your gate too.' },
+  { id: 'h-timed', hero: 'timed', get text() { return `${Math.round(HERO.timeLimit / 60)} minutes of battle: the side with more hero kills wins, then the stronger keep. A keep that falls ends it early.`; } },
+  { id: 'h-armies', hero: true, text: `You command no army here: both castles send a wave every ${WAVES.interval} seconds by themselves, and every round is tougher than the last.` },
+  { id: 'h-talents', hero: true, learn: 'talentstab', text: 'Press [N] to spend a talent point whenever you level up: talents are the only upgrades you can get.' },
+  { id: 'h-fountain', hero: true, text: 'Near your own keep a hero mends fast: fall back to the fountain when you are low, and a fallen hero rises there after a few seconds.' },
+  { id: 'h-ways', hero: true, get text() { return `Three ways to win, chosen in the menu: first to ${HERO.killTarget} hero kills, destroy the enemy keep, or the most hero kills in ${Math.round(HERO.timeLimit / 60)} minutes.`; } },   // (getters: HERO is read when the tip is shown, not when this module loads)
+  { id: 'h-scores', hero: true, learn: 'tab', text: 'Hold [Tab] for the score and the level, kills and deaths of all six heroes.' },
+  { id: 'h-d-rise', hero: true, at: 'death', text: 'You rise again at your keep in a few seconds. [N] spends talent points while you wait.' },
+  { id: 'h-o-modes', hero: true, at: 'over', text: 'Try another way to win: the first to the hero kills, destroying the enemy keep, or the timed match.' },
   { id: 'duck', learn: 'ducked', text: 'Hold [C] to duck: arrows fly over your head and a battlement hides you completely.' },
   { id: 'climb', learn: 'climbed', text: 'Jump at a wall of your own castle ([Space]) to scramble up onto the wall walk.' },
   { id: 'guard', learn: 'guarded', text: 'Hold right click to guard. Block the side the red arrow points to; just in time, it parries.' },
@@ -87,6 +101,9 @@ export const TIPS = [
   { id: 'o-army', at: 'over', text: 'Armies win sieges: spend early on barracks and elite levies.' },
 ];
 
+// the war tips that say nothing true in the Hero Game Mode (no gold, shop, army, orders or class changes; allies are bots)
+const HERO_OFF = new Set(['shop', 'army', 'orders', 'waves', 'castle', 'group', 'formation', 'classswitch', 'scores', 'ping', 'pingwheel', 'mapping', 'd-class', 'd-army', 'o-army']);
+
 const $ = (id) => document.getElementById(id);
 const SCAN = 0.25;                              // seconds (of game time) between the slower checks
 const ARMY = { count: 5, range: 80 };           // this many foes within this many metres of your castle is an army at the door
@@ -111,6 +128,7 @@ export const dir4 = (dx, dz) => (Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 'east' 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // tip text to markup: [X] becomes a key cap
 const fmt = (s) => esc(s).replace(/\[([^\]]{1,12})\]/g, '<kbd>$1</kbd>');
+const roundWord = (g) => (g.hero ? 'Round' : 'Wave');   // (the Hero Game Mode HUD counts rounds)
 const clockText = (sec) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
 
 // what has been shown and what the player already knows, kept in this browser
@@ -242,6 +260,7 @@ export class Alerts {
     this.goldLast = f.gold;
     this.parts = null;
     this.armyNear = false;
+    this.heroDeaths = null;
     this.spotted = new Set();
     this.hillOwner = g.hill.owner;
     this.hillContested = false;
@@ -293,14 +312,14 @@ export class Alerts {
     if (g.round > this.round) {
       this.round = g.round;
       // (the first wave and every tenth come with the game's own horn and banner)
-      if (g.round !== 1 && g.round % 10 !== 0) this.raise('wave', { text: `Wave ${g.round} marches out`, icon: '⚔', tone: 'info', cooldown: 5 });
+      if (g.round !== 1 && g.round % 10 !== 0) this.raise('wave', { text: `${roundWord(g)} ${g.round} marches out`, icon: '⚔', tone: 'info', cooldown: 5 });
     }
     const s = Math.max(0, Math.ceil(g.phaseT));
     if (s === this.sec) return;
     const prev = this.sec;
     this.sec = s;
     if (s > prev) return;                     // a new countdown has begun
-    if (prev > 10 && s <= 10) this.raise('wave10', { text: `Wave ${g.round + 1} marches in 10 s`, icon: '⏳', tone: 'info', cooldown: 5 });
+    if (prev > 10 && s <= 10) this.raise('wave10', { text: `${roundWord(g)} ${g.round + 1} marches in 10 s`, icon: '⏳', tone: 'info', cooldown: 5 });
     if (s >= 1 && s <= 3) this.snd('tick');
   }
 
@@ -348,7 +367,7 @@ export class Alerts {
     if (this.idleShown || now - this.lastInput < IDLE) return;
     this.idleShown = true;
     const left = Math.max(0, g.phaseT);
-    this.raise('idle', { text: `Still with us? ${g.round ? `Wave ${g.round + 1}` : 'The first wave'} marches in ${clockText(left)}.`, icon: '💤', tone: 'info', sound: 'chime', cooldown: 30 });
+    this.raise('idle', { text: `Still with us? ${g.round ? `${roundWord(g)} ${g.round + 1}` : `The first ${roundWord(g).toLowerCase()}`} marches in ${clockText(left)}.`, icon: '💤', tone: 'info', sound: 'chime', cooldown: 30 });
   }
 
   // low health: a heartbeat that quickens as the end nears
@@ -367,6 +386,7 @@ export class Alerts {
     this.enemies(c, p);
     this.vitals(p);
     this.treasury(f, p);
+    this.heroWatch(p);
     this.hillWatch(p);
     this.life(p);
     this.tipWatch(p);
@@ -442,10 +462,28 @@ export class Alerts {
   // gold that has sat there for a while while you are at home
   treasury(f, p) {
     const g = this.g, now = g.time;
+    if (g.hero) return;   // (no gold in the Hero Game Mode)
     if (f.gold < GOLD.amount || f.gold < this.goldLast - 4 || g.ui.shopOpen) this.goldSince = now;   // spent some, or not enough yet
     this.goldLast = f.gold;
     if (now - this.goldSince < GOLD.wait || !p.alive || f.castle.fallen || !p.atHome()) return;
     this.raise('gold', { text: `You have ${Math.floor(f.gold)} gold to spend (B)`, icon: '💰', tone: 'info', cooldown: 90 });
+  }
+
+  // Hero Game Mode: a hero has fallen ("Enemy hero slain: 12/25", "Your ally Mara was slain"). Every screen counts the deaths on
+  // the roster, so this works the same for everyone; the first look only learns the counts. Your own fall has the respawn screen.
+  heroWatch(p) {
+    const h = this.g.hero;
+    if (!h || typeof h.roster !== 'function') { this.heroDeaths = null; return; }
+    const seen = this.heroDeaths || (this.heroDeaths = new Map());
+    for (const r of h.roster()) {
+      const key = r.player || r.name, was = seen.get(key);
+      seen.set(key, r.deaths);
+      if (was === undefined || r.deaths <= was || r.mine) continue;
+      if (r.team !== p.team) {
+        const n = h.sides && h.sides[p.team] ? h.sides[p.team].kills : 0;
+        this.raise('hero:' + r.name, { text: `Enemy hero slain: ${n}${h.killTarget ? '/' + h.killTarget : ''}`, icon: '⚔', tone: 'good', sound: 'chime', cooldown: 1 });
+      } else this.raise('hero:' + r.name, { text: `Your ally ${r.name} was slain`, icon: '☠', tone: 'warn', cooldown: 1 });
+    }
   }
 
   // King of the Hill: the game toasts the changes; these are the sounds that go with them
@@ -506,6 +544,8 @@ export class Alerts {
     if (t.learn && this.learned.has(t.learn)) return false;
     if (t.cls && t.cls !== g.player.classId) return false;
     if (t.koth !== undefined && t.koth !== (g.objective === 'koth')) return false;
+    if (t.hero !== undefined && (!g.hero || (t.hero !== true && t.hero !== g.hero.win))) return false;   // (Hero Game Mode tips)
+    if (g.hero && HERO_OFF.has(t.id)) return false;
     if (t.team && !g.humans.some((h) => h !== g.player && allied(h.team, g.player.team))) return false;   // (needs a human ally)
     return true;
   }
@@ -631,7 +671,7 @@ export class Alerts {
     if (waves > 0) lines.push(['⚔', `${waves} wave${waves > 1 ? 's' : ''} marched`]);
     if (kills > 0) lines.push(['🗡', `You slew ${kills}`]);
     if (deaths > 0) lines.push(['☠', deaths > 1 ? `You fell ${deaths} times` : 'You fell']);
-    if (gold >= 10) lines.push(['●', `+${gold} gold earned`]);
+    if (gold >= 10 && !g.hero) lines.push(['●', `+${gold} gold earned`]);
     if (p.level > a.level) lines.push(['✦', `You reached level ${p.level}`]);
     const el = $('away');
     if (!lines.length || !el) return;

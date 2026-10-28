@@ -8,6 +8,7 @@ import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
+import { HERO } from './herogame.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -21,6 +22,10 @@ const ROLES = [
 ];
 const ROSTER_TYPES = ['swordsman', 'spearman', 'archer', 'knight', 'longbowman', 'horseman', 'lancer'];
 const pct = (x) => `${Math.round(x * 100)}%`;
+// what a Hero Game Mode match is played for, in a few words (the HUD, the scoreboard, the banner)
+const heroGoal = (h) => (h.win === 'castle' ? 'Destroy the enemy keep'
+  : h.win === 'timed' ? `Most hero kills in ${Math.round((h.timeLimit || HERO.timeLimit) / 60)} min`
+  : `First to ${h.killTarget || HERO.killTarget} hero kills`);
 
 // Six hero-class buttons plus a panel describing the chosen class (main menu and lobby).
 export function renderClassPicker(root, info, selected, onPick) {
@@ -106,6 +111,7 @@ export class UI {
   }
 
   goldPopup(g) {
+    if (this.game && this.game.hero) return;   // (no gold in Hero Game Mode: no popup, no coin sound)
     const el = document.createElement('div');
     el.className = 'goldpop';
     el.textContent = `+${g}`;
@@ -181,6 +187,7 @@ export class UI {
   }
 
   openOrders() {
+    if (this.game.hero) return;   // (no orders in Hero Game Mode)
     this.tab = 'orders';
     if (this.shopOpen) this.renderShop();
     else this.toggleShop(true);
@@ -258,6 +265,7 @@ export class UI {
   renderShop() {
     const g = this.game;
     if (document.querySelector(`#shop .tabs button[data-tab="${this.tab}"]`)?.disabled) this.tab = 'army';   // a greyed-out tab can't be shown
+    if (g.hero) this.tab = 'talents';   // Hero Game Mode: the Talents panel is the whole shop
     document.querySelectorAll('#shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
     const grid = $('shopGrid');
     grid.innerHTML = '';
@@ -523,6 +531,7 @@ export class UI {
   // Update gold, descriptions and button states in place.
   refreshShop() {
     const g = this.game;
+    if (g.hero) { refreshTalentTab(this); return; }   // (no gold, army or class cards to refresh)
     const f = g.localFaction;
     $('shopGold').textContent = Math.floor(f.gold);
     const rc = g.roleCounts(g.localTeam);
@@ -622,6 +631,8 @@ export class UI {
     const wf = g.factions[winner];
     const team = won && g.coop;
     $('gameover').classList.remove('hidden');
+    if (g.hero) { this.heroGameOver(won, winner, reason); return; }
+    $('goHeroes').classList.add('hidden');
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
     $('goText').textContent = reason || (team
@@ -648,6 +659,7 @@ export class UI {
     if (!g || g.state === 'menu' || g.state === 'loading') return;
     const p = g.player;
     const f = g.localFaction;
+    this.syncHero();
     if (this.shopOpen) {
       this.shopT = (this.shopT || 0) - dt;
       if (this.shopT <= 0) { this.shopT = 0.25; this.refreshShop(); }
@@ -689,11 +701,11 @@ export class UI {
       $('xpFill').style.width = `${(levelProgress(p.xp, p.level) * 100).toFixed(1)}%`;
       $('xpbar').classList.toggle('max', p.level >= MAX_LEVEL);
       $('xpbar').title = p.level >= MAX_LEVEL ? 'Level 5: the highest level' : `Level ${p.level}: ${Math.floor(p.xp)} / ${XP_FOR_LEVEL[p.level + 1]} experience`;
-      this.renderFactions();
+      if (g.hero) this.updateHeroHud(); else this.renderFactions();
       this.updateHill(dt);
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
-        $('respawnT').textContent = f.castle.fallen ? 'Your keep has fallen – no respawn' : `Respawning in ${Math.ceil(f.respawnT)}s`;
+        $('respawnT').textContent = f.castle.fallen ? 'Your keep has fallen – no respawn' : `Respawning in ${Math.ceil(g.hero ? this.heroRespawn() : f.respawnT)}s`;
       } else $('respawn').classList.add('hidden');
       $('scoreboard').classList.toggle('hidden', !g.input.down('Tab'));
       if (g.input.down('Tab')) this.renderScoreboard();
@@ -800,6 +812,7 @@ export class UI {
 
   renderScoreboard() {
     const g = this.game;
+    if (g.hero) { this.renderHeroScoreboard(); return; }
     let rows = '';
     for (const f of g.factions) {
       const c = f.castle;
@@ -811,6 +824,110 @@ export class UI {
     }
     $('hillTh').style.display = g.objective === 'koth' ? '' : 'none';
     $('scoreRows').innerHTML = rows;
+  }
+
+  // ---------- Hero Game Mode ----------
+  // game.hero swaps the war HUD for the hero one: the orders bar, army line, gold, castle list and hill box go (CSS, by the class
+  // `hero` on the HUD), the score panel, the roster of the six heroes and the Talents-only shop come, and the key hints change.
+  syncHero() {
+    const g = this.game, h = g.hero || null;
+    if (h === this.heroSeen) return;
+    this.heroSeen = h;
+    for (const id of ['hud', 'shop', 'scoreboard', 'controls']) $(id).classList.toggle('hero', !!h);
+    if (this.hintHtml === undefined) { this.hintHtml = $('hint').innerHTML; this.clsHintText = $('clsHint').textContent; }
+    $('hint').innerHTML = h ? 'Esc: menu · N: talents · M: map · Q / R: abilities · C:&nbsp;duck · Tab: scores' : this.hintHtml;
+    $('clsHint').textContent = h ? ' · N → Talents' : this.clsHintText;
+    this.heroHtml = '';
+    this.heroBars = {};
+    if (!h) { this.tab = 'army'; return; }
+    this.tab = 'talents';
+    $('heroBarKB').firstElementChild.style.background = TEAM_CSS[0];
+    $('heroBarKR').firstElementChild.style.background = TEAM_CSS[1];
+    $('heroTop').querySelector('.hside.b .hn b').style.color = TEAM_CSS[0];
+    $('heroTop').querySelector('.hside.r .hn b').style.color = TEAM_CSS[1];
+    if (g.state === 'playing') {   // (instead of the war modes' "Prepare for battle")
+      const prep = h.prepLeft > 0 ? h.prepLeft : g.phaseT;
+      this.banner('Hero Game Mode', `${heroGoal(h)}. The armies march in ${clock(prep)} and every ${WAVES.interval} seconds after. N: talents · M: map · Q / R: abilities.`);
+    }
+  }
+
+  // seconds until the local hero rises (the faction's timer, or the roster's when that is what the rules keep)
+  heroRespawn() {
+    const g = this.game, h = g.hero, me = h && h.roster ? h.roster().find((r) => r.mine) : null;
+    return me && me.respawnIn > 0 ? me.respawnIn : Math.max(0, g.localFaction.respawnT);
+  }
+
+  // the score panel (kills, the goal, the clock, the round), both keeps and gates, and the roster of the six heroes
+  updateHeroHud() {
+    const g = this.game, h = g.hero;
+    const set = (id, text) => { const el = $(id); if (el.textContent !== text) el.textContent = text; };
+    const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
+    set('heroScoreB', String(kills(0)));
+    set('heroScoreR', String(kills(1)));
+    set('heroGoal', heroGoal(h));
+    set('heroClock', h.remaining != null ? `Time left ${clock(h.remaining)}` : `Battle ${clock(h.clock || 0)}`);
+    set('heroRound', h.prepLeft > 0 ? `Prepare: ${Math.ceil(h.prepLeft)} s` : `Round ${g.round} · next army in ${Math.ceil(Math.max(0, g.phaseT))} s`);
+    for (const [t, k, name] of [[0, 'B', 'Blue'], [1, 'R', 'Red']]) {
+      const c = g.castles[t];
+      if (!c) continue;
+      const keep = c.fallen ? 0 : Math.max(0, Math.min(1, c.keep.hp / c.keep.maxHp));
+      const gate = c.gate.alive ? Math.max(0, Math.min(1, c.gate.hp / c.gate.maxHp)) : 0;
+      set(`heroKeep${k}`, `Keep ${Math.round(keep * 100)}%`);
+      for (const [bar, v, title] of [[`heroBarK${k}`, keep, `${name} keep ${Math.round(keep * 100)}%`], [`heroBarG${k}`, gate, c.gate.alive ? `${name} gate ${Math.round(gate * 100)}%` : `${name} gate broken`]]) {
+        const el = $(bar), w = `${(v * 100).toFixed(0)}%`;
+        if (this.heroBars[bar] !== w) { this.heroBars[bar] = w; el.firstElementChild.style.width = w; }
+        if (el.title !== title) el.title = title;
+      }
+    }
+    const rows = typeof h.roster === 'function' ? h.roster() : [];
+    let html = '', prev = null;
+    for (const r of rows) {
+      const c = CLASSES[r.cls] || { icon: '?', name: String(r.cls || ''), color: NEUTRAL_CSS };
+      const p = r.player, hp = p && p.maxHp ? Math.max(0, Math.min(1, p.hp / p.maxHp)) : 1;
+      html += `<div class="hr${r.mine ? ' me' : ''}${r.alive ? '' : ' down'}${prev !== null && prev !== r.team ? ' sep' : ''}" style="border-left-color:${TEAM_CSS[r.team] || NEUTRAL_CSS}">
+        <span class="ic" title="${esc(c.name)}">${esc(c.icon)}</span><span class="nm" title="${esc(r.name)}${r.mine ? ' (you)' : ''}">${esc(r.name)}</span><span class="lv">Lv ${r.level}</span><span class="kd" title="hero kills / deaths">${r.kills}/${r.deaths}</span>${
+  r.alive ? `<span class="st" title="alive"><span class="bar"><b style="width:${Math.round(hp * 100)}%"></b></span></span>` : `<span class="st respawn">respawn ${Math.ceil(r.respawnIn || 0)} s</span>`}</div>`;
+      prev = r.team;
+    }
+    if (html !== this.heroHtml) { this.heroHtml = html; $('heroRoster').innerHTML = html; }
+  }
+
+  // the table of the six heroes: the scoreboard (Tab) and the end screen share it
+  heroTable(rows, withStatus) {
+    return rows.map((r) => {
+      const c = CLASSES[r.cls] || { icon: '', name: String(r.cls || '') };
+      const side = r.team === 0 ? 'Blue' : 'Red';
+      return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${esc(r.name)}${r.mine ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
+    }).join('');
+  }
+
+  // Tab: the score on top, then the six heroes
+  renderHeroScoreboard() {
+    const g = this.game, h = g.hero;
+    const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
+    const mode = HERO.modes[h.win] ? HERO.modes[h.win].name : '';
+    $('heroScoreTop').innerHTML = `<span style="color:${TEAM_CSS[0]}">Blue ${kills(0)}</span><i>:</i><span style="color:${TEAM_CSS[1]}">${kills(1)} Red</span>`;
+    $('heroScoreSub').textContent = `${mode ? mode + ': ' : ''}${heroGoal(h)} · ${h.remaining != null ? `time left ${clock(h.remaining)}` : `battle ${clock(h.clock || 0)}`} · round ${g.round}`;
+    $('heroScoreRows').innerHTML = this.heroTable(typeof h.roster === 'function' ? h.roster() : [], true);
+  }
+
+  // the end of a hero match: why, the score and what each of the six heroes did
+  heroGameOver(won, winner, reason) {
+    const g = this.game, h = g.hero, res = h.result || {};
+    const w = res.winner !== undefined ? res.winner : winner;
+    const draw = w === undefined || w < 0;
+    const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
+    $('goTitle').textContent = draw ? 'A draw' : won ? 'Victory!' : 'Defeat';
+    $('goTitle').className = draw ? '' : won ? 'win' : 'lose';
+    $('goText').textContent = res.reason || reason || (draw ? 'Neither side won the day.' : won ? 'Blue wins the battle.' : 'Red wins the battle.');
+    $('goStats').innerHTML = `
+      <div><b style="color:${TEAM_CSS[0]}">${kills(0)}</b><span>Blue hero kills</span></div>
+      <div><b style="color:${TEAM_CSS[1]}">${kills(1)}</b><span>Red hero kills</span></div>
+      <div><b>${clock(h.clock || 0)}</b><span>of battle</span></div>
+      <div><b>${g.round}</b><span>rounds</span></div>`;
+    $('goHeroes').innerHTML = `<table class="herotbl"><thead><tr><th>Side</th><th>Hero</th><th>Class</th><th>Level</th><th>Kills</th><th>Deaths</th></tr></thead><tbody>${this.heroTable(typeof h.roster === 'function' ? h.roster() : [], false)}</tbody></table>`;
+    $('goHeroes').classList.remove('hidden');
+    this.hideHud();
   }
 
   updateTarget() {

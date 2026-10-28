@@ -23,6 +23,9 @@ Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** 
   hill at once, and men of every wave after that (more as the war goes on) to keep them there, so nobody can sit on it
   unopposed and it is fought over all game long. **Y** sends your own army up to
   hold it. In co-op, allies share the hold and the time, and win together.
+- **Hero Game Mode**: three heroes against three, out of one castle each, with nothing to control but your hero and its
+  talents while the armies march by themselves, round after round tougher. Win by 25 hero kills, by destroying the enemy
+  keep, or by the most hero kills in 20 minutes (see **Hero Game Mode** below). Single player for now.
 
 ## Play
 
@@ -363,7 +366,9 @@ so it works the same in single player, as the host and as a guest.
   seconds. There are about forty: controls, tricks for each of the six classes, climbing and ducking, the maps, orders and
   the Army tab, King of the Hill, upgrades and the shop, levels and talents, and (with a human ally in the game) pings. Tips about things you have already done are skipped, none comes
   round twice until every one that applies has been shown, and what you have seen is remembered in this browser. The
-  respawn screen and the game-over screen show one too. The list is the `TIPS` array at the top of `src/alerts.js`.
+  respawn screen and the game-over screen show one too. The list is the `TIPS` array at the top of `src/alerts.js`. In Hero Game
+  Mode (below) the gold, army, order, shop and castle-upgrade tips and the gold alert are left out, and hero tips (the way to
+  win, the armies that come by themselves, talents, the fountain) come first.
 - **While you look away**: when the tab is hidden or the window loses focus the game keeps a log. Something important (an
   attack, a breach, an army at the gate) flashes the browser tab's title ("⚔ (3) Castle under attack!") and sounds its
   alert, and when you come back a "While you were away" panel lists what happened for a few seconds: attacks, waves, kills,
@@ -380,6 +385,50 @@ Code that wants to add an alert calls `game.alerts.raise(key, { text, icon, tone
 away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, and `game.alerts.learn(flag)` tells the tips
 that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
 `alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
+
+## Hero Game Mode
+
+Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
+Blue team mates and the three Red heroes are bots (`src/herobot.js`), each a full hero with a class, levels, talents and
+abilities. The other two castles of the map stand empty: no lords, no soldiers, no waves. This round the mode is single
+player only: with Hero Mode chosen, the Multiplayer button is disabled and says so.
+
+Everything but your hero is taken away. There is no gold, no shop, no castle upgrades, no army and no orders, and you
+cannot change class. You move, strike, guard, shoot, use **Q** and **R**, drink, ride, climb, duck, look at the map, ping
+and spend your **talents**. The armies march by themselves: both castles send a wave every 30 seconds (after a short
+preparation), each round tougher than the last (tougher soldiers, elite levies and training tiers, then rams and
+catapults), the same for both sides, so a match always ends. A hero who falls rises again at their own keep after a few
+seconds (longer with every death) and mends quickly near it (the fountain); experience comes a little quicker than in the war
+modes, because the match is short. The numbers are the `HERO` table in `src/herogame.js`.
+
+**Three ways to win**, chosen in the menu: pick *Hero Mode* in the Mode row and a second row offers them (the last choice is
+remembered in your browser):
+
+- **Hero kills**: the first side to **25 hero kills** wins. A hero kill is a hero who falls to the other side, to a hero,
+  a soldier, an engine, whatever hit last.
+- **Castle**: destroy the enemy keep. Hero kills only count on the scoreboard.
+- **Timed**: **20 minutes** of battle (the clock starts when the first army marches). The side with more hero kills wins,
+  then the stronger keep; if those are level too, it is a draw.
+
+In every way of winning, a keep that falls ends the match at once.
+
+**Controls.** **B** or **N** open the **Talents** panel and nothing else: the shop with only its Talents tab, no gold and no
+other tabs. In single player the world waits while it is open, and closing it gives the mouse back as usual. **O**, **F1-F4**,
+**Z**, **X**, **V**, **T**, **Y**, **G**, **F** and the class switch do nothing, and the key hints and the Controls sheet leave
+them out and list the Hero Game Mode keys. **M** (the map), pings, **Tab** and **Esc** work as usual.
+
+**The HUD.** The orders bar, the army line, the gold box, the castle list and the hill box are gone. A panel at the top centre
+shows the score (Blue's hero kills : Red's), the goal of the chosen mode, the battle clock (the time left in the timed mode), the
+round with the seconds to the next army ("Prepare: 24 s" during the preparation), and both keeps and gates as slim bars. A roster
+of the six heroes sits at the top left: class icon, name, level, kills/deaths and a health bar, or "respawn 7 s" while down, with
+your own hero highlighted. Your health, stamina, level and experience bar, abilities, potions and the talent-point hint stay.
+**Tab** shows the score and a table of the six heroes (side, hero, class, level, kills, deaths, status). A callout says when a
+hero falls ("Enemy hero slain: 12/25", "Your ally Mara was slain"), and the end screen gives the reason, the score and what each
+of the six did (class, level, kills, deaths).
+
+Code: the rules (`HeroMode`) are in `src/herogame.js` and the bots in `src/herobot.js`; `Game.start` switches the mode on when
+the setup has `hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
+controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handleInput`).
 
 ## Controls
 
@@ -415,6 +464,9 @@ that the player knows something now. The details are in the header of `src/alert
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
 | Esc | Game menu: resume, options, controls, quit (closes the shop or a panel first) |
+
+In **Hero Game Mode** (below) only some of these work: B and N both open the Talents panel (and nothing else), and O, F1-F4,
+Z, X, V, T, Y, G and F do nothing.
 
 **Pings and markers.** Team mates can call out targets and places. A **ping** is a quick middle click on whatever the
 crosshair is on and lasts about 6 seconds; a **marker** (the held-button wheel, or a click on a map) lasts 45 seconds,
@@ -463,7 +515,8 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/teams.js` | Who fights whom: co-op sides |
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/world.js`, `src/textures.js` | Terrain, sky, forests and procedural textures |
-| `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby |
+| `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
+| `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/settings.js` | Volume, sensitivity, field-of-view and alerts/tips settings, kept in the browser |
 | `src/alerts.js` | Callouts, kill streaks, tips, the idle nudge, the away log and the background ticker for hidden tabs; `raise(key, {...})` is the way in |
 | `src/alertsounds.js` | The sounds of the alerts (bells, brass, ticks, heartbeat), added to the registry in `audio.js` |
