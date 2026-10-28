@@ -1,7 +1,7 @@
 // Grass that grows around the camera: instanced blade clumps swaying in the wind.
 // The patch is rebuilt (deterministically, so it doesn't flicker) when the camera moves far enough.
 import * as THREE from 'three';
-import { CASTLE } from './config.js';
+import { CASTLE, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { roadDist } from './world.js';
 
@@ -93,6 +93,8 @@ export class Grass {
     }
     if (roadDist(x, z) < 3.2) return false;
     if (Math.hypot(x, z) < 17) return false;
+    const y = this.physics.practice;   // the practice yard has a bare floor
+    if (y && Math.abs(x - y.x) < PRACTICE.hw + PRACTICE.wallT + 1 && Math.abs(z - y.z) < PRACTICE.hd + PRACTICE.wallT + 1) return false;
     return true;
   }
 

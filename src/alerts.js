@@ -207,7 +207,7 @@ export class Alerts {
   update() {
     const g = this.g;
     if (g.state === 'over') { this.finish(); return; }
-    if (g.state !== 'playing') return;
+    if (g.state !== 'playing' || g.practice) return;   // (nothing to warn about in the practice yard)
     if (!this.begun) this.begin();
     const p = g.player, now = g.time;
     this.watch(p);

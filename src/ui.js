@@ -8,6 +8,7 @@ import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
+import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } from './practiceui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -56,6 +57,7 @@ export class UI {
   constructor() {
     this.game = null;
     this.shopOpen = false;
+    this.practiceOpen = false;   // the practice courtyard's panel (P)
     this.tab = 'army';
     this.hudT = 0;
     this.mapT = 0;
@@ -113,6 +115,9 @@ export class UI {
     setTimeout(() => el.remove(), 1200);
     if (this.game) this.game.audio.play('coin');
   }
+
+  // the damage the hero did to a practice dummy, floating up from it
+  damagePop(dummy, amount) { damagePop(this, dummy, amount); }
 
   // "+8 XP" under the crosshair; gains that come close together add up in one popup
   xpPopup(n) {
@@ -235,6 +240,29 @@ export class UI {
   }
 
   // ---------- shop ----------
+  // The practice courtyard's panel: the mouse is free while it is up, and the world goes on behind it.
+  togglePractice(force) {
+    const g = this.game;
+    if (!g || !g.practice) return;
+    const open = force !== undefined ? force : !this.practiceOpen;
+    if (open === !!this.practiceOpen) return;
+    this.practiceOpen = open;
+    $('practice').classList.toggle('hidden', !open);
+    if (open) {
+      if (!this.pr) {
+        buildPracticePanel(this);
+        $('practiceClose').addEventListener('click', () => this.togglePractice(false));
+      }
+      g.player.cancelAim();
+      if (this.shopOpen) this.toggleShop(false);
+      this.toggleMap(false);
+      this.showPause(false);
+      this.prT = 0;
+      refreshPractice(this, true);
+      g.input.unlock();
+    } else if (!this.shopOpen && !this.mapOpen && $('pause').classList.contains('hidden') && g.state === 'playing') g.input.lock();
+  }
+
   toggleShop(force) {
     const open = force !== undefined ? force : !this.shopOpen;
     const g = this.game;
@@ -242,6 +270,7 @@ export class UI {
     this.shopOpen = open;
     $('shop').classList.toggle('hidden', !open);
     if (open) {
+      this.togglePractice(false);
       g.player.cancelAim();   // (a volley being placed is dropped, not loosed)
       this.toggleMap(false);
       this.showPause(false); // the shop always sits on top and takes the clicks
@@ -639,7 +668,10 @@ export class UI {
     this.hideHud();
   }
 
-  showHud() { $('hud').classList.remove('hidden'); }
+  showHud() {
+    $('hud').classList.remove('hidden');
+    $('hud').classList.toggle('practice', !!(this.game && this.game.practice));
+  }
   hideHud() { $('hud').classList.add('hidden'); }
 
   // ---------- per-frame HUD ----------
@@ -673,6 +705,7 @@ export class UI {
       if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
+      if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: the practice panel'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
       $('weapon').textContent = p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
         : `${p.bow.name} · ${p.arrows} arrows`;
@@ -700,6 +733,7 @@ export class UI {
     }
     this.targetT -= dt;
     if (this.targetT <= 0) { this.targetT = 0.15; this.updateTarget(); }
+    if (this.practiceOpen) { this.prT -= dt; if (this.prT <= 0) { this.prT = 0.25; refreshPractice(this); } }
     this.mapT -= dt;
     if (this.mapT <= 0) { this.mapT = 0.1; this.drawMinimap(); }
     if (this.mapOpen) {
@@ -840,7 +874,8 @@ export class UI {
     const team = o.team;
     const house = (g.factions[team] || { name: 'Unknown' }).name;
     let name;
-    if (o.kind === 'gate') name = `${house} – Gate`;
+    if (o.isDummy) name = `${o.name} · armour ${o.armor}`;
+    else if (o.kind === 'gate') name = `${house} – Gate`;
     else if (o.isSiege) name = `${o.name} – ${house}${o.abandoned ? ' (abandoned: E to take it)' : ''}`;
     else name = `${o.name}${!o.isHero && o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''} – ${house}${team === g.localTeam && !o.isHero && !o.isGiant && !o.isCrew ? ` · ${o.role}` : ''}`;
     el.classList.remove('hidden');
@@ -1054,7 +1089,7 @@ export class UI {
     if (open === !!this.mapOpen) return;
     this.mapOpen = open;
     $('bigmap').classList.toggle('hidden', !open);
-    if (open) { this.bigT = 0; this.drawBigMap(); }
+    if (open) { this.togglePractice(false); this.bigT = 0; this.drawBigMap(); }
     // the mouse is free while the map is up, so the maps can be clicked (markers); closing it hands the mouse back,
     // unless the shop or the game menu is the reason it closed
     const g = this.game;

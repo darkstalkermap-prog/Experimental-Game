@@ -26,6 +26,7 @@ import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
 import { Pings } from './pings.js';
+import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
 import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
@@ -57,7 +58,7 @@ class Grid {
 }
 
 export class Game {
-  constructor(renderer, ui, audio, input) {
+  constructor(renderer, ui, audio, input, opts = {}) {
     this.renderer = renderer;
     this.ui = ui;
     this.audio = audio;
@@ -69,6 +70,7 @@ export class Game {
     this.time = 0;
     this.state = 'loading';
     this.mode = 'single';
+    this.practice = !!opts.practice;   // the practice courtyard: no war, a yard with training dummies (see practice.js)
     this.net = null;
     this.paused = false;
     this.diff = DIFFICULTY.normal;
@@ -102,6 +104,7 @@ export class Game {
     this.phaseT = 0;
     this.hitStop = 0;
     this.pings = new Pings(this);
+    this.court = this.practice ? new PracticeCourt(this) : null;
   }
 
   // Map replacement keeps the renderer, network connection and shared asset caches.
@@ -191,7 +194,7 @@ export class Game {
       h.spawn(c.spawnPoint, c.rot);
     }
 
-    if (this.simulating) {
+    if (this.simulating && !this.practice) {
       for (const f of this.factions) {
         if (f.isPlayer) continue;
         this.spawnLord(f);
@@ -216,6 +219,14 @@ export class Game {
     const factionTypes = ['swordsman', 'spearman', 'archer', 'knight', 'horseman', 'lancer', 'longbowman', 'engineer', 'giant'];
     for (let v = 0; v < 6; v++) {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
+    }
+    if (this.practice) {
+      this.phaseT = 1e9;   // (nothing marches in the yard)
+      this.court.begin();
+      this.court.onHeroHit = (d, amount) => this.ui.damagePop(d, amount);
+      this.audio.play('horn');
+      this.ui.banner('Practice courtyard', 'Hit the dummies and read what you do to them. P: the practice panel (hero class, level, talents, soldiers by rank and tier, dummies) · Q / R: your abilities.');
+      return;
     }
     this.audio.play('horn');
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
@@ -682,7 +693,7 @@ export class Game {
     }
     dmg = Math.max(1, dmg - (target.armor || 0) * (info.splash ? 0.5 : 1));
     const p = target.chest(new THREE.Vector3());
-    this.fx.blood(p, info.ranged ? 5 : 9);
+    if (target.isDummy) this.fx.dust(p, 3, 0.35); else this.fx.blood(p, info.ranged ? 5 : 9);
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
     target.takeDamage(dmg, attacker, info);
@@ -1113,6 +1124,8 @@ export class Game {
 
   handleInput() {
     const i = this.input;
+    if (this.practice && i.hit('KeyP')) { this.ui.togglePractice(); return; }
+    if (this.ui.practiceOpen) return;   // (the panel has the keys while it is up)
     if (i.hit('KeyB')) { if (this.ui.tab === 'orders') this.ui.tab = 'army'; this.ui.toggleShop(); return; }
     if (i.hit('KeyN')) { this.ui.openTalents(); return; }
     if (this.ui.shopOpen) return;
@@ -1271,7 +1284,7 @@ export class Game {
     for (const h of this.humans) if (h.alive && !h.drive) this.grid.insert(h);
 
     const p = this.player;
-    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen ? this.input : this.input.idle);
+    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen ? this.input : this.input.idle);
     else this.deathCamera(dt);
     for (const h of this.humans) {
       if (h.remote) h.remoteUpdate(dt);
@@ -1300,7 +1313,8 @@ export class Game {
     this.grass.update(dt, this.camera.position);
     for (const c of this.castles) if (this.factions[c.team]) c.syncUpgrades(this.factions[c.team]);
 
-    if (this.simulating && this.state === 'playing') {
+    if (this.practice && this.state === 'playing') this.court.update(dt);
+    else if (this.simulating && this.state === 'playing') {
       this.updateWaves(dt);
       this.processSpawns(dt);
       this.hill.update(dt);
@@ -1325,7 +1339,7 @@ export class Game {
     let retier = 4;   // soldiers whose house has trained them further change into their new kit a few at a time
     for (const u of this.units) {
       const f = this.factions[u.team];
-      if (f && retier > 0 && u.alive && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
+      if (f && retier > 0 && u.alive && !u.fixedTier && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
       const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
       const s = u.isGiant ? 3 : 1;
       u.setLod(d2 < (32 * s) ** 2 ? 0 : d2 < (85 * s) ** 2 ? 1 : d2 < 260 * 260 ? 2 : 3);

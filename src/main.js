@@ -8,7 +8,7 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
+import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -42,11 +42,12 @@ audio.vol.master = settings.master / 100;
 audio.vol.music = settings.music / 100;
 audio.vol.sfx = settings.sfx / 100;
 
-function buildGame(size) {
+function buildGame(size, practice = false) {
   setMapSize(size);
-  game = new Game(renderer, ui, audio, input);
+  setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
+  game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
-  game.mapBuiltFor = size;
+  game.mapBuiltFor = size + (practice ? '+practice' : '');
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
   applySettings();
@@ -112,18 +113,18 @@ document.querySelectorAll('#objective button').forEach((b) => b.addEventListener
 selectObjective(objective);
 
 // rebuild the world if the chosen map size differs from the one on screen
-function ensureMap(size) {
-  if (WORLD.size === size && game.mapBuiltFor === size) return;
+function ensureMap(size, practice = false) {
+  if (WORLD.size === size && game.mapBuiltFor === size + (practice ? '+practice' : '')) return;
   const net0 = game.net;
   game.dispose();
-  buildGame(size);
+  buildGame(size, practice);
   game.net = net0;
   game.setQuality(quality);
   resize();
 }
 
 function begin(diff, setup = null, map = mapSize) {
-  ensureMap(map);
+  ensureMap(map, !!(setup && setup.practice));
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
@@ -145,6 +146,8 @@ const rememberClass = (id) => {
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
 $('play').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective }));
+// the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
+$('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], practice: true }, 'small'));
 
 // ---------------- online play ----------------
 let net = null;
@@ -361,7 +364,7 @@ input.onLockChange = (locked) => {
   }
   lastUnlockAt = performance.now();
   game.player.cancelAim();   // a volley being placed is dropped when the menu comes up
-  if (!ui.shopOpen && !ui.mapOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
+  if (!ui.shopOpen && !ui.mapOpen && !ui.practiceOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
 };
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
@@ -369,7 +372,7 @@ $('again').addEventListener('click', () => location.reload());
 
 // Clicking the game view while playing re-captures the mouse.
 renderer.domElement.addEventListener('click', () => {
-  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !ui.mapOpen && !shown('pause')) input.lock();
+  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !ui.mapOpen && !ui.practiceOpen && !shown('pause')) input.lock();
 });
 
 // Escape: close whatever is open on top, else open or close the game menu.
@@ -380,6 +383,7 @@ addEventListener('keydown', (e) => {
     if (shown('controls')) { $('controls').classList.add('hidden'); return; }
     if (ui.shopOpen) { input.pressed.delete(e.code); ui.toggleShop(false); return; }
     if (ui.mapOpen) { ui.toggleMap(false); return; }
+    if (ui.practiceOpen) { ui.togglePractice(false); return; }
     if (game.state !== 'playing') return;
     if (performance.now() - lastUnlockAt < 350) return;   // the release of the mouse has just opened the menu
     if (shown('pause')) closePause(); else openPause();

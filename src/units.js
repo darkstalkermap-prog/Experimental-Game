@@ -176,7 +176,7 @@ export class Unit {
 
   // --- experience ---
   gainXp(n) {
-    if (this.team === RAIDER_TEAM || this.isHero || this.isGiant || this.isCrew || !this.alive) return;
+    if (this.team === RAIDER_TEAM || this.isHero || this.isGiant || this.isCrew || !this.alive || this.noXp) return;
     this.xp += n;
     while (this.rank < 5 && this.xp >= RANKS.xp[this.rank]) {
       this.rank++;

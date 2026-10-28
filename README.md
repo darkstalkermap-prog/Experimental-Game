@@ -46,6 +46,29 @@ python3 -m http.server 8080
 # then open http://localhost:8080
 ```
 
+### Practice courtyard
+
+The **Practice Courtyard** button in the main menu takes you to a walled yard on its own flat ground, with nothing at war: no waves, no
+rival lords, nobody wins or loses. It is for trying things out on **training dummies**. A dummy cannot be beaten: it only counts what it
+takes, and shows it above its head (the damage per second over the last 5 seconds, the last blow, the best, the total), and the HUD keeps
+your own damage per second in the top left. Dummies come in five armour tiers (Straw 0, Mail 3, Plate 7, Champion 11, Fortress 15), so you
+can see what armour does to a blow. The floor has chalk lines every 10 m and distance boards on the walls, for the bow, the spells and the volley.
+
+Press **P** for the practice panel (the mouse is free while it is up, and the yard carries on behind it):
+
+- **Your hero**: any of the six classes at level 1 to 5, with full health and ready abilities each time. **All talents** gives the whole tree of
+  the class at any level (**No talents** clears it, **Talent tree (N)** spends the points the level gives), **Heal and refill** tops everything up.
+  The line below shows what your hero is now (health, armour, sword, bow, spells, speed, recharge).
+- **Soldiers**: any kind (swordsman, spearman, archer and cavalry; knight, longbowman and lancer; lord and giant) at any **veteran rank** (1 to 5,
+  +12% health, +10% damage, +1 armour per rank above the first) and any **training tier** (0 to 5, +15% health and damage and a better kit), one, five,
+  ten or twenty at a time (40 in the yard at most). They stand behind you and charge the nearest dummy by themselves. They keep the rank and tier they
+  were sent in with, and the panel tells how many damage per second each group does, each and in all, so kinds, ranks and tiers can be compared.
+- **Dummies**: the armour of the row, the crowd and the far targets, and which stands are filled: a **ladder** (one of each armour, side by side),
+  a **row of five** (alike: the fair test for soldiers, who choose the nearest dummy), a **crowd of twelve** (for the Whirlwind, fireballs and the
+  volley) and **far targets** (46 and 56 m). **Reset counters** starts the counting again.
+
+The yard is part of the world, so entering and leaving it rebuilds the map (the small one); it is single player only.
+
 ### Online (up to 4 players)
 
 The game picks the first connection that works: your own **Castle Wars server** when the page was served by
@@ -401,6 +424,7 @@ that the player knows something now. The details are in the header of `src/alert
 | O | Orders menu (click to command troops) |
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
 | N | Talents: the shop on the Talents tab (press again to close) |
+| P | Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies) |
 | M | Big map (the mouse is free while it is up; press again to close) |
 | Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |
 | Middle button (hold) | Marker wheel round the crosshair: move the mouse towards Go here / Attack / Defend / Danger / Need help and let go to place a marker there; let go in the middle for the ordinary ping |
@@ -443,6 +467,8 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
 | `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
+| `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
+| `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |
 | `src/hill.js` | The hill in the middle: the banner, and in King of the Hill the capture, scoring, gold and win |
 | `src/pings.js` | Pings and markers: the crosshair ray and what it hit, the marker wheel, map clicks, the beacons and edge arrows, the sounds, and the host's checks and relay to allies |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |

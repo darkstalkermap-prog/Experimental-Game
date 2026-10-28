@@ -153,7 +153,12 @@ export class Dummy extends Unit {
     this.tilt.rotation.z = s.x * 0.2;
     this.tilt.rotation.x = -s.z * 0.2;
     this.labelT -= dt;
-    if (this.labelT <= 0) { this.labelT = 0.25; this.paint(); }
+    if (this.labelT <= 0) {
+      this.labelT = 0.25;
+      this.paint();
+      // (a crowd of twelve would hide one another's readouts: they show only while they are being hit)
+      this.label.sp.visible = this.stand !== 'crowd' || this.log.length > 0;
+    }
   }
 
   paint() {
