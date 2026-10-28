@@ -222,6 +222,7 @@ export class Projectiles {
       if (!g.physics.lineClear(at.x, at.y, at.z, c.x, c.y, c.z, p.team)) return; // walls shelter from the blast
       const k = 1 - 0.5 * Math.min(1, d / p.radius);
       g.damage(u, p.dmg * k, p.owner, { magic: true, splash: true });
+      if (u.alive && p.owner && p.owner.isPlayer) g.abilities.scorch(u, p);   // (a Mage talent sets the foes alight)
       if (u.stagger && d < p.radius * 0.6) u.stagger(0.5, { pos: at });
     });
   }

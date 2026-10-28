@@ -9,6 +9,7 @@ import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
+import { talentFx } from './talents.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -252,14 +253,16 @@ export class Player {
   get armor() { return PLAYER.armor + this.mods.armor; }
   get dmgMult() { return this.mods.melee * (this.buffs.get('rage') || 1) * (this.hp < this.maxHp * 0.5 ? 1 + (this.mods.bloodied || 0) : 1); }
   get blockPower() { return Math.min(0.97, this.shield.block + (this.mods.block || 0)); }
-  get drawTime() { return this.bow.draw * (this.mods.draw || 1); }
+  get drawTime() { return this.bow.draw * (this.mods.draw || 1) * (this.buffs.has('focus') ? talentFx(this, 'focus', { draw: 1 }).draw : 1); }   // (Hunter's Focus: the first arrow after a roll is drawn at once)
   get sword() { return SWORDS[this.lv.sword]; }
   get shield() { return SHIELDS[this.lv.shield]; }
   get bow() { return BOWS[this.lv.bow]; }
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 0.7 : 1); }
+  get speedMult() { return this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  // seconds an ability takes to recharge: the class passive and the talents shorten it
+  abilityCd(slot) { const d = this.cls[slot]; return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
@@ -1058,7 +1061,7 @@ export class Player {
     const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
     a.at.copy(r.pos);
     a.far = r.far;
-    g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
+    g.aimRing.show(a.at, VOLLEY.radius * talentFx(this, 'volleyRadius', 1), a.far, a.t);
     if (input.release('KeyQ')) {
       const at = a.at.clone();
       this.cancelAim();
@@ -1086,13 +1089,14 @@ export class Player {
     const def = this.cls[slot];
     if (!def || !this.alive || this.drive) return;
     if (this.staggerT > 0) { g.audio.play('deny'); return; }
-    if (this.abilCd[slot] > 0) { g.audio.play('deny'); return; }
+    const again = def.id === 'evade' && this.buffs.has('twin');   // Twin Roll: one more roll while the first one's window is open
+    if (this.abilCd[slot] > 0 && !again) { g.audio.play('deny'); return; }
     const dir = this.lookDir();
     const fl = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / fl, fz = dir.z / fl;
     switch (def.id) {
       case 'bash': this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break;
-      case 'lancecharge': this.dash = { x: fx, z: fz, v: this.mounted ? 20 : 13, t: 1.1 }; break;
+      case 'lancecharge': this.dash = { x: fx, z: fz, v: this.mounted ? 20 : 13, t: 1.1 * talentFx(this, 'chargeTime', 1) }; break;
       case 'evade': {
         // the way you are moving, or straight back when standing still
         let mx = 0, mz = 0;
@@ -1114,7 +1118,7 @@ export class Player {
     }
     const cam = this.camera.position.clone();
     if (this.netClient) {
-      this.abilCd[slot] = def.cd * (this.mods.cd || 1);
+      if (again) this.buffs.del('twin'); else this.abilCd[slot] = this.abilityCd(slot);
       const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
       if (at) msg.at = [at.x, at.y, at.z].map(r2);
       g.net.toHost(msg);
@@ -1278,7 +1282,9 @@ export class Player {
   fireFrom(from, dir, draw) {
     if (this.arrows <= 0) return;
     const speed = 30 + 32 * draw;
-    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bowDmg * (0.4 + 0.6 * draw), this);
+    const focus = this.buffs.get('focus');   // Hunter's Focus: the first arrow after a roll hits harder
+    if (focus) this.buffs.del('focus');
+    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bowDmg * (0.4 + 0.6 * draw) * (focus || 1), this);
     this.arrows--;
   }
 
@@ -1304,11 +1310,14 @@ export class Player {
   takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
     if (this.buffs.has('ghost')) return;              // mid-roll: nothing touches you
+    const reflect = this.buffs.get('reflect');        // Avenging Wall (Knight talent): part of a melee blow is dealt back
+    if (reflect && info.melee && attacker && attacker !== this && attacker.alive) this.game.damage(attacker, amount * reflect, this, { magic: true, splash: true });
     const guard = this.buffs.get('guard');
     if (guard) amount *= guard;
     if (this.buffs.has('ward')) {
       amount = this.buffs.absorb(amount);
       this.game.fx.frost(this.chest(new THREE.Vector3()), 6);
+      if (!this.buffs.has('ward')) this.game.abilities.shatter(this);   // the ward broke (Mage talent)
       if (amount <= 0) return;
     }
     if (info.melee && amount > this.maxHp * 0.15) this.stagger(0.25);

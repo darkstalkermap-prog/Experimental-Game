@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { SPELLS, VOLLEY } from './config.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
+import { talentFx } from './talents.js';
 
 export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'cavalier'];
 
@@ -62,6 +63,10 @@ export const CLASSES = {
 
 export function classOf(id) { return CLASSES[id] || CLASSES.knight; }
 
+// Experience for the support classes: a Healing Light earns this share of the health it really restores in others (up
+// to a cap), and a Rally Cry this much for each ally it reaches (up to a cap).
+const SUPPORT_XP = { heal: 0.05, healCap: 40, rally: 3, rallyCap: 24 };
+
 // Changing class in the field (shop → Class). Free during the preparation and while waiting to respawn.
 export const SWITCH = {
   cooldown: 15,   // seconds before a hero may change class again
@@ -83,6 +88,7 @@ export class Buffs {
   get(id) { const o = this.b[id]; return o && o.t > 0 ? o.v : 0; }
   time(id) { const o = this.b[id]; return o && o.t > 0 ? o.t : 0; }
   clear() { this.b = {}; }
+  del(id) { delete this.b[id]; }
   update(dt) {
     for (const k in this.b) if ((this.b[k].t -= dt) <= 0) delete this.b[k];
   }
@@ -104,10 +110,11 @@ export class Buffs {
 
 export const BUFF_NAMES = {
   guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Blood Rage', ghost: 'Evading',
-  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging',
+  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', twin: 'Roll again', focus: 'Focus',
 };
 
 const ZERO = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 const SEE_THROUGH = new Set(['tree']);   // a trunk does not stop you putting a volley on the ground behind it
 const v3 = (p) => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100];
 const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
@@ -126,6 +133,7 @@ export class Abilities {
     this.g = game;
     this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a volley coming down
     this.rising = [];   // the arrows of a volley on their way up (looks only: on every screen)
+    this.burning = [];  // foes a fireball set alight (Mage talent)
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
@@ -133,8 +141,9 @@ export class Abilities {
   use(p, slot, cam, dir, at = null) {
     const def = p.cls[slot];
     if (!def || !p.alive || p.drive) return false;
-    if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
-    p.abilCd[slot] = def.cd * (p.mods.cd || 1);
+    const again = def.id === 'evade' && p.buffs.has('twin');   // Twin Roll: one more roll while the first one's window is open
+    if (p.abilCd[slot] > 0.45 && !again) return false;   // a little slack for network delay
+    if (!again) p.abilCd[slot] = p.abilityCd(slot);
     this[def.id](p, cam, dir.clone().normalize(), at);
     return true;
   }
@@ -151,9 +160,12 @@ export class Abilities {
       }
       if (!p.alive || e.t > e.dur) { this.active.splice(i, 1); continue; }
       if (e.kind === 'whirl') {
-        while (e.n < 3 && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n); e.n++; }
+        while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n); e.n++; }
+      } else if (e.kind === 'pulse') {
+        if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
       } else this.chargeSweep(p, e);
     }
+    this.burn(dt);
   }
 
   // Looks that run on every screen: the arrows of a volley climbing out of sight.
@@ -216,46 +228,55 @@ export class Abilities {
     const g = this.g;
     const f = flat(dir);
     const c = p.pos.clone().addScaledVector(f, 2.8);
-    const dmg = p.meleeDmg * 2;
-    this.eachFoe(p.team, c.x, c.z, 3.4, (o) => {
+    const dmg = p.meleeDmg * 2 * talentFx(p, 'bashDmg', 1);
+    const reach = talentFx(p, 'bashReach', 1), stun = 1.6 + talentFx(p, 'bashStun', 0);
+    this.eachFoe(p.team, c.x, c.z, 3.4 * reach, (o) => {
       if ((o.pos.x - p.pos.x) * f.x + (o.pos.z - p.pos.z) * f.z < -0.5) return;   // never behind you
       g.damage(o, dmg, p, { melee: true, splash: true, charge: 1 });
       if (!o.alive) return;
-      if (o.stagger) o.stagger(1.6, p);
+      if (o.stagger) o.stagger(stun, p);
       if (o.vel && !o.isPlayer) { o.vel.x += f.x * 10; o.vel.z += f.z * 10; }
     }, p.pos.y, 3);
-    this.emit('bash', c, f);
+    this.emit('bash', c, f, null, reach);
   }
 
   bulwark(p) {
-    p.buffs.add('guard', 5, 0.3);
-    p.buffs.add('steady', 5);
-    this.eachFriend(p.team, p.pos.x, p.pos.z, 8, (o) => { if (o !== p) this.guard(o, 5, 0.6); });
-    this.emit('bulwark', p.pos, ZERO);
+    const t = 5 + talentFx(p, 'bulwarkTime', 0), reach = 8 + talentFx(p, 'bulwarkRadius', 0);
+    p.buffs.add('guard', t, 0.3);
+    p.buffs.add('steady', t);
+    const reflect = talentFx(p, 'reflect', 0);
+    if (reflect) p.buffs.add('reflect', t, reflect);   // Avenging Wall (Knight talent): see Player.takeDamage
+    this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => { if (o !== p) this.guard(o, t, 0.6 - talentFx(p, 'bulwarkAlly', 0)); });
+    this.emit('bulwark', p.pos, ZERO, null, reach / 8);
   }
 
   // ---------- Berserker ----------
   whirl(p) {
     p.buffs.add('whirl', 1.25);
-    this.active.push({ kind: 'whirl', p, t: 0, n: 0, dur: 1.3 });
+    this.active.push({ kind: 'whirl', p, t: 0, n: 0, dur: 1.3, hits: 3 + talentFx(p, 'whirlHits', 0) });
   }
 
   whirlTick(p, n) {
     const g = this.g;
-    const dmg = p.meleeDmg * 0.85;
-    this.eachFoe(p.team, p.pos.x, p.pos.z, 4.2, (o) => {
+    const dmg = p.meleeDmg * 0.85, reach = talentFx(p, 'whirlRadius', 1);
+    let foes = 0;
+    this.eachFoe(p.team, p.pos.x, p.pos.z, 4.2 * reach, (o) => {
       g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5 });
       if (o.alive && o.stagger) o.stagger(0.45, p);
+      if (!o.isSiege) foes++;
     }, p.pos.y, 2.8);
+    const reaper = talentFx(p, 'reaper', null);   // Reaper (Berserker talent): the blade drinks
+    if (reaper && foes) p.heal(p.maxHp * reaper.heal * Math.min(foes, reaper.foes));
     p.swingT = 0.25;
     p.attackDir = n % 2 ? 'left' : 'right';
-    this.emit('whirl', p.pos, ZERO);
+    this.emit('whirl', p.pos, ZERO, null, reach);
   }
 
   bloodrage(p) {
-    p.buffs.add('lifesteal', 7, 0.5);
-    p.buffs.add('steady', 7);
-    p.buffs.add('rage', 7, 1.25);
+    const t = 7 + talentFx(p, 'rageTime', 0);
+    p.buffs.add('lifesteal', t, 0.5 * talentFx(p, 'rageSteal', 1));
+    p.buffs.add('steady', t);
+    p.buffs.add('rage', t, 1.25 + talentFx(p, 'rageDmg', 0));
     p.heal(p.maxHp * 0.1);
     this.emit('rage', p.pos, ZERO);
   }
@@ -273,10 +294,15 @@ export class Abilities {
       c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
     }
     const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
-    const shots = [];
-    for (let i = 0; i < V.arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / V.arrows);
-    this.active.push({ kind: 'rain', p, t: 0, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg });
-    this.emit('volley', cam, f, [c]);
+    const k = talentFx(p, 'volleyRadius', 1), slow = talentFx(p, 'volleySlow', 0), wave = talentFx(p, 'volleyWave', null);
+    const flight = (arrows, t) => {
+      const shots = [];
+      for (let i = 0; i < arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / arrows);
+      this.active.push({ kind: 'rain', p, t, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg, radius: V.radius * k, slow });
+    };
+    flight(V.arrows + talentFx(p, 'volleyArrows', 0), 0);
+    if (wave) flight(wave.arrows, -wave.gap);   // Second Wave (Ranger talent): another flight, a moment later
+    this.emit('volley', cam, f, [c], k);
   }
 
   // The arrows that are due: each one falls steeply from above and behind the target onto a foe in the circle (a
@@ -291,7 +317,8 @@ export class Abilities {
       if (Math.random() < V.aimed) {
         // the foe the volley has picked least so far, so the arrows spread over everyone in the circle
         let o = null, least = Infinity;
-        this.eachFoe(e.p.team, e.c.x, e.c.z, V.radius, (f) => {
+        this.eachFoe(e.p.team, e.c.x, e.c.z, e.radius, (f) => {
+          if (e.slow && f.slowT !== undefined) f.slowT = Math.max(f.slowT, e.slow);   // Pinning Fire (Ranger talent)
           const k = (e.picked.get(f) || 0) + Math.random() * 0.5;
           if (k < least) { least = k; o = f; }
         }, e.c.y, 12);
@@ -303,7 +330,7 @@ export class Abilities {
         }
       }
       if (!L) {
-        const a = Math.random() * Math.PI * 2, r = V.radius * Math.sqrt(Math.random());
+        const a = Math.random() * Math.PI * 2, r = e.radius * Math.sqrt(Math.random());
         L = new THREE.Vector3(e.c.x + Math.cos(a) * r, 0, e.c.z + Math.sin(a) * r);
         L.y = g.physics.groundHeight(L.x, L.z, e.c.y + 3);
       }
@@ -338,6 +365,10 @@ export class Abilities {
 
   evade(p) {
     p.buffs.add('ghost', 0.85);
+    const again = talentFx(p, 'rollAgain', 0);   // Twin Roll (Ranger talent): the first roll opens a window for a second
+    if (again) { if (p.buffs.has('twin')) p.buffs.del('twin'); else p.buffs.add('twin', again); }
+    const focus = talentFx(p, 'focus', null);   // Hunter's Focus: the next arrow is drawn at once and hits harder
+    if (focus) p.buffs.add('focus', focus.time, focus.dmg);
     this.emit('evade', p.pos, ZERO);
   }
 
@@ -350,17 +381,60 @@ export class Abilities {
     from.y -= 0.15;
     // aim from the hand at the point under the crosshair so the ball lands where you look
     const d = cam.clone().addScaledVector(dir, 40).sub(from).normalize();
-    this.g.magic.fireball(p, from, d, s.dmg * p.mods.spell, s.radius);
+    const dmg = s.dmg * p.mods.spell, radius = s.radius * talentFx(p, 'fireRadius', 1);
+    this.g.magic.fireball(p, from, d, dmg, radius);
+    const fork = talentFx(p, 'fireFork', 0);   // Forked Flame (Mage talent): a second, weaker ball a little to the side
+    if (fork) this.g.magic.fireball(p, from, d.clone().applyAxisAngle(UP, 0.12), dmg * fork, radius);
     p.swingT = 0.25; p.attackDir = 'thrust';
   }
 
+  // Mage talent: the foes a fireball caught go on burning for a few seconds
+  scorch(o, ball) {
+    const burn = talentFx(ball.owner, 'burn', null);
+    if (!burn || !o.alive) return;
+    let b = this.burning.find((x) => x.o === o && x.p === ball.owner);
+    if (!b) this.burning.push(b = { o, p: ball.owner });
+    b.left = burn.time; b.every = b.tick = burn.tick;
+    b.dmg = ball.dmg * burn.share * burn.tick / burn.time;   // the share of the blast that burns on, a little at a time
+  }
+
+  burn(dt) {
+    const g = this.g;
+    for (let i = this.burning.length - 1; i >= 0; i--) {
+      const b = this.burning[i];
+      b.left -= dt; b.tick -= dt;
+      if (!b.o.alive || b.left <= 0) { this.burning.splice(i, 1); continue; }
+      if (b.tick > 0) continue;
+      b.tick += b.every;
+      const at = b.o.chest(new THREE.Vector3());
+      g.fx.fireTrail(at);
+      g.fx.sparks(at, 3);
+      g.damage(b.o, b.dmg, b.p, { magic: true, splash: true });
+    }
+  }
+
   ward(p) {
-    p.buffs.add('ward', 8, 170);
-    this.eachFoe(p.team, p.pos.x, p.pos.z, 6.5, (o) => {
-      if (o.slowT !== undefined) o.slowT = Math.max(o.slowT, 3);
-      if (o.stagger) o.stagger(0.5, p);
+    const reach = talentFx(p, 'wardRadius', 1), chill = 3 + talentFx(p, 'wardChill', 0), stun = 0.5 + talentFx(p, 'wardStun', 0);
+    p.buffs.add('ward', 8 + talentFx(p, 'wardTime', 0), 170 * talentFx(p, 'wardAbsorb', 1));
+    this.eachFoe(p.team, p.pos.x, p.pos.z, 6.5 * reach, (o) => {
+      if (o.slowT !== undefined) o.slowT = Math.max(o.slowT, chill);
+      if (o.stagger) o.stagger(stun, p);
     }, p.pos.y, 3);
-    this.emit('ward', p.pos, ZERO);
+    this.emit('ward', p.pos, ZERO, null, reach);
+  }
+
+  // Mage talent: a ward that is broken bursts, hurting, staggering and chilling the foes around the Mage
+  shatter(p) {
+    const s = talentFx(p, 'shatter', null);
+    if (!s) return;
+    const g = this.g, dmg = s.dmg * p.mods.spell;
+    this.eachFoe(p.team, p.pos.x, p.pos.z, s.radius, (o) => {
+      g.damage(o, dmg, p, { magic: true, splash: true });
+      if (!o.alive) return;
+      if (o.slowT !== undefined) o.slowT = Math.max(o.slowT, s.chill);
+      if (o.stagger) o.stagger(s.stun, p);
+    }, p.pos.y, 3);
+    this.emit('shatter', p.pos, ZERO, null, s.radius / 6);
   }
 
   // ---------- Cleric ----------
@@ -368,46 +442,81 @@ export class Abilities {
     const g = this.g, s = SPELLS.smite;
     const { pos: at, col } = this.rayHit(cam, dir, s.range, p.team);
     const dmg = s.dmg * p.mods.spell;
-    this.eachFoe(p.team, at.x, at.z, s.radius, (o, d) => {
-      g.damage(o, dmg * (1 - 0.4 * Math.min(1, d / s.radius)), p, { magic: true, splash: true });
-      if (o.alive && o.stagger) o.stagger(0.8, { pos: at });
+    const reach = talentFx(p, 'smiteRadius', 1), radius = s.radius * reach, stun = 0.8 + talentFx(p, 'smiteStun', 0);
+    const hit = new Set();
+    this.eachFoe(p.team, at.x, at.z, radius, (o, d) => {
+      g.damage(o, dmg * (1 - 0.4 * Math.min(1, d / radius)), p, { magic: true, splash: true });
+      if (o.alive && o.stagger) o.stagger(stun, { pos: at });
+      hit.add(o);
     }, at.y, 4);
+    const chain = talentFx(p, 'smiteChain', null);
+    if (chain) this.chainSmite(p, at, hit, dmg, chain);
     if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(dmg * 0.5, p);
     const sky = at.clone();
     sky.x += (Math.random() - 0.5) * 3; sky.z += (Math.random() - 0.5) * 3; sky.y += 42;
     g.magic.showBolt([sky, at], s.color);
     g.audio.play('zap', at);
     p.swingT = 0.25; p.attackDir = 'over';
-    this.emit('smite', at, ZERO);
+    this.emit('smite', at, ZERO, null, reach);
+  }
+
+  // Cleric talent: the bolt arcs on from the blast to the nearest foes beyond it
+  chainSmite(p, at, hit, dmg, chain) {
+    const g = this.g, foes = [];
+    this.eachFoe(p.team, at.x, at.z, chain.range, (o, d) => { if (!hit.has(o) && !o.isSiege) foes.push({ o, d }); }, at.y, 4);
+    foes.sort((a, b) => a.d - b.d);
+    const pts = [at.clone().setY(at.y + 1)];
+    for (const { o } of foes.slice(0, chain.foes)) {
+      pts.push(o.chest(new THREE.Vector3()));
+      g.damage(o, dmg * chain.dmg, p, { magic: true, splash: true });
+      if (o.alive && o.stagger) o.stagger(0.5, { pos: at });
+    }
+    if (pts.length > 1) g.magic.showBolt(pts, SPELLS.smite.color);   // (every screen sees it: Magic.onBolt)
   }
 
   heal(p) {
-    p.heal(p.maxHp * 0.45);
+    this.healBurst(p, 1);
+    const pulse = talentFx(p, 'healPulse', null);   // Second Dawn (Cleric talent): the light comes again
+    if (pulse) this.active.push({ kind: 'pulse', p, t: 0, dur: 99, delay: pulse.delay, scale: pulse.scale });
+  }
+
+  healBurst(p, scale) {
+    const mul = talentFx(p, 'healMul', 1) * scale, reach = 14 + talentFx(p, 'healRadius', 0);
+    const aegis = talentFx(p, 'aegis', null);   // Divine Aegis (Cleric talent): the healed take less damage for a while
+    p.heal(p.maxHp * 0.45 * mul);
+    if (aegis) p.buffs.add('guard', aegis.time, 1 - aegis.cut);
     const healed = [];
-    this.eachFriend(p.team, p.pos.x, p.pos.z, 14, (o) => {
+    let mended = 0;   // what the light really restored in others: it earns the Cleric experience
+    this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => {
       if (o === p) return;
-      const n = o.maxHp * 0.4;
+      const n = o.maxHp * 0.4 * mul;
+      mended += Math.min(n, o.maxHp - o.hp);
       if (o.isPlayer) o.heal(n); else o.hp = Math.min(o.maxHp, o.hp + n);
+      if (aegis) this.guard(o, aegis.time, 1 - aegis.cut);
       if (healed.length < 14) healed.push(o.chest(new THREE.Vector3()));
     });
-    this.emit('heal', p.pos, ZERO, healed);
+    this.emit('heal', p.pos, ZERO, healed, reach / 14);
+    p.gainXp(Math.min(SUPPORT_XP.healCap, mended * SUPPORT_XP.heal), 'support');
   }
 
   // ---------- Cavalier ----------
   lancecharge(p, cam, dir) {
     const f = flat(dir);
-    p.buffs.add('charging', 1.15);
-    this.active.push({ kind: 'charge', p, t: 0, dur: 1.15, f, hit: new Set() });
+    const dur = 1.15 * talentFx(p, 'chargeTime', 1);
+    p.buffs.add('charging', dur);
+    this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set() });
+    const rush = talentFx(p, 'chargeRush', null);   // Vanguard! (Cavalier talent): the army rides with the charge
+    if (rush) this.eachFriend(p.team, p.pos.x, p.pos.z, rush.radius, (o) => { if (o !== p) this.haste(o, rush.time, rush.speed); });
     this.emit('charge', p.pos, f);
   }
 
   chargeSweep(p, e) {
     const g = this.g;
     const c = p.pos.clone().addScaledVector(e.f, 1.2);
-    this.eachFoe(p.team, c.x, c.z, p.mounted ? 2.6 : 2, (o) => {
+    this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
-      g.damage(o, p.meleeDmg * 2 + (p.mounted ? 25 : 0), p, { melee: true, splash: true, charge: 1 });
+      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1), p, { melee: true, splash: true, charge: 1 });
       if (!o.alive) return;
       if (o.stagger) o.stagger(1.3, p);
       if (o.vel && !o.isPlayer) { o.vel.x += e.f.x * 12; o.vel.z += e.f.z * 12; }
@@ -417,28 +526,33 @@ export class Abilities {
   }
 
   rally(p) {
-    this.eachFriend(p.team, p.pos.x, p.pos.z, 28, (o) => {
+    const t = 8 + talentFx(p, 'rallyTime', 0), reach = talentFx(p, 'rallyReach', 1);
+    let rallied = 0;
+    this.eachFriend(p.team, p.pos.x, p.pos.z, 28 * reach, (o) => {
       if (o === p) return;
-      this.guard(o, 8, 0.7);
-      this.haste(o, 8, 1.25);
+      rallied++;
+      this.guard(o, t, 0.7 - talentFx(p, 'rallyAlly', 0));
+      this.haste(o, t, 1.25);
     });
-    p.buffs.add('guard', 8, 0.6);
-    p.buffs.add('haste', 8, 1.25);
-    this.emit('rally', p.pos, ZERO);
+    p.gainXp(Math.min(SUPPORT_XP.rallyCap, rallied * SUPPORT_XP.rally), 'support');
+    p.buffs.add('guard', t, 0.6 - talentFx(p, 'rallySelf', 0));
+    p.buffs.add('haste', t, 1.25);
+    this.emit('rally', p.pos, ZERO, null, reach);
   }
 
   // ---------- looks ----------
-  // Show the effect here and, in a hosted game, on everyone else's screen too.
-  emit(id, pos, dir, targets = null) {
-    this.show(id, pos, dir, false, targets);
+  // Show the effect here and, in a hosted game, on everyone else's screen too. sz: how much wider than usual its rings
+  // are (a talent that widens an ability).
+  emit(id, pos, dir, targets = null, sz = 1) {
+    this.show(id, pos, dir, false, targets, sz);
     const g = this.g;
     if (g.mode === 'host' && g.sync) {
-      g.sync.shared.push({ k: 'abil', id, p: v3(pos), d: [Math.round(dir.x * 100) / 100, Math.round(dir.z * 100) / 100], t: targets ? targets.map(v3) : undefined });
+      g.sync.shared.push({ k: 'abil', id, p: v3(pos), d: [Math.round(dir.x * 100) / 100, Math.round(dir.z * 100) / 100], t: targets ? targets.map(v3) : undefined, sz: sz !== 1 ? Math.round(sz * 100) / 100 : undefined });
     }
   }
 
   // silent: the sound already arrived as its own event
-  show(id, pos, dir, silent = false, targets = null) {
+  show(id, pos, dir, silent = false, targets = null, sz = 1) {
     const g = this.g, fx = g.fx;
     const snd = (n) => { if (!silent) g.audio.play(n, pos); };
     const at = pos.clone();
@@ -447,17 +561,17 @@ export class Abilities {
       case 'bash':
         fx.dust(at.clone().setY(at.y + 0.2), 10, 2.2);
         fx.sparks(chest, 20);
-        fx.ring(at, 2.8, C.guard, 22, { speed: 3 });
+        fx.ring(at, 2.8 * sz, C.guard, 22, { speed: 3 });
         snd('clang'); snd('thud');
         break;
       case 'bulwark':
         fx.ring(at, 1.1, C.guard, 20, { up: 1.5 });
-        fx.ring(at, 2.4, C.guard, 28, { up: 1.0 });
+        fx.ring(at, 2.4 * sz, C.guard, 28, { up: 1.0 });
         fx.sparks(chest, 14);
         snd('block');
         break;
       case 'whirl':
-        fx.ring(at, 3.6, C.spark, 26, { speed: 3, up: 0.6 });
+        fx.ring(at, 3.6 * sz, C.spark, 26, { speed: 3, up: 0.6 });
         fx.sparks(chest, 14);
         snd('swing');
         break;
@@ -474,7 +588,7 @@ export class Abilities {
         // a flight of arrows leaves the bow; the circle stays marked on the ground until they land
         snd('bow');
         const c = targets && targets[0];
-        if (c) g.aimRing.flash(c, VOLLEY.radius, 1.9);
+        if (c) g.aimRing.flash(c, VOLLEY.radius * sz, 1.9);
         for (let i = 0; i < 9; i++) {
           const mesh = g.projectiles.makeArrowMesh();
           mesh.position.copy(at).addScaledVector(dir, 0.6);
@@ -485,18 +599,23 @@ export class Abilities {
       }
       case 'ward':
         fx.frost(chest, 26);
-        fx.ring(at, 5.5, C.frost, 38, { speed: 4, up: 0.8 });
+        fx.ring(at, 5.5 * sz, C.frost, 38, { speed: 4, up: 0.8 });
         fx.ring(at, 1.2, C.frost, 20, { up: 1.8 });
+        snd('ice');
+        break;
+      case 'shatter':
+        fx.frost(chest, 30);
+        fx.ring(at, 6 * sz, C.frost, 44, { speed: 5, up: 0.9 });
         snd('ice');
         break;
       case 'smite':
         fx.zap(at, 16);
-        fx.ring(at, 3.2, C.holy, 30, { speed: 4, up: 0.9 });
+        fx.ring(at, 3.2 * sz, C.holy, 30, { speed: 4, up: 0.9 });
         g.magic.flash(at, 0xffe9a0, 8);
         break;
       case 'heal':
         fx.ring(at, 2, C.heal, 28, { up: 1.8 });
-        fx.ring(at, 6, C.holy, 36, { speed: 2.5, up: 1.2 });
+        fx.ring(at, 6 * sz, C.holy, 36, { speed: 2.5, up: 1.2 });
         for (const t of targets || []) fx.gold(t);
         snd('buy');
         break;
@@ -506,7 +625,7 @@ export class Abilities {
         break;
       case 'rally':
         fx.ring(at, 3, C.rally, 30, { speed: 7, up: 1.2 });
-        fx.ring(at, 9, C.rally, 44, { speed: 5, up: 0.8 });
+        fx.ring(at, 9 * sz, C.rally, 44, { speed: 5, up: 0.8 });
         fx.gold(chest);
         snd('horn');
         break;

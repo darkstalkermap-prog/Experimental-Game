@@ -4,6 +4,7 @@
 import { classOf } from './classes.js';
 import { SOUNDS } from './audio.js';
 import { PLAYER } from './config.js';
+import { treeMods } from './talents.js';
 
 export const MAX_LEVEL = 5;
 // total experience needed to reach each level (the index is the level)
@@ -82,9 +83,9 @@ export function levelProgress(xp, level) {
   return Math.max(0, Math.min(1, (xp - a) / (b - a)));
 }
 
-// What the hero's talents add (same shape as levelMods). p.talents is { talentId: true }.
+// What the hero's talents add (same shape). p.talents is { talentId: true }; the trees are in talents.js.
 export function talentMods(p) {
-  return { mul: {}, add: {} };
+  return treeMods(p);
 }
 
 // The class mods with the level and the talents applied. The keys are those of CLASSES[id].mods: hp, speed, melee, bow,
@@ -104,4 +105,11 @@ SOUNDS.levelup = (a, k) => {
   [523, 659, 784, 1047].forEach((f, i) => a.tone(f, 0.5, 0.17 * k, 'triangle', 1, i * 0.1));
   a.tone(1568, 0.9, 0.1 * k, 'sine', 1, 0.42);
   a.noise(0.5, 6000, 1.5, 0.1 * k, 'highpass', 0.4);
+};
+
+// A talent learnt: a short bright chime.
+SOUNDS.talent = (a, k) => {
+  a.tone(784, 0.25, 0.14 * k, 'triangle');
+  a.tone(1175, 0.4, 0.14 * k, 'triangle', 1, 0.09);
+  a.noise(0.2, 7000, 2, 0.06 * k, 'highpass', 0.09);
 };

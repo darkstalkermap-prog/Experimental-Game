@@ -231,6 +231,18 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   of being hit) or again within 15 s. A hero who has died comes back as the new class. Online, the host checks the
   position too, and everyone sees the new class on your name tag.
 
+  **Talents**: every level after the first gives one talent point, and the shop's **Talents** tab (**B**, or **N** for
+  short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
+  A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
+  it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
+  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Berserker's Whirlwind strikes
+  once more, the Ranger rolls twice, the Mage's fireballs burn and fork, the Cleric's Smite chains on to more foes, the
+  Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
+  to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
+  own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
+  level, parent, free point, castle) and says why it refused one. Every number is in the table at the top of
+  `src/talents.js`.
+
   The two ability tiles and any effects running on you sit above your health bar.
 - **Hero levels**: your hero earns **experience** and rises from level 1 to **level 5**. The host pays it out for
   what the hero, or the army fighting beside them, brings down:
@@ -246,10 +258,11 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   | Every wave you live through | 10 |
   | Breaking an enemy gate / opening a breach / breaking a keep | 40 / 15 / 250 |
   | Taking the hill (King of the Hill) while standing on it | 25 |
+  | A Healing Light that really mends others / a Rally Cry | 5% of the health restored (at most 40) / 3 for each ally reached (at most 24) |
 
   It takes 120, 320, 640 and 1100 experience in all to reach levels 2 to 5. **Every level** adds health (+7% of the
   class's), armour, a little speed, faster healing out of combat, abilities that recharge sooner and more damage with
-  the sword, the bow and spells, and mends 30% of your health. The damage is sized so that **at level 5 a hero's
+  the sword, the bow and spells, mends 30% of your health and gives you a **talent point** (see **Talents**, above). The damage is sized so that **at level 5 a hero's
   best weapon hits a little harder than the best veteran soldier** (a rank-5 Lancer hits for 42): a Knight's sword
   goes from 34 to about 46, a Berserker's from 44 to 50 and a Ranger's arrow from 42 to 47 (the classes that already
   hit hard grow less in damage), while the casters' spells grow by a third. Your level stays through death and when
@@ -343,6 +356,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | W / S / A / D, left click, E (inside an engine) | Roll / turn / strike or fire / climb out |
 | O | Orders menu (click to command troops) |
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
+| N | Talents: the shop on the Talents tab (press again to close) |
 | M | Big map (press again to close) |
 | Tab | Scoreboard |
 | F1 or Z | Army: follow me |
@@ -382,6 +396,8 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
+| `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
+| `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |
 | `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
 | `src/combat.js` | Shared rules for attack and guard directions |
 | `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |

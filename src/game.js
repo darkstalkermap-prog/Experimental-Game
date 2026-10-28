@@ -22,6 +22,7 @@ import { incomingSide, PARRY_WINDOW } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
+import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
 import { prewarmSoldier } from './models.js';
@@ -1030,6 +1031,61 @@ export class Game {
     return true;
   }
 
+  // ---------------- talents ----------------
+  // A hero learns a talent of their class, if the rules allow it (talents.js). Returns the reason it is refused, or null.
+  learnTalent(p, id) {
+    const why = talentBlock(p, id);
+    if (why) return why;
+    p.talents[id] = true;
+    p.talentRev++;
+    p.refreshStats();
+    return null;
+  }
+
+  // A hero gives all their talents back (free, at their own castle). Returns the reason it is refused, or null.
+  respec(p) {
+    const why = respecBlock(p);
+    if (why) return why;
+    p.clearTalents();
+    for (const b of ['reflect', 'twin', 'focus']) p.buffs.del(b);   // (what only a talent gives)
+    p.refreshStats();
+    return null;
+  }
+
+  // A hero asks to learn a talent or give them back (their own click, or a guest's message) and is told how it went.
+  askTalent(p, id) {
+    const why = this.learnTalent(p, id);
+    return this.talentReply(p, why, why ? '' : `Talent learnt: ${TALENT_BY_ID[id].name}`);
+  }
+
+  askRespec(p) { return this.talentReply(p, this.respec(p), 'Your talents are given back: choose again'); }
+
+  talentReply(p, why, done) {
+    if (why) { p.notify(why); p.sound('deny'); } else { p.notify(done); p.sound('talent'); }
+    return !why;
+  }
+
+  // The local hero clicks a talent or Respec. A guest asks the host, and the host's next update confirms it.
+  localLearnTalent(id) {
+    const p = this.player;
+    if (this.mode !== 'client') return this.askTalent(p, id);
+    const why = talentBlock(p, id);
+    if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }
+    if (this.talentAsk && this.talentAsk.id === id && this.time < this.talentAsk.until) return true;   // (the answer to that click is on its way)
+    this.talentAsk = { id, until: this.time + 0.6 };
+    this.net.toHost({ a: 'talent', id });
+    return true;
+  }
+
+  localRespec() {
+    const p = this.player;
+    if (this.mode !== 'client') return this.askRespec(p);
+    const why = respecBlock(p);
+    if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }
+    this.net.toHost({ a: 'respec' });
+    return true;
+  }
+
   setSiegeTarget(castle) {
     this.localFaction.siegeTarget = castle;   // null = let the lanes decide
     if (this.mode === 'client') { this.localPickUntil = this.time + 2; this.net.toHost({ a: 'target', team: castle ? castle.team : -1 }); }
@@ -1038,6 +1094,7 @@ export class Game {
   handleInput() {
     const i = this.input;
     if (i.hit('KeyB')) { if (this.ui.tab === 'orders') this.ui.tab = 'army'; this.ui.toggleShop(); return; }
+    if (i.hit('KeyN')) { this.ui.openTalents(); return; }
     if (this.ui.shopOpen) return;
     if (i.hit('KeyM')) this.ui.toggleMap();
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
