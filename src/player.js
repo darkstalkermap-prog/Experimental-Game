@@ -10,6 +10,7 @@ import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
+import { HeroBot } from './herobot.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -33,6 +34,8 @@ export class Player {
     this.game = game;
     this.camera = camera;
     this.remote = !!opts.remote;   // another person's hero (driven by network updates)
+    this.isBot = !!opts.bot;       // a hero the computer plays (Hero Game Mode): `bot` steers it where the battle is run
+    this.bot = null;
     this.netId = opts.netId ?? null;
     this.isPlayer = true;
     this.isHero = true;
@@ -74,6 +77,7 @@ export class Player {
     this.abilCd = { q: 0, r: 0 };
     this.classAt = -99;        // when this hero last changed class
     this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
+    this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks and stones while this runs)
     this.castFlash = 0;        // the spell hand is raised while this runs down
     this.castColor = 0xff8a2a;
     this.drive = null;         // the siege engine this hero is steering
@@ -120,7 +124,11 @@ export class Player {
       this.buildBody();
       if (this.cls.mods.horse) this.giveHorse();   // a Cavalier starts with a warhorse (the real hero's comes from setClass)
     }
+    if (opts.bot) this.bot = opts.bot === true ? new HeroBot(game, this) : opts.bot;   // true: make the AI here; or hand one in
   }
+
+  // Where the hero's eyes are (arrows and spells leave from here; the hero on this screen uses the camera instead).
+  eyePos(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z); }
 
   // ---------- third-person body for other people's heroes ----------
   buildBody() {
@@ -838,6 +846,7 @@ export class Player {
       if (input.down('KeyS')) { mx -= fx; mz -= fz; }
       if (input.down('KeyA')) { mx += fz; mz -= fx; }
       if (input.down('KeyD')) { mx -= fz; mz += fx; }
+      if (input.wish) { mx = input.wish.x; mz = input.wish.z; }   // a bot walks in any direction it likes
       const ml = Math.hypot(mx, mz);
       moving = ml > 0.01;
       sprint = input.down('ShiftLeft') && moving && this.stamina > 5 && !this.blocking && this.drawT === 0 && !this.ducking && !this.aiming;
@@ -875,7 +884,7 @@ export class Player {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team) && this.mounted) {
+    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, this.ghostT > 0) && this.mounted) {
       this.rideSpeed *= 0.6; // ran into a wall
     }
 
@@ -932,7 +941,7 @@ export class Player {
         atk.phase = 'strike'; atk.t = 0;
         this.struck = false;
         this.swingT = 0.25;
-        g.audio.play('swing');
+        g.audio.play('swing', this.isBot ? this.pos : null);
       } else this.swingT = Math.min(0.24, atk.t * 1.7);
     } else if (atk.phase === 'strike') {
       this.swingT = 0.25 + atk.t * 0.75;
@@ -1116,7 +1125,7 @@ export class Player {
       case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
       default: break;
     }
-    const cam = this.camera.position.clone();
+    const cam = this.camera ? this.camera.position.clone() : this.eyePos();
     if (this.netClient) {
       if (again) this.buffs.del('twin'); else this.abilCd[slot] = this.abilityCd(slot);
       const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
@@ -1264,12 +1273,12 @@ export class Player {
   shoot() {
     const draw = Math.min(1, this.drawT / this.drawTime);
     const dir = this.lookDir();
-    const from = this.camera.position.clone().addScaledVector(dir, 0.6);
+    const from = (this.camera ? this.camera.position.clone() : this.eyePos()).addScaledVector(dir, 0.6);
     from.y -= 0.08;
     const wobble = (1 - draw) * 0.04 + (this.zoomed ? 0 : 0.006);
     dir.x += (Math.random() - 0.5) * wobble; dir.y += (Math.random() - 0.5) * wobble; dir.z += (Math.random() - 0.5) * wobble;
     dir.normalize();
-    this.game.audio.play('bow');
+    this.game.audio.play('bow', this.isBot ? this.pos : null);
     if (this.netClient) {
       this.game.net.toHost({ a: 'shoot', f: [from.x, from.y, from.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), draw: r2(draw) });
       this.arrows--;
