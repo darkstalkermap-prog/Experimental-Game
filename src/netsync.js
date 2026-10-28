@@ -205,7 +205,6 @@ export class HostSync {
         hp: r1(h.hp), maxHp: h.maxHp, alive: h.alive ? 1 : 0, arrows: h.arrows, potions: h.potions, lv: h.lv,
         bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
-        sp: h.spawnAt && g.time - h.spawnAt.t < 5 ? [r1(h.spawnAt.x), r1(h.spawnAt.y), r1(h.spawnAt.z), r2(h.spawnAt.yaw)] : 0,   // (a hero called back rises beside another keep)
         order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId), xp: Math.floor(h.xp), lvl: h.level,
         tal: Object.keys(h.talents),   // the talents learnt (see talents.js)
       };
@@ -415,8 +414,7 @@ export class ClientSync {
       }
       if (me.alive && (me.seq !== p.spawnSeq || !p.alive)) {
         const c = g.castles[p.team];
-        if (me.sp) p.spawn(new THREE.Vector3(me.sp[0], me.sp[1], me.sp[2]), me.sp[3]);
-        else p.spawn(c.spawnPoint, c.rot);
+        p.spawn(c.spawnPoint, c.rot);
         p.hp = me.hp;
         p.spawnSeq = me.seq;
       }

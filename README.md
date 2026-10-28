@@ -88,16 +88,15 @@ use the same host, invite code and lobby. Before the battle starts, the host pic
   castle has fallen.
 
   **Calling a fallen ally back (co-op Conquest).** A house is finished when its keep has fallen and its hero is dead:
-  that player can only watch. An ally whose own keep still stands can pay **500 gold** to bring them back to life.
+  that player can only watch. Any ally still in the battle can pay **500 gold** to bring them back to life.
   Open the shop (**B**): under the tabs, on every tab, a red bar names each ally who is out of the battle, with a
   **Call back to life** button (it says how much gold is missing if you are short). **U** does the same for the first
-  fallen ally without opening the shop. The ally rises in the courtyard of the keep that paid, a little aside, with
-  two seconds of protection, at full health, and fights on. Their own keep is still a ruin, so if they fall again
-  they are out again until somebody pays again. A toast when the house falls, a callout that comes back now and
+  fallen ally without opening the shop. The ally rises in the courtyard of their own keep, ruin though it is, with
+  two seconds of protection and at full health, and fights on. There is no keep left to raise them again, so if they
+  fall again they are out again until somebody pays again. A toast when the house falls, a callout that comes back now and
   then while the ally is out, and the fallen player's own screen all say that it can be done. It is not offered in King of the Hill, in Versus, or for a player who has left
-  the game, and not when the buyer's own keep has fallen. The price (and the protection) are `SUMMON` in
-  `src/config.js`; the rules are `Game.summonBlock` and `Game.summonAlly` (the guest is told where to rise in the
-  snapshot, so it appears in the same place on both screens).
+  the game. The price (and the protection) are `SUMMON` in `src/config.js`; the rules are `Game.summonBlock` and
+  `Game.summonAlly` (a guest rises by itself, in its own courtyard, as soon as the host says it is alive again).
 
 **On the GitHub Pages link (or any plain web hosting): no server needed.** One person hosts, the others join:
 

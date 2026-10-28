@@ -1225,15 +1225,15 @@ export class Game {
     const back = this.callableBack(f);
     this.announce((t) => (t === f.team
       ? `Your house has been destroyed. You can keep watching the battle${back ? `, or an ally can call you back for ${SUMMON.cost} gold` : ''}.`
-      : back && allied(t, f.team) && !this.factions[t].castle.fallen ? `${f.name} has been destroyed! Press U to call ${f.lord} back to life (${SUMMON.cost} gold).` : `${f.name} has been destroyed!`), f.team, f.team);
+      : back && allied(t, f.team) && !this.factions[t].eliminated ? `${f.name} has been destroyed! Press U to call ${f.lord} back to life (${SUMMON.cost} gold).` : `${f.name} has been destroyed!`), f.team, f.team);
     if (f.ai) f.ai.assault = null;
   }
 
   // ---------------- calling a fallen ally back ----------------
   // An ally whose house has fallen and whose hero is dead is out of the game for good ("Your house has been destroyed"). In co-op
-  // Conquest an ally who still holds a keep can pay SUMMON.cost to call them back: they rise in the courtyard of the keep that
-  // paid and fight on. Their own keep is gone, so if they fall again they are out again until somebody pays again. Only players
-  // can be called back: a house that an AI lord took over when its player left is not.
+  // Conquest any ally still in the battle can pay SUMMON.cost to call them back: they rise in the courtyard of their own keep, ruin
+  // though it is, and fight on. There is no keep left to raise them again, so if they fall again they are out again until somebody
+  // pays again. Only players can be called back: a house that an AI lord took over when its player left is not.
   get summonLive() { return this.coop && this.objective === 'conquest' && !this.hero && this.state === 'playing'; }
 
   // the allied houses of `team` that are out for good and could be called back
@@ -1242,9 +1242,9 @@ export class Game {
     return this.factions.filter((a) => a.team !== team && allied(a.team, team) && a.isPlayer && a.player && a.eliminated && !a.player.alive);
   }
 
-  // does house `f` have an ally who could call it back (once it has fallen)?
+  // does house `f` have an ally still in the battle who could call it back (once it has fallen)?
   callableBack(f) {
-    return this.summonLive && f.isPlayer && this.factions.some((o) => o !== f && o.isPlayer && !o.eliminated && !o.castle.fallen && allied(o.team, f.team));
+    return this.summonLive && f.isPlayer && this.factions.some((o) => o !== f && o.isPlayer && !o.eliminated && allied(o.team, f.team));
   }
 
   // why house `f` cannot call `ally` back right now (a few words for the shop), or null when it can
@@ -1253,21 +1253,21 @@ export class Game {
     if (!ally || ally === f || !allied(ally.team, f.team)) return 'Not your ally';
     if (!ally.isPlayer || !ally.player) return 'Has left the game';
     if (!ally.eliminated || ally.player.alive) return `${ally.lord} is still fighting`;
-    if (f.castle.fallen) return 'Your keep has fallen';
+    if (f.eliminated) return 'You are out of the battle';
     return null;
   }
 
-  // buy() has taken the gold: the ally rises in the courtyard of the keep that paid, a little aside so they do not stand on the buyer
+  // buy() has taken the gold: the ally rises where a hero always rises, in the courtyard of their own keep (a guest does the same
+  // by itself when the host says it is alive again: see netsync.js)
   summonAlly(f, ally) {
-    const p = ally.player, c = f.castle;
+    const p = ally.player, c = ally.castle;
     ally.eliminated = false;
     ally.respawnT = 0;
-    p.spawn(c.toWorld(ally.team % 2 ? 3 : -3, 2.5), c.rot);
-    p.spawnAt = { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: c.rot, t: this.time };   // (a guest puts itself where the host put it: see netsync.js)
+    p.spawn(c.spawnPoint, c.rot);
     p.buffs.add('ghost', SUMMON.protect);
     this.audio.play('horn', p.pos);
     this.announce((t) => (t === ally.team ? `${f.lord} has called you back to life!`
-      : t === f.team ? `${ally.lord} rises again at your keep.`
+      : t === f.team ? `${ally.lord} rises again from the ruins of their keep.`
       : allied(t, f.team) ? `${f.lord} has called ${ally.lord} back to life!` : `${ally.lord} is back in the battle!`), ally.team, ally.team);
   }
 

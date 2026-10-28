@@ -19,12 +19,12 @@ function recruit(type) {
   };
 }
 
-// An ally whose house has fallen and whose hero is dead is out for good; in co-op Conquest an ally who still holds a keep can pay
+// An ally whose house has fallen and whose hero is dead is out for good; in co-op Conquest any ally still in the battle can pay
 // to call them back (see Game.summonBlock). One item per house, bought by the shop's ally bar and the U key; no tab lists them.
 function summon(team) {
   return {
     id: 'summon_' + team, tab: 'allies', name: 'Call an ally back', playerOnly: true,
-    desc: (g) => `${g.factions[team].lord} rises again in the courtyard of your keep`,
+    desc: (g) => `${g.factions[team].lord} rises again in the courtyard of their own keep`,
     cost: () => SUMMON.cost,
     can: (g, f) => g.summonBlock(f, g.factions[team]) || true,
     apply: (g, f) => g.summonAlly(f, g.factions[team]),

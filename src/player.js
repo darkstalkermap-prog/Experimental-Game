@@ -381,7 +381,6 @@ export class Player {
   }
 
   spawn(at, yaw) {
-    this.spawnAt = null;   // (set afterwards when somebody other than the keep chose the place: see Game.summonAlly)
     this.pos.copy(at);
     this.pos.y = this.game.physics.groundHeight(at.x, at.z, at.y + 3);
     this.vel.set(0, 0, 0);
