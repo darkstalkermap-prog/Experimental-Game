@@ -71,6 +71,23 @@ void main() {
   #include <fog_vertex>
 }`;
 
+// Glowing things are added to the picture, so distance must fade them out, not tint them with the fog colour. The scene's fog
+// chunk blends a colour toward the fog colour; running it once on black and once on white tells how much of a colour survives.
+export const FOG_ADD = `
+  #ifdef USE_FOG
+    vec3 keep = gl_FragColor.rgb;
+    gl_FragColor.rgb = vec3(0.0);
+    {
+    #include <fog_fragment>
+    }
+    float fogBlack = gl_FragColor.g;
+    gl_FragColor.rgb = vec3(1.0);
+    {
+    #include <fog_fragment>
+    }
+    gl_FragColor.rgb = keep * clamp(gl_FragColor.g - fogBlack, 0.0, 1.0);
+  #endif`;
+
 const FRAG = `
 uniform sampler2DArray uAtlas;
 varying vec3 vUv;
@@ -90,19 +107,7 @@ void main() {
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
   #ifdef ADDITIVE
-    #ifdef USE_FOG
-      vec3 keep = gl_FragColor.rgb;
-      gl_FragColor.rgb = vec3(0.0);
-      {
-      #include <fog_fragment>
-      }
-      float fogBlack = gl_FragColor.g;
-      gl_FragColor.rgb = vec3(1.0);
-      {
-      #include <fog_fragment>
-      }
-      gl_FragColor.rgb = keep * clamp(gl_FragColor.g - fogBlack, 0.0, 1.0);
-    #endif
+${FOG_ADD}
   #else
     #include <fog_fragment>
   #endif
@@ -145,7 +150,6 @@ export class ParticleLayer {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = order;
     this.mesh.matrixAutoUpdate = false;
-    this.mesh.visible = false;
     this.mesh.name = 'fx-' + name;
     scene.add(this.mesh);
   }
@@ -194,8 +198,8 @@ export class ParticleLayer {
       this.buf.needsUpdate = true;
       this.lo = this.max; this.hi = -1;
     }
-    this.geo.instanceCount = this.hw;
-    this.mesh.visible = time < this.liveUntil && this.hw > 0;
+    // an empty layer draws nothing (zero instances: no draw call), but stays in the scene so its shader is compiled up front
+    this.geo.instanceCount = time < this.liveUntil ? this.hw : 0;
   }
 
   // keep the clock small (float precision): called when the shared clock is rebased by `by` seconds
@@ -285,7 +289,6 @@ export class DecalLayer {
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 2;
     this.mesh.matrixAutoUpdate = false;
-    this.mesh.visible = false;
     this.mesh.name = 'fx-decals';
     scene.add(this.mesh);
   }
@@ -316,8 +319,7 @@ export class DecalLayer {
       this.buf.needsUpdate = true;
       this.lo = this.max; this.hi = -1;
     }
-    this.geo.instanceCount = Math.min(this.hw, this.max);
-    this.mesh.visible = time < this.liveUntil && this.hw > 0;
+    this.geo.instanceCount = time < this.liveUntil ? Math.min(this.hw, this.max) : 0;
   }
 
   rebase(by) {

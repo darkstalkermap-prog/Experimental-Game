@@ -508,7 +508,8 @@ export class FX {
   // Something struck a surface: a small, local effect (arrows and bolts that arrive on every screen make their own).
   // kind: 'stone', 'wood', 'earth', 'metal'; (nx, ny, nz) the way the surface faces (up for the ground)
   impact(kind, p, nx = 0, ny = 1, nz = 0, n = 1) {
-    const A = this.alpha;
+    const A = this.alpha, nl = Math.hypot(nx, ny, nz) || 1;
+    nx /= nl; ny /= nl; nz /= nl;
     const k = Math.max(1, this.q(2 * n));
     if (kind === 'wood') {
       for (let i = 0; i < k + 1; i++) {
