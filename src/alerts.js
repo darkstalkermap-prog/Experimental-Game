@@ -58,6 +58,12 @@ export const TIPS = [
   { id: 'gate', learn: 'gate', text: 'Stand at the lever inside your gate and press [E] to bar it: nobody gets through, not even your own troops.' },
   { id: 'engine', learn: 'engine', text: 'Press [E] beside an abandoned siege engine to take it over: rams break gates, catapults break walls.' },
   { id: 'scores', learn: 'tab', text: 'Hold [Tab] for the scoreboard: gold, kills and the state of every keep.' },
+  { id: 'levels', learn: 'talents', text: 'Kills, waves and the hill earn experience: the purple bar under your health. Every level makes you stronger and gives a talent point.' },
+  { id: 'talents', learn: 'talentstab', text: 'Press [N] to spend your talent points: every class has its own tree of ability upgrades.' },
+  { id: 'respec', learn: 'talents', text: 'Chose badly? At your own castle [N] → Respec gives every talent point back, free.' },
+  { id: 'ping', team: true, learn: 'ping', text: 'Middle-click to ping what you are looking at: red for a foe, blue to defend, gold to go there. Your allies see it.' },
+  { id: 'pingwheel', team: true, learn: 'marker', text: 'Hold the middle button and flick the mouse to leave a marker: Go here, Attack, Defend, Danger or Need help.' },
+  { id: 'mapping', team: true, learn: 'marker', text: 'Press [M] and click the big map to mark a spot for your team; right click removes your nearest marker.' },
   { id: 'arrows', text: 'Arrows run out. Each wave brings five more, so save them for archers and siege crews.' },
   { id: 'knight', cls: 'knight', text: 'Knight: [Q] Shield Bash stuns whatever is ahead; [R] Bulwark cuts the damage you take by 70% for five seconds.' },
   { id: 'berserker', cls: 'berserker', text: 'Berserker: Blood Rage ([R]) heals you for half of what you deal. Stay in the thick of it.' },
@@ -72,6 +78,7 @@ export const TIPS = [
   { id: 'd-class', at: 'death', text: 'A new class changes how you fight: pick one in [B] → Class while you wait.' },
   { id: 'd-wall', at: 'death', text: 'Fight from the wall walk: battlements cover you and the enemy has to climb to reach you.' },
   { id: 'd-duck', at: 'death', text: 'Duck ([C]) behind a battlement when archers are shooting at you.' },
+  { id: 'd-talent', at: 'death', learn: 'talents', text: 'Talent points to spend? [N] opens the Talents tab while you wait to respawn.' },
   { id: 'd-army', at: 'death', text: 'Your army fights on while you wait. [B] → Army puts more soldiers on the walls.' },
   // the game-over screen
   { id: 'o-class', at: 'over', text: 'Try another class next time: all six play differently.' },
@@ -94,7 +101,7 @@ const AWAY = { min: 12, show: 8 };              // seconds away before the panel
 const TONES = ['info', 'good', 'warn', 'danger'];
 const ICON = { info: '🔔', good: '✔', warn: '⚠', danger: '⚔' };
 const SOUND = { info: 'alertLow', good: 'chime', warn: 'alertLow', danger: 'alertDanger' };
-const TAB_FLAG = { army: 'armytab', castle: 'castletab', class: 'classtab', siege: 'siegetab', orders: 'orderstab' };   // shop tab -> what opening it teaches
+const TAB_FLAG = { army: 'armytab', castle: 'castletab', class: 'classtab', siege: 'siegetab', orders: 'orderstab', talents: 'talentstab' };   // shop tab -> what opening it teaches
 const WIND8 = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 const ARROWS = ['↑', '↗', '→', '↘', '↓', '↙', '←', '↖'];
 
@@ -142,7 +149,7 @@ export class Alerts {
     this.learned = new Set(saved.learned);
     this.last = new Map();      // alert key -> game time it last fired
     this.recent = [];           // the latest alerts: { key, t, text, tone }
-    this.away = null;           // while the player is not looking: { at, round, kills, deaths, earned, events, n, label }
+    this.away = null;           // while the player is not looking: { at, round, kills, deaths, earned, level, events, n, label }
     this.begun = false;
     this.over = false;
     this.dirty = false;
@@ -269,6 +276,7 @@ export class Alerts {
       this.learn(TAB_FLAG[ui.tab]);
     }
     if (p.group !== undefined) this.learn('group');
+    if (Object.keys(p.talents).length) this.learn('talents');
     // (a guest's last order always comes with the snapshot: only a change counts there)
     if (g.mode === 'client') { if (this.order0 === undefined) this.order0 = p.lastOrder; else if (p.lastOrder !== this.order0) this.learn('order'); }
     else if (p.lastOrder !== undefined) this.learn('order');
@@ -498,6 +506,7 @@ export class Alerts {
     if (t.learn && this.learned.has(t.learn)) return false;
     if (t.cls && t.cls !== g.player.classId) return false;
     if (t.koth !== undefined && t.koth !== (g.objective === 'koth')) return false;
+    if (t.team && !g.humans.some((h) => h !== g.player && allied(h.team, g.player.team))) return false;   // (needs a human ally)
     return true;
   }
 
@@ -580,7 +589,7 @@ export class Alerts {
     const p = g.player, f = g.localFaction;
     this.title0 = document.title;
     this.bgAt = performance.now();
-    this.away = { at: performance.now(), round: g.round, kills: p.kills, deaths: p.deaths, earned: f.earned, events: [], n: 0, label: '' };
+    this.away = { at: performance.now(), round: g.round, kills: p.kills, deaths: p.deaths, earned: f.earned, level: p.level, events: [], n: 0, label: '' };
   }
 
   // something happened while they were away: kept for the panel, and a warning also flashes in the tab title
@@ -623,6 +632,7 @@ export class Alerts {
     if (kills > 0) lines.push(['🗡', `You slew ${kills}`]);
     if (deaths > 0) lines.push(['☠', deaths > 1 ? `You fell ${deaths} times` : 'You fell']);
     if (gold >= 10) lines.push(['●', `+${gold} gold earned`]);
+    if (p.level > a.level) lines.push(['✦', `You reached level ${p.level}`]);
     const el = $('away');
     if (!lines.length || !el) return;
     el.querySelector('small').textContent = clockText(secs);

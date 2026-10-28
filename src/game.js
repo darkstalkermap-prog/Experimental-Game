@@ -600,7 +600,7 @@ export class Game {
       case 'kill': this.ui.kill(ev.a, ev.v); break;
       case 'gold': this.ui.goldPopup(ev.g); break;
       case 'xp': this.ui.xpPopup(ev.n); break;
-      case 'lvl': this.ui.levelUp(ev.n); this.alerts.raise(`level${ev.n}`, { sound: false, cooldown: 0, away: `Reached level ${ev.n}` }); break;   // (kept for the "while you were away" panel)
+      case 'lvl': this.ui.levelUp(ev.n); break;
       case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); break;
       case 'stagger': this.player.stagger(ev.t); break;

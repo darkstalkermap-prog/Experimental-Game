@@ -358,14 +358,14 @@ so it works the same in single player, as the host and as a guest.
 - **Kill streaks**: 3, 5 and 8 kills of your own within 12 seconds show "Killing spree", "Rampage" and "Unstoppable" with a brass fanfare.
 - **Tips**: a slim hint line at the bottom of the screen (clear of the crosshair, the minimap and the health bars) shows
   one tip for nine seconds after about 25 calm seconds (nothing has hurt you for ten), and never more than one every 40
-  seconds. There are about thirty: controls, tricks for each of the six classes, climbing and ducking, the maps, orders and
-  the Army tab, King of the Hill, upgrades and the shop. Tips about things you have already done are skipped, none comes
+  seconds. There are about forty: controls, tricks for each of the six classes, climbing and ducking, the maps, orders and
+  the Army tab, King of the Hill, upgrades and the shop, levels and talents, and (with a human ally in the game) pings. Tips about things you have already done are skipped, none comes
   round twice until every one that applies has been shown, and what you have seen is remembered in this browser. The
   respawn screen and the game-over screen show one too. The list is the `TIPS` array at the top of `src/alerts.js`.
 - **While you look away**: when the tab is hidden or the window loses focus the game keeps a log. Something important (an
   attack, a breach, an army at the gate) flashes the browser tab's title ("⚔ (3) Castle under attack!") and sounds its
   alert, and when you come back a "While you were away" panel lists what happened for a few seconds: attacks, waves, kills,
-  deaths and gold earned. Browsers stop the render loop of a hidden tab, so an online game (host or guest) is stepped from a
+  deaths, gold earned and any levels you reached. Browsers stop the render loop of a hidden tab, so an online game (host or guest) is stepped from a
   timer in 1/20 s slices meanwhile: a host who looks at another tab does not freeze the match for everybody. Single player
   simply waits for you.
 - **Idle nudge**: after 25 seconds without touching anything while you are alive, "Still with us? Wave 4 marches in 0:21."

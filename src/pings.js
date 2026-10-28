@@ -405,6 +405,7 @@ export class Pings {
     const id = near ? near.id : ++this.seq;
     const it = this.add({ id, team: g.localTeam, name: g.player.name, type, marker: !!marker, x, y, z, mine: true });
     g.audio.play(SOUND_OF[type]);
+    g.alerts.learn(marker ? 'marker' : 'ping');   // (the tips about it can rest)
     const wire = { id, ty: type, mk: marker ? 1 : 0, x, y, z };
     if (g.mode === 'client') g.net.toHost({ a: 'ping', ...wire });
     else if (g.mode === 'host') this.relay({ k: 'ping', ...wire, team: g.localTeam, name: g.player.name }, g.player);
