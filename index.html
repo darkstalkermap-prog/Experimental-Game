@@ -358,7 +358,8 @@
   .tnode.child.linked::before { background: var(--gold); box-shadow: 0 0 6px rgba(224,180,76,0.7); }
   .tnode.bought { animation: bought 0.45s ease-out; }
   .tnode.nope { animation: nope 0.3s ease-out; }
-  #talentHint { position: absolute; left: 16px; top: 130px; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
+  #talentHint { position: absolute; left: 16px; bottom: 244px; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
+  @media (max-width: 760px) { #talentHint { bottom: 212px; } }   /* (the ability tiles sit lower here) */
   @keyframes talentPulse { 0%, 100% { box-shadow: 0 0 0 rgba(224,180,76,0); } 50% { box-shadow: 0 0 14px rgba(224,180,76,0.85); } }
   .abil .tpips { position: absolute; right: 6px; bottom: 3px; font-size: 11px; line-height: 1; letter-spacing: 1px; }
   @media (max-width: 700px) {
