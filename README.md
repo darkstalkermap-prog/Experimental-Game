@@ -87,6 +87,18 @@ use the same host, invite code and lobby. Before the battle starts, the host pic
   **ally** in the castle list. A side wins when every rival house has fallen, and loses when every allied
   castle has fallen.
 
+  **Calling a fallen ally back (co-op Conquest).** A house is finished when its keep has fallen and its hero is dead:
+  that player can only watch. An ally whose own keep still stands can pay **500 gold** to bring them back to life.
+  Open the shop (**B**): under the tabs, on every tab, a red bar names each ally who is out of the battle, with a
+  **Call back to life** button (it says how much gold is missing if you are short). **U** does the same for the first
+  fallen ally without opening the shop. The ally rises in the courtyard of the keep that paid, a little aside, with
+  two seconds of protection, at full health, and fights on. Their own keep is still a ruin, so if they fall again
+  they are out again until somebody pays again. A toast when the house falls, a callout that comes back now and
+  then while the ally is out, and the fallen player's own screen all say that it can be done. It is not offered in King of the Hill, in Versus, or for a player who has left
+  the game, and not when the buyer's own keep has fallen. The price (and the protection) are `SUMMON` in
+  `src/config.js`; the rules are `Game.summonBlock` and `Game.summonAlly` (the guest is told where to rise in the
+  snapshot, so it appears in the same place on both screens).
+
 **On the GitHub Pages link (or any plain web hosting): no server needed.** One person hosts, the others join:
 
 1. The host opens the link, clicks **Multiplayer**, types a name and clicks **Host Online Game**.
@@ -490,6 +502,7 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 | O | Orders menu (click to command troops) |
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
 | N | Talents: the shop on the Talents tab (press again to close) |
+| U | Co-op Conquest: call the first fallen ally back to life for 500 gold (the bar under the shop's tabs has a button for each) |
 | P | Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies) |
 | M | Big map (the mouse is free while it is up; press again to close) |
 | Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |

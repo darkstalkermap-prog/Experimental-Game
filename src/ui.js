@@ -1,7 +1,7 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, clock } from './config.js';
-import { SHOP } from './economy.js';
+import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, clock } from './config.js';
+import { SHOP, SHOP_BY_ID } from './economy.js';
 import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
@@ -565,6 +565,7 @@ export class UI {
     $('shopGold').textContent = Math.floor(f.gold);
     const rc = g.roleCounts(g.localTeam);
     $('shopTroops').textContent = `garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane} (barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap})`;
+    this.refreshAllyBar();
     this.refreshRoster();
     refreshTalentTab(this);
     if (this.autoBtn && this.tab === 'siege') {
@@ -604,6 +605,39 @@ export class UI {
       if (c.last !== label) { c.btn.innerHTML = can !== true ? esc(can) : label; c.last = label; }
       c.btn.classList.toggle('unavailable', can !== true);
       c.btn.classList.toggle('poor', can === true && f.gold < cost);
+    }
+  }
+
+  // The bar under the shop's tabs: for every ally who is out of the game for good, a button that calls them back for SUMMON.cost
+  // gold (co-op Conquest; the U key does the same for the first one). Built once for each set of fallen allies, so a click always
+  // lands on the button it was aimed at; afterwards only the label changes.
+  refreshAllyBar() {
+    const g = this.game, bar = $('allyBar'), f = g.localFaction;
+    const down = g.fallenAllies(g.localTeam);
+    const key = down.map((a) => a.team).join();
+    if (key !== this.allyKey) {
+      this.allyKey = key;
+      bar.innerHTML = '';
+      this.allyBtns = [];
+      for (const a of down) {
+        const row = document.createElement('div');
+        row.className = 'al';
+        const who = document.createElement('span');
+        who.innerHTML = `<i style="background:${TEAM_CSS[a.team]}"></i><b>${esc(a.lord)}</b> has fallen with their keep and is out of the battle.`;
+        const btn = document.createElement('button');
+        btn.addEventListener('click', () => this.clickItem(SHOP_BY_ID['summon_' + a.team], row));
+        row.append(who, btn);
+        bar.appendChild(row);
+        this.allyBtns.push({ a, btn, last: '' });
+      }
+      bar.classList.toggle('hidden', !down.length);
+    }
+    for (const b of this.allyBtns || []) {
+      const item = SHOP_BY_ID['summon_' + b.a.team], can = item.can(g, f), cost = Math.round(item.cost(g, f));
+      const label = can !== true ? esc(can) : `Call back to life · <b>${cost}</b> <span class="coin">●</span>`;
+      if (b.last !== label) { b.btn.innerHTML = label; b.last = label; }
+      b.btn.classList.toggle('unavailable', can !== true);
+      b.btn.classList.toggle('poor', can === true && f.gold < cost);
     }
   }
 
@@ -738,7 +772,7 @@ export class UI {
       this.updateHill(dt);
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
-        $('respawnT').textContent = f.castle.fallen ? 'Your keep has fallen – no respawn' : `Respawning in ${Math.ceil(g.hero ? this.heroRespawn() : f.respawnT)}s`;
+        $('respawnT').textContent = f.castle.fallen ? `Your keep has fallen – no respawn${g.callableBack(f) ? ` (an ally can call you back for ${SUMMON.cost} gold)` : ''}` : `Respawning in ${Math.ceil(g.hero ? this.heroRespawn() : f.respawnT)}s`;
       } else $('respawn').classList.add('hidden');
       $('scoreboard').classList.toggle('hidden', !g.input.down('Tab'));
       if (g.input.down('Tab')) this.renderScoreboard();

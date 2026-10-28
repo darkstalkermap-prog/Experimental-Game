@@ -70,6 +70,7 @@ export const clock = (sec) => {
 
 export const START_GOLD = 500;
 export const GIANT_COST = 1600;
+export const SUMMON = { cost: 500, protect: 2 };   // calling a fallen ally back to life (co-op Conquest): the gold it takes, and the seconds they are untouchable on rising
 export const GATE_REPAIR_COST = 1500;   // repairing a damaged gate or rebuilding a broken one (the Iron-Banded Gate upgrades are priced on their own)
 
 export const DIFFICULTY = {

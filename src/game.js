@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY, clock,
-  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -1146,6 +1146,7 @@ export class Game {
     if (i.hit('KeyN')) { this.ui.openTalents(); return; }
     if (this.ui.shopOpen) return;
     if (i.hit('KeyM')) this.ui.toggleMap();
+    if (i.hit('KeyU')) this.localSummon();
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
     if (i.hit('F3')) this.localOrder('charge');
@@ -1221,8 +1222,63 @@ export class Game {
   eliminate(f) {
     if (f.eliminated) return;
     f.eliminated = true;
-    this.announce((t) => (t === f.team ? 'Your house has been destroyed. You can keep watching the battle.' : `${f.name} has been destroyed!`), f.team, f.team);
+    const back = this.callableBack(f);
+    this.announce((t) => (t === f.team
+      ? `Your house has been destroyed. You can keep watching the battle${back ? `, or an ally can call you back for ${SUMMON.cost} gold` : ''}.`
+      : back && allied(t, f.team) && !this.factions[t].castle.fallen ? `${f.name} has been destroyed! Press U to call ${f.lord} back to life (${SUMMON.cost} gold).` : `${f.name} has been destroyed!`), f.team, f.team);
     if (f.ai) f.ai.assault = null;
+  }
+
+  // ---------------- calling a fallen ally back ----------------
+  // An ally whose house has fallen and whose hero is dead is out of the game for good ("Your house has been destroyed"). In co-op
+  // Conquest an ally who still holds a keep can pay SUMMON.cost to call them back: they rise in the courtyard of the keep that
+  // paid and fight on. Their own keep is gone, so if they fall again they are out again until somebody pays again. Only players
+  // can be called back: a house that an AI lord took over when its player left is not.
+  get summonLive() { return this.coop && this.objective === 'conquest' && !this.hero && this.state === 'playing'; }
+
+  // the allied houses of `team` that are out for good and could be called back
+  fallenAllies(team) {
+    if (!this.summonLive) return [];
+    return this.factions.filter((a) => a.team !== team && allied(a.team, team) && a.isPlayer && a.player && a.eliminated && !a.player.alive);
+  }
+
+  // does house `f` have an ally who could call it back (once it has fallen)?
+  callableBack(f) {
+    return this.summonLive && f.isPlayer && this.factions.some((o) => o !== f && o.isPlayer && !o.eliminated && !o.castle.fallen && allied(o.team, f.team));
+  }
+
+  // why house `f` cannot call `ally` back right now (a few words for the shop), or null when it can
+  summonBlock(f, ally) {
+    if (!this.summonLive) return 'Not in this game';
+    if (!ally || ally === f || !allied(ally.team, f.team)) return 'Not your ally';
+    if (!ally.isPlayer || !ally.player) return 'Has left the game';
+    if (!ally.eliminated || ally.player.alive) return `${ally.lord} is still fighting`;
+    if (f.castle.fallen) return 'Your keep has fallen';
+    return null;
+  }
+
+  // buy() has taken the gold: the ally rises in the courtyard of the keep that paid, a little aside so they do not stand on the buyer
+  summonAlly(f, ally) {
+    const p = ally.player, c = f.castle;
+    ally.eliminated = false;
+    ally.respawnT = 0;
+    p.spawn(c.toWorld(ally.team % 2 ? 3 : -3, 2.5), c.rot);
+    p.spawnAt = { x: p.pos.x, y: p.pos.y, z: p.pos.z, yaw: c.rot, t: this.time };   // (a guest puts itself where the host put it: see netsync.js)
+    p.buffs.add('ghost', SUMMON.protect);
+    this.audio.play('horn', p.pos);
+    this.announce((t) => (t === ally.team ? `${f.lord} has called you back to life!`
+      : t === f.team ? `${ally.lord} rises again at your keep.`
+      : allied(t, f.team) ? `${f.lord} has called ${ally.lord} back to life!` : `${ally.lord} is back in the battle!`), ally.team, ally.team);
+  }
+
+  // U: call back the first fallen ally (the shop's ally bar has a button for each)
+  localSummon() {
+    if (!this.summonLive) return;
+    const down = this.fallenAllies(this.localTeam);
+    if (!down.length) { this.ui.toast('No ally has fallen'); return; }
+    const short = SUMMON.cost - Math.floor(this.localFaction.gold);
+    if (short > 0) { this.audio.play('deny'); this.ui.toast(`Need ${short} more gold`); return; }   // (the same words as the shop's button)
+    this.buyForPlayer('summon_' + down[0].team);
   }
 
   endGame(winner, reason = '') {

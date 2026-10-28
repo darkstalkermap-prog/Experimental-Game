@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 
 function recruit(type) {
@@ -16,6 +16,18 @@ function recruit(type) {
       return true;
     },
     apply: (g, f) => g.recruit(f, type),
+  };
+}
+
+// An ally whose house has fallen and whose hero is dead is out for good; in co-op Conquest an ally who still holds a keep can pay
+// to call them back (see Game.summonBlock). One item per house, bought by the shop's ally bar and the U key; no tab lists them.
+function summon(team) {
+  return {
+    id: 'summon_' + team, tab: 'allies', name: 'Call an ally back', playerOnly: true,
+    desc: (g) => `${g.factions[team].lord} rises again in the courtyard of your keep`,
+    cost: () => SUMMON.cost,
+    can: (g, f) => g.summonBlock(f, g.factions[team]) || true,
+    apply: (g, f) => g.summonAlly(f, g.factions[team]),
   };
 }
 
@@ -178,6 +190,8 @@ export const SHOP = [
     can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : !g.siegeTarget(f) ? 'No target' : g.siegeCount(f.team) >= 4 ? 'Too many engines' : true),
     apply: (g, f) => g.buildSiege(f, 'catapult'),
   },
+
+  summon(0), summon(1), summon(2), summon(3),
 ];
 
 export const SHOP_BY_ID = Object.fromEntries(SHOP.map((i) => [i.id, i]));

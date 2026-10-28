@@ -23,7 +23,7 @@
 // Options has a switch for the alerts (callouts, sounds, the away panel, nudges) and one for the tips.
 import { settings } from './settings.js';
 import { allied } from './teams.js';
-import { HILL, WAVES } from './config.js';
+import { HILL, WAVES, SUMMON } from './config.js';
 import { HERO } from './herogame.js';
 import './alertsounds.js';
 
@@ -387,6 +387,7 @@ export class Alerts {
     this.vitals(p);
     this.treasury(f, p);
     this.heroWatch(p);
+    this.allyWatch(p);
     this.hillWatch(p);
     this.life(p);
     this.tipWatch(p);
@@ -483,6 +484,16 @@ export class Alerts {
         const n = h.sides && h.sides[p.team] ? h.sides[p.team].kills : 0;
         this.raise('hero:' + r.name, { text: `Enemy hero slain: ${n}${h.killTarget ? '/' + h.killTarget : ''}`, icon: '⚔', tone: 'good', sound: 'chime', cooldown: 1 });
       } else this.raise('hero:' + r.name, { text: `Your ally ${r.name} was slain`, icon: '☠', tone: 'warn', cooldown: 1 });
+    }
+  }
+
+  // co-op Conquest: an ally who has fallen for good can be called back with U; say so now and then while they are out
+  allyWatch(p) {
+    const g = this.g, f = g.localFaction;
+    for (const a of g.fallenAllies(p.team)) {
+      if (g.summonBlock(f, a)) continue;
+      const text = f.gold >= SUMMON.cost ? `${a.lord} is out of the battle. Press U to call them back (${SUMMON.cost} gold)` : `${a.lord} is out of the battle. Save ${SUMMON.cost} gold to call them back (U)`;
+      this.raise('ally:' + a.team, { text, icon: '☠', tone: 'warn', cooldown: 75, away: `${a.lord} has fallen and can be called back` });
     }
   }
 

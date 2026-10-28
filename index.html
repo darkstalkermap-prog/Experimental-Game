@@ -323,6 +323,16 @@
   .card .ab { font-size: 13.5px; margin-top: 5px; }
   .card .st { font-size: 12.5px; margin-top: 5px; opacity: 0.7; }
   .classnote { grid-column: 1 / -1; font-size: 14.5px; opacity: 0.85; }
+  /* calling a fallen ally back (co-op Conquest): one bar for each ally who is out of the battle, under the tabs on every tab */
+  #allyBar { padding: 12px 20px 0; display: flex; flex-direction: column; gap: 8px; }
+  #allyBar .al { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--red); border-radius: 4px; background: rgba(196,60,48,0.15); }
+  #allyBar .al > span { flex: 1 1 260px; font-size: 16px; }
+  #allyBar .al i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; }
+  #allyBar .al b { color: #f3e2b5; }
+  #allyBar button.unavailable { opacity: 0.45; }
+  #allyBar button.poor { opacity: 0.6; }
+  #allyBar .al.bought { animation: bought 0.45s ease-out; }
+  #allyBar .al.nope { animation: nope 0.3s ease-out; }
   .card.bought { animation: bought 0.45s ease-out; }
   .card.nope { animation: nope 0.3s ease-out; }
   @keyframes bought { 0% { background: rgba(224,180,76,0.45); } 100% { background: rgba(255,255,255,0.04); } }
@@ -732,6 +742,7 @@
       <button data-tab="items" disabled title="Items are not available yet">Items</button>
       <button data-tab="siege">Siege</button>
     </div>
+    <div id="allyBar" class="hidden"></div>
     <div id="shopGrid"></div>
   </div>
 </div>
@@ -796,7 +807,8 @@
       <b>Engine</b><span>W/S roll · A/D turn · left click batters or fires · E climbs out</span>
       <div class="war"><b>O</b><span>Orders menu (click to command troops)</span>
       <b>B</b><span>Shop &amp; upgrades</span>
-      <b>B → Class</b><span>Switch your hero class (at your own castle)</span></div>
+      <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
+      <b>U</b><span>Co-op Conquest: call a fallen ally back to life for 500 gold (the bar under the shop's tabs does the same)</span></div>
       <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
       <b>P</b><span>Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies)</span>
       <b>M</b><span>Big battle map (the battle goes on; the mouse is free while it is up; press again to close)</span>
