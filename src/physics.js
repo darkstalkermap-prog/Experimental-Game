@@ -23,6 +23,22 @@ export function layoutCastles() {
 }
 layoutCastles();
 
+// Every collider is one of these, whoever made it: the scanning loops (resolve, groundHeight, pointHit, lineClear) then see a single
+// object shape. With the literals the modules pass in (a dozen different key sets) those loops were megamorphic, and every read of a
+// number field allocated. Modules keep using the object that add() returns (walls flip `active`, upgrades move the bounds).
+class Collider {
+  constructor(c) {
+    this.minX = c.minX; this.maxX = c.maxX; this.minZ = c.minZ; this.maxZ = c.maxZ;
+    this.top = c.top;
+    this.bottom = c.bottom === undefined ? -100 : c.bottom;
+    this.active = c.active === undefined ? true : c.active;
+    this.passTeam = c.passTeam === undefined ? -1 : c.passTeam;
+    this.kind = c.kind; this.ref = c.ref; this.team = c.team;
+    this.noWalk = c.noWalk; this.noProjectile = c.noProjectile; this.heightFn = c.heightFn;
+    for (const k in c) if (!(k in this)) this[k] = c[k];   // (anything else a module hangs on its colliders)
+  }
+}
+
 export class Physics {
   constructor(seed = 7) {
     layoutCastles();
@@ -91,17 +107,14 @@ export class Physics {
   // Something that only stops arrows and spells (battlement merlons): soldiers walk through it, and the side it
   // belongs to (c.team) shoots through it. Keeps the movement checks cheap.
   addShotBlocker(c, bucket) {
-    if (c.bottom === undefined) c.bottom = -100;
-    if (c.active === undefined) c.active = true;
+    c = new Collider(c);
     bucket.shots.push(c);
     return c;
   }
 
   // c: { minX,maxX,minZ,maxZ, top, bottom=0, heightFn?, passTeam?, active, kind, ref }
   add(c, bucket = null) {
-    if (c.bottom === undefined) c.bottom = -100;
-    if (c.active === undefined) c.active = true;
-    if (c.passTeam === undefined) c.passTeam = -1;
+    c = new Collider(c);
     if (bucket) { bucket.list.push(c); return c; }
     const pad = 2;
     const x0 = Math.floor((c.minX - pad) / this.cell), x1 = Math.floor((c.maxX + pad) / this.cell);
