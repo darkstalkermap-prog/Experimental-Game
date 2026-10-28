@@ -1,6 +1,6 @@
 // Scenery: sky, lighting, terrain mesh, roads, forests and rocks.
 import * as THREE from 'three';
-import { WORLD, CASTLE, HILL } from './config.js';
+import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
 import { grassDetailTexture } from './textures.js';
@@ -123,6 +123,7 @@ export function createTerrain(scene, physics) {
   const grassA = new THREE.Color(0x5d7a32), grassB = new THREE.Color(0x7d8e3e), grassDry = new THREE.Color(0x9a9050);
   const dirt = new THREE.Color(0x7b6646), rock = new THREE.Color(0x77736a), tmp = new THREE.Color();
   const trodden = new THREE.Color(0xa09572);   // the top of the hill in the middle: bare, pale, much walked on
+  const sand = new THREE.Color(0xb39a68);      // the floor of the practice yard: packed sand
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     const h = physics.terrainHeight(x, z);
@@ -144,6 +145,10 @@ export function createTerrain(scene, physics) {
     const rd = roadDist(x, z);
     tmp.lerp(dirt, (1 - smoothstep(2.2, 4.5, rd)) * 0.85);
     tmp.lerp(trodden, (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8);
+    if (physics.practice) {
+      const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
+      tmp.lerp(sand, (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92);
+    }
     tmp.lerp(rock, smoothstep(0.35, 0.8, slope));
     const shade = 0.9 + n2 * 0.15;
     colors[i * 3] = tmp.r * shade; colors[i * 3 + 1] = tmp.g * shade; colors[i * 3 + 2] = tmp.b * shade;
@@ -163,6 +168,7 @@ function okForProp(x, z, physics) {
   }
   if (roadDist(x, z) < 7) return false;
   if (Math.hypot(x, z) < 44) return false;
+  if (physics.practice && Math.abs(x - physics.practice.x) < PRACTICE.hw + 16 && Math.abs(z - physics.practice.z) < PRACTICE.hd + 16) return false;   // the practice yard
   return true;
 }
 

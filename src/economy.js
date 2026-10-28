@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 
 function recruit(type) {
@@ -56,7 +56,7 @@ export const SHOP = [
   {
     id: 'repair_gate', tab: 'castle', name: 'Repair Gate',
     desc: (g, f) => (f.castle.gate.alive ? `Gate ${Math.round(f.castle.gate.hp)}/${Math.round(f.castle.gate.maxHp)}` : 'Rebuild the destroyed gate'),
-    cost: (g, f) => (f.castle.gate.alive ? 100 : 250),
+    cost: () => GATE_REPAIR_COST,
     can: (g, f) => {
       const c = f.castle;
       if (c.fallen) return 'Castle has fallen';

@@ -160,6 +160,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     be promoted.
   - **Class**: change your hero class, at your own castle (see **Hero classes**).
   - **Castle**: repair or reinforce the gate, repair or thicken the walls, restore the keep, and add tower archers.
+    Repairing the gate (or rebuilding a broken one) costs **1500 gold**, the same for every house, so a gate that falls
+    is a real loss (`GATE_REPAIR_COST` in `src/config.js`). The Iron-Banded Gate upgrades are priced on their own.
   - **Items** (greyed out for now): better swords, a kite shield, a war bow, a warhorse, arrows and healing
     draughts. The tab is disabled in the shop until the items come back.
   - **Siege**: battering rams, catapults and the giant, plus where your armies march (Auto lanes, or a castle you choose).

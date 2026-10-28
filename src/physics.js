@@ -1,6 +1,6 @@
 // Terrain heightfield + simple box colliders (walls, towers, gates, ramps).
 // Characters are vertical capsules approximated by a circle in XZ plus a foot height.
-import { WORLD, CASTLE, BODY, HILL } from './config.js';
+import { WORLD, CASTLE, BODY, HILL, PRACTICE, PRACTICE_WORLD, practiceSite } from './config.js';
 import { makeNoise, smoothstep, clamp } from './noise.js';
 import { allied } from './teams.js';
 
@@ -27,6 +27,7 @@ export class Physics {
   constructor(seed = 7) {
     layoutCastles();
     this.noise = makeNoise(seed);
+    this.practice = PRACTICE_WORLD.on ? practiceSite() : null;   // the practice yard flattens the ground it stands on
     this.res = 2; // metres per terrain cell
     this.n = Math.round((WORLD.half * 2) / this.res) + 1;
     this.heights = new Float32Array(this.n * this.n);
@@ -60,6 +61,11 @@ export class Physics {
       const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
       const w = 1 - smoothstep(CASTLE.H + 10, CASTLE.H + 34, d);
       h = h * (1 - w) + CASTLE.baseY * w;
+    }
+    if (this.practice) {
+      const d = Math.max(Math.abs(x - this.practice.x) - PRACTICE.hw, Math.abs(z - this.practice.z) - PRACTICE.hd);
+      const w = 1 - smoothstep(PRACTICE.wallT + 3, PRACTICE.wallT + 20, d);
+      h = h * (1 - w) + this.practice.y * w;
     }
     return h;
   }

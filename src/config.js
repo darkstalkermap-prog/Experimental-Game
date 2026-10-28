@@ -70,6 +70,7 @@ export const clock = (sec) => {
 
 export const START_GOLD = 500;
 export const GIANT_COST = 1600;
+export const GATE_REPAIR_COST = 1500;   // repairing a damaged gate or rebuilding a broken one (the Iron-Banded Gate upgrades are priced on their own)
 
 export const DIFFICULTY = {
   easy:   { wave: 0.7, enemyStat: 0.85, aiGold: 0.8, aiAggro: 0.7 },
@@ -192,6 +193,27 @@ export const HILL = {
 };
 
 export const TROOP_CAP = { start: 12, step: 6, max: 36 };
+
+// The practice courtyard (practice mode only): a walled yard on its own flat ground between the player's castle and the
+// next, with training dummies on fixed stands. Sizes are metres; the yard's centre is a share of the castle distance.
+export const PRACTICE = {
+  hw: 13, hd: 34,            // half the width and the depth of the inside of the yard
+  wallH: 5, wallT: 1.6,
+  cx: 0.5, cz: 0.7,
+  start: 6,                  // the hero begins this far in from the south wall, facing the dummies
+  maxCharacters: 40,         // soldiers sent in at once
+  dummyHp: 1e6,              // a dummy is never knocked down: it only counts what it takes
+  window: 5,                 // seconds the damage per second is measured over
+  // the dummies' armour, one per tier: straw; mail like a spearman's; plate like a knight's; a rank-5 lancer's; a fortress
+  dummies: [
+    { name: 'Straw', armor: 0 }, { name: 'Mail', armor: 3 }, { name: 'Plate', armor: 7 }, { name: 'Champion', armor: 11 }, { name: 'Fortress', armor: 15 },
+  ],
+};
+// Practice mode changes the world itself (the yard has flat ground and no trees round it), so it is a switch that is set
+// before a Game is built, like the map size.
+export const PRACTICE_WORLD = { on: false };
+export const setPracticeWorld = (on) => { PRACTICE_WORLD.on = !!on; };
+export const practiceSite = () => ({ x: PRACTICE.cx * WORLD.castleDist, z: PRACTICE.cz * WORLD.castleDist, y: CASTLE.baseY });
 
 // Formations for your troops when they follow you or hold a position.
 export const FORMATIONS = {
