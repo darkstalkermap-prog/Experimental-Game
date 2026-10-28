@@ -211,13 +211,13 @@ export function initPerf({ renderer, getGame, render = null }) {
     if (panel) return;
     const style = document.createElement('style');
     style.id = 'perfStyle';
-    style.textContent = '#perfPanel{position:fixed;left:8px;top:8px;z-index:60;width:292px;padding:6px 8px 7px;background:rgba(8,10,14,.82);color:#d7e0ea;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid #2c3a4b;border-radius:4px;pointer-events:none;white-space:pre;text-shadow:none}#perfPanel b{color:#fff;font-weight:600}#perfPanel canvas{display:block;margin:3px 0 4px;width:276px;height:46px}';
+    style.textContent = '#perfPanel{position:fixed;left:8px;top:8px;z-index:60;width:344px;padding:6px 8px 7px;background:rgba(8,10,14,.82);color:#d7e0ea;font:11px/1.35 ui-monospace,Menlo,Consolas,monospace;border:1px solid #2c3a4b;border-radius:4px;pointer-events:none;white-space:pre;text-shadow:none}#perfPanel b{color:#fff;font-weight:600}#perfPanel canvas{display:block;margin:3px 0 4px;width:328px;height:46px}';
     document.head.appendChild(style);
     panel = document.createElement('div');
     panel.id = 'perfPanel';
     textEl = document.createElement('div');
     canvas = document.createElement('canvas');
-    canvas.width = 276 * 2; canvas.height = 46 * 2;
+    canvas.width = 328 * 2; canvas.height = 46 * 2;
     ctx2 = canvas.getContext('2d');
     panel.append(canvas, textEl);
     document.body.appendChild(panel);
@@ -243,16 +243,17 @@ export function initPerf({ renderer, getGame, render = null }) {
       heap = `heap <b>${mb.toFixed(0)}</b> MB  +${heapMark.rate.toFixed(1)} MB/s  gc ${heapMark.gcRate.toFixed(1)}/s`;
     }
     const f1 = (v) => v.toFixed(1);
+    const parts = names.map((n) => `${n} ${f1(s.parts[n].mean)}`);
     const lines = [
       `<b>${s.fps.toFixed(0)}</b> fps  <b>${f1(s.interval.mean)}</b> ms  p95 ${f1(s.interval.p95)}  worst ${f1(s.worstSecond)}`,
-      names.slice(0, 7).map((n) => `${n} ${f1(s.parts[n].mean)}`).join(' '),
-      `busy ${f1(s.busy.mean)} ms  other ${f1(Math.max(0, s.interval.mean - s.busy.mean))}` + (names.length > 7 ? '  ' + names.slice(7).map((n) => `${n} ${f1(s.parts[n].mean)}`).join(' ') : ''),
+      parts.slice(0, 4).join('  '),
+      parts.slice(4).join('  ') + `  busy ${f1(s.busy.mean)}`,
       `calls <b>${s.calls}</b>  tris <b>${(s.tris / 1000).toFixed(0)}k</b>  geo ${info.memory.geometries}  tex ${info.memory.textures}  prog ${info.programs ? info.programs.length : 0}`,
-      `units ${c.alive}/${c.units}  siege ${c.siege}  proj ${c.proj}  parts ${c.particles}  meshes ${sceneObjs}`,
-      heap,
+      `units ${c.alive}/${c.units}  siege ${c.siege}  proj ${c.proj}  parts ${c.particles}`,
+      `meshes ${sceneObjs}  ` + heap,
     ];
     const last = P.longFrames.slice(-3).reverse();
-    if (last.length) lines.push('slow frames (' + P.longFrames.length + '): ' + last.map((r) => `${r.at}s ${r.ms}ms${r.gc ? ' gc' : ''}`).join(' · '));
+    if (last.length) lines.push('slow (' + P.longFrames.length + '): ' + last.slice(0, 2).map((r) => `${r.at}s ${r.ms}ms${r.gc ? ' gc' : ''}`).join(' · '));
     textEl.innerHTML = lines.join('\n');
     // frame-time bars (last 138 frames: green fast, amber slow, red a hitch) with the split of the mean frame underneath
     const w = canvas.width, h = canvas.height, x = ctx2;
