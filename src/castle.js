@@ -1,30 +1,22 @@
 // A castle: curtain walls (breakable by siege engines), a gate (breakable by anyone),
 // corner towers, the keep (the castle falls when it is destroyed) and ramps to the wall walk.
+// What it looks like is built in castlegeo.js (pieces per material) and merged here into a handful of meshes: the walls (rebuilt when
+// one is damaged, broken or mended), the keep and towers, timber, roofs, metal, soft goods, the courtyard floor and the cloth.
 import * as THREE from 'three';
-import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { CASTLE, TEAM_COLORS, TROOP_CAP } from './config.js';
-import { materials, box, shadowed } from './materials.js';
+import { materials, box, shadowed, partsMaterial } from './materials.js';
 import { Upgrades } from './upgrades.js';
+import { Q, onQuality } from './quality.js';
+import { Parts, place } from './parts.js';
+import { Cloth, clothMaterial, updateWind } from './castlefx.js';
+import * as G from './castlegeo.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
 const TC = H + towerOff; // corner tower centres
 const GW = gateW / 2;
-const KEEP_Z = -6;
-const MERLON_H = 1.3;   // merlons stand chest-high: they cover a soldier's body and leave the head showing
+const KEEP_Z = G.KEEP_Z;
+const MERLON_H = G.MERLON_H;   // merlons stand chest-high: they cover a soldier's body and leave the head showing
 const POST_LEAN = 0.95; // an archer at a slot leans out to the wall's outer face, so he can shoot at the foot of the wall
-
-function merlonGeos(len, alongX, outer, skip = null) {
-  const geos = [];
-  const n = Math.floor(len / 2);
-  for (let i = 0; i < n; i++) {
-    const t = -len / 2 + 1 + i * 2;
-    if (skip && skip(t)) continue;
-    const g = box(alongX ? 1.1 : 0.5, 1.3, alongX ? 0.5 : 1.1);
-    g.translate(alongX ? t : outer, wallH + 0.65, alongX ? outer : t);
-    geos.push(g);
-  }
-  return geos;
-}
 
 export class Castle {
   constructor(game, team, site) {
@@ -42,14 +34,23 @@ export class Castle {
     this.towerCd = [0, 0, 0, 0];
     // stands in as the 'attacker' for tower arrows (kill credit); soldiers can't fight back at it
     this.towerShooter = { team, alive: true, isTower: true, isStructure: true, name: 'Tower archers', pos: new THREE.Vector3(site.x, CASTLE.baseY + 14, site.z) };
-    this.flags = [];
     this.group = new THREE.Group();
     this.group.position.copy(this.center);
     this.group.rotation.y = this.rot;
     game.scene.add(this.group);
     this.bucket = game.physics.addBucket(site.x, site.z, H + 8);
     this.mats = materials();
+    this.clothMat = clothMaterial(this.mats.banners[team].map);   // (its own: the fallen keep scorches it)
+    this.vis = [];
     this.build();
+    this.group.updateMatrix();
+    this.group.matrixAutoUpdate = false;
+    // the geometry depends on Q.detail: build it again when the graphics setting changes
+    const off = onQuality((q) => {
+      if (this.detail === undefined) return;
+      if (!this.group.parent) { off(); return; }   // (the world was rebuilt: this castle is gone)
+      if (q.detail !== this.detail) this.buildVisuals();
+    });
   }
 
   toWorld(lx, lz, y = 0) {
@@ -77,7 +78,7 @@ export class Castle {
     return Math.abs(p.x - this.center.x) < H + margin && Math.abs(p.z - this.center.z) < H + margin;
   }
 
-  // One shot-blocking box per merlon, matching the stone ones drawn by merlonGeos.
+  // One shot-blocking box per merlon, matching the stone ones drawn by castlegeo.
   addMerlons(cx, cz, len, alongX, outer, ref, skip = null) {
     const list = [];
     const n = Math.floor(len / 2);
@@ -130,19 +131,11 @@ export class Castle {
       const outer = alongX ? nz * (T / 2 - 0.25) : nx * (T / 2 - 0.25);
       // the corner towers stand on the corner squares of the front and back walls: no merlons there
       const atCorner = (t) => Math.abs(alongX ? cx + t : cx) > H - T - 0.1 && Math.abs(alongX ? cz : cz + t) > H - T - 0.1;
-      const body = box(w, wallH, d);
-      body.translate(0, wallH / 2, 0);
-      const full = mergeGeometries([body, ...merlonGeos(len, alongX, outer, atCorner)]);
-      const damaged = box(w, wallH - 0.9, d);
-      damaged.translate(0, (wallH - 0.9) / 2, 0);
-      const mesh = new THREE.Mesh(full, M.stone);
-      mesh.position.set(cx, 0, cz);
-      shadowed(mesh);
-      g.add(mesh);
       const seg = {
         kind: 'wall', isStructure: true, castle: this, team: this.team, breakable,
         hp: CASTLE.wallHp, maxHp: CASTLE.wallHp, alive: true,
-        mesh, full, damaged, lx: cx, lz: cz, nx, nz, len, alongX,
+        vis: 'full',   // what is drawn: 'full', 'damaged' or 'gone' (see applyWallVisual)
+        lx: cx, lz: cz, nx, nz, len, alongX,
         pos: this.toWorld(cx, cz, wallH * 0.5),
         radius: Math.max(w, d) / 2,
         outPt: this.toWorld(cx + nx * 6, cz + nz * 6),
@@ -180,20 +173,9 @@ export class Castle {
     }
 
     // ---- gate lintel ----
-    const lintel = box(gateW + 0.2, wallH - gateH, T);
-    lintel.translate(0, gateH + (wallH - gateH) / 2, H - T / 2);
-    const lintelMesh = new THREE.Mesh(mergeGeometries([lintel, ...merlonGeos(gateW, true, T / 2 - 0.25).map((m) => m.translate(0, 0, H - T / 2))]), M.stone);
-    g.add(shadowed(lintelMesh));
     this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
     this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
     this.addMerlons(0, H - T / 2, gateW, true, T / 2 - 0.25, null);
-    // arch trim
-    const trim = new THREE.Mesh(box(0.6, gateH, T + 0.4), M.stoneDark);
-    for (const s of [-1, 1]) {
-      const t2 = trim.clone();
-      t2.position.set(s * (GW + 0.3), gateH / 2, H - T / 2);
-      g.add(shadowed(t2));
-    }
 
     // ---- gate ----
     this.buildGate();
@@ -212,20 +194,11 @@ export class Castle {
     const slabs = [[-IN, IN, E, IN], [-IN, IN, -IN, -E], [-IN, -E, -E, E], [E, IN, -E, E],
       // landings: the top of each staircase runs straight on into the back walkway
       [E - 3, E, -E, -6], [-E, -E + 3, -E, -6]];
-    const deck = [];
     for (const [x0, x1, z0, z1] of slabs) {
-      const b = box(x1 - x0, 0.45, z1 - z0, 2);
-      b.translate((x0 + x1) / 2, wallH - 0.225, (z0 + z1) / 2);
-      deck.push(b);
       this.addCollider(x0, x1, z0, z1, wallH, { kind: 'walk', bottom: cy + wallH - 0.5, noProjectile: true, team: this.team });
     }
-    g.add(shadowed(new THREE.Mesh(mergeGeometries(deck), M.plank)));
     // support posts with braces along the inner edge (stairs leave gaps)
-    const posts = [];
     const postAt = (x, z) => {
-      const pb = box(0.38, wallH - 0.45, 0.38, 1);
-      pb.translate(x, (wallH - 0.45) / 2, z);
-      posts.push(pb);
       this.addCollider(x - 0.22, x + 0.22, z - 0.22, z + 0.22, wallH - 0.5, { kind: 'post', noWalk: true, noProjectile: true });
     };
     for (let t = -E; t <= E + 0.01; t += (2 * E) / 6) {
@@ -234,21 +207,11 @@ export class Castle {
       if (Math.abs(t) > 6.5) { postAt(-E, t); postAt(E, t); } // sides: the stairs fill the middle
     }
     for (const sx of [-1, 1]) postAt(sx * (E - 3), -10.2); // under the landings
-    g.add(shadowed(new THREE.Mesh(mergeGeometries(posts), M.wood)));
 
     // stairs up to the walk, one on each side, rising toward the back of the castle
     const STAIR_W = 3, z0 = 6, z1 = -6;
     for (const s of [-1, 1]) {
       const xs = s * (E - STAIR_W / 2);
-      const steps = [];
-      const N = 14, d = (z0 - z1) / N;
-      for (let i = 0; i < N; i++) {
-        const h = (wallH * (i + 1)) / N;
-        const st = box(STAIR_W, h, d);
-        st.translate(xs, h / 2, z0 - (i + 0.5) * d);
-        steps.push(st);
-      }
-      g.add(shadowed(new THREE.Mesh(mergeGeometries(steps), M.stoneDark)));
       this.addCollider(Math.min(xs - STAIR_W / 2, xs + STAIR_W / 2), Math.max(xs - STAIR_W / 2, xs + STAIR_W / 2), z1, z0, wallH, {
         kind: 'ramp',
         heightFn: (x, z) => {
@@ -262,17 +225,16 @@ export class Castle {
     this.leverLocal = { x: 5.8, z: IN - 5 };
     const lever = new THREE.Group();
     lever.position.set(this.leverLocal.x, 0, this.leverLocal.z);
-    const base = new THREE.Mesh(box(0.9, 0.9, 0.6, 1), M.stoneDark);
-    base.position.y = 0.45;
     const handle = new THREE.Group();
     handle.position.y = 0.9;
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6), M.wood);
-    stick.position.y = 0.6;
-    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), M.iron);
-    knob.position.y = 1.2;
-    handle.add(stick, knob);
+    const hp = new Parts(1);
+    hp.cyl('timber', 0.05, 0.05, 1.2, 6, null, G.C.wood);
+    hp.add('timber', new THREE.SphereGeometry(0.11, 8, 6), place(0, 1.2, 0), G.C.iron);
+    const stick = new THREE.Mesh(hp.geometry('timber'), M.timber);
+    stick.castShadow = true;
+    handle.add(stick);
     handle.rotation.x = 0.6;
-    lever.add(shadowed(base), shadowed(handle));
+    lever.add(handle);
     g.add(lever);
     this.leverHandle = handle;
     this.leverPos = this.toWorld(this.leverLocal.x, this.leverLocal.z, 1.2);
@@ -282,29 +244,6 @@ export class Castle {
     g.add(shadowed(bar));
     this.gateBar = bar;
     this.gateLocked = false;
-
-    // ---- hanging banners on the front wall ----
-    for (const s of [-1, 1]) {
-      const b = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.2), M.banners[this.team]);
-      b.position.set(s * 8.5, wallH - 3.0, H + 0.06);
-      g.add(b);
-    }
-
-    // ---- courtyard props ----
-    const crate = new THREE.Mesh(box(1.1, 1.1, 1.1, 1.1), M.plank);
-    const props = [[-10, -12], [-11.3, -12.2], [-10.6, -10.8], [10.5, -12.5], [9.5, -9]];
-    for (const [x, z] of props) {
-      const c = crate.clone();
-      c.position.set(x, 0.55, z);
-      c.rotation.y = x * 0.37;
-      g.add(shadowed(c));
-    }
-    const barrelGeo = new THREE.CylinderGeometry(0.45, 0.45, 1.1, 10);
-    for (const [x, z] of [[11.6, -10.6], [12.3, -9.8], [-12.2, -8.5]]) {
-      const b = new THREE.Mesh(barrelGeo, M.plank);
-      b.position.set(x, 0.55, z);
-      g.add(shadowed(b));
-    }
 
     // ---- defend positions and key points ----
     this.gatePos = this.toWorld(0, H - T / 2, gateH / 2);
@@ -323,9 +262,106 @@ export class Castle {
     for (const x of [-1, 1]) {
       this.posts.unshift({ seg: null, occupant: null, pos: this.toWorld(x, H - T / 2, wallH), base: this.toWorld(x * 4.5, H - T - 6), lean: this.dirToWorld(0, 1).multiplyScalar(POST_LEAN), front: true });
     }
+    this.buildVisuals();
     this.barracksLevel = 0;
     this.levies = 0;
     this.upg = new Upgrades(this);
+  }
+
+  // ---------------------------------------------------------------- what the castle looks like
+  // Everything static is merged by material. Built again when Q.detail changes. (castlegeo.js holds the shapes.)
+  clearVisuals() {
+    for (const m of this.vis) { this.group.remove(m); m.geometry.dispose(); }
+    this.vis.length = 0;
+    this.wallMesh = this.keepMesh = this.tilesMesh = null;
+  }
+
+  buildVisuals() {
+    this.clearVisuals();
+    const d = Q.detail, g = this.group, seed = this.team * 101 + 5;
+    this.detail = d;
+    const fixed = new Parts(seed + 1), A = new Parts(seed + 2), R = new Parts(seed + 3), K = new Parts(seed + 4), cloth = new Cloth();
+    G.gatehouse(fixed, A, d);
+    G.stairs(fixed, d);
+    G.deck(A, d);
+    G.courtyard(A, d, seed);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
+    G.keep(K, A, R, d);
+    this.dress(cloth, A, d);
+    const mesh = (parts, key, geo = null, cast = false) => {
+      geo = geo || parts.geometry(key);
+      if (!geo) return null;
+      const m = new THREE.Mesh(geo, partsMaterial(key));
+      m.castShadow = cast; m.receiveShadow = true;
+      m.matrixAutoUpdate = false;
+      g.add(m);
+      this.vis.push(m);
+      return m;
+    };
+    // the walls: pieces for each state of each segment, merged again whenever one changes
+    this.wallParts = this.walls.map((seg, i) => G.wallParts(seg, d, seed * 31 + i));
+    this.fixedParts = fixed;
+    this.wallMesh = mesh(null, 'masonry', this.mergeWalls(), true);
+    this.wallsDirty = false;
+    this.keepMesh = mesh(K, 'masonry', null, true);
+    mesh(A, 'timber', null, true);
+    this.tilesMesh = mesh(R, 'roof', null, true);
+    mesh(A, 'metal');
+    mesh(A, 'plain');
+    mesh(A, 'ground');
+    if (!cloth.empty()) {
+      const m = new THREE.Mesh(cloth.geometry(), this.clothMat);
+      m.receiveShadow = false;
+      m.matrixAutoUpdate = false;
+      g.add(m);
+      this.vis.push(m);
+    }
+    if (this.burning) this.applyBurn();
+  }
+
+  // the walls mesh: the fixed stone plus each segment as it stands now
+  mergeWalls() {
+    const P = new Parts(1);
+    P.merge(this.fixedParts);
+    this.walls.forEach((seg, i) => P.merge(this.wallParts[i][seg.vis]));
+    return P.geometry('masonry');
+  }
+  rebuildWalls() {
+    this.wallsDirty = false;
+    if (!this.wallMesh) return;
+    const old = this.wallMesh.geometry;
+    this.wallMesh.geometry = this.mergeWalls();
+    old.dispose();
+  }
+
+  // banners, flags, rods and the few loose things that are not architecture
+  dress(cloth, A, d) {
+    const wood = G.C.woodDark;
+    for (const s of [-1, 1]) {            // hanging banners on the front wall, on a rod and brackets in front of the corbels
+      const x = s * 8.5, top = wallH - 1.0, zb = H + 0.5;
+      cloth.rect([x - 1.3, top - 5.2, zb], [2.6, 0, 0], [0, 5.2, 0], 'top', { segU: 6, segV: 10, amp: 0.16 });
+      A.box('timber', x - 1.45, x + 1.45, top, top + 0.15, zb - 0.08, zb + 0.08, wood);
+      for (const k of [-1.2, 1.2]) A.box('timber', x + k - 0.06, x + k + 0.06, top - 0.05, top + 0.1, H, zb, wood);
+    }
+    const kz = KEEP_Z + keepW / 2 + 0.22;   // the keep's big banner
+    cloth.rect([-1.5, 6, kz], [3, 0, 0], [0, 6, 0], 'top', { segU: 6, segV: 10, amp: 0.14, tag: 1 });
+    A.box('timber', -1.65, 1.65, 12, 12.15, kz - 0.08, kz + 0.08, wood);
+    for (const k of [-1.3, 1.3]) A.box('timber', k - 0.06, k + 0.06, 11.95, 12.1, kz - 0.2, kz, wood);
+    const flag = (x, y, z, size, tag = 0) => {   // a pole with a flag streaming from its top
+      A.cyl('metal', 0.06, 0.06, size * 2.6, 6, place(x, y, z), G.C.iron);
+      if (d >= 1) A.add('metal', new THREE.SphereGeometry(0.13, 8, 6), place(x, y + size * 2.6, z), G.C.gold);
+      cloth.flag([x, y + size * 1.6, z], size, tag);
+    };
+    const F1 = TC + towerR;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) flag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
+    if (d >= 1) flag(0, keepH + 3.0, KEEP_Z, 2.2, 1); else flag(-keepW / 2 + 1, keepH + 1.2, KEEP_Z + keepW / 2 - 1, 2.2, 1);
+    // the courtyard props that were always here (more of them come with props.js)
+    if (d >= 1) {
+      for (const [x, z] of [[-10, -12], [-11.3, -12.2], [-10.6, -10.8], [10.5, -12.5], [9.5, -9]]) {
+        A.obox('timber', place(x, 0.55, z, x * 0.37), 0.55, 0.55, 0.55, A.jitter(G.C.old, 0.1));
+      }
+      for (const [x, z] of [[11.6, -10.6], [12.3, -9.8], [-12.2, -8.5]]) A.cyl('timber', 0.42, 0.42, 1.1, 10, place(x, 0, z), A.jitter(G.C.old, 0.1));
+    }
   }
 
   // Show the house's upgrades on the castle. Called every frame: it only does anything when a level has changed.
@@ -374,8 +410,6 @@ export class Castle {
   //   stairs A run east along the south wall (x 20 to 24.5, then a landing), stairs B north along the east wall
   //   (z 21.5 to 26); the roof deck covers the rest of the room; the stairwell above the stairs stays open.
   buildTowers() {
-    const M = this.mats;
-    const g = this.group;
     const cy = this.center.y;
     const F0 = H - T, F1 = TC + towerR;      // the tower's inner and outer faces
     const W = 1;                             // wall thickness
@@ -386,27 +420,8 @@ export class Castle {
     const SA = [19, 21.5];                   // stairs A / landing: z range
     const SB = [F1 - W - 2, F1 - W];         // stairs B: x range
     this.towers = [];
-    this.towerMeshes = [];
-    this.towerProps = [];
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const stone = [], dark = [], plank = [];
-      // a box given in the (+,+) frame, mirrored into this corner
-      const bx = (list, x0, x1, z0, z1, y0, y1) => {
-        const b = box(x1 - x0, y1 - y0, z1 - z0, 3);
-        b.translate(sx * (x0 + x1) / 2, (y0 + y1) / 2, sz * (z0 + z1) / 2);
-        list.push(b);
-      };
       const col = (x0, x1, z0, z1, top, extra = {}) => this.addCollider(sx * x0, sx * x1, sz * z0, sz * z1, top, extra);
-      const lowered = FLOOR - 0.03;   // a hair under the wall tops so the two stone surfaces never flicker against each other
-
-      // ---- masonry ----
-      bx(dark, F0, F1 + 0.3, F0, F1 + 0.3, 0, 1.0);                          // plinth
-      bx(stone, F0, F1, F0, F1, 0, lowered);                                 // the solid base
-      bx(dark, F0, F1 + 0.15, F0, F1 + 0.15, lowered - 0.3, lowered + 0.05); // string course under the upper room
-      bx(stone, F1 - W, F1, F0, F1 - W, lowered, towerH);                    // east wall
-      bx(stone, F0, F1, F1 - W, F1, lowered, towerH);                        // north wall
-      bx(stone, F0, F0 + W, H, F1 - W, lowered, towerH);                     // west wall (from the wall's outer face)
-      bx(stone, H, F1 - W, F0, F0 + W, lowered, towerH);                     // south wall
       // merlons round the roof edge (each one also stops enemy arrows, like the ones on the walls)
       const mer = (cx, cz, len, alongX, outer) => {
         const n = Math.floor(len / 2);
@@ -414,7 +429,6 @@ export class Castle {
           const t = -len / 2 + 1 + i * 2;
           const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
           const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
-          bx(stone, lx - hx, lx + hx, lz - hz, lz + hz, towerH, towerH + MERLON_H);
           const a = this.toWorld(sx * (lx - hx), sz * (lz - hz)), b = this.toWorld(sx * (lx + hx), sz * (lz + hz));
           this.game.physics.addShotBlocker({
             minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
@@ -429,29 +443,6 @@ export class Castle {
         [(H + F1) / 2, F0 + W / 2, F1 - H, true, -(W / 2 - 0.25)],           // south
       ];
       for (const e of edges) mer(...e);
-      // narrow arrow slits in the outer walls
-      const slits = [];
-      for (const k of [20.6, 22.5, 24.4]) {
-        const a = box(0.16, 1.2, 0.34); a.translate(sx * (F1 + 0.02), lowered + 2.6, sz * k); slits.push(a);
-        const b = box(0.34, 1.2, 0.16); b.translate(sx * k, lowered + 2.6, sz * (F1 + 0.02)); slits.push(b);
-      }
-      // ---- inside: the roof deck and the stairs ----
-      bx(plank, F0 + W, F1 - W - 2, B0, F1 - W, towerH - 0.4, towerH);
-      const N = 9;
-      for (let i = 0; i < N; i++) {
-        const x0 = A0 + (A1 - A0) * i / N, x1 = A0 + (A1 - A0) * (i + 1) / N;
-        bx(dark, x0, x1, SA[0], SA[1], lowered, FLOOR + RISE * (i + 1) / N);
-        const z0 = B0 + (B1 - B0) * i / N, z1 = B0 + (B1 - B0) * (i + 1) / N;
-        bx(dark, SB[0], SB[1], z0, z1, lowered, FLOOR + RISE + RISE * (i + 1) / N);
-      }
-      bx(dark, A1, F1 - W, SA[0], SA[1], lowered, FLOOR + RISE);             // the landing
-
-      const stoneMesh = new THREE.Mesh(mergeGeometries(stone), M.stone);
-      const darkMesh = new THREE.Mesh(mergeGeometries(dark), M.stoneDark);
-      const plankMesh = new THREE.Mesh(mergeGeometries(plank), M.plank);
-      const slitMesh = new THREE.Mesh(mergeGeometries(slits), M.dark);
-      for (const m of [stoneMesh, darkMesh, plankMesh, slitMesh]) g.add(shadowed(m));
-      this.towerMeshes.push(stoneMesh, darkMesh);
 
       // ---- what you bump into ----
       col(F0, F1, F0, F1, FLOOR, { kind: 'tower' });                         // the solid base, and the floor inside it
@@ -475,7 +466,6 @@ export class Castle {
       col(A0, F1 - W, SA[0], SA[1], towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE * uA(x, z) });
       col(SB[0], SB[1], B0, B1, towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE + RISE * uB(x, z) });
 
-      this.addFlag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
       this.towers.push({ top: this.toWorld(sx * (F1 - 1.2), sz * (F1 - 1.2), towerH + 1.6), sx, sz });   // (where the tower archers' arrows leave: the roof's outer corner)
     }
   }
@@ -488,13 +478,13 @@ export class Castle {
       pos: this.toWorld(0, H - T / 2, gateH / 2), radius: 3.2,
     };
     gate.takeDamage = (amt, attacker) => this.damageGate(amt, attacker);
-    const leafGeo = box(GW, gateH, 0.45, 3);
+    const leafGeo = new THREE.BoxGeometry(GW, gateH, 0.45);   // (the gate picture covers each leaf once)
     leafGeo.translate(GW / 2, gateH / 2, 0);
     gate.leaves = [];
     for (const s of [-1, 1]) {
       const pivot = new THREE.Group();
       pivot.position.set(s * GW, 0, H - T / 2);
-      const leaf = new THREE.Mesh(leafGeo, M.wood);
+      const leaf = new THREE.Mesh(leafGeo, M.gate);
       leaf.scale.x = -s; // mirror so each leaf extends toward the centre
       pivot.add(shadowed(leaf));
       this.group.add(pivot);
@@ -505,55 +495,7 @@ export class Castle {
   }
 
   buildKeep() {
-    const M = this.mats;
-    const g = this.group;
     const hw = keepW / 2;
-    const parts = [];
-    const body = box(keepW, keepH, keepW);
-    body.translate(0, keepH / 2, KEEP_Z);
-    parts.push(body);
-    // merlons
-    for (let i = 0; i < 6; i++) {
-      const t = -hw + 0.9 + i * ((keepW - 1.8) / 5);
-      for (const [x, z, rx] of [[t, KEEP_Z - hw + 0.25, true], [t, KEEP_Z + hw - 0.25, true], [-hw + 0.25, KEEP_Z + t, false], [hw - 0.25, KEEP_Z + t, false]]) {
-        const m = box(rx ? 1 : 0.5, 1.2, rx ? 0.5 : 1);
-        m.translate(x, keepH + 0.6, z);
-        parts.push(m);
-      }
-    }
-    // buttresses
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      const b = box(1.4, keepH - 2, 1.4);
-      b.translate(sx * (hw - 0.3), (keepH - 2) / 2, KEEP_Z + sz * (hw - 0.3));
-      parts.push(b);
-    }
-    const keepGeo = mergeGeometries(parts);
-    this.keepMesh = new THREE.Mesh(keepGeo, M.stone);
-    g.add(shadowed(this.keepMesh));
-    // turret
-    const turret = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 6, 14), M.stone);
-    turret.position.set(hw - 1, keepH + 3, KEEP_Z - hw + 1);
-    g.add(shadowed(turret));
-    const troof = new THREE.Mesh(new THREE.ConeGeometry(2.3, 3.5, 14), M.roof);
-    troof.position.set(hw - 1, keepH + 7.75, KEEP_Z - hw + 1);
-    g.add(shadowed(troof));
-    // door + windows
-    const door = new THREE.Mesh(box(2.4, 3.6, 0.3, 2.4), M.wood);
-    door.position.set(0, 1.8, KEEP_Z + hw + 0.1);
-    g.add(door);
-    for (const [x, y] of [[-3, 7], [3, 7], [-3, 11], [3, 11], [0, 11]]) {
-      const w = new THREE.Mesh(box(0.7, 1.4, 0.2), M.dark);
-      w.position.set(x, y, KEEP_Z + hw + 0.05);
-      g.add(w);
-    }
-    // big banner on the keep
-    const banner = new THREE.Mesh(new THREE.PlaneGeometry(3, 6), M.banners[this.team]);
-    banner.position.set(0, 9, KEEP_Z + hw + 0.12);
-    g.add(banner);
-    this.keepBanner = banner;
-    this.addFlag(-hw + 1, keepH + 1.2, KEEP_Z + hw - 1, 2.2);
-    this.keepFlag = this.flags[this.flags.length - 1];
-
     this.keep = {
       kind: 'keep', isStructure: true, castle: this, team: this.team,
       hp: CASTLE.keepHp, maxHp: CASTLE.keepHp, alive: true,
@@ -565,20 +507,6 @@ export class Castle {
     this.keepDoor = this.toWorld(0, KEEP_Z + hw + 2.2);
   }
 
-  addFlag(x, y, z, size) {
-    const M = this.mats;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, size * 2.6, 6), M.iron);
-    pole.position.set(x, y + size * 1.3, z);
-    this.group.add(pole);
-    const geo = new THREE.PlaneGeometry(size * 1.8, size, 8, 2);
-    geo.translate(size * 0.9, 0, 0);
-    const flag = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: TEAM_COLORS[this.team], side: THREE.DoubleSide, roughness: 0.9 }));
-    flag.position.set(x, y + size * 2.6 - size / 2, z);
-    this.group.add(flag);
-    const base = geo.attributes.position.array.slice();
-    this.flags.push({ flag, base, phase: Math.random() * 10, size, pole });
-  }
-
   // --- visual / collider state (shared by the simulation and by network clients) ---
   applyWallVisual(seg) {
     if (this.upg && seg.armorOn !== seg.alive) { seg.armorOn = seg.alive; this.upg.wallsChanged(); }   // the stone Thicken Walls added goes with the wall
@@ -586,18 +514,15 @@ export class Castle {
     const on = seg.alive && seg.hp > seg.maxHp * 0.5;
     seg.parapet.active = on;
     for (const m of seg.merlons) m.active = on;
+    let vis;
     if (!seg.alive) {
       seg.collider.top = this.center.y + 0.5;
-      seg.mesh.visible = false;
-      if (!seg.rubble) seg.rubble = this.makeRubble(seg);
-      return;
+      vis = 'gone';
+    } else {
+      seg.collider.top = this.center.y + wallH;
+      vis = seg.hp <= seg.maxHp * 0.5 ? 'damaged' : 'full';
     }
-    seg.collider.top = this.center.y + wallH;
-    if (seg.rubble) { this.group.remove(seg.rubble); seg.rubble = null; }
-    seg.mesh.visible = true;
-    const damaged = seg.hp <= seg.maxHp * 0.5;
-    seg.mesh.geometry = damaged ? seg.damaged : seg.full;
-    seg.mesh.material = damaged ? this.mats.stoneDark : this.mats.stone;
+    if (seg.vis !== vis) { seg.vis = vis; this.wallsDirty = true; }   // (merged once per frame, however many walls changed)
   }
 
   applyGateVisual() {
@@ -609,24 +534,31 @@ export class Castle {
       if (gate.alive) {
         l.pivot.position.y = 0;
         leaf.rotation.z = 0;
-        leaf.material = this.mats.wood;
+        leaf.material = this.mats.gate;
       } else {
         l.pivot.rotation.y = l.s * 1.2;
         l.pivot.position.y = -0.2;
         leaf.rotation.z = l.s * 0.25;
-        leaf.material = this.mats.stoneBurnt;
+        leaf.material = this.mats.gateBurnt;
       }
     }
   }
 
   applyFallenVisual() {
     if (this.burning) return;
-    this.keepMesh.material = this.mats.stoneBurnt;
-    for (const m of this.towerMeshes) m.material = this.mats.stoneBurnt;
-    this.keepBanner.visible = false;
-    this.keepFlag.flag.visible = false;
-    for (const f of this.flags) f.flag.material.color.multiplyScalar(0.35);
     this.burning = true;
+    this.applyBurn();
+  }
+  // a fallen keep: the keep and towers are charred, the roofs are gone, the cloth burnt
+  applyBurn() {
+    if (this.keepMesh && !this.keepMesh.userData.charred) {
+      const c = this.keepMesh.geometry.attributes.color;
+      for (let i = 0; i < c.array.length; i++) c.array[i] *= 0.3;
+      c.needsUpdate = true;
+      this.keepMesh.userData.charred = true;
+    }
+    if (this.tilesMesh) this.tilesMesh.visible = false;
+    this.clothMat.userData.cwFall.value = 1;
   }
 
   // --- damage (simulation only) ---
@@ -643,22 +575,6 @@ export class Castle {
       this.applyWallVisual(seg);
       this.game.onStructureDestroyed(seg, attacker);
     } else this.applyWallVisual(seg);
-  }
-
-  makeRubble(seg) {
-    const grp = new THREE.Group();
-    const geo = new THREE.DodecahedronGeometry(1, 0);
-    for (let i = 0; i < 14; i++) {
-      const m = new THREE.Mesh(geo, this.mats.stoneDark);
-      const t = (Math.random() - 0.5) * seg.len * 0.9;
-      const off = (Math.random() - 0.5) * 3;
-      m.position.set(seg.alongX ? seg.lx + t : seg.lx + off, 0.2 + Math.random() * 0.5, seg.alongX ? seg.lz + off : seg.lz + t);
-      m.scale.set(0.6 + Math.random() * 0.9, 0.3 + Math.random() * 0.5, 0.6 + Math.random() * 0.9);
-      m.rotation.set(Math.random() * 3, Math.random() * 3, 0);
-      grp.add(m);
-    }
-    this.group.add(shadowed(grp));
-    return grp;
   }
 
   repairWalls() {
@@ -769,15 +685,8 @@ export class Castle {
   // --- per-frame ---
   update(dt, time) {
     this.upg.tick(dt, time);
-    for (const f of this.flags) {
-      if (!f.flag.visible) continue;
-      const arr = f.flag.geometry.attributes.position.array;
-      for (let i = 0; i < arr.length; i += 3) {
-        const x = f.base[i];
-        arr[i + 2] = f.base[i + 2] + Math.sin(time * 4 + x * 2.2 + f.phase) * 0.12 * x;
-      }
-      f.flag.geometry.attributes.position.needsUpdate = true;
-    }
+    updateWind(time);   // (every castle sets the one shared clock the cloth waves by)
+    if (this.wallsDirty) this.rebuildWalls();
     // gate opens for friendly troops when no enemy is close
     const gate = this.gate;
     if (gate.alive) {
