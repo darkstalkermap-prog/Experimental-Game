@@ -9,7 +9,7 @@ import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { smoothstep, clamp } from './noise.js';
 import { forestDensity } from './landscape.js';
-import { terrainMaterial } from './terrainmat.js';
+import { terrainMaterial, setRoads } from './terrainmat.js';
 import { Q } from './quality.js';
 
 const CHUNK = 32;   // cells per chunk side (64 m)
@@ -24,9 +24,20 @@ const trodden = new THREE.Color(0xa09572);   // the top of the hill in the middl
 const sand = new THREE.Color(0xb39a68);      // the floor of the practice yard: packed sand
 const forestFloor = new THREE.Color(0x2c4420), scrub = new THREE.Color(0x5a6034), snow = new THREE.Color(0xe6edf2);
 
-export const TREE_LINE = 92;   // metres above the valley floor where the forest gives up (varies with the noise)
-export const SNOW_LINE = 168;
+export const TREE_LINE = 126;   // metres above the valley floor where the forest gives up (varies with the noise)
+export const SNOW_LINE = 186;
 export const treeLineAt = (nz, x, z) => TREE_LINE + 12 * nz.noise(x * 0.01 + 4, z * 0.01 - 2);
+
+// The colour of the grass at a spot (the meadow, darker under the forest and thinning out towards the treeline): what the grass blades take
+export function grassBase(nz, x, z, h, base) {
+  const { fbm } = nz;
+  const n1 = fbm(x * 0.02, z * 0.02, 3) * 0.5 + 0.5, n2 = fbm(x * 0.09 + 10, z * 0.09, 2) * 0.5 + 0.5;
+  const forest = forestDensity(nz, x, z), tl = treeLineAt(nz, x, z);
+  base.copy(grassA).lerp(grassB, n1).lerp(grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
+  base.lerp(forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
+  base.lerp(forestFloor, smoothstep(10, 36, h) * 0.45 * (1 - smoothstep(tl - 14, tl, h)));
+  return base.multiplyScalar(0.9 + n2 * 0.15);
+}
 
 // Everything the ground colour depends on, for one spot. Fills `o` ({ base, all: Color, mask: [castle, hill, sand, forest] }).
 // slope is the gradient |grad h|. `roadDist` comes from world.js.
@@ -40,8 +51,9 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   // under the trees the grass is thin and dark; higher up the meadow gives way to forest floor and then to scrub
   base.lerp(forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
   const tl = treeLineAt(nz, x, z);
-  base.lerp(forestFloor, smoothstep(10, 36, h) * 0.45 * (1 - smoothstep(tl - 14, tl, h)));
-  base.lerp(scrub, smoothstep(tl - 16, tl + 6, h) * 0.8);
+  const forestZone = smoothstep(5, 24, h) * (1 - smoothstep(tl - 16, tl + 4, h));
+  base.lerp(forestFloor, forestZone * (0.55 + 0.3 * n1));
+  base.lerp(scrub, smoothstep(tl - 8, tl + 10, h) * 0.8);
   const shade = 0.9 + n2 * 0.15;
   base.multiplyScalar(shade);
   // the same layers as masks, for the shader
@@ -57,7 +69,12 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
     sandW = (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92;
   }
   const mask = o.mask;
-  mask[0] = castle; mask[1] = hill; mask[2] = sandW; mask[3] = forest;
+  // the forest on the foot of the mountains: the same inputs as the trees' placement (scenery.js), so the canopy is where the trees are
+  const rockN = fbm(x * 0.035 + 20, z * 0.035 - 8, 3) * 0.5 + 0.5;
+  const canopy = smoothstep(12, 34, h) * (1 - smoothstep(tl - 18, tl + 2, h)) * clamp(forest * 1.6 + 0.4, 0, 1) * (1 - smoothstep(1.5, 2.2, slope + 0.8 * (rockN - 0.5)));
+  mask[0] = castle; mask[1] = hill; mask[2] = sandW; mask[3] = canopy;
+  o.alt[0] = smoothstep(tl - 6, tl + 14, h);
+  o.alt[1] = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5));
   // the baked colour (what Q.terrain 0 and 1 show): the ground layers, then rock where it is steep, bare above the trees, snow on top
   const all = o.all;
   all.copy(base);
@@ -66,7 +83,10 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   all.lerp(trodden, hill);
   if (sandW) all.lerp(sand, sandW);
   tmp.copy(rock).lerp(rockWarm, n1);
-  const rockW = Math.max(smoothstep(0.35, 0.8, slope) * smoothstep(8, 20, h + 14 * n1), smoothstep(tl - 4, tl + 12, h) * 0.9);
+  // bare rock: patches on the steep faces (the cliffs of the wall), and everything above the trees
+  const rockW = Math.max(smoothstep(1.65, 2.3, slope + 0.9 * (rockN - 0.5)) * smoothstep(10, 26, h), smoothstep(tl - 6, tl + 14, h) * (0.55 + 0.4 * rockN),
+    smoothstep(0.85, 1.0, rockN) * smoothstep(0.9, 1.5, slope) * smoothstep(6, 20, h));
+  tmp.multiplyScalar(0.75 + 0.35 * rockN);
   all.lerp(tmp, rockW);
   all.multiplyScalar(shade);
   const sn = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5)) * (1 - smoothstep(0.8, 1.5, slope));
@@ -74,7 +94,7 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   return o;
 }
 
-const makeSample = () => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0] });
+const makeSample = () => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0], alt: [0, 0] });
 
 // A chunk's geometry is built from arrays that the caller fills; `quads` is the shared index list for an nx x nz grid of cells.
 const indexCache = new Map();
@@ -99,7 +119,7 @@ function makeGeometry(nv, withIndexFor) {
   const g = new THREE.BufferGeometry();
   const arrays = {
     position: new Float32Array(nv * 3), normal: new Float32Array(nv * 3), color: new Float32Array(nv * 3), uv: new Float32Array(nv * 2),
-    aBase: new Float32Array(nv * 3), aMask: new Float32Array(nv * 4),
+    aBase: new Float32Array(nv * 3), aMask: new Float32Array(nv * 4), aAlt: new Float32Array(nv * 2),
   };
   g.setAttribute('position', new THREE.BufferAttribute(arrays.position, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(arrays.normal, 3));
@@ -107,6 +127,7 @@ function makeGeometry(nv, withIndexFor) {
   g.setAttribute('uv', new THREE.BufferAttribute(arrays.uv, 2));
   g.setAttribute('aBase', new THREE.BufferAttribute(arrays.aBase, 3));
   g.setAttribute('aMask', new THREE.BufferAttribute(arrays.aMask, 4));
+  g.setAttribute('aAlt', new THREE.BufferAttribute(arrays.aAlt, 2));
   g.setIndex(gridIndex(withIndexFor[0], withIndexFor[1]));
   return { g, arrays };
 }
@@ -120,6 +141,7 @@ function put(a, v, x, y, z, nx, ny, nz, s) {
   a.color[v * 3] = s.all.r; a.color[v * 3 + 1] = s.all.g; a.color[v * 3 + 2] = s.all.b;
   a.aBase[v * 3] = s.base.r; a.aBase[v * 3 + 1] = s.base.g; a.aBase[v * 3 + 2] = s.base.b;
   a.aMask[v * 4] = s.mask[0]; a.aMask[v * 4 + 1] = s.mask[1]; a.aMask[v * 4 + 2] = s.mask[2]; a.aMask[v * 4 + 3] = s.mask[3];
+  a.aAlt[v * 2] = s.alt[0]; a.aAlt[v * 2 + 1] = s.alt[1];
 }
 
 export class Terrain {
@@ -127,12 +149,14 @@ export class Terrain {
     this.scene = scene;
     this.physics = physics;
     this.roadDist = env.roadDist;
+    setRoads(env.roads);
     this.group = new THREE.Group();
     this.group.userData.owner = 'a3 terrain';
     this.chunks = [];
     this.far = [];
     this.rings = [];
     this.level = -1;
+    this.isTerrain = true;
     this.buildChunks();
     this.buildFar();
     scene.add(this.group);
@@ -210,7 +234,7 @@ export class Terrain {
       const g = new THREE.BufferGeometry();
       const arrays = {
         position: new Float32Array(nvTotal * 3), normal: new Float32Array(nvTotal * 3), color: new Float32Array(nvTotal * 3), uv: new Float32Array(nvTotal * 2),
-        aBase: new Float32Array(nvTotal * 3), aMask: new Float32Array(nvTotal * 4),
+        aBase: new Float32Array(nvTotal * 3), aMask: new Float32Array(nvTotal * 4), aAlt: new Float32Array(nvTotal * 2),
       };
       const ntri = strips.reduce((t, [k, x0, z0, x1, z1]) => { const c = this.rings[k].c; return t + ((x1 - x0) / c) * ((z1 - z0) / c) * 6; }, 0);
       const index = new Uint32Array(ntri);
@@ -241,6 +265,7 @@ export class Terrain {
       g.setAttribute('uv', new THREE.BufferAttribute(arrays.uv, 2));
       g.setAttribute('aBase', new THREE.BufferAttribute(arrays.aBase, 3));
       g.setAttribute('aMask', new THREE.BufferAttribute(arrays.aMask, 4));
+      g.setAttribute('aAlt', new THREE.BufferAttribute(arrays.aAlt, 2));
       g.setIndex(new THREE.BufferAttribute(index, 1));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, null);
@@ -250,6 +275,18 @@ export class Terrain {
       this.group.add(mesh);
       this.far.push(mesh);
     }
+  }
+
+  // the height of the ground as drawn (and as walked on, inside the play area) at any spot, for planting things on it
+  surfaceHeight(x, z) {
+    const e = Math.max(Math.abs(x), Math.abs(z));
+    if (e <= WORLD.playHalf) return this.physics.terrainHeight(x, z);
+    let k = 0;
+    while (k < this.rings.length - 1 && e >= this.rings[k].b) k++;
+    const c = this.rings[k].c;
+    const x0 = Math.floor(x / c) * c, z0 = Math.floor(z / c) * c, tx = (x - x0) / c, tz = (z - z0) / c;
+    const a = this.ringHeight(k, x0, z0), b = this.ringHeight(k, x0 + c, z0), d = this.ringHeight(k, x0, z0 + c), f = this.ringHeight(k, x0 + c, z0 + c);
+    return tx + tz <= 1 ? a + (b - a) * tx + (d - a) * tz : f + (d - f) * (1 - tx) + (b - f) * (1 - tz);
   }
 
   setLevel(level) {

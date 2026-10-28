@@ -4,6 +4,8 @@ import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
 import { Terrain } from './terrain.js';
+import { Foliage } from './foliage.js';
+import { placeScenery, placeWallTrees } from './scenery.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
 
@@ -113,7 +115,7 @@ export function followShadow(sun, focus) {
 export function createTerrain(scene, physics) {
   layoutRoads();
   // the land (play area chunks and the far mountains) lives in terrain.js; world.js keeps the roads it is drawn with
-  const terrain = new Terrain(scene, physics, { roadDist });
+  const terrain = new Terrain(scene, physics, { roadDist, roads: ROADS });
   (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(terrain);
   return terrain;
 }
@@ -152,53 +154,24 @@ export function createForest(scene, physics) {
     rocks.push({ x, y: physics.terrainHeight(x, z), z, s: 0.4 + rng() * 1.6, r: rng() * 6, c: rng() });
   }
 
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3();
-  const up = new THREE.Vector3(0, 1, 0);
-  const col = new THREE.Color();
-  function instanced(geo, mat, items, place, color) {
-    const im = new THREE.InstancedMesh(geo, mat, items.length);
-    items.forEach((it, i) => {
-      place(it);
-      m4.compose(p, q, sc);
-      im.setMatrixAt(i, m4);
-      if (color) im.setColorAt(i, color(it));
-    });
-    im.castShadow = true;
-    im.receiveShadow = true;
-    scene.add(im);
-    return im;
-  }
-
-  const bark = new THREE.MeshStandardMaterial({ color: 0x4a3524, roughness: 1 });
-  const needle = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
-  const leaf = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, flatShading: true });
-  const stone = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, flatShading: true });
-
-  const trunkGeo = new THREE.CylinderGeometry(0.22, 0.38, 4, 6);
-  trunkGeo.translate(0, 2, 0);
-  instanced(trunkGeo, bark, pines.concat(oaks), (t) => { p.set(t.x, t.y - 0.2, t.z); q.setFromAxisAngle(up, t.r); sc.set(t.s, t.s, t.s); });
-
-  for (let layer = 0; layer < 3; layer++) {
-    const g = new THREE.ConeGeometry(2.6 - layer * 0.7, 3.6 - layer * 0.5, 7);
-    g.translate(0, 3.4 + layer * 2.1, 0);
-    instanced(g, needle, pines, (t) => { p.set(t.x, t.y, t.z); q.setFromAxisAngle(up, t.r + layer); sc.set(t.s, t.s * 1.15, t.s); },
-      (t) => col.setHSL(0.30 + t.c * 0.05, 0.42, 0.18 + t.c * 0.07));
-  }
-  const blob = new THREE.IcosahedronGeometry(2.6, 1);
-  blob.translate(0, 5.6, 0);
-  instanced(blob, leaf, oaks, (t) => { p.set(t.x, t.y, t.z); q.setFromAxisAngle(up, t.r); sc.set(t.s * 1.1, t.s * 0.9, t.s * 1.1); },
-    (t) => col.setHSL(0.2 + t.c * 0.08, 0.45, 0.24 + t.c * 0.08));
-  const blob2 = new THREE.IcosahedronGeometry(1.8, 1);
-  blob2.translate(1.2, 4.6, 0.6);
-  instanced(blob2, leaf, oaks, (t) => { p.set(t.x, t.y, t.z); q.setFromAxisAngle(up, t.r); sc.set(t.s, t.s, t.s); },
-    (t) => col.setHSL(0.22 + t.c * 0.06, 0.4, 0.22 + t.c * 0.07));
-
-  const rockGeo = new THREE.DodecahedronGeometry(1, 0);
-  instanced(rockGeo, stone, rocks, (r) => { p.set(r.x, r.y + r.s * 0.25, r.z); q.setFromEuler(new THREE.Euler(r.r, r.r * 2, r.r * 0.5)); sc.set(r.s * 1.3, r.s * 0.8, r.s); },
-    (r) => col.setHSL(0.1, 0.05, 0.38 + r.c * 0.15));
+  // What is drawn lives in foliage.js; this keeps only where the solid things stand. The trees stand a little way into the slope they are on.
+  const terrain = (scene.userData.worldSystems || []).find((s) => s.isTerrain);
+  const sink = (t) => {
+    const sl = Math.hypot(physics.terrainHeight(t.x + 1, t.z) - physics.terrainHeight(t.x - 1, t.z), physics.terrainHeight(t.x, t.z + 1) - physics.terrainHeight(t.x, t.z - 1)) / 2;
+    return Math.min(1.1, sl * 0.5);
+  };
+  const scenery = terrain ? placeScenery(physics, terrain) : { trees: [], rocks: [] };
+  const wall = placeWallTrees(physics, okForProp);   // the forest on the steep foot of the mountains: solid, like the others
+  const trees = [];
+  for (const t of pines) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: true });
+  for (const t of oaks) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: false });
+  for (const t of wall) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: t.conifer });
+  const rockItems = rocks.map((r) => ({ x: r.x, y: r.y, z: r.z, s: r.s, r: r.r, c: r.c }));
+  const foliage = new Foliage(scene, trees.concat(scenery.trees), rockItems.concat(scenery.rocks));
+  (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(foliage);
 
   // Collision for tree trunks (only the playable area matters)
-  for (const t of pines.concat(oaks)) {
+  for (const t of pines.concat(oaks, wall)) {
     if (Math.max(Math.abs(t.x), Math.abs(t.z)) > WORLD.playHalf) continue;
     const r = 0.4 * t.s;
     physics.add({ minX: t.x - r, maxX: t.x + r, minZ: t.z - r, maxZ: t.z + r, top: t.y + 8, kind: 'tree', noWalk: true });

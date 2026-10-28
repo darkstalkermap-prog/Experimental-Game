@@ -46,11 +46,11 @@ export function wallHeight(edge, x, z, nz) {
   const bx = clamp(x, -P, P), bz = clamp(z, -P, P);
   const along = nz.fbm(bx * 0.0062 + 31.7, bz * 0.0062 - 12.9, 3);          // -1..1, one crest feature about every 160 m
   const along2 = nz.noise(bx * 0.013 - 7.4, bz * 0.013 + 3.2);
-  const A = 74 + 46 * along + 14 * along2;                                   // how far the first crest stands above the play edge
-  const uc = 44 + 20 * along2 + 8 * along;                                    // and how far behind it
+  const uc = 100 + 34 * along2 + 16 * along;                                  // how far behind the edge the first crest stands
+  const m0 = s0 * uc;
+  const A = Math.max(74 + 46 * along + 14 * along2, 0.34 * m0);             // and how far above it (never so low that the cubic overshoots)
   const t = Math.min(1, u / uc);
   // cubic: leaves the edge at the old slope, tops out flat at the crest
-  const m0 = s0 * uc;
   const cube = (t * t * t - 2 * t * t + t) * m0 + (-2 * t * t * t + 3 * t * t) * A;
   let near = WP + cube;
   // relief: peaks and gullies fade in over the first metres (the edge itself stays exactly the old surface)
