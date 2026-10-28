@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
-import { buildHorse, poseHorse, buildSoldier, poseSoldier, SADDLE_Y } from './models.js';
+import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y } from './models.js';
 import { avoidCastles } from './nav.js';
 import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
@@ -132,9 +132,17 @@ export class Player {
 
   // ---------- third-person body for other people's heroes ----------
   buildBody() {
-    this.body = buildSoldier('lord', this.team, 2);
+    this.body = buildHeroBody(this.classId, this.team, 2);
+    this.bodyClass = this.classId;
     this.game.scene.add(this.body.root);
     this.buildTag();
+  }
+
+  // (another class: a new look)
+  restyleBody() {
+    if (!this.body || this.bodyClass === this.classId) return;
+    this.game.scene.remove(this.body.root);
+    this.buildBody();
   }
 
   // The floating name and class above another person's hero (drawn again when they change class).
@@ -184,7 +192,8 @@ export class Player {
     this.walkPhase += dt * sp * 2.1;
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
     b.root.rotation.y = this.mounted ? this.heading : this.yaw;
-    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time });
+    rigSetBow(b, this.weapon === 'bow');
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0 });
     this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4 - 0.7 * this.duck), this.pos.z);
   }
 
@@ -317,7 +326,7 @@ export class Player {
     this.dash = null;
     this.castFlash = 0;
     this.cancelAim();
-    if (this.body) this.buildTag();
+    if (this.body) { this.buildTag(); this.restyleBody(); }
   }
 
   // Take up another class where the battle is run: health keeps its proportion, buffs end, a Cavalier gets a horse.
