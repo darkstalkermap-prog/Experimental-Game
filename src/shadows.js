@@ -29,7 +29,8 @@ export class ShadowRig {
     this.focusFar = new THREE.Vector3(1e9, 0, 1e9);
     this.farAge = 1e9;
     this.farInterval = 1 / 15;
-    this.throttle = false;   // gfx.renderFrame turns this on: the far map is then redrawn only now and then (a plain renderer.render keeps it fresh)
+    this.throttle = false;   // while gfx.renderFrame runs the far map is redrawn only now and then (a plain renderer.render keeps it fresh)
+    this.lastFrameAt = -1e9;
     this.unsub = onQuality(() => this.apply());
   }
 
@@ -110,6 +111,7 @@ export class ShadowRig {
     this.place(this.focusTmp, ahead);
     const sh = this.far.shadow;
     this.throttle = true;
+    this.lastFrameAt = performance.now();
     sh.autoUpdate = false;
     this.farAge += dt;
     if (this.farAge >= this.farInterval || sh.needsUpdate) { sh.needsUpdate = true; this.farAge = 0; }
@@ -117,7 +119,7 @@ export class ShadowRig {
 
   // plain use (a renderer.render without gfx.js): every map redrawn each frame, centred on the focus
   follow(focus) {
-    if (!this.throttle) this.far.shadow.autoUpdate = true;
+    if (this.throttle && performance.now() - this.lastFrameAt > 500) { this.throttle = false; this.far.shadow.autoUpdate = true; }
     this.place(focus, null);
     if (!this.throttle) this.farAge = 0;
   }

@@ -6,6 +6,7 @@
 //   gfx.resize()            the window changed size
 import * as THREE from 'three';
 import { Q } from './quality.js';
+import { Post } from './post.js';
 
 // a guess at how strong the GPU is from its name (Auto picks the first quality level from it); automation always gets 'medium'
 export function guessLevel(renderer) {
@@ -26,10 +27,12 @@ class Gfx {
   constructor() {
     this.renderer = null;
     this.game = null;
+    this.post = null;
     this.scale = 1;        // the adaptive resolution's share of the full render size (1 = full)
     this.lastRatio = 0;
     this.lastW = 0;
     this.lastH = 0;
+    this.size = new THREE.Vector2();
   }
 
   init(renderer) {
@@ -39,7 +42,41 @@ class Gfx {
     renderer.toneMapping = THREE.CustomToneMapping;   // the neutral curve patched in by atmosphere.js
     renderer.toneMappingExposure = Q.exposure;
     renderer.info.autoReset = false;                  // reset once per frame here, so every pass of the frame is counted together
+    try {
+      this.post = new Post(renderer);
+      this.probe();
+    } catch (e) { console.warn('post-processing is not available here:', e && e.message); this.post = null; }
+    // renderer.compile (shader warm-up) must see the same target the frame will use, or it warms the wrong shader variants
+    const compile = renderer.compile.bind(renderer);
+    renderer.compile = (scene, camera, target) => {
+      const rt = this.post && this.post.active && this.post.sceneRT;
+      if (!rt) return compile(scene, camera, target);
+      const prev = renderer.getRenderTarget();
+      renderer.setRenderTarget(rt);
+      try { return compile(scene, camera, target); } finally { renderer.setRenderTarget(prev); }
+    };
     return this;
+  }
+
+  // can this GPU render into a multisampled half-float target? (a tiny one is bound and checked; otherwise fewer samples, or no post)
+  probe() {
+    const post = this.post, r = this.renderer, gl = r.getContext();
+    if (!post.ok) return;
+    const works = (samples) => {
+      let ok = false;
+      const rt = post.makeRT(8, 8, { depthBuffer: true, samples });
+      try {
+        while (gl.getError() !== gl.NO_ERROR) { /* clear old errors */ }
+        r.setRenderTarget(rt);
+        r.clear();
+        ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE && gl.getError() === gl.NO_ERROR;
+      } catch (e) { ok = false; }
+      r.setRenderTarget(null);
+      rt.dispose();
+      return ok;
+    };
+    if (!works(0)) { post.ok = false; return; }
+    if (post.floatMsaa && !works(Math.min(4, post.maxSamples))) post.floatMsaa = false;
   }
 
   setGame(game) { this.game = game; this.lastRatio = 0; }
@@ -63,6 +100,7 @@ class Gfx {
       r.setPixelRatio(ratio);
       r.setSize(innerWidth, innerHeight);
       this.lastRatio = ratio; this.lastW = innerWidth; this.lastH = innerHeight;
+      if (this.post) { r.getDrawingBufferSize(this.size); this.post.setup(this.size.x, this.size.y); }
     }
     if (game) {
       game.camera.aspect = innerWidth / innerHeight;
@@ -87,7 +125,8 @@ class Gfx {
     const rig = game.lights && game.lights.rig;
     if (rig) rig.update(camera, dt);
     r.info.reset();
-    r.render(scene, camera);
+    if (this.post && this.post.active) this.post.render(scene, camera);
+    else r.render(scene, camera);
   }
 }
 

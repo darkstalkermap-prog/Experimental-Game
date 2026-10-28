@@ -12,6 +12,7 @@ import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './co
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { gfx } from './gfx.js';
+import { LEVELS } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -67,8 +68,9 @@ addEventListener('resize', resize);
 resize();
 
 // graphics quality (remembered per browser)
-let quality = 'medium';
-try { quality = localStorage.getItem('cw-quality') || 'medium'; } catch (e) { /* storage unavailable */ }
+let quality = 'auto';   // 'auto' (a level picked for this machine) or a level of quality.js
+try { quality = localStorage.getItem('cw-quality') || 'auto'; } catch (e) { /* storage unavailable */ }
+if (quality !== 'auto' && !LEVELS.includes(quality)) quality = 'auto';
 function setQuality(q) {
   quality = q;
   game.setQuality(q);
@@ -373,7 +375,7 @@ for (const [id, key, apply, unit] of SLIDERS) {
 }
 
 // switches in the options panel (alerts.js looks at the settings as it goes)
-for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips']]) {
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres']]) {
   const el = $(id), out = el.nextElementSibling;
   const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
   show();

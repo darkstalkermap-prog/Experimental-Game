@@ -90,7 +90,7 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     #ifdef TONE_MAPPING
       haze = toneMapping( haze );
     #endif
-    return linearToOutputTexel( vec4( haze, 1.0 ) ).rgb;
+    return haze;
   }
   vec3 atmFog(vec3 color, vec3 ray, float k) {
     float dist = length(ray);
@@ -104,7 +104,14 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     float mist = abs(dy) > 0.02 ? (la - lb) * ATM_MIST_H / dy : la;
     tau += ATM_MIST * (k / ATM_K0) * dist * mist * smoothstep(6.0, 110.0, dist);
     float f = 1.0 - exp(-tau);
-    return mix(color, atmFogColor(dir, f), f);
+    vec3 haze = atmFogColor(dir, f);
+    #ifdef TONE_MAPPING
+      // straight to the canvas: the object's colour is display-encoded already, so blend in linear light as the HDR path does
+      vec3 lin = mix(color / 12.92, pow((color + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), color));
+      return linearToOutputTexel( vec4( mix(lin, haze, f), 1.0 ) ).rgb;
+    #else
+      return mix(color, linearToOutputTexel( vec4( haze, 1.0 ) ).rgb, f);
+    #endif
   }
 #endif`;
 const FOG_FRAGMENT = `#ifdef USE_FOG
