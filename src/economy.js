@@ -184,6 +184,7 @@ export const SHOP_BY_ID = Object.fromEntries(SHOP.map((i) => [i.id, i]));
 
 // Returns true on success, or a string reason.
 export function buy(g, f, id) {
+  if (g.hero) return 'Nothing is for sale in the Hero Game Mode';
   const item = SHOP_BY_ID[id];
   if (!item) return 'Unknown item';
   if (item.playerOnly && !f.isPlayer) return 'Not available';
