@@ -30,6 +30,7 @@ import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
 import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
+import { applyQuality } from './quality.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
@@ -124,6 +125,7 @@ export class Game {
 
   // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'
   setQuality(q) {
+    applyQuality(q);   // (the live settings every graphics module reads: see quality.js)
     const level = { low: 0, medium: 1, high: 2 }[q] ?? 1;
     this.quality = q;
     this.grass.setDensity(level);
