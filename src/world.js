@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
-import { grassDetailTexture } from './textures.js';
+import { Terrain } from './terrain.js';
 
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
 
@@ -112,54 +112,10 @@ export function followShadow(sun, focus) {
 
 export function createTerrain(scene, physics) {
   layoutRoads();
-  const size = WORLD.half * 2;
-  const segs = physics.n - 1;
-  const geo = new THREE.PlaneGeometry(size, size, segs, segs);
-  geo.rotateX(-Math.PI / 2);
-  const pos = geo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
-  const uv = geo.attributes.uv;
-  const { fbm } = physics.noise;
-  const grassA = new THREE.Color(0x5d7a32), grassB = new THREE.Color(0x7d8e3e), grassDry = new THREE.Color(0x9a9050);
-  const dirt = new THREE.Color(0x7b6646), rock = new THREE.Color(0x77736a), tmp = new THREE.Color();
-  const trodden = new THREE.Color(0xa09572);   // the top of the hill in the middle: bare, pale, much walked on
-  const sand = new THREE.Color(0xb39a68);      // the floor of the practice yard: packed sand
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
-    const h = physics.terrainHeight(x, z);
-    pos.setY(i, h);
-    uv.setXY(i, x / 6, z / 6);
-    // slope from neighbours
-    const hx = physics.terrainHeight(x + 2, z) - physics.terrainHeight(x - 2, z);
-    const hz = physics.terrainHeight(x, z + 2) - physics.terrainHeight(x, z - 2);
-    const slope = Math.hypot(hx, hz) / 4;
-    const n1 = fbm(x * 0.02, z * 0.02, 3) * 0.5 + 0.5;
-    const n2 = fbm(x * 0.09 + 10, z * 0.09, 2) * 0.5 + 0.5;
-    tmp.copy(grassA).lerp(grassB, n1).lerp(grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
-    // trampled earth around castles
-    for (const s of CASTLE_SITES) {
-      const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
-      const w = (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2);
-      tmp.lerp(dirt, w);
-    }
-    const rd = roadDist(x, z);
-    tmp.lerp(dirt, (1 - smoothstep(2.2, 4.5, rd)) * 0.85);
-    tmp.lerp(trodden, (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8);
-    if (physics.practice) {
-      const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
-      tmp.lerp(sand, (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92);
-    }
-    tmp.lerp(rock, smoothstep(0.35, 0.8, slope));
-    const shade = 0.9 + n2 * 0.15;
-    colors[i * 3] = tmp.r * shade; colors[i * 3 + 1] = tmp.g * shade; colors[i * 3 + 2] = tmp.b * shade;
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, map: grassDetailTexture(), roughness: 0.97, metalness: 0 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.receiveShadow = true;
-  scene.add(mesh);
-  return mesh;
+  // the land (play area chunks and the far mountains) lives in terrain.js; world.js keeps the roads it is drawn with
+  const terrain = new Terrain(scene, physics, { roadDist });
+  (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(terrain);
+  return terrain;
 }
 
 function okForProp(x, z, physics) {

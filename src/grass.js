@@ -155,6 +155,8 @@ export class Grass {
   }
 
   update(dt, camPos) {
+    const sys = this.scene.userData.worldSystems;   // the terrain, trees and life of the world (see world.js) are driven from here
+    if (sys) for (const s of sys) s.update(dt, camPos);
     this.uniforms.time.value += dt;
     if (!this.mesh) return;
     if (!this.job && Math.hypot(camPos.x - this.center.x, camPos.z - this.center.y) > this.radius * 0.3) {

@@ -3,6 +3,7 @@
 import { WORLD, CASTLE, BODY, HILL, PRACTICE, PRACTICE_WORLD, practiceSite } from './config.js';
 import { makeNoise, smoothstep, clamp } from './noise.js';
 import { allied } from './teams.js';
+import { wallHeight } from './landscape.js';
 
 export const STEP = 0.65; // max height a character can step up
 const LEDGE_KINDS = new Set(['wall', 'walk']);   // what a hero can climb onto: curtain walls and the planking of the wall walk
@@ -50,7 +51,7 @@ export class Physics {
     let h = 7 * fbm(x * 0.0075 + 3.1, z * 0.0075 - 1.7, 4) + 2.2 * fbm(x * 0.03, z * 0.03, 3) + 3;
     // ring of hills at the map edge
     const edge = Math.max(Math.abs(x), Math.abs(z));
-    h += Math.pow(Math.max(0, edge - (WORLD.half - 45)), 1.35) * 0.55;
+    h += wallHeight(edge, x, z, this.noise);   // (the old curve inside the play area, the ridge lines beyond it: see landscape.js)
     // gentle battlefield in the middle
     const rc = Math.hypot(x, z);
     h = h * (0.45 + 0.55 * smoothstep(25, 90, rc)) + 1.2 * (1 - smoothstep(25, 90, rc));
