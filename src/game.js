@@ -31,6 +31,7 @@ import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
+import { HeroMode, HERO } from './herogame.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -88,6 +89,7 @@ export class Game {
     this.hill = new Hill(this);
     this.alerts = new Alerts(this);   // callouts, tips and nudges (see alerts.js)
     this.objective = 'conquest';   // 'conquest' (the main mode) or 'koth' (King of the Hill)
+    this.hero = null;              // the Hero Game Mode's rules while one is on (see herogame.js)
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
     this.player = new Player(this, this.camera);
@@ -144,6 +146,7 @@ export class Game {
     setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
     this.mode = setup.mode;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
+    this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.hill.reset();
     this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
@@ -190,8 +193,9 @@ export class Game {
       const c = this.castles[h.team];
       h.spawn(c.spawnPoint, c.rot);
     }
+    if (this.hero) this.hero.setup(setup);   // (the six heroes, the two sides, houses 2 and 3 switched off)
 
-    if (this.simulating) {
+    if (this.simulating && !this.hero) {
       for (const f of this.factions) {
         if (f.isPlayer) continue;
         this.spawnLord(f);
@@ -218,6 +222,7 @@ export class Game {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
     this.audio.play('horn');
+    if (this.hero) { this.hero.intro(); return; }
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
     this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
   }
@@ -268,7 +273,7 @@ export class Game {
     const u = new Unit(this, type, f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
     u.homeCastle = c;
     u.lane = !!lane;
-    if (lane) u.structMult *= 1 + WAVES.siegeGrowth * Math.max(0, this.round - 1);   // later armies break gates faster
+    if (lane) u.structMult *= 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 1);   // later armies break gates faster
     u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
     u.setOrder('defend');
     this.units.push(u);
@@ -388,6 +393,7 @@ export class Game {
     return this.castles[pairs.find((pr) => pr.includes(f.team)).find((t) => t !== f.team)];
   }
   siegeTarget(f) {
+    if (this.hero) return this.hero.target(f);   // (Hero Game Mode: always the other keep)
     if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
     f.siegeTarget = null;
     const open = (c) => c && !c.fallen && !allied(c.team, f.team);
@@ -410,7 +416,7 @@ export class Game {
     const c = f.castle;
     const p = c.gateOut.clone().add(c.dirToWorld(0, 4));
     p.x += (Math.random() - 0.5) * 4;
-    const grow = 1 + WAVES.siegeGrowth * Math.max(0, this.round - 3);   // engines built later hit harder
+    const grow = 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 3);   // engines built later hit harder
     const d = SIEGE_TYPES[type];
     const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f), { dmg: Math.round(d.dmg * grow), hp: Math.round(d.hp * Math.min(2, 1 + 0.015 * this.round)) });
     this.siege.push(s);
@@ -594,6 +600,7 @@ export class Game {
     this.audio.play('levelup', p.pos);
     this.deliver(p, { k: 'lvl', n: p.level });
     if (p.level === MAX_LEVEL) this.announce((t) => (t === p.team ? null : `${p.name} has reached level ${MAX_LEVEL}!`), p.team);
+    if (p.isBot && this.hero) this.hero.spendTalents(p);   // a bot hero chooses its talents itself
   }
 
   killFeed(attacker, victim) {
@@ -694,7 +701,7 @@ export class Game {
   }
 
   credit(team, gold, at) {
-    if (team < 0 || team > 3) return;
+    if (this.hero || team < 0 || team > 3) return;   // (no gold in the Hero Game Mode)
     const f = this.factions[team];
     if (!f || f.eliminated) return;
     const g = Math.round(gold * (f.isPlayer ? 1 : this.diff.aiGold));
@@ -724,6 +731,7 @@ export class Game {
   }
 
   onPlayerKilled(attacker, p = this.player) {
+    if (this.hero) { this.hero.heroDown(p, attacker); return; }   // (Hero Game Mode: its own timers, score and win)
     const f = this.factions[p.team];
     f.heroDeaths++;
     f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
@@ -756,6 +764,7 @@ export class Game {
   }
 
   onCastleFallen(castle, attacker) {
+    if (this.hero) { this.audio.play('collapse', castle.keep.pos); this.hero.keepFell(castle); return; }   // (a fallen keep ends the Hero Game Mode)
     const f = this.factions[castle.team];
     if (attacker && !allied(attacker.team, castle.team)) { this.credit(attacker.team, BOUNTY.keep); this.heroXp(attacker, XP.keep, castle.keep.pos); }
     this.audio.play('collapse', castle.keep.pos);
@@ -779,7 +788,7 @@ export class Game {
 
   // how tough this house's wave soldiers are: drill upgrades, and a little more with every wave
   waveScale(f) {
-    return this.trainMult(f) * (1 + WAVES.growth * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
+    return this.trainMult(f) * (1 + (this.hero ? HERO.waveGrowth : WAVES.growth) * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
   }
 
   waveList(f) {
@@ -822,6 +831,7 @@ export class Game {
     this.phase = 'wave';
     this.phaseT = WAVES.interval;
     const r = this.round;
+    if (this.hero) this.hero.escalate(r);   // (the armies get better trained, bigger and more elite as the rounds go by)
     for (const f of this.factions) {
       if (f.eliminated || f.castle.fallen) continue;
       this.credit(f.team, WAVES.wage(r));
@@ -868,6 +878,7 @@ export class Game {
   // ---------------- orders ----------------
   // Give an order to a team's troops. hold = { pos: [x,y,z], yaw } for 'hold'.
   order(team, cmd, group = 'all', hold = null) {
+    if (this.hero) return;   // (nobody commands an army in the Hero Game Mode)
     const f = this.factions[team];
     const p = f.player;
     const inGroup = (u) => group === 'all' || (group === 'infantry' && u.kind === 'infantry') || (group === 'archers' && u.kind === 'archer') || (group === 'cavalry' && u.kind === 'cavalry');
@@ -1305,9 +1316,10 @@ export class Game {
       this.processSpawns(dt);
       this.hill.update(dt);
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
-      this.updateHeroes(dt);
+      if (this.hero) this.hero.update(dt);
+      else this.updateHeroes(dt);
       // trickle income while the castle stands
-      for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
+      if (!this.hero) for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
     if (this.simulating) this.cleanup(dt);

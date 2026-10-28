@@ -290,6 +290,7 @@ export class Player {
   classBlock(id) {
     const g = this.game;
     if (!CLASSES[id]) return 'No such class';
+    if (g.hero) return 'Your class is chosen before the match';
     if (id === this.classId) return 'Your class';
     if (!this.alive) return null;
     if (!this.atHome()) return 'Only at your own castle';
@@ -357,6 +358,7 @@ export class Player {
   gainXp(n, why = '') {
     const g = this.game;
     if (!g.simulating || !this.alive || !(n > 0)) return;
+    if (g.hero) n *= g.hero.xpMult;   // (the Hero Game Mode is short: experience comes quicker)
     this.xp = Math.min(XP_FOR_LEVEL[MAX_LEVEL], this.xp + n);
     if (n >= 0.5) g.deliver(this, { k: 'xp', n: Math.round(n), why });
     while (this.level < MAX_LEVEL && this.xp >= XP_FOR_LEVEL[this.level + 1]) this.levelUp();
