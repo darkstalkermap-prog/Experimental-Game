@@ -1,0 +1,244 @@
+// Talent trees: a small tree for every hero class, bought with the points that come with each level after the first.
+//
+// A talent costs one point. Its tier t needs hero level t + 1, and `needs` (the talent above it, null for the two at the
+// top of a tree) must be learnt first. Every tree has two branches, one for each ability (br: 'q' or 'r'), three tiers
+// deep, and a capstone at tier 4 under one of them. Four points (level 5) cannot buy a tree, so the choices matter.
+//
+// A talent changes the hero in one of two ways, or both:
+//   mods  the numbers every hero has (the keys of CLASSES[id].mods): { mul: { key: factor }, add: { key: amount } }.
+//         heroes.js adds them to the class numbers.
+//   fx    a change to one ability or rule, read by the ability code with talentFx(p, key, default). A number is either a
+//         multiplier (default 1) or an amount to add (default 0), as its comment says. Each key belongs to one talent.
+// Every number is in TUNE, and the descriptions are built from it, so the text always matches the game.
+
+export const TUNE = {
+  knight: {
+    bashDmg: 0.25,         // Spiked Boss: more Shield Bash damage
+    bashStun: 0.8,         // Skull Rattler: seconds added to the stun
+    bashReach: 0.25,       // Battering Ram: a wider sweep ...
+    bashCd: 0.25,          //   ... and a quicker recharge
+    hp: 0.12, armor: 2,    // Tempered Plate
+    bulwarkTime: 2,        // Hold the Line: seconds added
+    bulwarkRadius: 4,      // Phalanx: metres added to the reach ...
+    bulwarkAlly: 0.1,      //   ... and more of the damage allies do not take (on top of 40%)
+    reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker
+  },
+  berserker: {
+    whirlRadius: 0.2,      // Cyclone: a longer reach
+    whirlHits: 1,          // Blade Storm: strikes added
+    whirlCd: 0.2,          // Dervish: a quicker recharge, and no slow while whirling
+    reaper: 0.015,         // Reaper: the share of your health a Whirlwind heals per foe it hits ...
+    reaperFoes: 5,         //   ... for up to this many foes in one strike
+    rageSteal: 0.4,        // Bloodthirst: more of the damage you deal comes back as health
+    bloodied: 0.1,         // Battle Scars: the damage bonus below half health ...
+    hp: 0.1,               //   ... and health
+    rageTime: 3,           // Endless Fury: seconds added to Blood Rage ...
+    rageDmg: 0.1,          //   ... and more damage during it (on top of 25%)
+  },
+  ranger: {
+    volleyRadius: 0.15,    // Wide Volley: a wider circle
+    volleyArrows: 5,       // Hail of Arrows: arrows added
+    volleySlow: 2.5,       // Pinning Fire: seconds the foes in the circle are slowed for
+    wave: { arrows: 8, gap: 1 },   // Second Wave: arrows in it, and seconds after the first
+    speed: 0.06, draw: 0.1,        // Fleet-Footed: faster on foot, and the bow draws quicker
+    rollAgain: 2.5,        // Twin Roll: seconds in which a second roll is allowed
+    focus: { time: 4, dmg: 1.4, draw: 0.25 },   // Hunter's Focus: after a roll, for this long, the next arrow draws at this share of the time and hits this much harder
+  },
+  mage: {
+    fireRadius: 0.2,       // Greater Blast: wider explosions
+    burn: { share: 0.4, time: 3, tick: 0.5 },   // Searing Flames: the share of a blast's damage that burns on over this many seconds
+    fork: 0.5,             // Forked Flame: the second fireball's share of the first one's damage
+    hp: 0.15, armor: 1,    // Warded Robes
+    wardAbsorb: 0.25,      // Rime Shell: more damage soaked ...
+    wardTime: 2,           //   ... for longer
+    wardRadius: 0.4,       // Glacial Burst: a wider chill ...
+    wardChill: 2,          //   ... that slows for longer ...
+    wardStun: 0.5,         //   ... and staggers for longer
+    shatter: { dmg: 90, radius: 6, stun: 1, chill: 3 },   // Shatter: when the ward breaks, a frost burst (damage, reach, stagger, chill)
+  },
+  cleric: {
+    smiteRadius: 0.2,      // Holy Wrath: a wider blast
+    chain: { foes: 2, dmg: 0.5, range: 8 },   // Chain Smite: the bolt arcs on to this many foes within this many metres, for this share of the damage
+    smiteStun: 0.8,        // Judgement: seconds added to the stagger ...
+    smiteCd: 0.2,          //   ... and a quicker recharge
+    hp: 0.1, regen: 0.4,   // Gentle Grace
+    healMul: 0.25,         // Radiance: more healing ...
+    healRadius: 4,         //   ... reaching metres further
+    aegis: { cut: 0.25, time: 5 },     // Divine Aegis: those healed take this much less damage for this long
+    pulse: { delay: 3, scale: 0.6 },   // Second Dawn: a second heal after this many seconds, at this share of the first
+  },
+  cavalier: {
+    chargeDmg: 0.2,        // Couched Lance: harder charges
+    chargeReach: 0.3,      // Wide Sweep: a wider path
+    chargeTime: 0.3,       // Thundering Hooves: a longer charge
+    rush: { radius: 20, time: 5, speed: 1.25 },   // Vanguard!: allies this near ride with you, this much faster, for this long
+    rider: 0.12, trample: 0.15,    // Barded Charger: the horse shields better and tramples harder
+    rallyReach: 0.3,       // War Horn: a wider cry ...
+    rallyTime: 3,          //   ... that lasts longer
+    rallyAlly: 0.1,        // Banner of Valour: more damage allies do not take ...
+    rallySelf: 0.1,        //   ... and you
+  },
+};
+
+const pc = (x) => `${Math.round(x * 100)}%`;
+const K = TUNE.knight, Z = TUNE.berserker, R = TUNE.ranger, M = TUNE.mage, C = TUNE.cleric, V = TUNE.cavalier;
+
+export const TALENTS = [
+  // ---------- Knight: Shield Bash | Bulwark (the capstone is under Phalanx) ----------
+  { id: 'kn_boss', cls: 'knight', br: 'q', tier: 1, needs: null, icon: '🔩', name: 'Spiked Boss',
+    desc: `Shield Bash hits ${pc(K.bashDmg)} harder.`, fx: { bashDmg: 1 + K.bashDmg } },
+  { id: 'kn_rattle', cls: 'knight', br: 'q', tier: 2, needs: 'kn_boss', icon: '💫', name: 'Skull Rattler',
+    desc: `Shield Bash stuns for ${K.bashStun} s longer.`, fx: { bashStun: K.bashStun } },
+  { id: 'kn_ram', cls: 'knight', br: 'q', tier: 3, needs: 'kn_rattle', icon: '🐏', name: 'Battering Ram',
+    desc: `Shield Bash sweeps ${pc(K.bashReach)} wider and recharges ${pc(K.bashCd)} sooner.`, fx: { bashReach: 1 + K.bashReach, cd_bash: 1 - K.bashCd } },
+  { id: 'kn_plate', cls: 'knight', br: 'r', tier: 1, needs: null, icon: '⛓', name: 'Tempered Plate',
+    desc: `+${pc(K.hp)} health and +${K.armor} armour.`, mods: { mul: { hp: 1 + K.hp }, add: { armor: K.armor } } },
+  { id: 'kn_hold', cls: 'knight', br: 'r', tier: 2, needs: 'kn_plate', icon: '🏰', name: 'Hold the Line',
+    desc: `Bulwark lasts ${K.bulwarkTime} s longer.`, fx: { bulwarkTime: K.bulwarkTime } },
+  { id: 'kn_phalanx', cls: 'knight', br: 'r', tier: 3, needs: 'kn_hold', icon: '🛡', name: 'Phalanx',
+    desc: `Bulwark covers allies ${K.bulwarkRadius} m further away, and they take ${pc(0.4 + K.bulwarkAlly)} less damage instead of 40%.`,
+    fx: { bulwarkRadius: K.bulwarkRadius, bulwarkAlly: K.bulwarkAlly } },
+  { id: 'kn_avenge', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', icon: '⚔', name: 'Avenging Wall',
+    desc: `While Bulwark stands, a melee attacker takes ${pc(K.reflect)} of the blow back.`, fx: { reflect: K.reflect } },
+
+  // ---------- Berserker: Whirlwind | Blood Rage (the capstone is under Dervish) ----------
+  { id: 'bz_cyclone', cls: 'berserker', br: 'q', tier: 1, needs: null, icon: '🌪', name: 'Cyclone',
+    desc: `Whirlwind reaches ${pc(Z.whirlRadius)} further.`, fx: { whirlRadius: 1 + Z.whirlRadius } },
+  { id: 'bz_storm', cls: 'berserker', br: 'q', tier: 2, needs: 'bz_cyclone', icon: '🌀', name: 'Blade Storm',
+    desc: `Whirlwind strikes ${Z.whirlHits === 1 ? 'one more time' : `${Z.whirlHits} more times`}.`, fx: { whirlHits: Z.whirlHits } },
+  { id: 'bz_dervish', cls: 'berserker', br: 'q', tier: 3, needs: 'bz_storm', icon: '💃', name: 'Dervish',
+    desc: `Whirlwind no longer slows you and recharges ${pc(Z.whirlCd)} sooner.`, fx: { whirlSlow: 0, cd_whirl: 1 - Z.whirlCd } },
+  { id: 'bz_reaper', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', icon: '☠', name: 'Reaper',
+    desc: `Every foe a Whirlwind hits heals you for ${pc(Z.reaper)} of your health (up to ${Z.reaperFoes} foes a strike).`,
+    fx: { reaper: { heal: Z.reaper, foes: Z.reaperFoes } } },
+  { id: 'bz_thirst', cls: 'berserker', br: 'r', tier: 1, needs: null, icon: '🩸', name: 'Bloodthirst',
+    desc: `Blood Rage heals ${pc(Z.rageSteal)} more of the damage you deal.`, fx: { rageSteal: 1 + Z.rageSteal } },
+  { id: 'bz_scars', cls: 'berserker', br: 'r', tier: 2, needs: 'bz_thirst', icon: '💢', name: 'Battle Scars',
+    desc: `+${pc(Z.hp)} health, and below half health you hit ${pc(Z.bloodied)} harder still.`,
+    mods: { mul: { hp: 1 + Z.hp }, add: { bloodied: Z.bloodied } } },
+  { id: 'bz_endless', cls: 'berserker', br: 'r', tier: 3, needs: 'bz_scars', icon: '🔥', name: 'Endless Fury',
+    desc: `Blood Rage lasts ${Z.rageTime} s longer and hits ${pc(Z.rageDmg)} harder.`, fx: { rageTime: Z.rageTime, rageDmg: Z.rageDmg } },
+
+  // ---------- Ranger: Arrow Volley | Evasive Roll (the capstone is under Pinning Fire) ----------
+  { id: 'rg_wide', cls: 'ranger', br: 'q', tier: 1, needs: null, icon: '⭕', name: 'Wide Volley',
+    desc: `The volley's circle is ${pc(R.volleyRadius)} wider.`, fx: { volleyRadius: 1 + R.volleyRadius } },
+  { id: 'rg_hail', cls: 'ranger', br: 'q', tier: 2, needs: 'rg_wide', icon: '🌧', name: 'Hail of Arrows',
+    desc: `${R.volleyArrows} more arrows fall.`, fx: { volleyArrows: R.volleyArrows } },
+  { id: 'rg_pin', cls: 'ranger', br: 'q', tier: 3, needs: 'rg_hail', icon: '📌', name: 'Pinning Fire',
+    desc: `Foes in the circle are slowed while the arrows fall.`, fx: { volleySlow: R.volleySlow } },
+  { id: 'rg_wave', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', icon: '⛈', name: 'Second Wave',
+    desc: `A second wave of ${R.wave.arrows} arrows falls ${R.wave.gap} s after the first.`, fx: { volleyWave: R.wave } },
+  { id: 'rg_light', cls: 'ranger', br: 'r', tier: 1, needs: null, icon: '👢', name: 'Fleet-Footed',
+    desc: `+${pc(R.speed)} speed, and the bow draws ${pc(R.draw)} faster.`, mods: { mul: { speed: 1 + R.speed, draw: 1 - R.draw } } },
+  { id: 'rg_twin', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '♻', name: 'Twin Roll',
+    desc: `Roll a second time within ${R.rollAgain} s.`, fx: { rollAgain: R.rollAgain } },
+  { id: 'rg_focus', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_twin', icon: '🎯', name: "Hunter's Focus",
+    desc: `After a roll your next arrow is drawn at once and hits ${pc(R.focus.dmg - 1)} harder.`, fx: { focus: R.focus } },
+
+  // ---------- Mage: Fireball | Frost Ward (the capstone is under Glacial Burst) ----------
+  { id: 'mg_blast', cls: 'mage', br: 'q', tier: 1, needs: null, icon: '💥', name: 'Greater Blast',
+    desc: `Fireballs burst ${pc(M.fireRadius)} wider.`, fx: { fireRadius: 1 + M.fireRadius } },
+  { id: 'mg_sear', cls: 'mage', br: 'q', tier: 2, needs: 'mg_blast', icon: '🔥', name: 'Searing Flames',
+    desc: `Foes caught in a blast burn for ${pc(M.burn.share)} more of its damage over ${M.burn.time} s.`, fx: { burn: M.burn } },
+  { id: 'mg_fork', cls: 'mage', br: 'q', tier: 3, needs: 'mg_sear', icon: '🔱', name: 'Forked Flame',
+    desc: `Every Fireball is followed by a second at ${pc(M.fork)} strength.`, fx: { fireFork: M.fork } },
+  { id: 'mg_robes', cls: 'mage', br: 'r', tier: 1, needs: null, icon: '🧥', name: 'Warded Robes',
+    desc: `+${pc(M.hp)} health and +${M.armor} armour.`, mods: { mul: { hp: 1 + M.hp }, add: { armor: M.armor } } },
+  { id: 'mg_rime', cls: 'mage', br: 'r', tier: 2, needs: 'mg_robes', icon: '❄', name: 'Rime Shell',
+    desc: `Frost Ward soaks ${pc(M.wardAbsorb)} more damage and lasts ${M.wardTime} s longer.`, fx: { wardAbsorb: 1 + M.wardAbsorb, wardTime: M.wardTime } },
+  { id: 'mg_glacier', cls: 'mage', br: 'r', tier: 3, needs: 'mg_rime', icon: '🌨', name: 'Glacial Burst',
+    desc: `Frost Ward chills ${pc(M.wardRadius)} further, for ${M.wardChill} s longer, and staggers for ${M.wardStun} s more.`,
+    fx: { wardRadius: 1 + M.wardRadius, wardChill: M.wardChill, wardStun: M.wardStun } },
+  { id: 'mg_shatter', cls: 'mage', br: 'r', tier: 4, needs: 'mg_glacier', icon: '💎', name: 'Shatter',
+    desc: `When the ward breaks it bursts: ${M.shatter.dmg} damage, a stagger and a chill on the foes around you.`, fx: { shatter: M.shatter } },
+
+  // ---------- Cleric: Smite | Healing Light (the capstone is under Divine Aegis) ----------
+  { id: 'cl_wrath', cls: 'cleric', br: 'q', tier: 1, needs: null, icon: '⚡', name: 'Holy Wrath',
+    desc: `Smite strikes a ${pc(C.smiteRadius)} wider area.`, fx: { smiteRadius: 1 + C.smiteRadius } },
+  { id: 'cl_chain', cls: 'cleric', br: 'q', tier: 2, needs: 'cl_wrath', icon: '🔗', name: 'Chain Smite',
+    desc: `The bolt arcs on to ${C.chain.foes} more foes near the blast, for ${pc(C.chain.dmg)} of the damage.`, fx: { smiteChain: C.chain } },
+  { id: 'cl_judge', cls: 'cleric', br: 'q', tier: 3, needs: 'cl_chain', icon: '⚖', name: 'Judgement',
+    desc: `Smite staggers for ${C.smiteStun} s longer and recharges ${pc(C.smiteCd)} sooner.`, fx: { smiteStun: C.smiteStun, cd_smite: 1 - C.smiteCd } },
+  { id: 'cl_grace', cls: 'cleric', br: 'r', tier: 1, needs: null, icon: '🌿', name: 'Gentle Grace',
+    desc: `+${pc(C.hp)} health and ${pc(C.regen)} faster regeneration.`, mods: { mul: { hp: 1 + C.hp, regen: 1 + C.regen } } },
+  { id: 'cl_radiance', cls: 'cleric', br: 'r', tier: 2, needs: 'cl_grace', icon: '☀', name: 'Radiance',
+    desc: `Healing Light heals ${pc(C.healMul)} more and reaches ${C.healRadius} m further.`, fx: { healMul: 1 + C.healMul, healRadius: C.healRadius } },
+  { id: 'cl_aegis', cls: 'cleric', br: 'r', tier: 3, needs: 'cl_radiance', icon: '🔰', name: 'Divine Aegis',
+    desc: `Everyone Healing Light heals takes ${pc(C.aegis.cut)} less damage for ${C.aegis.time} s.`, fx: { aegis: C.aegis } },
+  { id: 'cl_bloom', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', icon: '🌅', name: 'Second Dawn',
+    desc: `Healing Light pulses again ${C.pulse.delay} s later at ${pc(C.pulse.scale)} strength.`, fx: { healPulse: C.pulse } },
+
+  // ---------- Cavalier: Lance Charge | Rally Cry (the capstone is under Thundering Hooves) ----------
+  { id: 'cv_lance', cls: 'cavalier', br: 'q', tier: 1, needs: null, icon: '🔱', name: 'Couched Lance',
+    desc: `Lance Charge hits ${pc(V.chargeDmg)} harder.`, fx: { chargeDmg: 1 + V.chargeDmg } },
+  { id: 'cv_sweep', cls: 'cavalier', br: 'q', tier: 2, needs: 'cv_lance', icon: '🌊', name: 'Wide Sweep',
+    desc: `The charge cuts a ${pc(V.chargeReach)} wider path.`, fx: { chargeReach: 1 + V.chargeReach } },
+  { id: 'cv_thunder', cls: 'cavalier', br: 'q', tier: 3, needs: 'cv_sweep', icon: '🐎', name: 'Thundering Hooves',
+    desc: `The charge lasts ${pc(V.chargeTime)} longer.`, fx: { chargeTime: 1 + V.chargeTime } },
+  { id: 'cv_vanguard', cls: 'cavalier', br: 'q', tier: 4, needs: 'cv_thunder', icon: '🚩', name: 'Vanguard!',
+    desc: `Allies within ${V.rush.radius} m ride with you: ${pc(V.rush.speed - 1)} faster for ${V.rush.time} s when you charge.`, fx: { chargeRush: V.rush } },
+  { id: 'cv_barding', cls: 'cavalier', br: 'r', tier: 1, needs: null, icon: '🛡', name: 'Barded Charger',
+    desc: `Your horse shields you ${pc(V.rider)} better and tramples ${pc(V.trample)} harder.`, mods: { mul: { rider: 1 - V.rider, trample: 1 + V.trample } } },
+  { id: 'cv_horn', cls: 'cavalier', br: 'r', tier: 2, needs: 'cv_barding', icon: '📯', name: 'War Horn',
+    desc: `Rally Cry reaches ${pc(V.rallyReach)} further and lasts ${V.rallyTime} s longer.`, fx: { rallyReach: 1 + V.rallyReach, rallyTime: V.rallyTime } },
+  { id: 'cv_banner', cls: 'cavalier', br: 'r', tier: 3, needs: 'cv_horn', icon: '🏴', name: 'Banner of Valour',
+    desc: `Rally Cry shields allies ${pc(V.rallyAlly)} more, and you ${pc(V.rallySelf)} more.`, fx: { rallyAlly: V.rallyAlly, rallySelf: V.rallySelf } },
+];
+
+export const TALENT_BY_ID = Object.fromEntries(TALENTS.map((t) => [t.id, t]));
+export const talentsOf = (cls) => TALENTS.filter((t) => t.cls === cls);
+export const tierLevel = (tier) => tier + 1;   // the hero level a tier needs
+
+export const hasTalent = (p, id) => !!(p.talents && p.talents[id]);
+
+// What a learnt talent changes about an ability or a rule: the value its fx gives for `key`, else `def` (1 for a
+// multiplier, 0 for an amount to add).
+export function talentFx(p, key, def) {
+  const have = p && p.talents;
+  if (have) for (const id in have) { const f = TALENT_BY_ID[id]?.fx; if (f && key in f) return f[key]; }
+  return def;
+}
+
+// The numbers the hero's talents add to the class: { mul: { key: factor }, add: { key: amount } } (see heroes.js)
+export function treeMods(p) {
+  const out = { mul: {}, add: {} };
+  for (const id in p.talents || {}) {
+    const m = TALENT_BY_ID[id]?.mods;
+    if (!m) continue;
+    for (const k in m.mul) out.mul[k] = (out.mul[k] ?? 1) * m.mul[k];
+    for (const k in m.add) out.add[k] = (out.add[k] ?? 0) + m.add[k];
+  }
+  return out;
+}
+
+// Why a talent cannot be learnt yet because of the hero's level or the talent above it (null when neither stops it).
+export function talentLock(p, id) {
+  const t = TALENT_BY_ID[id];
+  if (!t) return 'No such talent';
+  if (t.cls !== p.classId) return `A talent of the ${t.cls}`;
+  if (p.level < tierLevel(t.tier)) return `Needs level ${tierLevel(t.tier)}`;
+  if (t.needs && !hasTalent(p, t.needs)) return `Needs ${TALENT_BY_ID[t.needs].name}`;
+  return null;
+}
+
+// Why the hero cannot learn this talent now (null when they can): everything the rules ask for.
+export function talentBlock(p, id) {
+  if (hasTalent(p, id)) return 'Already learnt';
+  return talentLock(p, id) || (p.talentPoints > 0 ? null : 'No talent points left');
+}
+
+// Why the hero cannot give their talents back now (null when they can): free, but only in the grounds of their own castle.
+export function respecBlock(p) {
+  if (!Object.keys(p.talents).length) return 'You have no talents to give back';
+  return p.atHome() ? null : 'Only at your own castle';
+}
+
+// A guest's own copy of its talents follows the host's list (me.tal in the snapshot). Returns whether anything changed.
+export function mirrorTalents(p, ids) {
+  const want = ids.filter((id) => TALENT_BY_ID[id] && TALENT_BY_ID[id].cls === p.classId);
+  if (want.length === Object.keys(p.talents).length && want.every((id) => p.talents[id])) return false;
+  p.talents = Object.fromEntries(want.map((id) => [id, true]));
+  p.talentRev++;
+  p.refreshStats();
+  return true;
+}

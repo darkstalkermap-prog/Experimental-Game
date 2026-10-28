@@ -6,6 +6,7 @@ import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
+import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -162,6 +163,14 @@ export class UI {
     else this.toggleShop(true);
   }
 
+  // N: the shop on the Talents tab (and N again closes it)
+  openTalents() {
+    if (this.shopOpen && this.tab === 'talents') { this.toggleShop(false); return; }
+    this.tab = 'talents';
+    if (this.shopOpen) this.renderShop();
+    else this.toggleShop(true);
+  }
+
   // Direction chevrons: where you're aiming / winding up / guarding, and blows coming at you.
   updateDirs() {
     const g = this.game;
@@ -235,9 +244,11 @@ export class UI {
     $('shopTitle').textContent = this.tab === 'orders' ? 'Orders' : 'Quartermaster';
     this.roster = null;
     this.classCards = null;
+    this.talentView = null;
     if (this.tab === 'orders') { this.buildOrders(grid); this.refreshShop(); return; }
     if (this.tab === 'army') this.buildRoster(grid);
     if (this.tab === 'class') this.buildClassTab(grid);
+    if (this.tab === 'talents') buildTalentTab(this, grid);
     if (this.tab === 'siege') {
       const sel = document.createElement('div');
       sel.className = 'targets';
@@ -494,6 +505,7 @@ export class UI {
     const rc = g.roleCounts(g.localTeam);
     $('shopTroops').textContent = `garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane} (barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap})`;
     this.refreshRoster();
+    refreshTalentTab(this);
     if (this.autoBtn && this.tab === 'siege') {
       const now = g.siegeTarget(f);
       const txt = f.siegeTarget ? 'Auto lanes' : `✓ Auto lanes · now ${now ? g.factions[now.team].name : 'no target'}`;
@@ -622,6 +634,7 @@ export class UI {
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
     this.updateAbilities(dt);
+    updateTalentHud(this, p);
     $('crosshair').classList.toggle('block', p.blocking);
     this.updateDirs();
     this.updatePrompt();
@@ -724,7 +737,7 @@ export class UI {
       if (e.cd.style.transform !== t) e.cd.style.transform = t;
       const sec = cd > 0 ? String(Math.ceil(cd)) : '';
       if (e.sec.textContent !== sec) e.sec.textContent = sec;
-      e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
+      e.r.classList.toggle('ready', (cd <= 0 || (d.id === 'evade' && p.buffs.has('twin'))) && p.alive && !p.drive);
       e.r.classList.toggle('aiming', !!p.aiming && p.aiming.slot === slot);
     }
     const aim = !!p.aiming;

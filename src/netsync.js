@@ -7,6 +7,7 @@ import { Unit } from './units.js';
 import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
 import { DIRS, DIR_IDX } from './combat.js';
+import { mirrorTalents } from './talents.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
 const TYPE_IDX = Object.fromEntries(TYPE_NAMES.map((t, i) => [t, i]));
@@ -132,6 +133,8 @@ export class HostSync {
         }
         break;
       case 'class': g.switchClass(p, String(d.cls)); break;
+      case 'talent': g.askTalent(p, String(d.id)); break;
+      case 'respec': g.askRespec(p); break;
       case 'role': g.setRoles(p.team, d); break;
       case 'recruitRole': f.recruitRole = d.role === 'army' ? 'army' : 'garrison'; break;
       case 'board': g.boardEngine(p, g.siege.find((e) => e.id === d.id)); break;
@@ -189,6 +192,7 @@ export class HostSync {
         bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
         order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId),
+        tal: Object.keys(h.talents),   // the talents learnt (see talents.js)
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -368,6 +372,7 @@ export class ClientSync {
       p.lv = me.lv;
       if (lvChanged) p.rebuildWeapons();
       p.buffs.setList(me.bf);
+      if (me.tal) mirrorTalents(p, me.tal);   // the talents the host says you have (stats follow)
       // steering a siege engine (the host decides when you board or are thrown out)
       if (me.drv && (!p.drive || p.drive.id !== me.drv)) {
         const e = this.siege.get(me.drv);
@@ -411,7 +416,7 @@ export class ClientSync {
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;
       case 'spell': g.projectiles.fireSpell(ev.s, vec(ev.p), vec(ev.v), ev.t, 0, null, ev.r); break;
       case 'bolt': g.magic.showBolt(ev.pts.map(vec), ev.c); break;
-      case 'abil': g.abilities.show(ev.id, vec(ev.p), new THREE.Vector3(ev.d[0], 0, ev.d[1]), true, ev.t ? ev.t.map(vec) : null); break;
+      case 'abil': g.abilities.show(ev.id, vec(ev.p), new THREE.Vector3(ev.d[0], 0, ev.d[1]), true, ev.t ? ev.t.map(vec) : null, ev.sz || 1); break;
       default: g.applyEvent(ev); break;
     }
   }

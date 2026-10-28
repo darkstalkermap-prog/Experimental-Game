@@ -2,6 +2,7 @@
 // hero is goes through heroMods(), so the three can grow on their own: the class numbers live in classes.js, the
 // level numbers here, and the talent numbers in the talent tree.
 import { classOf } from './classes.js';
+import { treeMods } from './talents.js';
 
 export const MAX_LEVEL = 5;
 // total experience needed to reach each level (the index is the level)
@@ -21,9 +22,9 @@ export function levelMods(level) {
   return { mul: {}, add: {} };
 }
 
-// What the hero's talents add (same shape). p.talents is { talentId: true }.
+// What the hero's talents add (same shape). p.talents is { talentId: true }; the trees are in talents.js.
 export function talentMods(p) {
-  return { mul: {}, add: {} };
+  return treeMods(p);
 }
 
 // The class mods with the level and the talents applied. The keys are those of CLASSES[id].mods: hp, speed, melee, bow,

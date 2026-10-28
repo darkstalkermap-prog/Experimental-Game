@@ -381,6 +381,11 @@ addEventListener('keydown', (e) => {
     input.pressed.delete(e.code); // don't let the game loop re-open it this frame
     ui.toggleShop(false);
   }
+  if (ui.shopOpen && e.code === 'KeyN') {   // N: the Talents tab (and closes the shop when it is already there)
+    e.preventDefault();
+    input.pressed.delete(e.code);
+    if (!e.repeat) ui.openTalents();
+  }
 });
 
 // Browsers only allow sound after a click or key press: the music starts with the first one.

@@ -257,6 +257,47 @@
   .card.nope { animation: nope 0.3s ease-out; }
   @keyframes bought { 0% { background: rgba(224,180,76,0.45); } 100% { background: rgba(255,255,255,0.04); } }
   @keyframes nope { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  /* talents: the Talents tab of the shop, the hint on the HUD and the learnt icons beside the abilities */
+  .tal-wrap { grid-column: 1 / -1; display: grid; gap: 12px; }
+  .tal-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
+  .tal-head h5 { margin: 0; font-family: Cinzel, serif; font-size: 19px; color: var(--cls, var(--gold)); }
+  .tal-pts { font-family: Cinzel, serif; font-size: 15px; }
+  .tal-pts b { color: var(--gold); font-size: 19px; }
+  .tal-head .respec { margin-left: auto; padding: 6px 16px; font-size: 13px; }
+  .tal-head .respec.unavailable { opacity: 0.45; }
+  .tal-note { font-size: 14px; opacity: 0.85; }
+  .tal-tree { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr); gap: 22px 16px; align-items: stretch; }
+  .tal-col { align-self: end; padding-bottom: 6px; text-align: center; font-family: Cinzel, serif; font-size: 16px; border-bottom: 2px solid var(--cls, var(--gold)); }
+  .tal-col small { display: block; font-family: 'EB Garamond', Georgia, serif; font-size: 12.5px; opacity: 0.7; }
+  .tal-lv { align-self: center; justify-self: end; text-align: right; font-family: Cinzel, serif; font-size: 11px; line-height: 1.2; opacity: 0.7; }
+  .tal-lv b { font-size: 20px; color: var(--gold); }
+  .tnode { position: relative; display: grid; grid-template-columns: 38px minmax(0, 1fr); column-gap: 10px; align-content: start; text-align: left; padding: 9px 12px 10px; letter-spacing: 0;
+    font-family: 'EB Garamond', Georgia, serif; font-size: 15px; background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.25); border-radius: 4px; }
+  .tnode:hover:not(:disabled) { background: rgba(255,255,255,0.09); border-color: rgba(224,180,76,0.6); }
+  .tnode .ti { grid-row: 1 / span 3; font-size: 27px; line-height: 1.1; }
+  .tnode b { font-family: Cinzel, serif; font-size: 15px; font-weight: 600; color: #f3e2b5; }
+  .tnode small { font-size: 14px; line-height: 1.25; opacity: 0.88; }
+  .tnode .ts { font-style: normal; font-size: 12.5px; margin-top: 4px; opacity: 0.8; letter-spacing: 0.03em; }
+  .tnode.locked { opacity: 0.55; filter: grayscale(0.45); }
+  .tnode.locked .ts { color: #e0a890; }
+  .tnode.afford { border-color: #8fe88a; box-shadow: 0 0 10px rgba(143,232,138,0.32); }
+  .tnode.afford .ts { color: #bff5ba; opacity: 1; }
+  .tnode.learned { border-color: var(--gold); background: rgba(224,180,76,0.16); box-shadow: 0 0 0 1px rgba(224,180,76,0.35) inset; }
+  .tnode.learned .ts { color: var(--gold); opacity: 1; }
+  .tnode.child::before { content: ''; position: absolute; left: 50%; top: -22px; width: 2px; height: 22px; margin-left: -1px; background: rgba(224,180,76,0.25); }
+  .tnode.child.linked::before { background: var(--gold); box-shadow: 0 0 6px rgba(224,180,76,0.7); }
+  .tnode.bought { animation: bought 0.45s ease-out; }
+  .tnode.nope { animation: nope 0.3s ease-out; }
+  #talentHint { position: absolute; left: 16px; top: 130px; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
+  @keyframes talentPulse { 0%, 100% { box-shadow: 0 0 0 rgba(224,180,76,0); } 50% { box-shadow: 0 0 14px rgba(224,180,76,0.85); } }
+  .abil .tpips { position: absolute; right: 6px; bottom: 3px; font-size: 11px; line-height: 1; letter-spacing: 1px; }
+  @media (max-width: 700px) {
+    .tal-tree { grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr); gap: 20px 8px; }
+    .tnode { grid-template-columns: 1fr; padding: 7px 8px 8px; }
+    .tnode .ti { display: none; }
+    .tnode b { font-size: 13.5px; }
+    .tnode small { font-size: 13px; }
+  }
   .targets { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .targets .label { width: 100%; font-size: 15px; opacity: 0.85; }
   #gameover h1.win { color: #2c5a12; }
@@ -419,7 +460,8 @@
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
-  <div id="hint">Esc: menu · B: shop · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
+  <div id="talentHint" class="hidden"><kbd>N</kbd> Talent point available (<span id="talentN">1</span>)</div>
+  <div id="hint">Esc: menu · B: shop · N: talents · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
   <div id="banner"><h2></h2><p></p></div>
@@ -434,8 +476,8 @@
     <span class="cg"><kbd>O</kbd> Orders menu</span>
   </div>
   <div id="abilities">
-    <div class="abil" id="abilQ"><span class="ic"></span><kbd>Q</kbd><span class="nm"></span><span class="kind">Attack</span><i class="cd"></i><b class="sec"></b></div>
-    <div class="abil" id="abilR"><span class="ic"></span><kbd>R</kbd><span class="nm"></span><span class="kind">Defence</span><i class="cd"></i><b class="sec"></b></div>
+    <div class="abil" id="abilQ"><span class="ic"></span><kbd>Q</kbd><span class="nm"></span><span class="kind">Attack</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
+    <div class="abil" id="abilR"><span class="ic"></span><kbd>R</kbd><span class="nm"></span><span class="kind">Defence</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
     <div id="buffs"></div>
   </div>
   <div id="status" class="panel">
@@ -474,6 +516,7 @@
       <button data-tab="orders">Orders</button>
       <button data-tab="army">Army</button>
       <button data-tab="class">Class</button>
+      <button data-tab="talents">Talents</button>
       <button data-tab="castle">Castle</button>
       <button data-tab="items" disabled title="Items are not available yet">Items</button>
       <button data-tab="siege">Siege</button>
@@ -540,6 +583,7 @@
       <b>O</b><span>Orders menu (click to command troops)</span>
       <b>B</b><span>Shop &amp; upgrades</span>
       <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
+      <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
       <b>M</b><span>Big battle map (press again to close; the battle goes on)</span>
       <b>Tab</b><span>Scoreboard</span>
       <b>F1 / Z</b><span>Your army: follow me</span>
