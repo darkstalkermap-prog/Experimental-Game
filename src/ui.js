@@ -1000,6 +1000,7 @@ export class UI {
       if (big) ctx.stroke();
       ctx.restore();
     }
+    g.pings.paintMap(ctx, S, big);   // pings and markers (yours and your allies') on top of everything
   }
 
   drawMinimap() {
@@ -1014,6 +1015,11 @@ export class UI {
     this.mapOpen = open;
     $('bigmap').classList.toggle('hidden', !open);
     if (open) { this.bigT = 0; this.drawBigMap(); }
+    // the mouse is free while the map is up, so the maps can be clicked (markers); closing it hands the mouse back,
+    // unless the shop or the game menu is the reason it closed
+    const g = this.game;
+    if (open) g.input.unlock();
+    else if (!this.shopOpen && $('pause').classList.contains('hidden') && g.state === 'playing') g.input.lock();
   }
 
   drawBigMap() {

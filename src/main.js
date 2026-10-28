@@ -353,7 +353,7 @@ input.onLockChange = (locked) => {
   }
   lastUnlockAt = performance.now();
   game.player.cancelAim();   // a volley being placed is dropped when the menu comes up
-  if (!ui.shopOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
+  if (!ui.shopOpen && !ui.mapOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
 };
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
@@ -361,7 +361,7 @@ $('again').addEventListener('click', () => location.reload());
 
 // Clicking the game view while playing re-captures the mouse.
 renderer.domElement.addEventListener('click', () => {
-  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !shown('pause')) input.lock();
+  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !ui.mapOpen && !shown('pause')) input.lock();
 });
 
 // Escape: close whatever is open on top, else open or close the game menu.
@@ -371,6 +371,7 @@ addEventListener('keydown', (e) => {
     if (shown('options')) { $('options').classList.add('hidden'); return; }
     if (shown('controls')) { $('controls').classList.add('hidden'); return; }
     if (ui.shopOpen) { input.pressed.delete(e.code); ui.toggleShop(false); return; }
+    if (ui.mapOpen) { ui.toggleMap(false); return; }
     if (game.state !== 'playing') return;
     if (performance.now() - lastUnlockAt < 350) return;   // the release of the mouse has just opened the menu
     if (shown('pause')) closePause(); else openPause();

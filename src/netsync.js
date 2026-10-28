@@ -132,6 +132,7 @@ export class HostSync {
         }
         break;
       case 'class': g.switchClass(p, String(d.cls)); break;
+      case 'ping': g.pings.fromClient(p, d); break;
       case 'role': g.setRoles(p.team, d); break;
       case 'recruitRole': f.recruitRole = d.role === 'army' ? 'army' : 'garrison'; break;
       case 'board': g.boardEngine(p, g.siege.find((e) => e.id === d.id)); break;

@@ -210,3 +210,26 @@ export const SPELLS = {
   fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, color: 0xff7a1a },
   smite: { name: 'Smite', dmg: 95, radius: 3.8, range: 60, color: 0xffe9a0 },
 };
+
+// Pings and markers (src/pings.js): call-outs between team mates. A ping is a quick middle click on whatever you
+// look at and fades after a few seconds; a marker (the held middle button's wheel, or a click on a map) stays much
+// longer. The host enforces the rate limit online.
+export const PINGS = {
+  hold: 0.3,            // seconds the middle button is held before the marker wheel opens
+  life: 6,              // a ping lasts this long
+  markerLife: 45,       // a marker lasts this long
+  maxMarkers: 3,        // markers one player can have out at once: the oldest is replaced
+  merge: 3,             // placing within this many metres of one of your own refreshes it instead of adding another
+  gap: 0.6,             // least time between two call-outs from one player
+  burst: 8, window: 10, // and at most this many in this many seconds
+  slack: 0.2,           // a client paces itself this much slower than the host's gap, so network jitter never gets one dropped
+  range: 420,           // how far the crosshair looks for something to ping
+  size: 0.1,            // an icon in the world is this share of the screen's height, wherever it stands
+  types: [              // the five kinds; colour tints the icon, the sender's house colour rings it
+    { id: 'go', name: 'Go here', say: 'Go here!', color: '#f2c230' },
+    { id: 'attack', name: 'Attack', say: 'Attack here!', color: '#e8453c' },
+    { id: 'defend', name: 'Defend', say: 'Defend here!', color: '#4a9bff' },
+    { id: 'danger', name: 'Danger', say: 'Danger!', color: '#ff7a1a' },
+    { id: 'help', name: 'Need help', say: 'Need help!', color: '#5fe0a0' },
+  ],
+};

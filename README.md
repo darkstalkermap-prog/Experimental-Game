@@ -293,7 +293,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   only allow sound after a click or key press, so the music starts with your first one.
 - **Big map**: press **M** for a large live map with the terrain, roads and forests, every castle with its towers, gate
   and name, every soldier and engine, your armies' marching lines and your own position. The battle goes on while it is
-  up. Press **M** again to close it (opening the game menu closes it too).
+  up, and the mouse is free while you look at it so you can click it (markers, below). Press **M** again, press **Esc** or
+  click outside the map to close it and take the mouse back (opening the game menu closes it too).
 - **Game menu**: **Esc** opens the standard menu: **Resume**, **Options**, **Controls** and **Quit to Main
   Menu**. In single player the world freezes; online, the battle goes on while you are in the menu. Esc again
   resumes (it closes the shop, Options or Controls first). **Options** has master, music and sound-effects
@@ -319,7 +320,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | W / S / A / D, left click, E (inside an engine) | Roll / turn / strike or fire / climb out |
 | O | Orders menu (click to command troops) |
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
-| M | Big map (press again to close) |
+| M | Big map (the mouse is free while it is up; press again to close) |
+| Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |
+| Middle button (hold) | Marker wheel round the crosshair: move the mouse towards Go here / Attack / Defend / Danger / Need help and let go to place a marker there; let go in the middle for the ordinary ping |
+| Map click | On the big map or the HUD minimap, while the mouse is free: left click puts down a marker of the kind chosen in the palette beside the big map, right click removes your nearest one |
 | Tab | Scoreboard |
 | F1 or Z | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
@@ -330,6 +334,15 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
 | Esc | Game menu: resume, options, controls, quit (closes the shop or a panel first) |
+
+**Pings and markers.** Team mates can call out targets and places. A **ping** is a quick middle click on whatever the
+crosshair is on and lasts about 6 seconds; a **marker** (the held-button wheel, or a click on a map) lasts 45 seconds,
+at most 3 per player (the oldest is replaced, and placing within 3 m of one of yours renews it). Each shows as a pulse on the
+minimap and big map, a beacon with an icon and a distance in the world, an arrow at the edge of the screen when it is out of
+view, a toast ("Gwen: Attack here!") and a sound that differs for each of the five kinds, and carries the colour of
+whoever placed it. You always see your own (in single player it is a personal waypoint); online the host checks each one
+(shape, range, and a rate limit of 1 per 0.6 s and 8 per 10 s per player) and passes it on to your allies only, so in
+Versus nobody else sees it and in co-op the whole side does. The numbers are in `PINGS` in `src/config.js`.
 
 Stairs on both sides of the courtyard lead up to the wall walk, which goes all the way around the castle and into the corner towers.
 
@@ -350,6 +363,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
 | `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
 | `src/hill.js` | The hill in the middle: the banner, and in King of the Hill the capture, scoring, gold and win |
+| `src/pings.js` | Pings and markers: the crosshair ray and what it hit, the marker wheel, map clicks, the beacons and edge arrows, the sounds, and the host's checks and relay to allies |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
