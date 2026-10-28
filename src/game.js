@@ -1044,7 +1044,7 @@ export class Game {
 
   // A hero takes up another class (their own choice, or a guest's request), if the rules allow it (Player.classBlock).
   switchClass(p, id) {
-    const why = p.classBlock(id);
+    const why = this.hero ? 'Heroes keep their class in the Hero Game Mode' : p.classBlock(id);
     if (why) { p.notify(why); p.sound('deny'); return false; }
     p.changeClass(id);
     p.notify(p.alive ? `You are now a ${p.cls.name}. Your abilities are ready in a few seconds.` : `You will respawn as a ${p.cls.name}.`);
@@ -1056,7 +1056,7 @@ export class Game {
   localSwitchClass(id) {
     const p = this.player;
     if (this.mode !== 'client') return this.switchClass(p, id);
-    const why = p.classBlock(id);
+    const why = this.hero ? 'Heroes keep their class in the Hero Game Mode' : p.classBlock(id);
     if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }
     this.net.toHost({ a: 'class', cls: id });   // the host's next update confirms it
     return true;
@@ -1126,6 +1126,11 @@ export class Game {
     const i = this.input;
     if (this.practice && i.hit('KeyP')) { this.ui.togglePractice(); return; }
     if (this.ui.practiceOpen) return;   // (the panel has the keys while it is up)
+    if (this.hero) {   // Hero Game Mode: the hero's talents (B or N) and the map are all there is; no shop, orders, army or class switching
+      if (i.hit('KeyB') || i.hit('KeyN')) { this.ui.openTalents(); return; }
+      if (!this.ui.shopOpen && i.hit('KeyM')) this.ui.toggleMap();
+      return;
+    }
     if (i.hit('KeyB')) { if (this.ui.tab === 'orders') this.ui.tab = 'army'; this.ui.toggleShop(); return; }
     if (i.hit('KeyN')) { this.ui.openTalents(); return; }
     if (this.ui.shopOpen) return;

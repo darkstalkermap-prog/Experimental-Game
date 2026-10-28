@@ -9,6 +9,7 @@ import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
 import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
+import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -102,12 +103,46 @@ selectMap(mapSize);
 
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
+// Hero Mode is the third choice of the Mode row. It is not an objective of the war (OBJECTIVES, the lobby): it has its own
+// setup (`hero: { win }`) and its own row of three ways to win, the last one remembered per browser.
+let heroOn = false;
+let heroWin = 'kills';
+try { heroWin = localStorage.getItem('cw-herowin') || 'kills'; } catch (e) { /* storage unavailable */ }
+if (!HERO.modes[heroWin]) heroWin = 'kills';
+const HERO_DESC = 'Three heroes against three, out of one castle each: you and two bot heroes against three. You control only your hero and its talents; the armies march by themselves, every round tougher.';
+function showHeroWin(id) {
+  heroWin = id;
+  document.querySelectorAll('#heroWin button').forEach((b) => b.classList.toggle('active', b.dataset.w === id));
+  $('heroWinDesc').textContent = HERO.modes[id].desc;
+}
+for (const [id, m] of Object.entries(HERO.modes)) {
+  const b = document.createElement('button');
+  b.dataset.w = id;
+  b.append(m.name);
+  if (m.short) { const s = document.createElement('small'); s.textContent = m.short; b.append(s); }
+  b.addEventListener('click', () => {
+    showHeroWin(id);
+    try { localStorage.setItem('cw-herowin', id); } catch (e) { /* ignore */ }
+  });
+  $('heroWin').insertBefore(b, $('heroWinDesc'));
+}
+showHeroWin(heroWin);
 function selectObjective(o) {
-  if (!OBJECTIVES[o]) return;
-  objective = o;
-  document.querySelectorAll('#objective button, #lobbyObjective button').forEach((b) => b.classList.toggle('active', b.dataset.o === o));
-  $('objDesc').textContent = OBJECTIVES[o].desc;
-  $('lobbyObjDesc').textContent = OBJECTIVES[o].desc;
+  const hero = o === 'hero';
+  if (!hero && !OBJECTIVES[o]) return;
+  heroOn = hero;
+  if (!hero) objective = o;
+  document.querySelectorAll('#objective button').forEach((b) => b.classList.toggle('active', b.dataset.o === o));
+  document.querySelectorAll('#lobbyObjective button').forEach((b) => b.classList.toggle('active', b.dataset.o === objective));
+  $('objDesc').textContent = hero ? HERO_DESC : OBJECTIVES[o].desc;
+  $('lobbyObjDesc').textContent = OBJECTIVES[objective].desc;
+  $('heroWin').classList.toggle('hidden', !hero);
+  $('heroNote').classList.toggle('hidden', !hero);
+  $('menu').classList.toggle('hero', hero);
+  // online play is for the war modes this round: the lobby cannot start a hero match
+  $('mpBtn').disabled = hero;
+  $('mpBtn').title = hero ? 'Hero Game Mode is single player for now' : '';
+  if (hero) { $('online').classList.add('hidden'); $('offlineNote').classList.add('hidden'); $('mpBtn').classList.remove('active'); }
 }
 document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => selectObjective(b.dataset.o)));
 selectObjective(objective);
@@ -145,7 +180,9 @@ const rememberClass = (id) => {
 };
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
-$('play').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective }));
+$('play').addEventListener('click', () => begin(difficulty, heroOn
+  ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin } }
+  : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective }));
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], practice: true }, 'small'));
 
@@ -389,7 +426,7 @@ addEventListener('keydown', (e) => {
     if (shown('pause')) closePause(); else openPause();
     return;
   }
-  if (ui.shopOpen && (e.code === 'KeyB' || e.code === 'KeyO')) {
+  if (ui.shopOpen && (e.code === 'KeyB' || (e.code === 'KeyO' && !game.hero))) {   // (O does nothing in Hero Game Mode)
     e.preventDefault();
     input.pressed.delete(e.code); // don't let the game loop re-open it this frame
     ui.toggleShop(false);
