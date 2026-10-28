@@ -11,16 +11,13 @@ import { PeerNet } from './peernet.js';
 import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
+import { gfx } from './gfx.js';
 
 const $ = (id) => document.getElementById(id);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+gfx.init(renderer);   // (tone curve, shadow filter and the rest of the renderer set-up: see gfx.js)
 $('app').appendChild(renderer.domElement);
 
 const ui = new UI();
@@ -51,6 +48,8 @@ function buildGame(size, practice = false) {
   game.mapBuiltFor = size + (practice ? '+practice' : '');
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
+  window.__gfx = gfx;
+  gfx.setGame(game);
   applySettings();
 }
 try {
@@ -63,12 +62,7 @@ try {
 $('loading').classList.add('hidden');
 $('menu').classList.remove('hidden');
 
-function resize() {
-  renderer.setSize(innerWidth, innerHeight);
-  game.camera.aspect = innerWidth / innerHeight;
-  game.camera.updateProjectionMatrix();
-  game.fx.setScale(innerHeight * renderer.getPixelRatio());
-}
+function resize() { gfx.resize(); }
 addEventListener('resize', resize);
 resize();
 
@@ -462,7 +456,7 @@ function frame() {
     if (!frameErrors++) console.error('Frame error (the game keeps running):', e);
   }
   input.endFrame();
-  renderer.render(game.scene, game.camera);
+  gfx.renderFrame(dt);
   frames++;
   fpsT += dt;
   if (fpsT > 1) { $('fps').textContent = `${frames} fps`; frames = 0; fpsT = 0; }

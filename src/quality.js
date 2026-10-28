@@ -2,12 +2,14 @@
 // castles and the effects read `Q` (a live object that is updated in place when the quality changes) instead of testing the level
 // name themselves, so a new effect only has to pick the field that fits it. `Game.setQuality(name)` calls `applyQuality(name)`.
 //
-//   level          0 low · 1 medium · 2 high · 3 ultra
+//   level          0 low · 1 medium · 2 high · 3 ultra (the level in use; with the Auto choice it is the level Auto picked)
+//   choice         what the player picked: 'auto' or one of LEVELS (Q.name is always one of LEVELS)
 //   pixelRatio     the most device pixels per CSS pixel the canvas may use (the adaptive resolution may go lower, never higher)
-//   dynRes         the renderer may lower its resolution by itself to hold the frame rate
+//   dynRes         the renderer may lower its resolution by itself to hold the frame rate (never below dynMin of the full size)
 //   shadows        the sun casts shadows at all
-//   shadowMap      shadow map size in pixels (per cascade)
-//   shadowDist     metres around the camera that get shadows
+//   shadowMap      shadow map size in pixels (per cascade: the far one; shadowNearMap is the near one)
+//   shadowDist     metres around the camera that get shadows (the far cascade; the near cascade covers the closest third)
+//   shadowTaps     samples of the soft shadow filter (4 to 16)
 //   crowdShadowDist  soldiers closer than this many metres cast shadows (0 = none do)
 //   lodScale       multiplies every distance at which a model drops to a simpler version
 //   detail         0 plain · 1 rich · 2 richest: how much geometry and how many small parts models and props carry
@@ -16,35 +18,41 @@
 //   terrain        0 vertex colours · 1 detail texture · 2 splat shader (detail textures, normals, tile-breaking)
 //   wind           foliage, grass and cloth move in the wind
 //   particles      multiplier on how many particles an effect may spawn
-//   post           full-screen passes: { bloom, aa, vignette, grade, ao }
+//   clouds         sky: 0 plain gradient · 1 one cloud layer · 2 two layers with sun lighting
+//   msaa           samples of the multisampled scene target when a post pass is on (0 = none)
+//   post           full-screen passes: { bloom, aa, vignette, grade, ao } (all false = the scene goes straight to the canvas)
 //   exposure       tone-mapping exposure
 export const LEVELS = ['low', 'medium', 'high', 'ultra'];
 
 const PRESETS = {
   low: {
-    level: 0, pixelRatio: 1, dynRes: true, shadows: false, shadowMap: 1024, shadowDist: 0, crowdShadowDist: 0, lodScale: 0.7, detail: 0,
-    grass: 0, grassDist: 0, trees: 0.6, viewDist: 700, terrain: 0, wind: false, particles: 0.5,
-    post: { bloom: false, aa: false, vignette: false, grade: false, ao: false }, exposure: 1,
+    level: 0, pixelRatio: 1, dynRes: true, dynMin: 0.6, shadows: false, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 0, shadowTaps: 4,
+    crowdShadowDist: 0, lodScale: 0.7, detail: 0,
+    grass: 0, grassDist: 0, trees: 0.6, viewDist: 700, terrain: 0, wind: false, particles: 0.5, clouds: 1, msaa: 0,
+    post: { bloom: false, aa: false, vignette: false, grade: false, ao: false }, exposure: 1.25,
   },
   medium: {
-    level: 1, pixelRatio: 1.25, dynRes: true, shadows: true, shadowMap: 1024, shadowDist: 70, crowdShadowDist: 22, lodScale: 1, detail: 1,
-    grass: 0.6, grassDist: 34, trees: 0.85, viewDist: 1000, terrain: 1, wind: true, particles: 0.8,
-    post: { bloom: false, aa: false, vignette: true, grade: true, ao: false }, exposure: 1,
+    level: 1, pixelRatio: 1.25, dynRes: true, dynMin: 0.55, shadows: true, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 70, shadowTaps: 8,
+    crowdShadowDist: 22, lodScale: 1, detail: 1,
+    grass: 0.6, grassDist: 34, trees: 0.85, viewDist: 1000, terrain: 1, wind: true, particles: 0.8, clouds: 1, msaa: 2,
+    post: { bloom: false, aa: false, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   high: {
-    level: 2, pixelRatio: 1.75, dynRes: true, shadows: true, shadowMap: 2048, shadowDist: 90, crowdShadowDist: 32, lodScale: 1.25, detail: 2,
-    grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, wind: true, particles: 1,
-    post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1,
+    level: 2, pixelRatio: 1.75, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 2048, shadowNearMap: 2048, shadowDist: 90, shadowTaps: 12,
+    crowdShadowDist: 32, lodScale: 1.25, detail: 2,
+    grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, wind: true, particles: 1, clouds: 2, msaa: 4,
+    post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   ultra: {
-    level: 3, pixelRatio: 2, dynRes: true, shadows: true, shadowMap: 4096, shadowDist: 120, crowdShadowDist: 48, lodScale: 1.6, detail: 2,
-    grass: 1.4, grassDist: 58, trees: 1.2, viewDist: 1600, terrain: 2, wind: true, particles: 1.3,
-    post: { bloom: true, aa: true, vignette: true, grade: true, ao: true }, exposure: 1,
+    level: 3, pixelRatio: 2, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 3072, shadowNearMap: 2048, shadowDist: 120, shadowTaps: 16,
+    crowdShadowDist: 48, lodScale: 1.6, detail: 2,
+    grass: 1.4, grassDist: 58, trees: 1.2, viewDist: 1600, terrain: 2, wind: true, particles: 1.3, clouds: 2, msaa: 4,
+    post: { bloom: true, aa: true, vignette: true, grade: true, ao: true }, exposure: 1.25,
   },
 };
 
 // the live settings: medium until the page has read the saved choice
-export const Q = { name: 'medium', ...PRESETS.medium, post: { ...PRESETS.medium.post } };
+export const Q = { name: 'medium', choice: 'medium', ...PRESETS.medium, post: { ...PRESETS.medium.post } };
 
 const listeners = new Set();
 // call fn(Q, name) whenever the quality changes (and once now); returns a function that stops it
@@ -54,10 +62,15 @@ export function onQuality(fn) {
   return () => listeners.delete(fn);
 }
 
-export function applyQuality(name) {
+// `name` is one of LEVELS ('auto' is turned into a level by gfx.js before it gets here; if it arrives anyway it counts as medium)
+export function applyQuality(name, choice = name) {
   const p = PRESETS[name] || PRESETS.medium;
   Q.name = PRESETS[name] ? name : 'medium';
+  Q.choice = choice === 'auto' ? 'auto' : Q.name;
   Object.assign(Q, p, { post: { ...p.post } });
   for (const fn of listeners) fn(Q, Q.name);
   return Q;
 }
+
+// true when any full-screen pass is on (the scene is then drawn into an HDR target instead of the canvas)
+export const usesPost = () => { const p = Q.post; return !!(p.bloom || p.aa || p.vignette || p.grade || p.ao); };

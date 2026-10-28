@@ -30,7 +30,8 @@ import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
 import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
-import { applyQuality } from './quality.js';
+import { applyQuality, Q } from './quality.js';
+import { gfx } from './gfx.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
@@ -123,22 +124,13 @@ export class Game {
     this.renderer.renderLists.dispose();
   }
 
-  // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'
+  // Graphics quality, applied in one place: the live settings `Q` (every module's onQuality listener fires: shadows, sky, ...), the
+  // resolution and the passes (gfx.js). `q` is 'auto' or one of the levels in quality.js.
   setQuality(q) {
-    applyQuality(q);   // (the live settings every graphics module reads: see quality.js)
-    const level = { low: 0, medium: 1, high: 2 }[q] ?? 1;
-    this.quality = q;
-    this.grass.setDensity(level);
-    const sun = this.lights.sun;
-    sun.castShadow = level > 0;
-    const size = level === 2 ? 2048 : 1024;
-    if (sun.shadow.mapSize.x !== size) {
-      sun.shadow.mapSize.set(size, size);
-      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
-    }
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, [1, 1.25, 1.75][level]));
-    this.renderer.setSize(innerWidth, innerHeight);
-    this.fx.setScale(innerHeight * this.renderer.getPixelRatio());
+    applyQuality(gfx.levelFor(q), q);   // (the live settings every graphics module reads: see quality.js)
+    this.quality = Q.name;
+    if (this.grass.setDensity) this.grass.setDensity(Math.min(Q.level, 2));
+    gfx.applyQuality();
   }
 
   get localTeam() { return this.player.team; }
