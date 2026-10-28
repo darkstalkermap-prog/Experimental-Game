@@ -11,6 +11,7 @@ import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
+import { ViewModel } from './viewmodel.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -524,199 +525,18 @@ export class Player {
   }
 
   // ---------- view model ----------
+  // The first-person arms, weapons and their motion live in viewmodel.js (built per class, level and house; moved by this hero's combat state).
   buildViewModel() {
-    const vm = new THREE.Group();
-    this.viewModel = vm;
-    this.camera.add(vm);
-    this.vmSword = new THREE.Group();
-    this.vmShield = new THREE.Group();
-    this.vmBow = new THREE.Group();
-    this.vmMagic = new THREE.Group();
-    vm.add(this.vmSword, this.vmShield, this.vmBow, this.vmMagic);
-    // spell hand: an open glove with a flame / frost / spark orb above the palm
-    const glove = new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.9 });
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.12), glove);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.22, 8), glove);
-    wrist.rotation.x = Math.PI / 2; wrist.position.z = 0.15;
-    const fingers = new THREE.Group();
-    for (let i = 0; i < 4; i++) {
-      const f = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.022, 0.08), glove);
-      f.position.set(-0.035 + i * 0.023, 0.025, -0.08);
-      f.rotation.x = 0.6;
-      fingers.add(f);
-    }
-    this.vmOrbMat = new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-    this.vmOrb = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), this.vmOrbMat);
-    this.vmOrb.position.set(0, 0.09, -0.04);
-    this.vmMagic.add(palm, wrist, fingers, this.vmOrb);
-    this.vmMagic.position.set(0.24, -0.3, -0.48);
-    this.vmMagic.rotation.set(0.2, -0.15, 0);
-    this.rebuildWeapons();
+    this.vm = new ViewModel(this);
+    this.viewModel = this.vm.root;
   }
 
   rebuildWeapons() {
-    if (!this.camera) return;
-    const steel = new THREE.MeshStandardMaterial({ color: 0xdfe3ea, metalness: 0.95, roughness: 0.22 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.8 });
-    const gold = new THREE.MeshStandardMaterial({ color: 0xc9a040, metalness: 0.9, roughness: 0.3 });
-    const team = new THREE.MeshStandardMaterial({ color: TEAM_COLORS[this.team], roughness: 0.75 });
-    const trim = new THREE.MeshStandardMaterial({ color: 0xe8d9a8, roughness: 0.7 });
-    const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 });
-    for (const g of [this.vmSword, this.vmShield, this.vmBow]) g.clear();
-
-    // sword: blade points up the local +y axis from the grip
-    const sw = this.sword, ls = this.lv.sword;
-    // every sword level is plainly better to look at: longer and wider, then a dark fuller, then gilded steel
-    const gilt = new THREE.MeshStandardMaterial({ color: 0xf2e4b4, metalness: 0.95, roughness: 0.2, emissive: 0x3a2a08 });
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.05 + 0.01 * ls, sw.len, 0.012), ls >= 2 ? gilt : steel);
-    blade.position.y = 0.12 + sw.len / 2;
-    if (ls >= 1) {
-      const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.012, sw.len * 0.78, 0.016), ls >= 2 ? gold : dark);
-      fuller.position.y = 0.12 + sw.len * 0.5;
-      this.vmSword.add(fuller);
-    }
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.12, 4), steel);
-    tip.position.y = 0.12 + sw.len + 0.06;
-    tip.scale.z = 0.3;
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.035, 0.05), this.lv.sword >= 2 ? gold : dark);
-    guard.position.y = 0.11;
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.2, 8), dark);
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), this.lv.sword >= 1 ? gold : steel);
-    pommel.position.y = -0.11;
-    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.12, 0.1), new THREE.MeshStandardMaterial({ color: 0x4a3324, roughness: 0.9 }));
-    hand.position.y = 0;
-    this.vmSword.add(blade, tip, guard, grip, pommel, hand);
-    this.vmSwordBase = { pos: new THREE.Vector3(0.32, -0.32, -0.55), rot: new THREE.Euler(-0.5, 0.15, -0.35) };
-
-    // shield
-    let sh;
-    if (this.lv.shield === 0) {
-      sh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.04, 20), team);
-      sh.rotation.x = Math.PI / 2;
-      const boss = new THREE.Mesh(new THREE.SphereGeometry(0.08, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), steel);
-      boss.rotation.x = -Math.PI / 2;
-      boss.position.z = -0.02;
-      sh.add(boss);
-      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.018, 6, 24), steel);
-      rim.rotation.x = Math.PI / 2;
-      sh.add(rim);
-    } else {
-      sh = new THREE.Group();
-      const shape = new THREE.Shape();
-      shape.moveTo(-0.3, 0.35); shape.lineTo(0.3, 0.35); shape.quadraticCurveTo(0.32, -0.2, 0, -0.62); shape.quadraticCurveTo(-0.32, -0.2, -0.3, 0.35);
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false });
-      const face = new THREE.Mesh(geo, team);
-      face.rotation.y = Math.PI;
-      sh.add(face);
-      const cross1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.8, 0.01), trim);
-      cross1.position.set(0, -0.08, -0.05);
-      const cross2 = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.01), trim);
-      cross2.position.set(0, 0.14, -0.05);
-      sh.add(cross1, cross2);
-    }
-    this.vmShield.add(sh);
-    this.vmShield.scale.setScalar(0.8);
-    this.vmShieldBase = { pos: new THREE.Vector3(-0.66, -0.5, -0.72), rot: new THREE.Euler(0.15, 0.85, 0.15) };
-
-    // bow
-    const bw = this.bow;
-    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0.62, 0), new THREE.Vector3(0, 0, -0.3), new THREE.Vector3(0, -0.62, 0));
-    const limb = new THREE.Mesh(new THREE.TubeGeometry(curve, 16, this.lv.bow ? 0.026 : 0.017, 6, false), this.lv.bow ? dark : wood);
-    if (this.lv.bow) {   // the war bow has gold tips and a thicker, darker stave
-      for (const y of [0.62, -0.62]) {
-        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), gold);
-        tip.position.set(0, y, 0);
-        this.vmBow.add(tip);
-      }
-    }
-    const string = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 1.24, 4), trim);
-    this.vmString = string;
-    const arrow = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.8, 4), wood);
-    arrow.rotation.x = Math.PI / 2;
-    arrow.position.z = -0.25;
-    const head = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.08, 4), steel);
-    head.rotation.x = -Math.PI / 2;
-    head.position.z = -0.68;
-    const arrowGrp = new THREE.Group();
-    arrowGrp.add(arrow, head);
-    this.vmArrow = arrowGrp;
-    this.vmBow.add(limb, string, arrowGrp);
-    this.vmBowBase = { pos: new THREE.Vector3(-0.08, -0.12, -0.6), rot: new THREE.Euler(0, 0, 0.25) };
-    void bw;
+    if (this.vm) this.vm.dirty = true;
   }
 
   updateViewModel(dt, moving, sprint) {
-    const vm = this.viewModel;
-    // the spell hand comes up while a spell-like ability is cast
-    const casting = this.castFlash > 0;
-    this.vmMagic.visible = casting;
-    if (casting) {
-      const k = this.castFlash;
-      const reach = Math.sin(Math.min(1, (1 - k) * 3) * Math.PI / 2);   // thrust out, then hold
-      this.vmOrbMat.color.setHex(this.castColor);
-      this.vmOrb.scale.setScalar((0.04 + 0.05 * reach) * (1 + Math.sin(this.game.time * 30) * 0.08));
-      this.vmOrbMat.opacity = 0.9 * Math.min(1, k * 3);
-      this.vmMagic.position.set(0.24, -0.3 + 0.03 * reach, -0.48 - 0.12 * reach);
-      if (Math.random() < dt * 40) this.game.fx.orb(this.vmOrb.getWorldPosition(new THREE.Vector3()), new THREE.Color(this.castColor), 0.05);
-      this.castFlash = Math.max(0, this.castFlash - dt * 2.2);
-    }
-    const swordMode = this.weapon === 'sword' && !casting;
-    this.vmSword.visible = swordMode;
-    this.vmShield.visible = swordMode;
-    this.vmBow.visible = this.weapon === 'bow' && !casting;
-    this.bob += dt * (moving ? (sprint ? 13 : 9) : 2);
-    const bobAmt = moving ? (sprint ? 0.03 : 0.018) : 0.004;
-    vm.position.set(Math.sin(this.bob * 0.5) * bobAmt, -Math.abs(Math.sin(this.bob)) * bobAmt, 0);
-    this.vmDown += ((this.climb ? 1 : 0) - this.vmDown) * Math.min(1, dt * 8);   // out of the way while both hands climb
-    vm.position.y -= 0.55 * this.vmDown;
-
-    if (swordMode) {
-      const b = this.vmSwordBase;
-      const S = this.vmSword;
-      S.position.copy(b.pos);
-      S.rotation.copy(b.rot);
-      const atk = this.atk;
-      if (atk) {
-        const W = VM_WIND[atk.dir], E = VM_END[atk.dir];
-        let from = VM_ZERO, to = W, k;
-        if (atk.phase === 'wind') { k = easeOut(Math.min(1, atk.t / 0.09)); }
-        else if (atk.phase === 'strike') { from = W; to = E; k = easeOut(Math.min(1, atk.t / 0.09)); }
-        else { from = E; to = VM_ZERO; k = easeInOut(Math.min(1, atk.t / 0.2)); }
-        applyVm(S, from, to, k);
-        if (atk.phase === 'wind' && atk.t > 0.3) S.position.x += (Math.random() - 0.5) * 0.003; // straining a full wind-up
-      } else if (this.blocking) {
-        // raise the sword out of the way of the shield
-        S.position.x += 0.1; S.position.y -= 0.08; S.rotation.z -= 0.3;
-      }
-      if (this.buffs.has('whirl')) {
-        const w = this.game.time * 24;
-        S.position.x -= 0.3 + Math.cos(w) * 0.25; S.position.y += 0.1 + Math.sin(w) * 0.1; S.rotation.z += w;
-      }
-      if (this.staggerT > 0) { S.position.y -= 0.12 * Math.min(1, this.staggerT * 3); S.rotation.x -= 0.4 * Math.min(1, this.staggerT * 3); }
-      const sb = this.vmShieldBase;
-      const guard = { left: [-0.3, -0.2, 0.35], right: [0.02, -0.2, -0.2], over: [-0.14, -0.05, 0.05], thrust: [-0.14, -0.3, 0.05] }[this.blockDir];
-      const target = this.blocking ? { x: guard[0], y: guard[1], z: -0.55, ry: guard[2] } : { x: sb.pos.x, y: sb.pos.y, z: sb.pos.z, ry: sb.rot.y };
-      const k = Math.min(1, dt * 14);
-      const sh = this.vmShield;
-      if (!this._shInit) { sh.position.copy(sb.pos); sh.rotation.copy(sb.rot); this._shInit = true; }
-      sh.position.x += (target.x - sh.position.x) * k;
-      sh.position.y += (target.y - sh.position.y) * k;
-      sh.position.z += (target.z - sh.position.z) * k;
-      sh.rotation.y += (target.ry - sh.rotation.y) * k;
-    } else {
-      const b = this.vmBowBase;
-      this.vmBow.position.copy(b.pos);
-      this.vmBow.rotation.copy(b.rot);
-      const draw = this.aiming ? Math.min(1, this.aiming.t / 0.4) : Math.min(1, this.drawT / this.drawTime);
-      if (this.aiming) { this.vmBow.rotation.x -= 0.3 * draw; this.vmBow.position.y += 0.05 * draw; }   // a lob: the bow tips up
-      this.vmArrow.visible = this.arrows > 0;
-      this.vmArrow.position.z = 0.22 * draw;
-      this.vmString.position.z = 0.22 * draw;
-      this.vmString.scale.y = 1 - draw * 0.08;
-      this.vmBow.position.x += 0.04 * draw;
-      this.vmBow.position.y += 0.03 * draw;
-      if (draw >= 1) this.vmBow.position.x += (Math.random() - 0.5) * 0.002;
-    }
+    this.vm.update(dt, moving, sprint);
   }
 
   // ---------- per-frame ----------
@@ -968,6 +788,7 @@ export class Player {
 
   // feedback when your blow lands
   onHitLanded(heavy) {
+    if (this.vm) this.vm.struck(heavy);
     this.shake = Math.max(this.shake, heavy ? 0.22 : 0.1);
     if (this.game.mode === 'single') this.game.hitStop = heavy ? 0.09 : 0.05;
   }
@@ -1359,28 +1180,3 @@ export class Player {
 
 const r2 = (x) => Math.round(x * 100) / 100;
 const INTERP_SAMPLE = { x: 0, y: 0, z: 0, yaw: 0, extra: 0 };
-
-// first-person sword key poses per attack direction (offsets from the resting pose)
-const VM_ZERO = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
-const VM_WIND = {
-  right: { x: 0.18, y: 0.12, z: 0.05, rx: 0.2, ry: 0, rz: -1.3 },
-  left: { x: -0.42, y: 0.12, z: 0, rx: 0.2, ry: 0.3, rz: 1.2 },
-  over: { x: -0.05, y: 0.3, z: 0.1, rx: 0.9, ry: 0, rz: 0.25 },
-  thrust: { x: -0.12, y: 0.02, z: 0.22, rx: -1.2, ry: 0.1, rz: 0.3 },
-};
-const VM_END = {
-  right: { x: -0.6, y: -0.12, z: -0.1, rx: -0.4, ry: 0, rz: 1.3 },
-  left: { x: 0.3, y: -0.1, z: -0.1, rx: -0.4, ry: -0.3, rz: -1.2 },
-  over: { x: -0.1, y: -0.35, z: -0.15, rx: -1.4, ry: 0, rz: 0.2 },
-  thrust: { x: -0.15, y: 0.06, z: -0.4, rx: -1.3, ry: 0.1, rz: 0.3 },
-};
-const easeOut = (k) => 1 - (1 - k) * (1 - k);
-const easeInOut = (k) => k * k * (3 - 2 * k);
-function applyVm(obj, a, b, k) {
-  obj.position.x += a.x + (b.x - a.x) * k;
-  obj.position.y += a.y + (b.y - a.y) * k;
-  obj.position.z += a.z + (b.z - a.z) * k;
-  obj.rotation.x += a.rx + (b.rx - a.rx) * k;
-  obj.rotation.y += a.ry + (b.ry - a.ry) * k;
-  obj.rotation.z += a.rz + (b.rz - a.rz) * k;
-}
