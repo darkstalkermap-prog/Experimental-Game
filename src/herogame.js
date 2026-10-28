@@ -14,7 +14,7 @@
 // run, like every hero but the one on this screen).
 import { HeroBot } from './herobot.js';
 import { Player, HORSE } from './player.js';
-import { PLAYER, TROOP_CAP, clock } from './config.js';
+import { PLAYER, TROOP_CAP } from './config.js';
 import { CLASS_IDS } from './classes.js';
 import { killXp } from './heroes.js';
 
@@ -122,12 +122,6 @@ export class HeroMode {
     g.phase = 'prep';
     g.phaseT = HERO.prep;
     this.prepLeft = HERO.prep;
-  }
-
-  // The words that open the match.
-  intro() {
-    const m = HERO.modes[this.win];
-    this.g.ui.banner(`Hero Game Mode: ${m.name}`, `${m.desc} The armies march in ${clock(HERO.prep)} and grow stronger every round. B / N: talents · M: map · Q / R: your abilities.`);
   }
 
   // Every frame the battle is simulated (single player or the host): respawns, the fountain, the clock, the win.

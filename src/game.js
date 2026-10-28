@@ -233,7 +233,7 @@ export class Game {
       return;
     }
     this.audio.play('horn');
-    if (this.hero) { this.hero.intro(); return; }
+    if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
     this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
   }
@@ -853,10 +853,10 @@ export class Game {
     for (const h of this.humans) { h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5); h.gainXp(XP.wave, 'wave'); }
     if (r === 1) {
       this.audio.play('horn', this.camera.position);
-      this.bannerAll('The battle begins!', `A new army marches from every castle every ${WAVES.interval} seconds.`);
+      this.bannerAll('The battle begins!', this.hero ? `A new army marches from each keep every ${WAVES.interval} seconds.` : `A new army marches from every castle every ${WAVES.interval} seconds.`);
     } else if (r % 10 === 0) {
       this.audio.play('horn', this.camera.position);
-      this.bannerAll(`Wave ${r}`, 'The armies grow stronger. Hold your castle, break theirs.');
+      this.bannerAll(`${this.hero ? 'Round' : 'Wave'} ${r}`, 'The armies grow stronger. Hold your castle, break theirs.');
     } else if (r % WAVES.ramEvery === 0) {
       this.announce('Battering rams roll out with the armies.');
     }

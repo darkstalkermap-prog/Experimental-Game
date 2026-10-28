@@ -420,9 +420,23 @@ Everything but your hero is taken away. There is no gold, no shop, no castle upg
 cannot change class. You move, strike, guard, shoot, use **Q** and **R**, drink, ride, climb, duck, look at the map, ping
 and spend your **talents**. The armies march by themselves: both castles send a wave every 30 seconds (after a short
 preparation), each round tougher than the last (tougher soldiers, elite levies and training tiers, then rams and
-catapults), the same for both sides, so a match always ends. A hero who falls rises again at their own keep after a few
-seconds (longer with every death) and mends quickly near it (the fountain); experience comes a little quicker than in the war
-modes, because the match is short. The numbers are the `HERO` table in `src/herogame.js`.
+catapults), the same for both sides, so a match always ends. A hero who falls rises again at their own keep after 8 seconds
+(3 more for every earlier death, 24 at most), is untouchable for 2 seconds, and mends quickly near the keep (the fountain: 8% of
+their health a second within 16 metres, which also refills stamina, arrows and a spent healing draught); experience comes
+1.5 times as fast as in the war modes, because the match is short. The numbers are the `HERO` table in `src/herogame.js`.
+
+**The rounds.** The first army marches after 30 seconds, then one every 30 seconds from each keep. Soldiers get 6% tougher with
+every round and hit gates, walls and keeps 6% harder; Drill Sergeants' training arrives from round 5 (a step every 5 rounds), a
+barracks upgrade from round 6 (a bigger army, one more soldier per wave) and an elite in every wave from round 8 (a knight, then
+a rider, then a lancer); rams and catapults roll out as in the war modes. Both houses get the same, so by round 20 (ten minutes)
+a soldier has about 3.4 times the health and damage of a round-one soldier and a wave is five times as big.
+
+**The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
+alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
+rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class, they retreat
+to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
+fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty.
+They do not climb, duck or drive engines.
 
 **Three ways to win**, chosen in the menu: pick *Hero Mode* in the Mode row and a second row offers them (the last choice is
 remembered in your browser):
@@ -433,7 +447,8 @@ remembered in your browser):
 - **Timed**: **20 minutes** of battle (the clock starts when the first army marches). The side with more hero kills wins,
   then the stronger keep; if those are level too, it is a draw.
 
-In every way of winning, a keep that falls ends the match at once.
+In every way of winning, a keep that falls ends the match at once, and no match runs past **30 minutes** of battle (a warning
+comes 5 minutes before): then it is decided as the timed mode is, on hero kills, then keeps.
 
 **Controls.** **B** or **N** open the **Talents** panel and nothing else: the shop with only its Talents tab, no gold and no
 other tabs. In single player the world waits while it is open, and closing it gives the mouse back as usual. **O**, **F1-F4**,
@@ -449,8 +464,10 @@ your own hero highlighted. Your health, stamina, level and experience bar, abili
 hero falls ("Enemy hero slain: 12/25", "Your ally Mara was slain"), and the end screen gives the reason, the score and what each
 of the six did (class, level, kills, deaths).
 
-Code: the rules (`HeroMode`) are in `src/herogame.js` and the bots in `src/herobot.js`; `Game.start` switches the mode on when
-the setup has `hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
+Code: the rules (`HeroMode`: the sides, respawns, fountain, kill count, the three wins and `escalate` for the rounds) are in
+`src/herogame.js` and the bots in `src/herobot.js` (a bot is a remote `Player` with `isBot` and a `bot`, steered through the same
+movement, swing, shot and ability paths as a person); `Game.start` switches the mode on when the setup has
+`hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
 controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handleInput`).
 
 ## Controls
