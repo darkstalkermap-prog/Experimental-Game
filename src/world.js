@@ -77,7 +77,10 @@ export function createSky(scene, renderer = null) {
     ground.position.y = -40;
     envScene.add(ground);
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmrem.fromScene(envScene, 0.02).texture;
+    scene.userData.environmentTarget = pmrem.fromScene(envScene, 0.02);
+    scene.environment = scene.userData.environmentTarget.texture;
+    ground.geometry.dispose();
+    ground.material.dispose();
     pmrem.dispose();
   }
   scene.fog = new THREE.FogExp2(0xd6d2c4, 0.0032);

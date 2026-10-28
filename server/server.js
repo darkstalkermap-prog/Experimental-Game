@@ -14,14 +14,24 @@ const TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
+  let url, pathname;
+  try {
+    url = new URL(req.url, 'http://x');
+    pathname = decodeURIComponent(url.pathname);
+    if (pathname.includes('\0')) throw new Error('Invalid path');
+  } catch {
+    res.writeHead(400); res.end('Bad request'); return;
+  }
   if (url.pathname === '/api/ping') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ castleWars: true, rooms: rooms.size }));
     return;
   }
-  let file = path.normalize(path.join(ROOT, decodeURIComponent(url.pathname)));
-  if (!file.startsWith(ROOT) || file.includes(`${path.sep}server${path.sep}`) || file.includes('node_modules')) {
+  let file = path.normalize(path.join(ROOT, pathname));
+  const relative = path.relative(ROOT, file);
+  const segments = relative.split(path.sep);
+  if (relative.startsWith('..') || path.isAbsolute(relative) ||
+      segments.some((s) => s.startsWith('.') || s === 'server' || s === 'node_modules')) {
     res.writeHead(403); res.end(); return;
   }
   if (url.pathname === '/') file = path.join(ROOT, 'index.html');
@@ -51,6 +61,7 @@ wss.on('connection', (ws) => {
   ws.on('message', (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
+    if (!msg || typeof msg !== 'object' || Array.isArray(msg) || typeof msg.t !== 'string') return;
     const room = ws.room;
     switch (msg.t) {
       case 'create': {
@@ -64,7 +75,7 @@ wss.on('connection', (ws) => {
       }
       case 'join': {
         if (room) return;
-        const r = rooms.get(String(msg.code || '').toUpperCase().trim());
+        const r = rooms.get(typeof msg.code === 'string' ? msg.code.toUpperCase().trim() : '');
         if (!r) { send(ws, { t: 'error', msg: 'No game with that code.' }); return; }
         if (r.started) { send(ws, { t: 'error', msg: 'That game has already started.' }); return; }
         if (r.peers.size + 1 >= MAX_PLAYERS) { send(ws, { t: 'error', msg: 'That game is full (4 players).' }); return; }
@@ -72,7 +83,7 @@ wss.on('connection', (ws) => {
         r.peers.set(id, ws);
         ws.room = r; ws.id = id;
         send(ws, { t: 'joined', code: r.code, id });
-        send(r.host, { t: 'peer', id, name: String(msg.name || 'Player').slice(0, 20) });
+        send(r.host, { t: 'peer', id, name: typeof msg.name === 'string' && msg.name ? msg.name.slice(0, 20) : 'Player' });
         break;
       }
       case 'lock':        // host: game started, no more joins

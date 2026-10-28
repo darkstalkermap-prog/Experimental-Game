@@ -24,7 +24,8 @@ import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
-import { prewarmSoldier } from './models.js';
+import { prewarmSoldier, sharedModelResources } from './models.js';
+import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 
@@ -96,6 +97,19 @@ export class Game {
     this.phase = 'prep';
     this.phaseT = 0;
     this.hitStop = 0;
+  }
+
+  // Map replacement keeps the renderer, network connection and shared asset caches.
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];
+    // These resources may not currently be attached to a visible scene object.
+    const extra = [this.grass.geo, this.grass.material, this.magic.boltMat,
+      ...Object.values(this.projectiles).filter((v) => v && (v.isBufferGeometry || v.isMaterial))];
+    disposeWorld(this.scene, shared, extra);
+    this.warmQueue = [];
+    this.renderer.renderLists.dispose();
   }
 
   // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'

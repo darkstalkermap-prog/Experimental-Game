@@ -8,9 +8,11 @@
 //   object (4 KiB), so the host splits it over several named rooms, one piece per room, and clients put the
 //   pieces back together.
 const MAX_CHUNKS = 8;
+const MAX_CLIENTS = 3;
 const CHUNK_BYTES = 3300;
 const OUTBOX_BYTES = 2600;
-const len = (o) => JSON.stringify(o).length;
+const encoder = new TextEncoder();
+const len = (o) => encoder.encode(JSON.stringify(o)).length;
 const roomName = (code, i) => `cw-${code.toLowerCase()}${i ? '-' + i : ''}`;
 
 export class RoomNet {
@@ -18,6 +20,7 @@ export class RoomNet {
     this.room = room;
     this.viaRoom = true;
     this.role = null;
+    this.closed = false;
     this.id = null;
     this.code = null;
     this.handlers = {};
@@ -29,7 +32,9 @@ export class RoomNet {
     this.hostPeer = null;
     this.locked = false;
     this.sid = 0;
-    this.pieces = [];       // client: per chunk index, Map sid -> piece
+    this.pieces = new Map(); // client: snapshot id -> collected chunks
+    this.transmission = null;
+    this.joinTimer = null;
     this.lastSid = -1;
     this.pev = [];          // client: private events waiting for the next snapshot
     this.snapEvery = 0.15;
@@ -56,7 +61,13 @@ export class RoomNet {
     const names = [];
     for (let i = 0; i < MAX_CHUNKS; i++) names.push(roomName(code, i));
     try {
-      this.rooms = await Promise.all(names.map((n) => this.room.join(n)));
+      const results = await Promise.allSettled(names.map((n) => this.room.join(n)));
+      this.rooms = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      const failed = results.find((r) => r.status === 'rejected');
+      if (failed) {
+        this.close();
+        throw failed.reason;
+      }
     } catch (e) {
       throw new Error(e && e.code === 'not_permitted'
         ? 'Live rooms are not available for your account on this page.'
@@ -84,12 +95,13 @@ export class RoomNet {
     // wait for the host's presence to show up
     const t0 = performance.now();
     const wait = () => {
-      if (this.hostPeer) return;
+      if (this.hostPeer || !this.rooms[0]) return;
       if (!this.id) { const me = this.rooms[0].peers().find((p) => p.sameTab); if (me) this.id = me.peer; }
       const host = this.rooms[0].peers().find((p) => p.presence && p.presence.role === 'host');
-      if (host && this.id) { this.onMain({ peers: this.rooms[0].peers(), joined: [], left: [], updated: [host] }); return; }
+      if (host && this.id) this.onMain({ peers: this.rooms[0].peers(), joined: [], left: [], updated: [host] });
+      if (this.hostPeer || this.closed) return;
       if (performance.now() - t0 > 8000) { this.emit('error', `No game found with code ${code}.`); this.close(); return; }
-      setTimeout(wait, 250);
+      this.joinTimer = setTimeout(wait, 250);
     };
     wait();
   }
@@ -97,7 +109,10 @@ export class RoomNet {
   publish(extra = {}) {
     if (!this.rooms[0]) return;
     const p = { role: this.role, name: this.name, out: this.out, ...extra };
-    if (this.role === 'host') p.locked = this.locked ? 1 : 0;
+    if (this.role === 'host') {
+      p.locked = this.locked ? 1 : 0;
+      p.members = [...this.known.keys()];
+    }
     this.rooms[0].presence(p).catch(() => {});
   }
 
@@ -123,6 +138,7 @@ export class RoomNet {
   }
 
   onMain(ch) {
+    if (this.closed) return;
     if (!this.id) { const me = ch.peers.find((p) => p.sameTab); if (me) this.id = me.peer; }
     if (this.role === 'host') {
       for (const p of ch.left) {
@@ -131,9 +147,10 @@ export class RoomNet {
       for (const p of [...ch.joined, ...ch.updated]) {
         if (p.sameTab || !p.presence || p.presence.role !== 'client') continue;
         if (!this.known.has(p.peer)) {
-          if (this.locked) continue;
+          if (this.locked || this.known.size >= MAX_CLIENTS) { this.publish(); continue; }
           this.known.set(p.peer, String(p.presence.name || 'Lord').slice(0, 16));
           this.emit('peer', { id: p.peer, name: this.known.get(p.peer) });
+          this.publish();
         }
         this.readOutbox(p.peer, p.presence);
         if (p.presence.pose) this.emit('data', { from: p.peer, d: p.presence.pose });
@@ -143,7 +160,13 @@ export class RoomNet {
       for (const p of [...ch.joined, ...ch.updated]) {
         if (!p.presence || p.presence.role !== 'host') continue;
         if (!this.hostPeer) {
-          if (p.presence.locked) { this.emit('error', 'That game has already started.'); this.close(); return; }
+          const members = p.presence.members || [];
+          if (!members.includes(this.id)) {
+            const error = p.presence.locked ? 'That game has already started.'
+              : members.length >= MAX_CLIENTS ? 'That game is full (4 players).' : null;
+            if (error) { this.close(); this.emit('error', error); }
+            return; // only report success after the host has reserved a slot
+          }
           this.hostPeer = p.peer;
           this.emit('joined', { code: this.code, id: this.id });
         }
@@ -162,53 +185,67 @@ export class RoomNet {
   }
 
   addPiece(c) {
-    if (c.sid <= this.lastSid) return;
-    const m = (this.pieces[c.i] = this.pieces[c.i] || new Map());
-    m.set(c.sid, c);
-    if (m.size > 6) m.delete(m.keys().next().value);
-    for (let k = 0; k < c.n; k++) if (!this.pieces[k] || !this.pieces[k].has(c.sid)) return;
-    // every piece of this snapshot is here
-    const parts = [];
-    for (let k = 0; k < c.n; k++) parts.push(this.pieces[k].get(c.sid));
+    if (!Number.isSafeInteger(c.sid) || c.sid <= this.lastSid ||
+        !Number.isSafeInteger(c.n) || c.n < 1 ||
+        !Number.isSafeInteger(c.i) || c.i < 0 || c.i >= c.n || typeof c.text !== 'string') return;
+    let batch = this.pieces.get(c.sid);
+    if (!batch) {
+      batch = { n: c.n, parts: new Map() };
+      this.pieces.set(c.sid, batch);
+      // A lost presence update must not retain an incomplete snapshot forever.
+      if (this.pieces.size > 6) this.pieces.delete(Math.min(...this.pieces.keys()));
+    }
+    if (batch.n !== c.n) return;
+    batch.parts.set(c.i, c.text);
+    if (batch.parts.size !== c.n) return;
+    let decoded;
+    try {
+      decoded = JSON.parse(Array.from({ length: c.n }, (_, i) => batch.parts.get(i)).join(''));
+    } catch { this.pieces.delete(c.sid); return; }
+    const { s, me: players } = decoded;
+    const me = players && players[this.id];
+    if (!s || !me) return;
     this.lastSid = c.sid;
-    for (const pm of this.pieces) if (pm) for (const sid of [...pm.keys()]) if (sid <= c.sid) pm.delete(sid);
-    const head = parts[0].h;
-    const s = { ...head, u: [], s: [], ev: [] };
-    for (const part of parts) { s.u.push(...(part.u || [])); s.s.push(...(part.s || [])); s.ev.push(...(part.ev || [])); }
-    const me = (parts[0].me || {})[this.id];
-    if (!me) return;
+    for (const sid of this.pieces.keys()) if (sid <= c.sid) this.pieces.delete(sid);
+    if (Number.isFinite(c.delay) && c.delay > 0) this.snapDelay = c.delay;
     const pev = this.pev;
     this.pev = [];
     this.emit('data', { from: this.hostPeer, d: { k: 'snap', s, me, pev } });
   }
 
-  // Host: split a snapshot into pieces of at most CHUNK_BYTES each.
+  // Send complete snapshots, even when they need more pieces than we have rooms.
+  // Large snapshots reuse the seven chunk rooms in paced batches. The receiver
+  // applies nothing until it has the entire snapshot, including the entity lists.
   sendSnapshot(s, meById) {
-    const { u, s: siege, ev, ...head } = s;
-    const parts = [{ h: head, me: meById, u: [], s: [], ev: [] }];
-    let size = len(parts[0]);
-    const add = (key, item) => {
-      const l = len(item) + 1;
-      if (size + l > CHUNK_BYTES) {
-        if (parts.length >= MAX_CHUNKS - 1) return false;
-        parts.push({ u: [], s: [], ev: [] });
-        size = 40;
+    if (this.rooms.length !== MAX_CHUNKS) return;
+    if (!this.transmission) {
+      const parts = [];
+      const payload = JSON.stringify({ s, me: meById });
+      // Count escaped UTF-8 bytes: names can contain Unicode, quotes or backslashes.
+      // Reserve space for the chunk envelope. Search whole slices instead of
+      // encoding every character separately on the rendering thread.
+      for (let start = 0; start < payload.length;) {
+        let low = 1, high = Math.min(CHUNK_BYTES - 200, payload.length - start);
+        while (low < high) {
+          const middle = Math.ceil((low + high) / 2);
+          if (len(payload.slice(start, start + middle)) <= CHUNK_BYTES - 200) low = middle;
+          else high = middle - 1;
+        }
+        parts.push(payload.slice(start, start + low));
+        start += low;
       }
-      parts[parts.length - 1][key].push(item);
-      size += l;
-      return true;
-    };
-    for (const a of u) if (!add('u', a)) break;
-    for (const a of siege) if (!add('s', a)) break;
-    for (const e of ev) if (!add('ev', e)) break;  // effects are cosmetic: drop what doesn't fit
-    const sid = ++this.sid;
-    const n = parts.length;
-    // keep under the room's send budget (~40 presence updates a second, shared by all rooms)
-    this.snapEvery = Math.max(0.12, n / 26);
-    this.snapDelay = this.snapEvery * 1.4;
-    parts.forEach((part, i) => {
-      this.rooms[i + 1].presence({ role: 'host', c: { sid, i, n, ...part } }).catch(() => {});
-    });
+      this.snapEvery = Math.max(0.12, Math.min(parts.length, MAX_CHUNKS - 1) / 26);
+      this.snapDelay = Math.ceil(parts.length / (MAX_CHUNKS - 1)) * this.snapEvery * 1.4;
+      this.transmission = { sid: ++this.sid, parts, next: 0, delay: this.snapDelay };
+    }
+    const batch = this.transmission;
+    for (let room = 1; room < MAX_CHUNKS && batch.next < batch.parts.length; room++) {
+      const i = batch.next++;
+      this.rooms[room].presence({ role: 'host', c: {
+        sid: batch.sid, i, n: batch.parts.length, text: batch.parts[i], delay: batch.delay,
+      } }).catch(() => {});
+    }
+    if (batch.next === batch.parts.length) this.transmission = null;
   }
 
   lock() { this.locked = true; this.publish(); }
@@ -236,6 +273,12 @@ export class RoomNet {
   }
   toAll(d) { this.send('all', d); }
   close() {
+    this.closed = true;
+    clearTimeout(this.joinTimer);
+    this.pendingS = null;
+    this.pendingMe = {};
+    this.transmission = null;
+    this.pieces.clear();
     for (const r of this.rooms) r.leave().catch(() => {});
     this.rooms = [];
   }

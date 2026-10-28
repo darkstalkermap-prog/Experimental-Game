@@ -4,7 +4,8 @@
   "private": true,
   "description": "First-person medieval castle siege game for up to 4 players",
   "scripts": {
-    "start": "node server/server.js"
+    "start": "node server/server.js",
+    "test": "node --test test/*.test.cjs"
   },
   "dependencies": {
     "ws": "^8.18.0"

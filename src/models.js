@@ -618,3 +618,9 @@ export function bakedMesh(key, root) {
   mesh.visible = false;
   return mesh;
 } // how far a rider's root is raised to sit in the saddle
+
+// These resources outlive individual worlds and must survive map replacement.
+export function sharedModelResources() {
+  return [unitMat, ...Object.values(P || {}), ...bakeCache.values(),
+    ...[...cache.values(), ...horseCache.values()].flatMap((entry) => Object.values(entry))];
+}
