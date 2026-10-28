@@ -26,6 +26,7 @@ import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
+import { Alerts } from './alerts.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -81,6 +82,7 @@ export class Game {
     this.abilities = new Abilities(this);
     this.aimRing = new AimRing(this);
     this.hill = new Hill(this);
+    this.alerts = new Alerts(this);   // callouts, tips and nudges (see alerts.js)
     this.objective = 'conquest';   // 'conquest' (the main mode) or 'koth' (King of the Hill)
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
@@ -578,7 +580,7 @@ export class Game {
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || ''); break;
-      default: break;
+      default: this.alerts.event(ev); break;
     }
   }
 
@@ -1150,6 +1152,7 @@ export class Game {
       this.time += dt;
       return;
     }
+    this.alerts.update(dt);
     // single player pauses the world; online games keep running underneath menus
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
