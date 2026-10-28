@@ -25,6 +25,7 @@ import { Abilities } from './classes.js';
 import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
+import { Pings } from './pings.js';
 import { prewarmSoldier } from './models.js';
 import { allied, setSides } from './teams.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
@@ -99,6 +100,7 @@ export class Game {
     this.phase = 'prep';
     this.phaseT = 0;
     this.hitStop = 0;
+    this.pings = new Pings(this);
   }
 
   // Graphics quality: 'low' (no shadows or grass), 'medium', 'high'
@@ -129,6 +131,7 @@ export class Game {
     this.mode = setup.mode;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hill.reset();
+    this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
     // so the game becomes two teams of two: Blue + Red against Green + Gold.
     this.coop = !!setup.coop && setup.players.length > 1;
@@ -604,6 +607,7 @@ export class Game {
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || ''); break;
+      case 'ping': this.pings.receive(ev); break;
       default: this.alerts.event(ev); break;
     }
   }
@@ -1260,6 +1264,7 @@ export class Game {
       h.updateHorse(dt);
     }
     this.audio.setListener(this.camera.position);
+    this.pings.update(dt);
 
     if (this.simulating) {
       for (const u of this.units) u.update(dt);
