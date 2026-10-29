@@ -38,11 +38,7 @@ export class Upgrades {
     this.standardMeshes = [];
     this.flames = [];
     this.wallDirty = false;
-    this.mats = {
-      fine: this.M.stoneFine,
-      ember: new THREE.MeshBasicMaterial({ color: 0xff7a18, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false }),
-      emberHot: new THREE.MeshBasicMaterial({ color: 0xffd060, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }),
-    };
+    this.mats = { fine: this.M.stoneFine };
   }
 
   // levels: { wall, gate, tower, barracks, levies }. Returns the aspects that changed (all of them the first time).
@@ -66,11 +62,7 @@ export class Upgrades {
   tick(dt, time) {
     if (this.wallDirty) { this.wallDirty = false; this.rebuildWalls(); }
     const fx = this.c.game.fx;
-    for (const f of this.flames) {
-      const k = 1 + Math.sin(time * 11 + f.phase) * 0.14 + Math.sin(time * 23 + f.phase * 2) * 0.07;
-      f.mesh.scale.set(k * 0.9, k * 1.15, k * 0.9);
-      if (f.pos && fx && Math.random() < dt * 9) fx.fireTrail(f.pos);   // sparks and smoke rise from the braziers
-    }
+    for (const f of this.flames) if (fx && Math.random() < dt * 9) fx.fireTrail(f.pos);   // sparks and smoke rise from the braziers
   }
 
   clear(list) {
@@ -221,8 +213,9 @@ export class Upgrades {
     const c = this.c, L = c.towerLevel, M = this.M;
     this.clear(this.towerMeshes);
     this.flames.length = 0;
-    for (const a of this.archers || []) this.c.group.remove(a);
-    this.archers = [];
+    this.archers = [];   // (one entry per archer: where he stands; all of them are drawn as one mesh)
+    const fire = [];
+    c.fire.set('tower', fire);
     if (!L) return;
     const wood = [], iron = [], plank = [], disc = [], rim = [];
     for (const t of c.towers) {
@@ -245,10 +238,10 @@ export class Upgrades {
       const spots = [[22, 26.2, 0], [26.2, 22, 1], [26.2, 24, 1]];
       for (let i = 0; i < Math.min(L, 3); i++) {
         const [ax, az, east] = spots[i];
-        const m = this.archerMesh();
+        const m = new THREE.Object3D();
         m.position.set(sx * ax, towerH, sz * az);
         m.rotation.y = east ? (sx > 0 ? Math.PI / 2 : -Math.PI / 2) : (sz > 0 ? 0 : Math.PI);
-        c.group.add(m);
+        m.updateMatrix();
         this.archers.push(m);
       }
       if (L >= 2) {
@@ -269,17 +262,8 @@ export class Upgrades {
           const bowl = new THREE.CylinderGeometry(0.42, 0.28, 0.3, 10);
           bowl.translate(sx * fx, towerH + 0.95, sz * fz);
           iron.push(bowl);
-          const fl = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.9, 7), this.mats.ember);
-          fl.position.set(sx * fx, towerH + 1.5, sz * fz);
-          const core = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 6), this.mats.emberHot);
-          core.position.set(sx * fx, towerH + 1.42, sz * fz);
-          const lick = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.62, 5), this.mats.ember);
-          lick.position.set(sx * fx + 0.14, towerH + 1.38, sz * fz - 0.08);
-          lick.rotation.z = -0.35;
-          c.group.add(fl, core, lick);
-          this.towerMeshes.push(fl, core, lick);
-          const pos = c.toWorld(sx * fx, sz * fz, towerH + 1.5);
-          this.flames.push({ mesh: fl, phase: Math.random() * 6, pos }, { mesh: core, phase: Math.random() * 6 }, { mesh: lick, phase: Math.random() * 6 });
+          fire.push([0, sx * fx, towerH + 1.75, sz * fz, 1.3], [1, sx * fx, towerH + 1.6, sz * fz, 2.6]);   // (flame and glow: see FireSet)
+          this.flames.push({ pos: c.toWorld(sx * fx, sz * fz, towerH + 1.5) });
         }
         // wooden hoardings overhanging the north and east faces
         tb(plank, 18, F1 + 0.95, towerH - 1.35, towerH - 0.95, F1, F1 + 0.95);
@@ -297,10 +281,18 @@ export class Upgrades {
     this.add(this.towerMeshes, plank, M.plank);
     this.add(this.towerMeshes, disc, M.team[c.team]);
     this.add(this.towerMeshes, rim, M.gold);
+    if (this.archers.length) {        // every archer on the towers in one mesh
+      const base = this.archerGeo();
+      const mesh = new THREE.Mesh(mergeGeometries(this.archers.map((o) => base.clone().applyMatrix4(o.matrix))), unitMaterial());
+      mesh.castShadow = true;
+      c.group.add(mesh);
+      this.towerMeshes.push(mesh);
+    }
+    c.fire.set('tower', fire);
   }
 
-  // one archer drawing his bow, baked into a single static mesh
-  archerMesh() {
+  // one archer drawing his bow, baked into a single static geometry (shared by every tower of the house)
+  archerGeo() {
     const c = this.c;
     let geo = ARCHER_GEO.get(c.team);
     if (!geo) {
@@ -309,9 +301,7 @@ export class Upgrades {
       geo = bakedMesh(`towerArcher:${c.team}`, m.root).geometry;
       ARCHER_GEO.set(c.team, geo);
     }
-    const mesh = new THREE.Mesh(geo, unitMaterial());
-    mesh.castShadow = true;
-    return mesh;
+    return geo;
   }
 
   // ---------------------------------------------------------------- barracks
