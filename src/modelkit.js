@@ -101,20 +101,27 @@ export class Builder {
     return this;
   }
 
+  // how finely a sphere of this radius is cut at this level of detail: [around, down]
+  ellSeg(rm, seg) {
+    if (seg) return typeof seg === 'number' ? [seg, Math.max(3, Math.round(seg * 0.7))] : seg;
+    const t = rm >= 0.2 ? [[14, 10], [9, 6], [7, 5], [5, 4]] : rm >= 0.1 ? [[10, 7], [7, 5], [6, 4], [4, 3]] : rm >= 0.05 ? [[8, 6], [6, 4], [5, 3], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]];
+    return t[Math.min(3, this.level)];
+  }
+
   // ellipsoid: centre c, radii r (a number or [rx, ry, rz])
   ell(c, r, o = {}) {
-    const sg = o.seg || [this.pick(14, 10, 7), this.pick(10, 7, 5)];
+    const sg = this.ellSeg(typeof r === 'number' ? r : Math.max(r[0], r[1], r[2]), o.seg);
     return this.place(new THREE.SphereGeometry(1, sg[0], sg[1]), c, o.rot || [0, 0, 0], r, o);
   }
 
   // part of an ellipsoid: phi0..phi0+phiLen around y (0 is -x, a quarter turn is +z), theta0..theta0+thLen down from the top
   shell(c, r, phi0, phiLen, th0, thLen, o = {}) {
-    const sg = o.seg || [this.pick(14, 10, 7), this.pick(10, 7, 5)];
+    const sg = this.ellSeg(typeof r === 'number' ? r : Math.max(r[0], r[1], r[2]), o.seg);
     return this.place(new THREE.SphereGeometry(1, sg[0], sg[1], phi0, phiLen, th0, thLen), c, o.rot || [0, 0, 0], r, o);
   }
 
   torus(c, R, r, o = {}) {
-    return this.place(new THREE.TorusGeometry(R, r, o.sides || this.pick(6, 5, 4), o.seg || this.pick(24, 16, 10)), c, o.rot || [0, 0, 0], o.sc || 1, o);
+    return this.place(new THREE.TorusGeometry(R, r, o.sides || this.pick(5, 4, 3), o.seg || this.pick(20, 14, 9)), c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 
   // tapered rod from a to b, radius ra at a and rb at b
@@ -138,12 +145,13 @@ export class Builder {
   rbox(c, s, o = {}) {
     const e = o.e || 0.3;
     if (o.sharp) return this.place(new THREE.BoxGeometry(1, 1, 1), c, o.rot || [0, 0, 0], s, o);
-    return this.place(superGeo(e, o.e2 || e, o.seg ? o.seg[0] : this.pick(10, 8, 6), o.seg ? o.seg[1] : this.pick(8, 6, 4)), c, o.rot || [0, 0, 0], s, o);
+    const sg = o.seg || (Math.max(s[0], s[1], s[2]) >= 0.2 ? [[10, 8], [8, 6], [6, 4], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]])[Math.min(3, this.level)];
+    return this.place(superGeo(e, o.e2 || e, sg[0], sg[1]), c, o.rot || [0, 0, 0], s, o);
   }
 
   // surface of revolution about y: pts [[radius, y], ...]; sc scales the result (elliptical sections); arc [start, length] radians (0 = +z)
   lathe(pts, c, o = {}) {
-    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg || this.pick(20, 14, 9), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
+    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg || this.pick(18, 12, 8), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
     return this.place(g, c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 

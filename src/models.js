@@ -96,6 +96,8 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   if (desc.cape) add(joint(torso, 0, 0.43, -0.19), desc.cape);
   if (desc.quiver) add(torso, 'quiver');
   const kit = add(torso, 'kit.torso', false);
+  const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
+  const kitShield = desc.shield ? add(elL, 'kit.shield.' + desc.shield, false) : null;
   const mount = joint(head, 0, PLUME_Y[desc.head] || 0.3, -0.02);
   const plumeC = add(mount, 'plume.cloth', false), plumeG = add(mount, 'plume.gold', false);
   const ranged = desc.weapon === 'bow';
@@ -103,7 +105,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const m = {
     kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon,
     weaponTilt: WEAPON_TILT[wk] ?? -1, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart,
-    tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
+    kitArms, kitShield, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
   };
   m.farKey = `${m.hero || type}${raider && !desc.plate ? ':r' : ''}${m.mounted ? ':m' : ''}`;
   const face = raider ? 6 + (variant & 1) : look.face;
@@ -126,6 +128,8 @@ export function rigSetTier(m, tier) {
   m.tier = tier;
   m.inst[3] = m.baseBits | tierBits(tier);
   m.kit.on = tier > 0;
+  for (const p of m.kitArms) p.on = tier > 0;
+  if (m.kitShield) m.kitShield.on = tier >= 3;
   m.body.scale.setScalar(m.desc.scale * (m.desc.giant ? 1 : TIER_SCALE(tier)));
 }
 // veterans wear a plume: team colour from rank 3, gold at rank 5
@@ -416,6 +420,8 @@ function bakeRig(m, level, resolve, keepPose) {
   const list = [];
   for (const p of m.parts) {
     if (!p.on) continue;
+    // (far away the small things do not show: hands, tier kit, plumes, the quiver)
+    if (level === 3 && /^(fore|kit|plume|quiver)/.test(p.shape.name)) continue;
     _rel.multiplyMatrices(_inv, p.node.matrixWorld);
     list.push(bakePart(shapeGeo(p.shape, level), _rel.clone(), bits, resolve ? m.inst : null));
   }
@@ -450,7 +456,8 @@ export function bakedMesh(key, root) {
 // ---------------------------------------------------------------- warming and shared resources
 // The shapes a kind of soldier wears are built a few at a time (one per call) so a new arrival never stalls a frame.
 const warmed = new Set(), warmTasks = [];
-export const geoLevel = (lod) => Math.min(2, lod + 2 - Q.detail);
+// (the rich shapes are for soldiers close by; everyone farther away wears the plain ones, so a crowd stays cheap)
+export const geoLevel = (lod) => (lod === 0 ? Math.max(0, 2 - Q.detail) : 2);
 export function prewarmSoldier(type, team, variant, tier = 0) {
   const key = type + ':' + (team === RAIDER_TEAM ? 'r' : '');
   if (!warmed.has(key) && UNIT_TYPES[type]) {

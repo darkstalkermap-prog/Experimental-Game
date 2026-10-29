@@ -2,9 +2,10 @@
 // (shape geometry, cast shadows or not): each frame the soldiers that can be seen write the world matrix of each of their parts (the
 // joint Groups of the rig, see models.js) and their per-instance look (colours and flags) into the batch's buffers, so the draw cost
 // scales with the number of different shapes in view and not with the number of soldiers.
-//   near  (lod 0)  full detail, casts shadows (within Q.crowdShadowDist)
-//   mid   (lod 1)  simpler shapes, animated, no shadows
+//   near  (lod 0)  the rich shapes
+//   mid   (lod 1)  plain shapes, animated
 //   far   (lod 2)  one static model per kind of rig, no animation
+// Soldiers closer than Q.crowdShadowDist cast shadows (near or mid), so the shadow pass scales with the shapes close by.
 // A soldier outside the view frustum costs nothing but the test. Rigs whose owner is not in the scene graph are updated here.
 import * as THREE from 'three';
 import { Q } from './quality.js';
@@ -15,7 +16,7 @@ import { farShapeOf, geoLevel, warmStep } from './models.js';
 // the distances (metres) at which a soldier drops to the next level of detail, from the quality settings
 const LOD = { near: 32, mid: 85, far: 260 };
 export function lodLimits(out = LOD) {
-  out.near = Q.crowdShadowDist > 0 ? Math.max(18, Q.crowdShadowDist) : 18 * Q.lodScale;
+  out.near = 20 * Q.lodScale;
   out.mid = 85 * Q.lodScale;
   out.far = 260 * Q.lodScale;
   return out;
@@ -118,6 +119,7 @@ export class Crowd {
     crowdUniforms.uTime.value = this.time;
     crowdUniforms.uWind.value = Q.wind ? 1 : 0;
     const cast = !!(Q.shadows && Q.crowdShadowDist > 0 && game.lights && game.lights.sun.castShadow);
+    const sd2 = Q.crowdShadowDist * Q.crowdShadowDist, cp = cam.position;
     for (const b of this.list) b.n = 0;
     const units = game.units;
     for (let i = 0; i < units.length; i++) {
@@ -133,7 +135,7 @@ export class Crowd {
         if (u.horse) this.addFar(u.horse);
       } else {
         mesh.updateMatrixWorld(true);
-        const level = geoLevel(u.lod), c = cast && u.lod === 0;
+        const level = geoLevel(u.lod), c = cast && (u.pos.x - cp.x) ** 2 + (u.pos.z - cp.z) ** 2 < sd2;
         this.addRig(m, level, c);
         if (u.horse) this.addRig(u.horse, level, c);
       }
@@ -143,9 +145,13 @@ export class Crowd {
       if (h.body && h.alive !== undefined) this.addHero(h, h.body, h.mounted ? 2.4 : 1.9, lim, cast, game);
       if (h.horse) this.addHero(h, h.horse, 2.6, lim, cast, game);
     }
-    let n = 0, nb = 0;
-    for (const b of this.list) { b.end(cast); n += b.n; if (b.n) nb++; }
-    this.stats.instances = n; this.stats.batches = nb;
+    let n = 0, nb = 0, tris = 0, shadowBatches = 0, shadowTris = 0;
+    for (const b of this.list) {
+      b.end(cast);
+      n += b.n;
+      if (b.n) { nb++; const t = b.n * (b.geo.index.count / 3); tris += t; if (b.shadow) { shadowBatches++; shadowTris += t; } }
+    }
+    this.stats.instances = n; this.stats.batches = nb; this.stats.tris = Math.round(tris); this.stats.shadowBatches = shadowBatches; this.stats.shadowTris = Math.round(shadowTris);
     warmStep();
   }
 
@@ -162,7 +168,7 @@ export class Crowd {
     if (lod === 3) return;
     if (lod === 2) { this.addFar(rig); return; }
     root.updateMatrixWorld(true);
-    this.addRig(rig, geoLevel(lod), cast && lod === 0);
+    this.addRig(rig, geoLevel(lod), cast && d2 < Q.crowdShadowDist * Q.crowdShadowDist);
   }
 
   dispose() {

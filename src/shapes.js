@@ -36,11 +36,11 @@ const LEG = { cloth: { c: K.pants, m: 'cloth', p: PAT.weave }, mail: mailM, plat
 function boot(b, fur) {
   const bc = fur ? { c: K.fur, m: 'fur', p: PAT.fur } : { c: K.boot, m: 'leather', p: PAT.leather };
   b.rod([0, -0.13, 0], [0, -0.41, 0], 0.057, 0.05, { ...bc, a: [0.8, 1], seg: b.pick(10, 8, 6) });
-  b.rbox([0, -0.438, 0.06], [0.105, 0.075, 0.25], { ...bc, e: 0.35 });
+  b.rbox([0, -0.438, 0.06], [0.105, 0.075, 0.25], { ...bc, e: 0.35, seg: [b.pick(8, 6, 5), b.pick(5, 4, 3)] });
   if (b.level < 2) {
-    b.rod([0, -0.165, 0], [0, -0.1, 0], 0.07, 0.07, { c: K.cuff, m: 'leather' });
-    b.ell([0, -0.43, 0.15], [0.052, 0.036, 0.06], bc);
-    b.rbox([0, -0.474, 0.065], [0.108, 0.018, 0.26], { c: K.ironDk, m: 'rubber', e: 0.3 });
+    b.rod([0, -0.165, 0], [0, -0.1, 0], 0.07, 0.07, { c: K.cuff, m: 'leather', seg: b.pick(10, 7, 6) });
+    b.ell([0, -0.43, 0.15], [0.052, 0.036, 0.06], { ...bc, seg: [6, 4] });
+    b.rbox([0, -0.474, 0.065], [0.108, 0.018, 0.26], { c: K.ironDk, m: 'rubber', sharp: true });
   }
 }
 for (const st of Object.keys(LEG)) {
@@ -74,16 +74,16 @@ for (const st of Object.keys(ARM)) {
     if (st === 'plate') {
       if (b.level < 2) {
         b.ell([0, 0.03, 0], [0.115, 0.07, 0.11], { ...plate, a: [0.85, 1] });
-        b.ell([0, -0.025, 0], [0.108, 0.05, 0.103], { ...plate, a: [0.8, 0.95] });
-        b.ell([0, -0.07, 0], [0.1, 0.045, 0.097], { ...plate, a: [0.8, 0.95] });
-        b.ell([0, 0.035, 0], [0.122, 0.074, 0.117], { ...gold, g: 4 });
+        b.ell([0, -0.04, 0], [0.105, 0.05, 0.1], { ...plate, a: [0.8, 0.95] });
       } else b.ell([0, 0.02, 0], [0.112, 0.08, 0.108], plate);
-    } else if (b.level < 2) {
-      b.ell([0, 0.03, 0], [0.115, 0.07, 0.11], { ...steel, g: 1, a: [0.8, 1] });
-      b.ell([0, 0.035, 0], [0.12, 0.074, 0.115], { ...gold, g: 4 });
     }
   });
 }
+// the pauldrons of a trained soldier (gates 1 steel, 4 gold)
+def('kit.arm', (b) => {
+  b.ell([0, 0.03, 0], [0.115, 0.07, 0.11], { ...steel, g: 1, a: [0.8, 1] });
+  b.ell([0, 0.035, 0], [0.122, 0.074, 0.117], { ...gold, g: 4 });
+});
 const FORE = {
   cloth: { arm: { c: K.gamb, m: 'cloth', p: PAT.quilt }, hand: leather },
   mail: { arm: mailM, hand: leather },
@@ -114,10 +114,10 @@ const torsoR = (y) => {
 };
 function belt(b, extras) {
   b.lathe([[0.171, 0.02], [0.18, 0.02], [0.18, 0.085], [0.171, 0.085]], [0, 0, 0], { sc: [1, 1, 0.68], ...leather, seg: b.pick(20, 14, 9) });
-  b.rbox([0, 0.052, 0.126], [0.052, 0.05, 0.014], { ...gold, e: 0.3 });
+  b.rbox([0, 0.052, 0.126], [0.052, 0.05, 0.014], { ...gold, sharp: true });
   if (extras && b.level < 2) {
-    b.rbox([0.165, 0.0, 0.05], [0.07, 0.1, 0.055], { ...leather, e: 0.35 });
-    b.rbox([-0.15, 0.005, 0.085], [0.06, 0.08, 0.05], { ...leather, e: 0.35 });
+    b.rbox([0.165, 0.0, 0.05], [0.07, 0.1, 0.055], { ...leather, sharp: true });
+    b.rbox([-0.15, 0.005, 0.085], [0.06, 0.08, 0.05], { ...leather, sharp: true });
   }
 }
 // cloth hanging from the belt, front and back, swaying; the sides stay open
@@ -129,9 +129,8 @@ function tabardSkirt(b, hem, w) {
   }
 }
 function scabbard(b) {
-  b.rod([0.17, -0.03, 0.0], [0.21, -0.43, -0.09], 0.024, 0.02, { ...leather, a: [0.85, 1] });
-  b.rod([0.205, -0.4, -0.085], [0.212, -0.46, -0.1], 0.022, 0.026, { ...iron });
-  b.rbox([0.168, -0.0, 0.0], [0.05, 0.03, 0.05], { ...gold, e: 0.4 });
+  b.rod([0.17, -0.03, 0.0], [0.21, -0.43, -0.09], 0.024, 0.02, { ...leather, a: [0.85, 1], seg: 6 });
+  b.rod([0.205, -0.4, -0.085], [0.212, -0.46, -0.1], 0.022, 0.026, { ...iron, seg: 5 });
 }
 const hips = (b, o) => b.ell([0, -0.03, 0], [0.172, 0.1, 0.125], { a: [0.7, 1], ...o });
 
@@ -227,34 +226,39 @@ def('chest.fur', (b) => {
 
 // ---------------------------------------------------------------- heads (frame at the base of the neck; the face is at y 0.165)
 function headBase(b, brow = 1) {
-  b.rod([0, -0.04, 0], [0, 0.09, 0], 0.056, 0.05, { ...skin, a: [0.55, 0.8], seg: b.pick(10, 8, 6) });
+  if (b.level >= 3) { b.ell([0, 0.16, 0], [0.097, 0.12, 0.108], { ...skin, seg: [5, 3] }); return; }
+  b.rod([0, -0.04, 0], [0, 0.09, 0], 0.056, 0.05, { ...skin, a: [0.55, 0.8], seg: b.pick(10, 7, 5) });
   const front = (x, y, z) => (z < 0.0 ? [-3, -3] : [x / 0.21 + 0.5, (y - 0.16) / 0.25 + 0.5]);
   const fp = { ...skin, p: PAT.face, uv: front };
-  b.ell([0, 0.165, 0.0], [0.097, 0.12, 0.108], fp);
-  b.ell([0, 0.1, 0.03], [0.078, 0.075, 0.08], fp);
+  b.ell([0, 0.165, 0.0], [0.097, 0.12, 0.108], { ...fp, seg: [b.pick(14, 10, 8), b.pick(10, 7, 5)] });
+  b.ell([0, 0.1, 0.03], [0.078, 0.075, 0.08], { ...fp, seg: [b.pick(10, 8, 6), b.pick(7, 5, 4)] });
   if (b.level < 2) {
-    b.ell([0, 0.135, 0.105], [0.019, 0.032, 0.03], { ...skin, rot: [0.3, 0, 0], seg: [8, 6] });
-    b.ell([0, 0.205, 0.075], [0.09 * brow, 0.02 * brow, 0.04 * brow], { ...skin, a: [0.8, 0.8], seg: [10, 5] });
-    for (const s of [-1, 1]) b.ell([s * 0.097, 0.15, -0.005], [0.014, 0.03, 0.02], { s: 'skinDark', m: 'skin', seg: [6, 5] });
+    b.ell([0, 0.135, 0.105], [0.019, 0.032, 0.03], { ...skin, rot: [0.3, 0, 0], seg: [b.pick(8, 6, 5), b.pick(6, 4, 3)] });
+    b.ell([0, 0.205, 0.075], [0.09 * brow, 0.02 * brow, 0.04 * brow], { ...skin, a: [0.8, 0.8], seg: [b.pick(10, 7, 5), b.pick(5, 4, 3)] });
+    if (b.level < 1) for (const s of [-1, 1]) b.ell([s * 0.097, 0.15, -0.005], [0.014, 0.03, 0.02], { s: 'skinDark', m: 'skin', seg: [6, 4] });
   }
 }
 const hairM = { s: 'hair', m: 'hair' };
 function hairSet(b) {
-  b.shell([0, 0.18, -0.01], [0.103, 0.125, 0.112], 0, TAU, 0, PI * 0.56, { ...hairM, g: 7, rot: [-0.25, 0, 0] });
-  b.shell([0, 0.18, -0.012], [0.106, 0.128, 0.115], 0, TAU, 0, PI * 0.6, { ...hairM, g: 8, rot: [-0.3, 0, 0] });
-  b.ell([0, 0.09, -0.075], [0.095, 0.15, 0.06], { ...hairM, g: 8, a: [0.6, 1] });
-  b.shell([0, 0.15, -0.01], [0.1, 0.12, 0.108], 0, TAU, PI * 0.5, PI * 0.2, { ...hairM, g: 9 });
+  if (b.level >= 2) return;
+  const sg = [b.pick(8, 7, 5), b.pick(5, 4, 3)];
+  b.shell([0, 0.18, -0.01], [0.103, 0.125, 0.112], 0, TAU, 0, PI * 0.56, { ...hairM, g: 7, rot: [-0.25, 0, 0], seg: sg });
+  b.shell([0, 0.18, -0.012], [0.106, 0.128, 0.115], 0, TAU, 0, PI * 0.6, { ...hairM, g: 8, rot: [-0.3, 0, 0], seg: sg });
+  b.ell([0, 0.09, -0.075], [0.095, 0.15, 0.06], { ...hairM, g: 8, a: [0.6, 1], seg: [b.pick(8, 6, 5), b.pick(6, 4, 3)] });
+  b.shell([0, 0.15, -0.01], [0.1, 0.12, 0.108], 0, TAU, PI * 0.5, PI * 0.2, { ...hairM, g: 9, seg: sg });
 }
 function beard(b, big = 1) {
+  if (b.level >= 2) return;
   b.ell([0, 0.07, 0.06], [0.082 * big, 0.085 * big, 0.07], { ...hairM, g: 6, a: [0.6, 1] });
-  if (b.level < 2) b.ell([0, 0.115, 0.098], [0.055, 0.014, 0.025], { ...hairM, g: 6 });
+  if (b.level < 1) b.ell([0, 0.115, 0.098], [0.055, 0.014, 0.025], { ...hairM, g: 6 });
 }
 function coif(b) {
-  b.shell([0, 0.16, -0.006], [0.108, 0.135, 0.116], PI * 0.5 + 0.95, TAU - 1.9, 0, PI * 0.86, { ...mailM, a: [0.7, 1] });
+  if (b.level >= 3) return;
+  b.shell([0, 0.16, -0.006], [0.108, 0.135, 0.116], PI * 0.5 + 0.95, TAU - 1.9, 0, PI * 0.86, { ...mailM, a: [0.7, 1], seg: [b.pick(12, 9, 7), b.pick(8, 6, 4)] });
   b.lathe([[0.2, -0.13], [0.17, -0.04], [0.1, 0.04]], [0, 0, 0], { sc: [1, 1, 0.75], ...mailM, a: [0.7, 1] });
 }
 function wings(b, y) {
-  if (b.level > 1) return;
+  if (b.level > 0) return;
   for (const s of [-1, 1]) b.cone([s * 0.12, y, 0], [s * 0.24, y + 0.2, 0], 0.03, { ...gold, g: 4, seg: 5 });
 }
 
@@ -341,29 +345,34 @@ def('shield.kite', (b) => {
   const c = [0.03, -0.12, 0.125];
   const sc = (k) => KITE.map(([x, y]) => [x * k, y * k + (k < 1 ? 0.012 : 0)]);
   if (b.level < 2) {
-    b.extrude(sc(1), 0.034, 0.008, c, { ...iron, a: [0.7, 1] });
-    b.extrude(sc(0.9), 0.036, 0.006, [c[0], c[1], c[2] + 0.004], { ...cloth, p: PAT.emblem, uv: [c[0], c[1] + 0.1, 0.46, 0.46], a: [0.8, 1] });
+    b.extrude(sc(1), 0.034, 0.006, c, { ...iron, a: [0.7, 1] });
+    b.extrude(sc(0.9), 0.036, 0.004, [c[0], c[1], c[2] + 0.004], { ...cloth, p: PAT.emblem, uv: [c[0], c[1] + 0.1, 0.46, 0.46], a: [0.8, 1] });
     b.rbox([c[0], c[1] - 0.1, c[2] + 0.025], [0.034, 0.7, 0.02], { c: K.trim, m: 'cloth', e: 0.4 });
-    b.extrude(sc(1.0).map(([x, y]) => [x * 0.9, y * 0.9]), 0.004, 0, [c[0], c[1], c[2] - 0.022], { ...leather });
-    b.ell([c[0], c[1] + 0.1, c[2] + 0.034], [0.06, 0.06, 0.03], { ...steel, g: 0 });
-    b.ell([c[0], c[1] + 0.1, c[2] + 0.038], [0.062, 0.062, 0.03], { ...gold, g: 12 });
-    b.rbox([c[0], c[1] - 0.12, c[2] + 0.034], [0.5, 0.034, 0.014], { ...gold, g: 12, e: 0.4 });
+    b.ell([c[0], c[1] + 0.1, c[2] + 0.034], [0.06, 0.06, 0.03], { ...steel });
   } else {
     b.extrude(sc(1), 0.04, 0, c, { ...cloth, p: PAT.emblem, uv: [c[0], c[1] + 0.1, 0.5, 0.5] });
   }
 }, true);
 def('shield.round', (b) => {
   const c = [0.03, -0.14, 0.13];
-  b.lathe([[0.0, -0.034], [0.2, -0.026], [0.37, -0.01], [0.39, 0.0], [0.38, 0.02], [0.2, 0.034], [0.0, 0.04]], c, { rot: [PI / 2, 0, 0], ...cloth, p: PAT.emblem, uv: [c[0], c[1], 0.62, 0.62], a: [0.85, 1], seg: b.pick(26, 18, 12) });
+  b.lathe([[0.0, -0.034], [0.2, -0.026], [0.37, -0.01], [0.39, 0.0], [0.38, 0.02], [0.2, 0.034], [0.0, 0.04]], c, { rot: [PI / 2, 0, 0], ...cloth, p: PAT.emblem, uv: [c[0], c[1], 0.62, 0.62], a: [0.85, 1], seg: b.pick(22, 14, 9) });
   if (b.level < 2) {
-    b.torus([c[0], c[1], c[2] - 0.004], 0.385, 0.02, { ...iron, sc: [1, 1, 1.4], seg: 28, sides: 6 });
+    b.torus([c[0], c[1], c[2] - 0.004], 0.385, 0.02, { ...iron, sc: [1, 1, 1.4] });
     b.ell([c[0], c[1], c[2] + 0.034], [0.075, 0.075, 0.04], { ...steel });
-    b.torus([c[0], c[1], c[2] + 0.01], 0.25, 0.008, { c: K.trim, m: 'cloth', seg: 20, sides: 4 });
-    b.torus([c[0], c[1], c[2] + 0.0], 0.39, 0.03, { ...gold, g: 12, sc: [1, 1, 1.1], seg: 28, sides: 5 });
-    b.ell([c[0], c[1], c[2] + 0.04], [0.082, 0.082, 0.044], { ...gold, g: 12 });
+    b.torus([c[0], c[1], c[2] + 0.01], 0.25, 0.008, { c: K.trim, m: 'cloth', sides: 3 });
     b.rbox([c[0], c[1], c[2] - 0.04], [0.06, 0.22, 0.03], { ...leather });
   }
 }, true);
+// the gilding of a trained soldier's shield (tier 3 and up)
+def('kit.shield.round', (b) => {
+  b.torus([0.03, -0.14, 0.13], 0.39, 0.03, { ...gold, sc: [1, 1, 1.1] });
+  b.ell([0.03, -0.14, 0.17], [0.082, 0.082, 0.044], { ...gold });
+});
+def('kit.shield.kite', (b) => {
+  b.rbox([0.03, -0.0, 0.16], [0.034, 0.7, 0.014], { ...gold, e: 0.4 });
+  b.rbox([0.03, -0.24, 0.16], [0.5, 0.034, 0.014], { ...gold, e: 0.4 });
+  b.ell([0.03, -0.02, 0.165], [0.062, 0.062, 0.03], { ...gold });
+});
 
 // ---------------------------------------------------------------- weapons (hand frame: the weapon extends along -y)
 def('weapon.sword', (b) => {
@@ -408,7 +417,7 @@ def('weapon.club', (b) => {
 });
 def('weapon.staff', (b) => {
   b.rod([0, 0.6, 0], [0, -1.35, 0], 0.027, 0.024, { c: K.woodDk, m: 'wood', p: PAT.grain, seg: b.pick(8, 6, 5) });
-  b.ell([0, -1.5, 0], 0.085, { c: 0xff9a3a, m: 'gem', p: PAT.glow, seg: b.pick(12, 8, 6) });
+  b.ell([0, -1.5, 0], 0.085, { c: 0xff9a3a, m: 'gem', p: PAT.glow, seg: [b.pick(12, 8, 6), b.pick(8, 6, 4)] });
   if (b.level < 2) for (let i = 0; i < 3; i++) {
     const a = (i / 3) * TAU;
     b.sweep([[0, -1.33, 0], [Math.cos(a) * 0.09, -1.42, Math.sin(a) * 0.09], [Math.cos(a) * 0.11, -1.58, Math.sin(a) * 0.11], [Math.cos(a) * 0.05, -1.68, Math.sin(a) * 0.05]], 0.018, 0.006, { c: K.bone, m: 'bone', seg: 5 });
