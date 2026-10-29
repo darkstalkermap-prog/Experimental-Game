@@ -5,7 +5,8 @@
 // Events are for sentences ("Your Fireball broke the north gate at 8:42"), counters are for numbers. Keep events few (hundreds per match at most).
 //
 // Counter / event names in use (add yours here):
-//   (none yet)
+//   event 'rival' { team, id }          a house is led by a named rival lord (id as in options.rivals), at the start; 'rivalFell' { team } when his castle falls;
+//                                       'push' { team, target, men } when he sends an army at a castle (rivals.js, ai.js)
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

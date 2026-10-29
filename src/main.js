@@ -15,6 +15,7 @@ import { initPerf } from './perf.js';
 import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
+import { withRivals, lobbyRivals } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -107,7 +108,7 @@ selectMap(mapSize);
 // the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
-const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
+const matchOptions = (humans) => { options = sanitizeOptions(options); saveOptions(options); return withRivals(options, humans); };   // (the rival lords are rolled for a match, not remembered: see rivalsui.js)
 
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
@@ -282,7 +283,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass }];
-  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective }); };
+  const broadcast = () => { const rv = lobbyRivals(); ui.renderLobby(lobby, 0, coop, objective, rv); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, rv }); };
   lobbyBroadcast = broadcast;
   // guests report the class they pick
   net.on('data', ({ from, d }) => {
@@ -309,7 +310,7 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  const opts = matchOptions();
+  const opts = matchOptions(lobby.map((p) => p.team));
   net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective, opts });
   begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective, options: opts });
 });
@@ -322,7 +323,7 @@ $('joinBtn').addEventListener('click', async () => {
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); });
   net.on('data', ({ d }) => {
-    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj);
+    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.rv);
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;

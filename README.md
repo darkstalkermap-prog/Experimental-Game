@@ -420,6 +420,40 @@ away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, a
 that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
 `alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
 
+## Rival lords
+
+Every battle the three rival houses are led by **named lords with a style of their own** instead of three copies of the same AI: "Lord Varric
+the Reckless" does not play like "Lady Morwen the Patient", so each match asks for a new plan. The lords are drawn at random when a match starts
+(never two alike, and no house gets the lord it had last time); the house keeps its colour and its name (House Varr is the red one whoever leads it).
+
+| Lord | Style | How to meet him |
+| --- | --- | --- |
+| **the Reckless** (Rusher) | Strikes at about 2:30 with swords and riders, guards the castle thinly and mends it late. | Hold the gate through the first push, then hit back at the thin walls. |
+| **the Patient** (Turtler) | Raises walls, gate and towers first, calls the army home when a host stands at the gate, marches after 8 minutes with a huge army. | Do not feed an army to the walls: break the others first, or bring engines. |
+| **the Breaker** (Siege-lover) | Buys rams and catapults from the first minutes, keeps spearmen with them and does not march without an engine. | Kill the engines before they reach the gate (riders and archers do it best). |
+| **the Swift** (Raider) | Fast riders raid the field again and again, never for long, and leave the waves on their lanes. | Archers on the wall and riders of your own: raiders flee a fight they cannot win. |
+| **the Gilded** (Merchant) | Earns more than the others and spends it on Elite Levies, Drill Sergeants and the barracks, attacks late. | Hit early, before the levies pay off. |
+| **the Vengeful** (Zealot) | Every wave, engine, giant and push marches on the human houses and nobody else. | Stand your gate: the other houses are left in peace. |
+| **the Ironclad** (Warlord) | Few soldiers but knights and veterans, promoted early, the lord at their head. | Archers and engines hurt plate best; stay out of the open. |
+| **the Giantsworn** (Giant-caller) | Saves every coin for a giant, keeps a thin guard, calls the next one when the last has fallen. | Kill the giant (600 gold) or hit the thin guard while the next one is paid for. |
+| **the Cunning** (Opportunist) | Waits until a castle is broken (a gate down, a keep burning), then pounces on the wreck. | Do not leave your gate broken or your keep burning. |
+
+Each lord has six names (three Lords, three Ladies) to go with the epithet. They are shown wherever a lord is named: a **card at the start of the
+match** with each rival and how he plays, a small tag next to every house in the top-left list ("House Elden  Patient"), the **Rival lords** list in the
+game menu (Esc) with a plan against each, the scoreboard (**Tab**), the big map (**M**) under each castle, the announcements ("Lord Varric the Reckless
+charges out against House Elden!", "Lord Brokk the Breaker sends a battering ram against ..."), the kill feed, and the online lobby's AI slots. The end screen
+has a **Rivals next battle** row (with *Draw other lords*) and says how the rivals fared this time; **Play Again** starts with exactly the lords it showed.
+
+**Options -> Named rival lords** (On by default, remembered in this browser) switches them off: every house then has the plain old lord ("Lord Varr", "Lady
+Elden", "Lord Sol") whose numbers are the ones the AI always had. The difficulty stays the strength scale (Easy, Normal, Hard make every lord slower or
+quicker to attack, in the same way); the lords differ in style, not in cheating. Online, the host draws the lords and sends the ids in the start message
+(`options.rivals`), the guests only show them; a player who leaves is replaced by the plain lord. Hero Game Mode and the practice courtyard have no rival
+lords.
+
+For modders: a personality is a table of parameters in `src/rivals.js` (the key list is in its header; `CLASSIC` is the old lord), played by `LordAI` in
+`src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
+his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees. The match log records `rival`, `push` and `rivalFell` events.
+
 ## Hero Game Mode
 
 Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
