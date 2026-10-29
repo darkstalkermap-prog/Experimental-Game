@@ -44,7 +44,7 @@ const PRESETS = {
   },
   high: {
     level: 2, pixelRatio: 1.75, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 2048, shadowNearMap: 2048, shadowDist: 90, shadowTaps: 12,
-    crowdShadowDist: 26, crowdNear: 15, crowdRich: 24, kitShadows: true, props: 1, decals: 384, lodScale: 1.25, detail: 2,
+    crowdShadowDist: 23, crowdNear: 15, crowdRich: 20, kitShadows: true, props: 1, decals: 384, lodScale: 1.25, detail: 2,
     grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, wind: true, particles: 1, clouds: 2, msaa: 4,
     post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
