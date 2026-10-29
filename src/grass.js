@@ -1,11 +1,17 @@
-// Grass that grows around the camera: instanced blade clumps swaying in the wind.
-// The patch is rebuilt (deterministically, so it doesn't flicker) when the camera moves far enough.
+// Grass that grows around the camera: clumps of thin blades, in the colour of the ground they stand on, waving in the wind.
+// One draw call for the grass and one for the wild flowers. Every clump is just a position, a turn, a size and a colour (a quarter of
+// what a matrix costs), and the vertex shader does the rest: the wind bends the tips in waves that travel over the meadow, and clumps
+// shrink to nothing towards the edge of the patch so it has no visible rim. The patch is rebuilt, deterministically, when the camera has
+// moved far enough, a few milliseconds a frame, so walking never hitches. Q.grass is the density and Q.grassDist the radius.
 import * as THREE from 'three';
 import { CASTLE, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { roadDist } from './world.js';
-
-const SPACING = 0.62;
+import { mulberry32, smoothstep } from './noise.js';
+import { Q } from './quality.js';
+import { patchMaterial } from './shaderhook.js';
+import { WIND, WIND_GLSL } from './foliage.js';
+import { grassBase } from './terrain.js';
 
 function hash(x, z, s) {
   let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s, 1442695041);
@@ -14,33 +20,97 @@ function hash(x, z, s) {
   return (n >>> 0) / 4294967295;
 }
 
-function bladeGeometry() {
-  // three crossed blades, each a tapered quad bending slightly forward
-  const pos = [], col = [], idx = [];
-  const base = new THREE.Color(0x3d5a1e), tip = new THREE.Color(0xa8b860);
-  for (let b = 0; b < 3; b++) {
-    const a = (b / 3) * Math.PI;
-    const cx = Math.cos(a), cz = Math.sin(a);
-    const w = 0.09, h = 0.55 + b * 0.08;
-    const o = pos.length / 3;
-    const pts = [[-w, 0, 0], [w, 0, 0], [-w * 0.35, h * 0.6, 0.04], [w * 0.35, h * 0.6, 0.04], [0, h, 0.12]];
-    for (const [x, y, z] of pts) {
-      pos.push(x * cx - z * cz, y, x * cz + z * cx);
-      const c = base.clone().lerp(tip, y / h);
-      col.push(c.r, c.g, c.b);
-    }
-    idx.push(o, o + 1, o + 2, o + 1, o + 3, o + 2, o + 2, o + 3, o + 4);
+// a clump: nine single-triangle blades, dark at the root and bright at the tip, leaning outwards
+function clumpGeometry() {
+  const rng = mulberry32(5);
+  const pos = [], col = [], nor = [];
+  for (let b = 0; b < 9; b++) {
+    const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * 0.27;
+    const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+    const yaw = rng() * Math.PI, cx = Math.cos(yaw), cz = Math.sin(yaw);
+    const h = 0.3 + rng() * 0.4, w = 0.02 + rng() * 0.02, lean = (0.1 + rng() * 0.28) * h;
+    const v = 0.88 + rng() * 0.24;
+    pos.push(bx - cx * w, 0, bz - cz * w, bx + cx * w, 0, bz + cz * w, bx + Math.cos(a) * lean, h, bz + Math.sin(a) * lean);
+    col.push(0.46 * v, 0.52 * v, 0.4 * v, 0.46 * v, 0.52 * v, 0.4 * v, 1.22 * v, 1.2 * v, 0.9 * v);
+    nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
   }
-  const g = new THREE.BufferGeometry();
+  const g = new THREE.InstancedBufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  g.setIndex(idx);
-  g.computeVertexNormals();
-  // point normals up so blades shade like the ground beneath them
-  const n = g.attributes.normal;
-  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
   return g;
 }
+
+// a wild flower clump: three stems with a flat five-petal head each (aKind 0 stem, 1 petals, 2 the yellow middle)
+function flowerGeometry() {
+  const rng = mulberry32(17);
+  const pos = [], col = [], nor = [], kind = [];
+  const tri = (a, b, c, k, n = [0, 1, 0]) => { pos.push(...a, ...b, ...c); for (let i = 0; i < 3; i++) { col.push(1, 1, 1); nor.push(...n); kind.push(k); } };
+  for (let s = 0; s < 3; s++) {
+    const a = rng() * Math.PI * 2, r = 0.05 + rng() * 0.13, bx = Math.cos(a) * r, bz = Math.sin(a) * r, h = 0.28 + rng() * 0.26;
+    const tx = bx + Math.cos(a) * 0.07, tz = bz + Math.sin(a) * 0.07;
+    tri([bx - 0.006, 0, bz], [bx + 0.006, 0, bz], [tx, h, tz], 0);
+    const R = 0.042, n = 5;
+    for (let k = 0; k < n; k++) {
+      const a0 = (k / n) * Math.PI * 2 + s, a1 = ((k + 1) / n) * Math.PI * 2 + s;
+      tri([tx, h + 0.012, tz], [tx + Math.cos(a0) * R, h, tz + Math.sin(a0) * R], [tx + Math.cos(a1) * R, h, tz + Math.sin(a1) * R], 1);
+    }
+    const m = 0.014;
+    tri([tx, h + 0.016, tz], [tx + m, h + 0.012, tz], [tx, h + 0.012, tz + m], 2);
+  }
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
+  return g;
+}
+
+const VERT_DECL = `attribute vec4 aPos; attribute vec4 aTint; uniform float uFadeA; uniform float uFadeB;\n${WIND_GLSL}`;
+// the blade in world space: turned, scaled, shrunk with distance and bent by the wind (the tips travel in waves over the meadow)
+const VERT_BEGIN = `
+  float cy = cos(aPos.w), sy = sin(aPos.w);
+  float shrink = 1.0 - smoothstep(uFadeA, uFadeB, distance(aPos.xz, cameraPosition.xz));
+  vec3 lp = position * (aTint.w * shrink);
+  float hf = clamp(position.y / 0.7, 0.0, 1.0);
+  float bend = (0.12 + 0.55 * gG) * hf * hf * 0.42 * shrink;
+  vec3 transformed = vec3(aPos.x + cy * lp.x + sy * lp.z + 0.82 * bend, aPos.y + lp.y - bend * bend * 0.5, aPos.z - sy * lp.x + cy * lp.z + 0.57 * bend);`;
+
+const uni = (shader, extra = {}) => {
+  shader.uniforms.uWindTime = WIND.time; shader.uniforms.uWindAmp = WIND.amp;
+  Object.assign(shader.uniforms, extra);
+};
+
+function grassMaterial(fade) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.92, metalness: 0 });
+  patchMaterial(m, 'grass-blades', (shader) => {
+    uni(shader, fade);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\n' + VERT_DECL)
+      .replace('#include <color_vertex>', '#include <color_vertex>\n  float gG = windGust(aPos.xz) * uWindAmp;\n  vColor = color.rgb * aTint.rgb * (0.9 + 0.2 * clamp(gG, 0.0, 1.3));')
+      .replace('#include <begin_vertex>', VERT_BEGIN);
+    // blades are seen from both sides: light them the same (the ground's own normal), not as a back face
+    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+  });
+  return m;
+}
+
+function flowerMaterial(fade) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.8, metalness: 0 });
+  patchMaterial(m, 'grass-flowers', (shader) => {
+    uni(shader, fade);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aKind;\n' + VERT_DECL)
+      .replace('#include <color_vertex>', `#include <color_vertex>
+  float gG = windGust(aPos.xz) * uWindAmp;
+  vColor = aKind < 0.5 ? vec3(0.07, 0.17, 0.035) * (0.8 + 0.5 * position.y) : (aKind < 1.5 ? aTint.rgb : vec3(0.7, 0.45, 0.04));`)
+      .replace('#include <begin_vertex>', VERT_BEGIN);
+    shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('normal *= faceDirection;', ''));
+  });
+  return m;
+}
+
+const FLOWER_COLOURS = [[0.8, 0.8, 0.74], [0.8, 0.55, 0.04], [0.28, 0.1, 0.55], [0.8, 0.2, 0.3], [0.1, 0.18, 0.7], [0.85, 0.82, 0.3]];
 
 export class Grass {
   constructor(scene, physics) {
@@ -49,41 +119,56 @@ export class Grass {
     this.radius = 44;
     this.max = 0;
     this.mesh = null;
+    this.flowers = null;
     this.center = new THREE.Vector2(1e9, 1e9);
-    this.uniforms = { time: { value: 0 } };
-    this.material = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.95 });
-    this.material.onBeforeCompile = (shader) => {
-      shader.uniforms.time = this.uniforms.time;
-      shader.vertexShader = 'uniform float time;\n' + shader.vertexShader.replace(
-        '#include <begin_vertex>',
-        `#include <begin_vertex>
-        vec2 ip = vec2(instanceMatrix[3][0], instanceMatrix[3][2]);
-        float sway = sin(time * 1.8 + ip.x * 0.35 + ip.y * 0.21) * 0.5 + sin(time * 3.1 + ip.x * 0.9) * 0.2;
-        float k = position.y * position.y;
-        transformed.x += sway * k * 0.35;
-        transformed.z += sway * k * 0.2;`,
-      );
-    };
-    this.geo = bladeGeometry();
+    this.fade = { uFadeA: { value: 30 }, uFadeB: { value: 44 } };
+    this.material = grassMaterial(this.fade);
+    this.flowerMat = flowerMaterial(this.fade);
+    this.geo = clumpGeometry();
+    this.flowerGeo = flowerGeometry();
+    this.sig = '';
+    this.job = null;
+    this.tint = { base: new THREE.Color() };
   }
 
-  setDensity(level) {
-    // level: 0 off, 1 medium, 2 high
-    const max = [0, 9000, 20000][level];
-    this.radius = [0, 34, 46][level];
-    if (max === this.max) return;
-    this.max = max;
-    if (this.mesh) { this.scene.remove(this.mesh); this.mesh.dispose(); this.mesh = null; }
-    if (!max) return;
-    this.mesh = new THREE.InstancedMesh(this.geo, this.material, max);
-    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    this.mesh.frustumCulled = false;
-    this.mesh.receiveShadow = true;
-    this.mesh.count = 0;
-    this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
-    this.stageMat = null; this.stageCol = null; this.job = null;
-    this.scene.add(this.mesh);
+  // (kept for the quality menu; the settings themselves come from Q)
+  setDensity() { this.sig = ''; }
+
+  configure() {
+    this.radius = Q.grass > 0 ? Q.grassDist : 0;
+    this.fade.uFadeA.value = this.radius * 0.7; this.fade.uFadeB.value = this.radius;
+    const k = 1 / Math.sqrt(Math.max(0.35, Q.grass));
+    this.spA = 0.42 * k; this.spB = 0.95 * k; this.RA = 13;
+    // room for the dense inner disc and the sparser outer ring
+    const cells = Math.PI * this.RA * this.RA / (this.spA * this.spA) + Math.PI * Math.max(0, this.radius * this.radius - 100) / (this.spB * this.spB);
+    const max = this.radius ? Math.ceil(cells * 0.78) : 0;
+    const fmax = this.radius ? Math.ceil(max * 0.05) : 0;
     this.center.set(1e9, 1e9);
+    this.job = null;
+    if (max === this.max && this.mesh) return;
+    this.max = max;
+    for (const key of ['mesh', 'flowers']) if (this[key]) { this.scene.remove(this[key]); this[key].geometry.dispose(); this[key] = null; }
+    if (!max) return;
+    this.mesh = this.build(this.geo, this.material, max);
+    this.flowers = this.build(this.flowerGeo, this.flowerMat, fmax);
+    this.stage = { a: new Float32Array(max * 4), t: new Float32Array(max * 4), fa: new Float32Array(fmax * 4), ft: new Float32Array(fmax * 4) };
+  }
+
+  // a mesh that draws `cap` instances of the clump geometry (its own copy of the geometry, so the instance buffers belong to it)
+  build(src, mat, cap) {
+    const g = new THREE.InstancedBufferGeometry();
+    for (const k of Object.keys(src.attributes)) g.setAttribute(k, src.attributes[k]);
+    g.setAttribute('aPos', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aTint', new THREE.InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(THREE.DynamicDrawUsage));
+    g.instanceCount = 0;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
+    const m = new THREE.Mesh(g, mat);
+    m.frustumCulled = false;
+    m.receiveShadow = true;
+    m.matrixAutoUpdate = false;
+    m.userData.owner = 'a3 grass';
+    this.scene.add(m);
+    return m;
   }
 
   allowed(x, z) {
@@ -98,64 +183,76 @@ export class Grass {
     return true;
   }
 
-  // Rebuilding is spread over several frames (a small time budget each) into a staging buffer,
-  // then swapped in, so walking never causes a hitch.
+  // Rebuilding is spread over several frames (a small time budget each) into staging buffers, then swapped in.
   startRebuild(cx, cz) {
     const R = this.radius;
-    this.job = {
-      cx, cz, n: 0,
-      i: Math.floor((cx - R) / SPACING), i1: Math.floor((cx + R) / SPACING),
-      j0: Math.floor((cz - R) / SPACING), j1: Math.floor((cz + R) / SPACING),
-      mat: this.stageMat || (this.stageMat = new Float32Array(this.max * 16)),
-      col: this.stageCol || (this.stageCol = new Float32Array(this.max * 3)),
-    };
+    const tier = (sp) => ({ sp, i: Math.floor((cx - R) / sp), i1: Math.floor((cx + R) / sp), j0: Math.floor((cz - R) / sp), j1: Math.floor((cz + R) / sp) });
+    this.job = { cx, cz, n: 0, nf: 0, t: 0, tiers: [tier(this.spA), tier(this.spB)] };
   }
 
   work(budgetMs) {
     const job = this.job;
     if (!job) return;
     const t0 = performance.now();
-    const m4 = this.tmpM || (this.tmpM = new THREE.Matrix4());
-    const q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
-    const up = new THREE.Vector3(0, 1, 0);
-    const R = this.radius;
+    const R = this.radius, RA = this.RA, { cx, cz } = job;
     const { fbm } = this.physics.noise;
-    const { cx, cz } = job;
-    for (; job.i <= job.i1; job.i++) {
-      if (performance.now() - t0 > budgetMs) return;
-      const i = job.i;
-      for (let j = job.j0; j <= job.j1 && job.n < this.max; j++) {
-        const x = (i + hash(i, j, 1)) * SPACING, z = (j + hash(i, j, 2)) * SPACING;
-        const d = Math.hypot(x - cx, z - cz);
-        if (d > R) continue;
-        const dens = fbm(x * 0.05, z * 0.05, 2) * 0.5 + 0.62;
-        if (hash(i, j, 3) > dens) continue;
-        if (!this.allowed(x, z)) continue;
-        const y = this.physics.terrainHeight(x, z);
-        const edge = Math.min(1, (R - d) / 8); // shrink toward the rim so the patch has no hard edge
-        const s = (0.55 + hash(i, j, 4) * 0.45) * edge;
-        p.set(x, y - 0.02, z);
-        q.setFromAxisAngle(up, hash(i, j, 5) * Math.PI * 2);
-        sc.set(s * 1.25, s * (0.55 + hash(i, j, 6) * 0.45), s * 1.25);
-        m4.compose(p, q, sc);
-        m4.toArray(job.mat, job.n * 16);
-        const v = 0.8 + hash(i, j, 7) * 0.35;
-        job.col[job.n * 3] = v; job.col[job.n * 3 + 1] = v * (0.95 + hash(i, j, 8) * 0.1); job.col[job.n * 3 + 2] = v * 0.85;
-        job.n++;
+    const st = this.stage, col = this.tint.base;
+    for (; job.t < 2; job.t++) {
+      const T = job.tiers[job.t], sp = T.sp;
+      for (; T.i <= T.i1; T.i++) {
+        if (performance.now() - t0 > budgetMs) return;
+        const i = T.i;
+        for (let j = T.j0; j <= T.j1; j++) {
+          const x = (i + hash(i, j, 1)) * sp, z = (j + hash(i, j, 2)) * sp;
+          const d = Math.hypot(x - cx, z - cz);
+          if (d > (job.t === 0 ? RA : R)) continue;
+          // the dense inner disc thins out towards its rim while the sparser ring takes over (by a per-cell number, so nothing flickers)
+          const mixv = smoothstep(RA - 5, RA + 1, d), r3 = hash(i, j, 3), r9 = hash(i, j, 9);
+          if (job.t === 0 ? r9 < mixv : r9 >= mixv) continue;
+          const dens = fbm(x * 0.05, z * 0.05, 2) * 0.5 + 0.62;
+          if (r3 > dens) continue;
+          if (!this.allowed(x, z)) continue;
+          const y = this.physics.terrainHeight(x, z);
+          // not on steep ground (the foot of the mountains is forest floor)
+          const sl = Math.abs(this.physics.terrainHeight(x + 1.5, z) - this.physics.terrainHeight(x - 1.5, z)) + Math.abs(this.physics.terrainHeight(x, z + 1.5) - this.physics.terrainHeight(x, z - 1.5));
+          if (sl > 2.2) continue;
+          if (job.n >= this.max) continue;
+          const size = (job.t === 0 ? 0.8 : 1.35) * (0.8 + hash(i, j, 4) * 0.5) * (1 - 0.5 * smoothstep(1.2, 2.2, sl));
+          grassBase(this.physics.noise, x, z, y, col);
+          const v = 0.82 + hash(i, j, 7) * 0.4, k = job.n * 4;
+          st.a[k] = x; st.a[k + 1] = y - 0.02; st.a[k + 2] = z; st.a[k + 3] = hash(i, j, 5) * 6.2832;
+          st.t[k] = col.r * v * 1.12; st.t[k + 1] = col.g * v * (0.96 + hash(i, j, 8) * 0.12) * 1.12; st.t[k + 2] = col.b * v * 0.95; st.t[k + 3] = size;
+          job.n++;
+          // wild flowers: in patches, and a few on their own
+          const patch = fbm(x * 0.07 + 31, z * 0.07 - 17, 2) * 0.5 + 0.5;
+          if (job.nf < st.fa.length / 4 && hash(i, j, 11) < (patch > 0.6 ? 0.16 : 0.012) * (job.t === 0 ? 1 : 1.6)) {
+            const f = job.nf * 4, c = FLOWER_COLOURS[Math.floor((patch * 7 + hash(i, j, 12) * 1.6) % FLOWER_COLOURS.length)];
+            st.fa[f] = x + (hash(i, j, 13) - 0.5) * 0.3; st.fa[f + 1] = y - 0.02; st.fa[f + 2] = z + (hash(i, j, 14) - 0.5) * 0.3; st.fa[f + 3] = hash(i, j, 15) * 6.2832;
+            st.ft[f] = c[0]; st.ft[f + 1] = c[1]; st.ft[f + 2] = c[2]; st.ft[f + 3] = 0.8 + hash(i, j, 16) * 0.5;
+            job.nf++;
+          }
+        }
       }
     }
     // finished: swap the new patch in
-    this.mesh.instanceMatrix.array.set(job.mat.subarray(0, job.n * 16));
-    this.mesh.instanceMatrix.needsUpdate = true;
-    if (!this.mesh.instanceColor) this.mesh.setColorAt(0, new THREE.Color(1, 1, 1));
-    this.mesh.instanceColor.array.set(job.col.subarray(0, job.n * 3));
-    this.mesh.instanceColor.needsUpdate = true;
-    this.mesh.count = job.n;
+    const set = (mesh, a, t, n) => {
+      const g = mesh.geometry;
+      g.attributes.aPos.array.set(a.subarray(0, n * 4)); g.attributes.aPos.needsUpdate = true;
+      g.attributes.aTint.array.set(t.subarray(0, n * 4)); g.attributes.aTint.needsUpdate = true;
+      g.instanceCount = n;
+    };
+    set(this.mesh, st.a, st.t, job.n);
+    set(this.flowers, st.fa, st.ft, job.nf);
     this.job = null;
   }
 
   update(dt, camPos) {
-    this.uniforms.time.value += dt;
+    const sys = this.scene.userData.worldSystems;   // the terrain, trees and life of the world (see world.js) are driven from here
+    if (sys) for (const s of sys) s.update(dt, camPos);
+    WIND.time.value += dt;
+    WIND.amp.value = Q.wind ? 1 : 0;
+    const sig = `${Q.grass}|${Q.grassDist}`;
+    if (sig !== this.sig) { this.sig = sig; this.configure(); }
     if (!this.mesh) return;
     if (!this.job && Math.hypot(camPos.x - this.center.x, camPos.z - this.center.y) > this.radius * 0.3) {
       const first = this.center.x > 1e8;
