@@ -11,7 +11,7 @@
 import * as THREE from 'three';
 import { allied } from './teams.js';
 import { settings } from './settings.js';
-import { pickHighlight } from './highlights.js';
+import { pickHighlight, highlights } from './highlights.js';
 import './horn.js';
 
 const QUICK = /conced|connection|host left|left the game|disconnect/i;   // endings that are not a show
@@ -380,5 +380,5 @@ export class Finale {
     if (this.g.player && this.g.player.viewModel && this.g.player.alive) this.g.player.viewModel.visible = true;
   }
 
-  dispose() { this.reset(); }
+  dispose() { this.reset(); highlights.reset(null); }   // (the match log's helper lets go of this game)
 }

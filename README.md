@@ -550,6 +550,7 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 | Middle button (hold) | Marker wheel round the crosshair: move the mouse towards Go here / Attack / Defend / Danger / Need help and let go to place a marker there; let go in the middle for the ordinary ping |
 | Map click | On the big map or the HUD minimap, while the mouse is free: left click puts down a marker of the kind chosen in the palette beside the big map, right click removes your nearest one |
 | Tab | Scoreboard |
+| Any key or click | At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go straight to the results (see Big finishes) |
 | F1 or Z | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
 | F3 | Army: charge |
