@@ -237,6 +237,7 @@ export class Game {
     for (let v = 0; v < 6; v++) {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
+    introduceRivals(this);   // (a card naming the rival lords and how they play, when the match has any: none in the yard or the Hero Game Mode)
     if (this.practice) {
       this.phaseT = 1e9;   // (nothing marches in the yard)
       this.court.begin();
@@ -249,7 +250,6 @@ export class Game {
     if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
     this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
-    introduceRivals(this);   // (a card naming the rival lords and how they play, when the match has any)
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first

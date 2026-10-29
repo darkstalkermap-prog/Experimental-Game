@@ -30,8 +30,10 @@ export class LordAI {
     this.cooldown = P.cooldown[0] + Math.random() * P.cooldown[1];
     this.personality = P.jitter[0] + Math.random() * P.jitter[1]; // aggression
     this.taxed = 0;
-    this.saidAt = -99;
+    this.saidAt = game.time + 20;   // (nothing to announce in the first seconds: the match opens with its own banner and card)
     this.pushes = 0;
+    this.goalAt = -999;           // when he last bought a piece of his plan
+    this.engineNext = 'ram';      // the engine his plan buys next (they alternate)
   }
 
   update(dt) {
@@ -78,13 +80,21 @@ export class LordAI {
     if (breached || weak) this.try('repair_walls');
 
     // a lord with a plan buys the next piece of it as soon as he can pay, keeps the guard the plan allows, and puts the rest of the gold aside for it
-    const goal = P.goals ? this.goal() : null;
+    const goal = P.goals && !(P.goalGap && g.time - this.goalAt < P.goalGap) ? this.goal() : null;
     let floor = 0;
     if (goal) {
-      if (f.gold >= goal.cost) this.try(goal.id);
-      else floor = goal.cost;
+      const gift = goal.id === 'giant' && P.giantGift ? Math.round(goal.cost * P.giantGift) : 0;   // (the retinue of the Giantsworn pays part of every giant)
+      if (f.gold + gift >= goal.cost) {
+        if (gift && f.gold < goal.cost) {
+          f.gold += gift; f.earned += gift;
+          if (!this.try(goal.id)) { f.gold -= gift; f.earned -= gift; } else this.goalAt = g.time;
+        } else if (this.try(goal.id)) {
+          this.goalAt = g.time;
+          if (goal.id === 'ram' || goal.id === 'catapult') this.engineNext = goal.id === 'ram' ? 'catapult' : 'ram';
+        }
+      } else floor = goal.cost - gift;
     }
-    const need = P.garrison ? Math.ceil(P.garrison[0] + stage * P.garrison[1]) : 0;
+    const need = P.garrison ? Math.ceil(P.garrison * f.troopCap) : 0;
 
     // keep a reserve once the war starts so repairs stay affordable
     const reserve = stage >= 4 ? P.reserve[1] : stage >= 2 ? P.reserve[0] : 0;
@@ -94,8 +104,10 @@ export class LordAI {
       if (!(f.gold - (thin ? reserve : Math.max(reserve, floor)) > P.recruitMin)) break;
       const r = Math.random();
       let type = r < P.mix[0] ? 'swordsman' : r < P.mix[1] ? 'spearman' : 'archer';
-      for (const e of P.elites) {
-        if (f.gold > e.gold && stage >= e.stage && Math.random() < e.p) { type = e.type; break; }
+      if (!thin) {   // (filling a thin guard is done with the cheap soldiers: the elites wait for gold that is not saved for something)
+        for (const e of P.elites) {
+          if (f.gold > e.gold && stage >= e.stage && Math.random() < e.p) { type = e.type; break; }
+        }
       }
       if (!this.try('recruit_' + type)) break;
     }
@@ -113,33 +125,40 @@ export class LordAI {
   }
 
   // The next big thing this lord is saving for (personalities only): the first entry of his plan that is still open. Upgrades are open below their level
-  // (`lv`), engines while he has fewer than `n` of that kind, the giant while none lives; a maxed upgrade or a closed shop item is skipped.
+  // (`lv`), engines while he has fewer than `n` of that kind, the giant while none lives, and nothing before stage `from`; a maxed upgrade or a closed shop
+  // item is skipped.
   goal() {
-    const g = this.g, f = this.f;
+    const g = this.g, f = this.f, stage = this.stage;
     for (const e of this.P.goals) {
-      const item = SHOP_BY_ID[e.id];
+      if (e.from !== undefined && stage < e.from) continue;
+      const id = e.id === 'engine' ? this.engineNext : e.id;   // ('engine': a ram, then a catapult, then a ram, ...)
+      const item = SHOP_BY_ID[id];
       if (!item) continue;
-      if (e.lv !== undefined && !(LEVEL[e.id] && LEVEL[e.id](f) < e.lv)) continue;
-      if (e.n !== undefined && this.engines(e.id) >= e.n) continue;
+      if (e.lv !== undefined && !(LEVEL[id] && LEVEL[id](f) < e.lv)) continue;
+      if (e.n !== undefined && this.engines(e.id === 'engine' ? '' : id) >= e.n) continue;
       if (item.can(g, f) !== true) continue;
-      return { id: e.id, cost: Math.round(item.cost(g, f)) };
+      return { id, cost: Math.round(item.cost(g, f)) };
     }
     return null;
   }
 
+  // his engines on the road (of one kind, or all)
   engines(type) {
     let n = 0;
-    for (const s of this.g.siege) if (s.alive && !s.abandoned && s.team === this.f.team && s.type === type) n++;
+    for (const s of this.g.siege) if (s.alive && !s.abandoned && s.team === this.f.team && (!type || s.type === type)) n++;
     return n;
   }
 
-  // a purchase the other houses should hear about (an engine or a giant bought by a lord who likes to say so), at most one every 25 seconds
+  // a purchase the other houses should hear about (an engine he sends, a wall he raises, ... for a lord who likes to say so), at most one every 25 seconds
   bought(id) {
     const v = this.P.verbs && this.P.verbs[id];
-    const g = this.g, t = v && g.siegeTarget(this.f);
-    if (!t || g.time - this.saidAt < 25) return;
+    const g = this.g;
+    if (!v || g.time - this.saidAt < 25) return;
+    const engine = id === 'ram' || id === 'catapult';
+    const t = engine ? g.siegeTarget(this.f) : null;   // (an engine is sent against somebody)
+    if (engine && !t) return;
     this.saidAt = g.time;
-    g.announce(`${this.rival.name} ${v} ${g.factions[t.team].name}!`, this.f.team, t.team);
+    g.announce(`${this.rival.name} ${engine ? `${v} ${g.factions[t.team].name}` : v.replace('{house}', this.f.name)}!`, this.f.team, engine ? t.team : -99);
   }
 
   // the bought troops that stay at home (wave soldiers march by themselves)
@@ -157,6 +176,7 @@ export class LordAI {
     // castle in danger: call everybody home
     if (this.assault && !f.castle.fallen && (f.castle.keep.hp < f.castle.keep.maxHp * P.recallKeep || (P.recallGate && !f.castle.gate.alive))) {
       this.recall(troops);
+      if (this.rival) this.cooldown = Math.max(this.cooldown, P.failWait / aggro);   // (the plain lord marches out again at once, and is called back again: a toast every three seconds)
       return;
     }
     // some lords come home as soon as a host stands before their walls, whatever the keep says

@@ -1166,12 +1166,12 @@ export class UI {
         ctx.fillStyle = '#fff';
         ctx.fillText(label, cx, cz - s / 2 - 9);
         const rv = houseRival(g, f);
-        if (rv) {   // (the named lord who leads the house)
+        if (rv) {   // (the named lord who leads the house, above its name)
           ctx.font = 'italic 600 12px Cinzel, Georgia, serif';
           ctx.lineWidth = 3;
-          ctx.strokeText(rv.name, cx, cz - s / 2 + 5);
+          ctx.strokeText(rv.name, cx, cz - s / 2 - 25);
           ctx.fillStyle = '#e8d9a0';
-          ctx.fillText(rv.name, cx, cz - s / 2 + 5);
+          ctx.fillText(rv.name, cx, cz - s / 2 - 25);
         }
       }
     }

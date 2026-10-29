@@ -12,9 +12,11 @@
 //              · repair { gate, keep, walls } (share of health below which it repairs)
 //   war        warStage, rush · cooldown [base, spread] · jitter [base, spread] · minTroops, troopStep · minAttackers · maxPush · failWait, winWait · recallKeep,
 //              recallGate · sendKinds, sendShare · order · redirect · hero · pushBuy { ram, catapult, giant } · aim { ... weights of the target score }
-//   persona only   goals [{ id, lv | n, max }] (what it saves up for, in order) · garrison [base, perStage] (soldiers it keeps before it saves) · tax (gold a
-//              second) · lock ('human': every army marches on a human house) · defend { at, hold } (calls the army home when this many foes stand at the gate)
-//              · pounce { min, by } (only strikes a castle that is this damaged, until stage `by`) · needEngines · wave { mix, elite } · verbs { push, ram, ... }
+//   persona only   goals [{ id, lv | n, from }] (what it saves up for, in order: an upgrade up to level `lv`, 'engine' (a ram, then a catapult, ...) up to `n`
+//              on the road, 'giant'; nothing before stage `from`) · goalGap (seconds between two of them) · garrison (share of the barracks limit it keeps filled
+//              before it saves) · giantGift (share of a giant's price its retinue pays) · tax (gold a second) · lock ('human': every army marches on a human
+//              house) · defend { at, hold } (calls the army home when this many foes stand at the gate) · pounce { min, by } (only strikes a castle that is this
+//              damaged, until stage `by`) · needEngines · wave { mix, elite } · verbs { push, ram, catapult, and any shop id he likes to announce when he buys it: `{house}` in the text is his house }
 
 // What the lords have always done (src/ai.js before the personalities); every personality below starts from it.
 export const CLASSIC = Object.freeze({
@@ -57,7 +59,7 @@ export const PERSONAS = [
     params: {
       reserve: [0, 40], recruitMin: 30,
       mix: [0.55, 0.7],
-      elites: [rider(250, 2, 0.35), knight(400, 3, 0.2), lancer(500, 4, 0.15)],
+      elites: [rider(150, 0, 0.4), knight(400, 3, 0.2), lancer(500, 4, 0.15)],
       barracks: 500, siege: { stage: 2, gold: 700, max: 1, p: 0.25, ram: 0.8 },
       upgradeGold: 700, upgrades: ['training', 'training', 'levies'],
       repair: { gate: 0.25, keep: 0.3, walls: 0.2 },
@@ -80,19 +82,19 @@ export const PERSONAS = [
       elites: [knight(350, 3, 0.35)],
       siege: { stage: 6, gold: 900, max: 2, p: 0.5, ram: 0.4 },
       giant: { stage: 5, gold: 1900 },
-      repair: { gate: 0.7, keep: 0.75, walls: 0.6 },
+      repair: { gate: 0.6, keep: 0.7, walls: 0.5 },
       goals: [
         { id: 'fortify_walls', lv: 1 }, { id: 'towers', lv: 1 }, { id: 'reinforce_gate', lv: 1 }, { id: 'barracks', lv: 1 },
         { id: 'fortify_walls', lv: 2 }, { id: 'towers', lv: 2 }, { id: 'reinforce_gate', lv: 2 }, { id: 'barracks', lv: 2 },
-        { id: 'fortify_walls', lv: 3 }, { id: 'towers', lv: 3 }, { id: 'reinforce_gate', lv: 3 }, { id: 'training', lv: 2 }, { id: 'barracks', lv: 3 },
+        { id: 'fortify_walls', lv: 3 }, { id: 'towers', lv: 3 }, { id: 'reinforce_gate', lv: 3 }, { id: 'barracks', lv: 3 },
       ],
-      garrison: [6, 1.5],
+      garrison: 0.85,
       warStage: 8, rush: 1, cooldown: [200, 60], jitter: [0.95, 0.1],
       minTroops: 16, troopStep: 3, minAttackers: 4, maxPush: 300, failWait: 90,
-      recallKeep: 0.8, hero: 0.1,
+      recallKeep: 0.8, hero: 0,
       defend: { at: 5, hold: 25 },
       wave: { mix: ['archer', 'spearman', 'archer', 'swordsman', 'archer', 'spearman', 'archer', 'swordsman'] },
-      verbs: { push: 'opens the gates at last and marches on' },
+      verbs: { push: 'opens the gates at last and marches on', fortify_walls: 'thickens the walls of {house}', towers: 'mans the towers of {house}', reinforce_gate: 'iron-bands the gate of {house}' },
     },
   },
   {
@@ -103,13 +105,11 @@ export const PERSONAS = [
     params: {
       mix: [0.2, 0.65],
       elites: [knight(500, 5, 0.2)],
-      siege: { stage: 1, gold: 450, max: 3, p: 0.85, ram: 0.55 },
+      siege: null,
       giant: { stage: 4, gold: 2000 },
       upgrades: ['training', 'levies', 'training'],
-      goals: [
-        { id: 'ram', n: 1 }, { id: 'catapult', n: 1 }, { id: 'ram', n: 2 }, { id: 'catapult', n: 2 }, { id: 'ram', n: 3 },
-      ],
-      garrison: [5, 1.3],
+      goals: [{ id: 'engine', n: 2, from: 1 }, { id: 'engine', n: 3, from: 4 }],
+      goalGap: 45, garrison: 0.7,
       warStage: 3, rush: 1, cooldown: [30, 30], jitter: [0.95, 0.1],
       minTroops: 8, troopStep: 3, needEngines: 1,
       pushBuy: { ram: 350, catapult: [2, 600], giant: [4, 2000] },
@@ -123,15 +123,15 @@ export const PERSONAS = [
     plan: 'Keep archers on the wall and your own riders at hand: raiders flee from a fight they cannot win.',
     names: ['Lord Corvin', 'Lord Tarn', 'Lord Wulfric', 'Lady Sable', 'Lady Rhiannon', 'Lady Ysmay'],
     params: {
-      reserve: [60, 80], recruitMin: 40,
+      reserve: [60, 80], recruitMin: 40, barracks: 300,
       mix: [0.5, 0.65],
-      elites: [rider(260, 1, 0.6), lancer(500, 3, 0.3), knight(450, 5, 0.1)],
+      elites: [rider(120, 0, 0.7), lancer(500, 3, 0.3), knight(450, 5, 0.1)],
       siege: null, giant: null,
       upgradeGold: 600, upgrades: ['training', 'levies'],
       warStage: 1, rush: 0, cooldown: [20, 20], jitter: [0.95, 0.1],
       minTroops: 3, troopStep: 6, minAttackers: 2, maxPush: 50, failWait: 25, winWait: 15,
       recallKeep: 0.35, recallGate: false,
-      sendKinds: ['cavalry'], sendShare: 0, order: 'charge', redirect: false, hero: 0.2,
+      sendKinds: ['cavalry'], sendShare: 0, order: 'charge', redirect: false, hero: 0,
       pushBuy: { ram: null, catapult: null, giant: null },
       aim: { troops: 25, gate: 40, keep: 80, dist: 1.2, noise: 80, human: 0, damaged: 0 },
       wave: { elite: { from: 4, every: 1, type: 'horseman' } },
@@ -149,19 +149,19 @@ export const PERSONAS = [
       giant: { stage: 5, gold: 2000 },
       goals: [
         { id: 'levies', lv: 1 }, { id: 'training', lv: 1 }, { id: 'barracks', lv: 1 }, { id: 'levies', lv: 2 }, { id: 'training', lv: 2 },
-        { id: 'barracks', lv: 2 }, { id: 'levies', lv: 3 }, { id: 'training', lv: 3 }, { id: 'fortify_walls', lv: 1 }, { id: 'training', lv: 5 },
+        { id: 'barracks', lv: 2 }, { id: 'levies', lv: 3 }, { id: 'training', lv: 3 }, { id: 'fortify_walls', lv: 1 },
       ],
-      garrison: [5, 1.2], tax: 0.9,
+      garrison: 0.5, tax: 0.35,
       warStage: 6, rush: 1, cooldown: [100, 60], jitter: [0.95, 0.1],
       minTroops: 12, troopStep: 3, minAttackers: 4, maxPush: 260, failWait: 70,
       recallKeep: 0.6, hero: 0.2,
-      verbs: { push: 'sends a bought army against' },
+      verbs: { push: 'sends a bought army against', levies: 'hires elite levies for {house}', training: 'pays drill sergeants for {house}' },
     },
   },
   {
     id: 'zealot', kind: 'Zealot', epithet: 'the Vengeful', tag: 'Vengeful',
     blurb: 'Every army, engine and giant marches on you. The other houses are forgotten.',
-    plan: 'Stand your gate: nobody else is being attacked by this lord, so the others can expand.',
+    plan: 'Keep your gate strong: every army of this lord comes for you, and none for the other houses.',
     names: ['Lord Draven', 'Lord Aldric', 'Lord Mordain', 'Lady Isolde', 'Lady Sigrun', 'Lady Vanya'],
     params: {
       mix: [0.4, 0.62],
@@ -179,10 +179,10 @@ export const PERSONAS = [
     plan: 'Archers and engines hurt plate best; do not meet the iron host in the open.',
     names: ['Lord Gorm', 'Lord Hadrian', 'Lord Roland', 'Lady Brunhild', 'Lady Ingrid', 'Lady Matilda'],
     params: {
-      recruitMin: 100,
+      recruitMin: 120,
       mix: [0.3, 0.6],
-      elites: [knight(240, 1, 0.55), lancer(550, 5, 0.2), rider(300, 3, 0.15)],
-      promote: 100, upgradeGold: 300, upgrades: ['training', 'training', 'levies', 'training'],
+      elites: [knight(150, 0, 0.5), lancer(550, 5, 0.2), rider(300, 3, 0.15)],
+      promote: 150, upgradeGold: 300, upgrades: ['training', 'training', 'levies', 'training'],
       warStage: 5, rush: 1, cooldown: [60, 40], jitter: [0.95, 0.1],
       minTroops: 8, troopStep: 3, minAttackers: 3, hero: 1,
       wave: { elite: { from: 6, every: 3, type: 'knight' } },
@@ -195,10 +195,9 @@ export const PERSONAS = [
     plan: 'Kill the giant for 600 gold, or hit the thin guard while the next one is paid for.',
     names: ['Lord Orm', 'Lord Bjorn', 'Lord Thorgest', 'Lady Skadi', 'Lady Hrolla', 'Lady Jarla'],
     params: {
-      siege: null,
-      giant: { stage: 1, gold: 1600 },
+      siege: null, giant: null,
       goals: [{ id: 'giant' }],
-      garrison: [4, 1],
+      garrison: 0.45, giantGift: 0.5,
       warStage: 5, rush: 1, cooldown: [90, 60], jitter: [0.95, 0.1],
       minTroops: 9, troopStep: 3, minAttackers: 3,
       pushBuy: { ram: 600, catapult: null, giant: null },
@@ -211,10 +210,11 @@ export const PERSONAS = [
     plan: 'Do not leave your gate broken or your keep burning: the Cunning sees it first.',
     names: ['Lord Ulrich', 'Lord Reynard', 'Lord Matthias', 'Lady Vesper', 'Lady Seraphine', 'Lady Morgause'],
     params: {
-      reserve: [200, 300],
+      reserve: [150, 300],
       elites: [rider(300, 2, 0.3), lancer(550, 4, 0.2), knight(450, 4, 0.2)],
       warStage: 3, rush: 1, cooldown: [60, 60], jitter: [0.95, 0.1],
       minTroops: 9, troopStep: 3, hero: 0.8, failWait: 40,
+      pushBuy: { ram: 400, catapult: [2, 700], giant: [4, 1800] },
       pounce: { min: 0.35, by: 9 },
       aim: { troops: 12, gate: 40, keep: 80, dist: 0.3, noise: 30, human: 0, damaged: 900 },
       verbs: { push: 'swoops down on' },

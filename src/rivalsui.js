@@ -67,7 +67,6 @@ css.textContent = `
   .rvrow span, .nb-rivals .rv span { display: block; font-size: 15px; line-height: 1.3; }
   .rvrow .plan { font-style: italic; opacity: 0.8; }
   .nb-rivals { background: rgba(255,255,255,0.28); border: 1px solid rgba(138,106,58,0.6); border-radius: 4px; padding: 10px 16px 12px; text-align: left; }
-  .nb-rivals .why { text-align: center; font-size: 14px; opacity: 0.8; margin: 0 0 4px; }
   .nb-rivals .fate { text-align: center; font-size: 14px; font-style: italic; opacity: 0.8; margin: 8px 0 0; }
   .nb-rivals .again { display: block; margin: 8px auto 0; padding: 5px 14px; font-size: 13px; }
   .opt-rivals-note { text-align: center; font-size: 14.5px; opacity: 0.85; margin: 8px 0; }
@@ -94,7 +93,9 @@ export function lobbyRivalName(team, ids) {
 }
 
 // ---------------- the card at the start of a match ----------------
+let current = null;   // the game the card and the menu list speak for
 export function introduceRivals(game) {
+  current = game;
   const old = $('rivalsCard');
   if (old) old.remove();
   const list = rivalFactions(game);
@@ -113,7 +114,7 @@ export function introduceRivals(game) {
 
 // ---------------- the game menu ----------------
 function fillPauseList() {
-  const game = window.__game;
+  const game = current;
   let box = $('pauseRivals');
   const list = game && game.state === 'playing' ? rivalFactions(game) : [];
   if (!list.length) { if (box) box.classList.add('hidden'); return; }
@@ -164,8 +165,9 @@ function section(summary) {
     // the houses that were led by AI lords this time have an AI lord next time too (the others are people)
     const houses = had.length ? had.map((x) => x.team) : [1, 2, 3];
     const fate = had.map((x) => {
-      const fell = events.find((e) => e.type === 'rivalFell' && e.team === x.team);
-      return `${x.r.short} ${fell ? 'fell at ' + clockText(fell.t) : 'held out'}`;
+      const ev = events.find((e) => e.type === 'rivalFell' && e.team === x.team);   // (only the host's AI notes the time; a guest can still see the ruin)
+      const ruin = current && current.castles[x.team] && current.castles[x.team].fallen;
+      return `${x.r.short} ${ev ? 'fell at ' + clockText(ev.t) : ruin ? 'fell' : 'held out'}`;
     }).join(' · ');
     el.innerHTML = `<h4>Rivals next battle</h4>
       ${houses.map((t) => {
