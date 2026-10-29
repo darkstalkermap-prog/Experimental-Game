@@ -424,7 +424,7 @@ that the player knows something now. The details are in the header of `src/alert
 
 **Battle Decrees.** When a battle ends, the game rolls one or two *decrees* for the next one: random rule changes such as
 "Giants cost half" or "Double waves: every house sends twice the soldiers". The end screen shows them under **Next battle**,
-each with its effect in a line, and two buttons: **Reroll** (as often as you like, it is a hook and not a currency) and
+each with its effect in a line, and two buttons: **Reroll** (key **R**; as often as you like, it is a hook and not a currency) and
 **Classic battle** (play the next one without decrees). The main menu has the same row, and Play Again, Single Player and
 hosting all start with what you saw. At the start of the battle a banner names the decrees, a line under the wave timer keeps
 them in view, and the Esc menu lists them with their effects. The first battle you ever play is classic, and
@@ -563,6 +563,7 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 | N | Talents: the shop on the Talents tab (press again to close) |
 | U | Co-op Conquest: call the first fallen ally back to life for 500 gold (the bar under the shop's tabs has a button for each) |
 | L | Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same) |
+| R (end screen) | Roll the next battle's Battle Decrees again |
 | P | Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies) |
 | M | Big map (the mouse is free while it is up; press again to close) |
 | Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |
