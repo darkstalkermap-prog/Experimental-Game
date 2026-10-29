@@ -43,26 +43,3 @@ export function placeScenery(physics, terrain) {
   }
   return { trees, rocks };
 }
-
-// Trees on the steep foot of the mountains inside the play area. They are solid like every other tree (world.js gives them colliders),
-// but they only grow where nobody marches: the last 14 m before the edge of the play area, away from the castles.
-export function placeWallTrees(physics, ok) {
-  const P = WORLD.playHalf, nz = physics.noise;
-  const rng = mulberry32(4242);
-  const out = [];
-  const sp = 7.2, from = WORLD.half - 30;
-  const slopeAt = (x, z) => Math.hypot(physics.terrainHeight(x + 2, z) - physics.terrainHeight(x - 2, z), physics.terrainHeight(x, z + 2) - physics.terrainHeight(x, z - 2)) / 4;
-  for (let gz = -P; gz < P; gz += sp) for (let gx = -P; gx < P; gx += sp) {
-    const x = gx + (rng() - 0.5) * sp, z = gz + (rng() - 0.5) * sp;
-    const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng();
-    const edge = Math.max(Math.abs(x), Math.abs(z));
-    if (edge < from || edge > P - 0.5 || !ok(x, z, physics)) continue;
-    const dens = forestDensity(nz, x, z);
-    const rockN = nz.fbm(x * 0.035 + 20, z * 0.035 - 8, 3) * 0.5 + 0.5;
-    const sl = slopeAt(x, z);
-    if (r1 > clamp(dens * 1.2 + 0.2, 0, 1) || sl > 2.4 || (sl + 0.8 * (rockN - 0.5) > 2.0)) continue;
-    const y = physics.terrainHeight(x, z);
-    out.push({ x, y, z, s: 0.8 + r2 * 0.5, r: r3 * 6.283, c: r4, conifer: r2 + 0.3 > 0.62 });
-  }
-  return out;
-}

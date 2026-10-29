@@ -8,7 +8,7 @@ import { SUN_DIR, createAtmosphere } from './atmosphere.js';
 import { ShadowRig } from './shadows.js';
 import { Terrain } from './terrain.js';
 import { Foliage } from './foliage.js';
-import { placeScenery, placeWallTrees } from './scenery.js';
+import { placeScenery } from './scenery.js';
 
 export { SUN_DIR };   // (the sun and the sky live in atmosphere.js)
 
@@ -104,17 +104,15 @@ export function createForest(scene, physics) {
     return Math.min(1.1, sl * 0.5);
   };
   const scenery = terrain ? placeScenery(physics, terrain) : { trees: [], rocks: [] };
-  const wall = placeWallTrees(physics, okForProp);   // the forest on the steep foot of the mountains: solid, like the others
   const trees = [];
   for (const t of pines) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: true });
   for (const t of oaks) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: false });
-  for (const t of wall) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: t.conifer });
   const rockItems = rocks.map((r) => ({ x: r.x, y: r.y, z: r.z, s: r.s, r: r.r, c: r.c }));
   const foliage = new Foliage(scene, trees.concat(scenery.trees), rockItems.concat(scenery.rocks));
   (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(foliage);
 
   // Collision for tree trunks (only the playable area matters)
-  for (const t of pines.concat(oaks, wall)) {
+  for (const t of pines.concat(oaks)) {
     if (Math.max(Math.abs(t.x), Math.abs(t.z)) > WORLD.playHalf) continue;
     const r = 0.4 * t.s;
     physics.add({ minX: t.x - r, maxX: t.x + r, minZ: t.z - r, maxZ: t.z + r, top: t.y + 8, kind: 'tree', noWalk: true });
