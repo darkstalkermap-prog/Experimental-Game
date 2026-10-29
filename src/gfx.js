@@ -14,10 +14,11 @@ const AUTO_KEY = 'cw-auto';   // the level the Auto choice settled on (kept per 
 const WINDOW = 60;           // frames the adaptive resolution looks at
 
 // a guess at how strong the GPU is from its name (Auto picks the first quality level from it); automation always gets 'medium'
+// (`renderer` may also be a bare WebGL context)
 export function guessLevel(renderer) {
   try {
     if (navigator.webdriver) return 'medium';
-    const gl = renderer.getContext();
+    const gl = renderer.getContext ? renderer.getContext() : renderer;
     const ext = gl.getExtension('WEBGL_debug_renderer_info');
     const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).toLowerCase();
     if (/swiftshader|llvmpipe|software|softpipe|basic render|microsoft basic/.test(name)) return 'low';
@@ -26,6 +27,28 @@ export function guessLevel(renderer) {
     if (/mali|adreno|powervr|videocore|tegra|mesa|v3d|intel.*(hd|uhd|iris)|intel\(r\) graphics|apple gpu/.test(name)) return /iris xe|iris plus|iris pro|uhd graphics 7|apple/.test(name) ? 'medium' : 'low';
     return 'medium';
   } catch (e) { return 'medium'; }
+}
+
+// Does the canvas need multisampling of its own? Only where the scene is drawn straight into it (Low, or a GPU that cannot render
+// into float targets). At every other level the scene goes through the post target, which carries its own samples (or FXAA), and
+// the canvas only receives full-screen passes: a multisampled canvas there would hold several times its size in memory and
+// resolve it every frame for nothing. A context's attributes cannot change once it exists, so main.js asks before it makes the
+// renderer, and this reads what the page is about to choose (the saved quality; Auto: what it settled on, else a guess from the GPU).
+export function canvasNeedsAA() {
+  try {
+    let level = null;
+    try {
+      const saved = localStorage.getItem('cw-quality') || 'auto';
+      level = LEVELS.includes(saved) ? saved : localStorage.getItem(AUTO_KEY);
+    } catch (e) { /* storage unavailable */ }
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return true;
+    const hdr = !!(gl.getExtension('EXT_color_buffer_float') || gl.getExtension('EXT_color_buffer_half_float'));
+    if (!LEVELS.includes(level)) level = guessLevel(gl);
+    const lose = gl.getExtension('WEBGL_lose_context');
+    if (lose) lose.loseContext();   // (this one only answered the question)
+    return !hdr || level === 'low';
+  } catch (e) { return true; }
 }
 
 class Gfx {

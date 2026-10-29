@@ -12,7 +12,7 @@ import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS } f
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
-import { gfx } from './gfx.js';
+import { gfx, canvasNeedsAA } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
 import { setWorldLand, landKey, land, loadLand } from './biomes.js';
@@ -26,7 +26,7 @@ import { withRivals, lobbyRivals } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: canvasNeedsAA(), powerPreference: 'high-performance' });   // (samples for the canvas only where the scene is drawn straight into it: see gfx.js)
 renderer.setSize(innerWidth, innerHeight);
 gfx.init(renderer);   // (tone curve, shadow filter and the rest of the renderer set-up: see gfx.js)
 $('app').appendChild(renderer.domElement);

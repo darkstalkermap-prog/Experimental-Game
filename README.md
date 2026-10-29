@@ -907,6 +907,7 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Online, other players and soldiers are interpolated between the host's updates for smooth movement, and
   shop purchases show instantly while the host confirms them.
 - Mouse look uses raw input where the browser supports it.
+- Edges are smoothed by 4x multisampling of the scene target at High and Ultra and by FXAA at Medium; the canvas itself has samples only at Low, where the scene is drawn straight into it.
 
 ## Current limits
 

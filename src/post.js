@@ -187,6 +187,10 @@ export class Post {
     this.floatMsaa = !!(renderer.capabilities.isWebGL2 && ext.has('EXT_color_buffer_float'));
     this.maxSamples = renderer.capabilities.maxSamples || 0;
     this.ok = this.hdr;
+    // does the canvas itself have samples? (main.js only asks for that where the scene is drawn straight into it)
+    const attrs = renderer.getContextAttributes && renderer.getContextAttributes();
+    this.canvasAA = !attrs || !!attrs.antialias;
+    this.aa = false;   // whether the FXAA pass runs (the level asks for it, or nothing else smooths the edges)
     this.active = false;
     this.width = 0; this.height = 0;
     this.sceneRT = null; this.samples = -1; this.ldrRT = null; this.bloomRT = [];
@@ -212,6 +216,7 @@ export class Post {
     this.cam = { desaturate: 0, flash: 0, flashColor: new THREE.Color(1, 1, 1) };
     this.defineKey = '';
     this.stats = { passes: 0 };
+    this.kept = { calls: 0, triangles: 0, points: 0, lines: 0 };   // (the scene's own counts while the passes run)
   }
 
   makeRT(w, h, opts = {}) {
@@ -224,10 +229,13 @@ export class Post {
   // follow the quality settings and the canvas size; returns whether the post pipeline is in use
   setup(w, h) {
     const p = Q.post;
-    const wanted = this.ok && !!(p.bloom || p.aa || p.vignette || p.grade || p.ao);
+    const samples = this.floatMsaa ? Math.min(Q.msaa | 0, this.maxSamples) : 0;
+    // FXAA runs where the level asks for it, and also where nothing else would smooth the edges: a canvas that has no samples of its
+    // own (main.js leaves them off where the post target has some) showing a scene drawn without any
+    this.aa = !!p.aa || (!this.canvasAA && samples === 0);
+    const wanted = this.ok && !!(p.bloom || this.aa || p.vignette || p.grade || p.ao);
     this.active = wanted;
     if (!wanted) { this.release(); return false; }
-    const samples = this.floatMsaa ? Math.min(Q.msaa | 0, this.maxSamples) : 0;
     if (!this.sceneRT || this.samples !== samples) {
       if (this.sceneRT) this.sceneRT.dispose();
       this.sceneRT = this.makeRT(w, h, { depthBuffer: true, samples });
@@ -245,7 +253,7 @@ export class Post {
       this.bloomRT = levels.map(([lw, lh]) => this.makeRT(lw, lh));
       this.bloomKey = sizeKey;
     }
-    if (p.aa) {
+    if (this.aa) {
       if (!this.ldrRT) this.ldrRT = this.makeRT(w, h, { type: THREE.UnsignedByteType });
       else if (this.ldrRT.width !== w || this.ldrRT.height !== h) this.ldrRT.setSize(w, h);
     } else if (this.ldrRT) { this.ldrRT.dispose(); this.ldrRT = null; }
@@ -291,8 +299,8 @@ export class Post {
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
     // what the scene itself cost (the passes below would add their own draw calls to the same counters)
-    const info = r.info.render;
-    const keep = { calls: info.calls, triangles: info.triangles, points: info.points, lines: info.lines };
+    const info = r.info.render, keep = this.kept;
+    keep.calls = info.calls; keep.triangles = info.triangles; keep.points = info.points; keep.lines = info.lines;
     const auto = r.autoClear;
     r.autoClear = false;
     const w = this.width, h = this.height;
@@ -327,7 +335,7 @@ export class Post {
     u.uTexel.value.set(1 / w, 1 / h);
     u.uCam.value.set(this.cam.desaturate, this.cam.flash, 0);
     u.uFlash.value.set(this.cam.flashColor.r, this.cam.flashColor.g, this.cam.flashColor.b);
-    if (p.aa && this.ldrRT) {
+    if (this.aa && this.ldrRT) {
       this.pass(this.matComposite, this.ldrRT);
       this.matFxaa.uniforms.tColor.value = this.ldrRT.texture;
       this.matFxaa.uniforms.uTexel.value.set(1 / w, 1 / h);
