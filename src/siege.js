@@ -9,6 +9,7 @@ import { Unit } from './units.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { allied } from './teams.js';
+import { limitShadow } from './shadows.js';
 
 let NEXT_ID = 1;
 
@@ -59,6 +60,8 @@ export class SiegeEngine {
     this.speedNow = 0;
     this.manT = 0;
     game.scene.add(this.mesh);
+    // a shadow this size matters only close up: the wide shadow map (redrawn now and then) leaves engines out, like the crowd
+    this.mesh.traverse((o) => { if (o.isMesh) limitShadow(game.scene, o); });
   }
 
   // The engine's own crew of engineers (host and single player only).

@@ -169,13 +169,19 @@ export class ShadowRig {
     if (!this.throttle) this.farAge = 0;
   }
 
+  // is `o` still part of the scene (a mesh in a group that was removed keeps its own parent)
+  inScene(o) {
+    for (let p = o.parent; p; p = p.parent) if (p === this.scene) return true;
+    return false;
+  }
+
   // a shadow phase starts: note what each registered caster wants (its owner decided that this frame)
   begin() {
     const list = this.scene.userData.casters;
     if (!list) return;
     for (let i = list.length - 1; i >= 0; i--) {
       const o = list[i];
-      if (!o.parent) { list.splice(i, 1); continue; }   // (removed from the scene: its owner built a new one)
+      if (!this.inScene(o)) { list.splice(i, 1); continue; }   // (removed from the scene: its owner built a new one)
       const sh = o.userData.sh;
       sh.want = sh.proxy ? !!o.userData.on : o.castShadow;
     }
