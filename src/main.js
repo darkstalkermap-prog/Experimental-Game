@@ -14,6 +14,7 @@ import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
 import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
+import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -103,6 +104,11 @@ function selectMap(size) {
 document.querySelectorAll('#mapsize button').forEach((b) => b.addEventListener('click', () => selectMap(b.dataset.m)));
 selectMap(mapSize);
 
+// the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
+// that choose them change fields of this object; every start below sends a sanitized copy and remembers it
+let options = loadOptions();
+const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
+
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
 // Hero Mode is the third choice of the Mode row. It is not an objective of the war (OBJECTIVES, the lobby): it has its own
@@ -183,8 +189,8 @@ const rememberClass = (id) => {
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
 $('play').addEventListener('click', () => begin(difficulty, heroOn
-  ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin } }
-  : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective }));
+  ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin }, options: matchOptions() }
+  : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective, options: matchOptions() }));
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], practice: true }, 'small'));
 
@@ -303,8 +309,9 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective });
-  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective });
+  const opts = matchOptions();
+  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective, opts });
+  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -319,7 +326,7 @@ $('joinBtn').addEventListener('click', async () => {
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest' }, d.map || 'medium');
+      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   });
   net.join(code, playerName());

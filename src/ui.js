@@ -10,6 +10,8 @@ import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
 import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } from './practiceui.js';
 import { HERO } from './herogame.js';
+import { matchlog } from './matchlog.js';
+import { buildSummary, renderEndScreen } from './endscreen.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -694,7 +696,7 @@ export class UI {
     const wf = g.factions[winner];
     const team = won && g.coop;
     $('gameover').classList.remove('hidden');
-    if (g.hero) { this.heroGameOver(won, winner, reason); return; }
+    if (g.hero) { this.heroGameOver(won, winner, reason); this.endSections(won, winner, reason); return; }
     $('goHeroes').classList.add('hidden');
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
@@ -710,7 +712,14 @@ export class UI {
       <div><b>${f.earned}</b><span>gold earned</span></div>
       <div><b>${g.player.deaths}</b><span>deaths</span></div>
       ${g.objective === 'koth' ? `<div><b>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</b><span>on the hill</span></div>` : ''}`;
+    this.endSections(won, winner, reason);
     this.hideHud();
+  }
+
+  // the sections other features add to the end screen (see endscreen.js)
+  endSections(won, winner, reason) {
+    this.lastSummary = buildSummary(this.game, won, winner, reason, matchlog);
+    renderEndScreen(this.lastSummary, $('goSections'));
   }
 
   showHud() {

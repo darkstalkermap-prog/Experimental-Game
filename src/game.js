@@ -37,6 +37,9 @@ import { CamFx } from './camfx.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
+import { matchlog } from './matchlog.js';
+import { mods } from './mods.js';
+import { sanitizeOptions } from './options.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -110,6 +113,7 @@ export class Game {
     this.round = 0;
     this.phase = 'prep';
     this.phaseT = 0;
+    this.options = sanitizeOptions(null);   // (what this match was set up with beyond the basics: see options.js)
     this.hitStop = 0;
     this.pings = new Pings(this);
     this.court = this.practice ? new PracticeCourt(this) : null;
@@ -150,6 +154,9 @@ export class Game {
   start(difficulty = 'normal', setup = null) {
     setup = setup || { mode: 'single', localTeam: PLAYER_TEAM, players: [{ team: PLAYER_TEAM, name: 'You' }] };
     this.mode = setup.mode;
+    this.options = sanitizeOptions(setup.options);
+    matchlog.reset();
+    mods.reset();
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.hill.reset();
@@ -1355,6 +1362,7 @@ export class Game {
     // brief hit-stop when a blow lands (single player only)
     if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.12; }
     this.time += dt;
+    if (this.state === 'playing') matchlog.tick(dt);
     const controlling = this.state === 'playing' && !this.paused;
     if (controlling) this.handleInput();
     if (this.mode === 'single' && this.ui.shopOpen) return;

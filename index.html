@@ -412,6 +412,8 @@
   }
   .targets { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .targets .label { width: 100%; font-size: 15px; opacity: 0.85; }
+  #goSections { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+  #goSections:empty { display: none; }
   #gameover h1.win { color: #2c5a12; }
   #gameover h1.lose { color: #6a1010; }
   .stats { display: flex; gap: 22px; justify-content: center; margin: 16px 0; flex-wrap: wrap; }
@@ -846,6 +848,7 @@
     <div class="sub" id="goText"></div>
     <div class="stats" id="goStats"></div>
     <div id="goHeroes" class="hidden"></div>
+    <div id="goSections"></div>
     <div class="tipline" id="goTip"></div>
     <div class="row"><button id="again">Play Again</button></div>
   </div>
