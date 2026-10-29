@@ -16,6 +16,11 @@ const FX = { value: 1 };
 // Masonry shader additions: damp and moss at the foot of a wall, long rain streaks, large-scale patchiness (so repeated tiles do not read)
 // Positions are in the mesh's own space, which for a castle is castle-local, so "y = 0" is the ground. Normal maps and the
 // weathering are switched by Q.detail (see below).
+// The fine detail is also given up with distance, with a branch instead of a fade of the result so that the reads themselves are skipped:
+// the rain streaks (finer than a pixel from about 50 m, the noise texture's mips have averaged them out by then) and the normal map's relief
+// (the courses and bevels, under a pixel from about 50 m) are drawn in full up to the first distance and not at all past the second.
+// The patchiness and the damp stay at every distance: they are large (several metres) and carry the look of a far castle.
+const STREAK_FADE = '30.0, 60.0', NORMAL_FADE = '34.0, 70.0';
 export function weathering(material) {
   return patchMaterial(material, 'cwStone', (shader) => {
     shader.uniforms.cwNoise = { value: noiseTexture() };
@@ -25,17 +30,42 @@ export function weathering(material) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCwP = position;\nvCwN = normal;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform sampler2D cwNoise;\nuniform float cwFx;\nvarying vec3 vCwP;\nvarying vec3 vCwN;')
+      // the tangent frame of the normal map is worked out where the relief is drawn (see normal_fragment_maps below), not here
+      .replace('#include <normal_fragment_begin>', `float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+      vec3 normal = normalize( vNormal );
+      #ifdef DOUBLE_SIDED
+        normal *= faceDirection;
+      #endif
+      vec3 nonPerturbedNormal = normal;`)
+      .replace('#include <normal_fragment_maps>', `#ifdef USE_NORMALMAP_TANGENTSPACE
+        // (the screen derivatives are taken here, outside the branch; the rest is the stock tangent frame of three.js)
+        vec3 cwQ0 = dFdx( - vViewPosition ), cwQ1 = dFdy( - vViewPosition );
+        vec2 cwS0 = dFdx( vNormalMapUv ), cwS1 = dFdy( vNormalMapUv );
+        float cwNK = 1.0 - smoothstep( ${NORMAL_FADE}, vViewPosition.z );
+        if ( cwNK > 0.0 ) {
+          vec3 cwQ1p = cross( cwQ1, normal ), cwQ0p = cross( normal, cwQ0 );
+          vec3 cwT = cwQ1p * cwS0.x + cwQ0p * cwS1.x;
+          vec3 cwB = cwQ1p * cwS0.y + cwQ0p * cwS1.y;
+          float cwDet = max( dot( cwT, cwT ), dot( cwB, cwB ) );
+          float cwSc = ( cwDet == 0.0 ) ? 0.0 : inversesqrt( cwDet );
+          vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+          mapN.xy *= normalScale * cwNK;
+          normal = normalize( mat3( cwT * cwSc, cwB * cwSc, normal ) * mapN );
+        }
+      #endif`)
       .replace('#include <map_fragment>', `#include <map_fragment>
-      {
-        float cwUp = abs(vCwN.y);
-        float cwVert = 1.0 - smoothstep(0.55, 0.9, cwUp);
+      if (cwFx > 0.5) {   // (Low: the plain textured stone, nothing is read)
+        float cwVert = 1.0 - smoothstep(0.55, 0.9, abs(vCwN.y));
         vec2 cwP = mix(vec2(vCwP.x + vCwP.z, vCwP.y), vCwP.xz, 1.0 - cwVert);
         vec4 cwA = texture2D(cwNoise, cwP * 0.09);
         float cwDamp = smoothstep(1.7 + cwA.g * 1.3, 0.0, vCwP.y) * cwVert;
-        diffuseColor.rgb *= mix(vec3(1.0), vec3(0.66, 0.74, 0.52), cwDamp * 0.7 * cwFx);
-        float cwStreak = texture2D(cwNoise, vec2((vCwP.x + vCwP.z) * 0.75, vCwP.y * 0.035)).g;
-        diffuseColor.rgb *= 1.0 - 0.24 * smoothstep(0.55, 0.92, cwStreak) * cwVert * cwFx;
-        diffuseColor.rgb *= mix(1.0, 0.8 + 0.4 * cwA.b, cwFx);
+        diffuseColor.rgb *= mix(vec3(1.0), vec3(0.66, 0.74, 0.52), cwDamp * 0.7);
+        float cwStreakK = cwVert * (1.0 - smoothstep(${STREAK_FADE}, vViewPosition.z));   // (none on a roof or a step: nothing runs down it)
+        if (cwStreakK > 0.0) {
+          float cwStreak = texture2D(cwNoise, vec2((vCwP.x + vCwP.z) * 0.75, vCwP.y * 0.035)).g;
+          diffuseColor.rgb *= 1.0 - 0.24 * smoothstep(0.55, 0.92, cwStreak) * cwStreakK;
+        }
+        diffuseColor.rgb *= 0.8 + 0.4 * cwA.b;
       }`);
   });
 }

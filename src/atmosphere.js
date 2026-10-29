@@ -17,6 +17,8 @@ export const SUN_INTENSITY = 3.1;
 
 const f6 = (v) => v.toFixed(6);
 const SUN_CONST = `const vec3 ATM_SUN = vec3(${f6(SUN_DIR.x)}, ${f6(SUN_DIR.y)}, ${f6(SUN_DIR.z)});`;
+// a colour written as sRGB values, as the linear vec3 literal the shaders use (raised to 2.2 here, once, not in every pixel)
+const lin3 = (r, g, b) => `vec3(${[r, g, b].map((c) => Math.pow(c, 2.2).toFixed(8)).join(', ')})`;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // The shared sky model. Linear radiance of the clear sky for a unit view direction d (y up); no clouds, no sun disc.
@@ -25,27 +27,29 @@ const SUN_CONST = `const vec3 ATM_SUN = vec3(${f6(SUN_DIR.x)}, ${f6(SUN_DIR.y)},
 export const ATM_GLSL = `
 ${SUN_CONST}
 const vec3 ATM_SUN_TINT = vec3(1.0, 0.80, 0.55);
-vec3 atmSrgb(vec3 c) { return pow(c, vec3(2.2)); }
-float atmHg(float mu, float g) { float g2 = g * g; return (1.0 - g2) / (12.5663706 * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5)); }
+// (the sky colours are sRGB triples raised to 2.2: written out as linear constants, and the powers with fixed exponents as products, because
+// the fog evaluates this in every pixel of every lit surface and a compiler does not fold a pow of constants behind a function call)
+float atmHg(float mu) { float t = max(1.49 - 1.4 * mu, 1e-4); return 0.51 / (12.5663706 * t * sqrt(t)); }   // Henyey-Greenstein, g = 0.70
 // tint: the colour of the haze at the horizon (1 = the meadow's), fading out overhead; murk 0..1: overcast and mist (0 = the clear meadow sky). Both are
 // 1 and 0 in the meadow, where the two branches below are skipped (they test uniforms, so they cost a compare) and every other line gives back exactly the
 // value it had before biomes (see the air of a biome in biomes.js).
 vec3 atmHazeB(vec3 d, vec3 tint, float murk) {
   float y = clamp(d.y, 0.0, 1.0);
   float mu = clamp(dot(d, ATM_SUN), -1.0, 1.0);
-  vec3 zenith = atmSrgb(vec3(0.27, 0.46, 0.79));
-  vec3 mid = atmSrgb(vec3(0.44, 0.64, 0.91));
-  vec3 low = atmSrgb(vec3(0.68, 0.82, 0.96));
-  vec3 hor = atmSrgb(vec3(0.84, 0.90, 0.95));
+  vec3 zenith = ${lin3(0.27, 0.46, 0.79)};
+  vec3 mid = ${lin3(0.44, 0.64, 0.91)};
+  vec3 low = ${lin3(0.68, 0.82, 0.96)};
+  vec3 hor = ${lin3(0.84, 0.90, 0.95)};
   vec3 sky = mix(hor, low, smoothstep(0.0, 0.10, y));
   sky = mix(sky, mid, smoothstep(0.06, 0.42, y));
   sky = mix(sky, zenith, smoothstep(0.30, 1.0, y));
   float gk = 1.0, hk = 1.0;                                              // how much of the sun's glow and of the golden horizon a murky sky keeps
   if (murk > 0.0) { sky = mix(sky, hor, murk * smoothstep(0.0, 0.25, y)); gk = 1.0 - 0.8 * murk; hk = 1.0 - 0.9 * murk; }   // overcast: the sky above pales to the horizon's colour
   sky *= 0.86 + 0.28 * mu * mu;                                          // Rayleigh phase: dimmest about 90 degrees from the sun
-  float glow = atmHg(mu, 0.70) * 0.50 + pow(max(mu, 0.0), 3.0) * 0.14;   // forward scattering by the haze
+  float ms = max(mu, 0.0);
+  float glow = atmHg(mu) * 0.50 + ms * ms * ms * 0.14;                   // forward scattering by the haze
   sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y)) * gk;
-  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y)) * hk;   // golden horizon on the sun side
+  sky += ${lin3(0.95, 0.74, 0.50)} * (ms * sqrt(ms)) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y)) * hk;   // golden horizon on the sun side
   if (tint != vec3(1.0)) sky *= mix(tint, vec3(1.0), smoothstep(0.0, 0.55, y));
   return sky;
 }
@@ -95,7 +99,8 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
   vec3 atmFogColor(vec3 dir, float f, vec3 tint, float murk) {
     vec3 haze = atmHazeB(dir, tint, murk);
     float mu = max(dot(dir, ATM_SUN), 0.0);
-    haze *= 1.0 + 1.4 * pow(mu, 6.0) * f;   // looking into the sun the haze glows
+    float mu3 = mu * mu * mu;
+    haze *= 1.0 + 1.4 * mu3 * mu3 * f;   // looking into the sun the haze glows
     #ifdef TONE_MAPPING
       haze = toneMapping( haze );
     #endif
@@ -109,7 +114,6 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
       vec3 tint = fogColor; float murk = fogNear;
     #endif
     float dist = length(ray);
-    vec3 dir = ray / max(dist, 1e-3);
     float t = dist * k;
     float tau = t * t;
     float h0 = max(cameraPosition.y, -30.0);
@@ -119,6 +123,8 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     float mist = abs(dy) > 0.02 ? (la - lb) * ATM_MIST_H / dy : la;
     tau += ATM_MIST * (1.0 + 2.5 * murk) * (k / ATM_K0) * dist * mist * smoothstep(6.0, 110.0, dist);
     float f = 1.0 - exp(-tau);
+    if (f < 0.0015) return color;   // (nearer than about 15 m the haze is under half a grey level: not worth evaluating the sky for it)
+    vec3 dir = ray / max(dist, 1e-3);
     vec3 haze = atmFogColor(dir, f, tint, murk);
     #ifdef TONE_MAPPING
       // straight to the canvas: the object's colour is display-encoded already, so blend in linear light as the HDR path does
@@ -325,7 +331,7 @@ const SKY_FRAGMENT = `
     vec3 col = atmHazeB(d, uTint, uMurk);
     #ifdef ENV
       // environment map for the reflections and the ambient light: no sun disc, no clouds; the ground bounces warm light back up
-      vec3 ground = atmSrgb(vec3(0.42, 0.40, 0.30)) * 0.42;
+      vec3 ground = ${lin3(0.42, 0.40, 0.30)} * 0.42;
       col = mix(col, ground, smoothstep(0.02, -0.12, d.y));
     #else
       float vis = 1.0;
@@ -344,7 +350,7 @@ const SKY_FRAGMENT = `
           float ns = atmCumulus(p + toSun * 1.0, 2);
           float densSun = smoothstep(cov, cov + 0.22, ns);
           float shade = clamp(0.62 + (dens - densSun) * 1.9 - dens * 0.34, 0.0, 1.0);
-          vec3 belly = mix(atmSrgb(vec3(0.46, 0.52, 0.64)), atmHaze(vec3(0.0, 0.6, 0.8)) * 0.9, 0.35) * 0.80;
+          vec3 belly = mix(${lin3(0.46, 0.52, 0.64)}, atmHaze(vec3(0.0, 0.6, 0.8)) * 0.9, 0.35) * 0.80;
           vec3 top = ATM_SUN_TINT * 1.45 + vec3(0.12, 0.13, 0.15);
           vec3 cc = mix(belly, top, shade);
           // an overcast biome (uMurk): the clouds are the grey of its haze, lit from within, with no sunlit edges

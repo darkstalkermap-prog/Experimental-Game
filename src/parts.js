@@ -9,6 +9,7 @@
 //   p.cyl('masonry', rTop, rBottom, h, segs, matrix, tint);    // cylinder / cone about the matrix's y axis (base at y = 0)
 //   p.add('roof', someThreeGeometry, matrix, tint);            // any indexed or plain THREE geometry
 //   const geo = p.geometry('masonry');                         // -> THREE.BufferGeometry (or null when empty)
+//   p.cull([other, ...]);                                      // drop the faces of axis-aligned boxes that lie inside other solids (see below)
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 
@@ -46,14 +47,38 @@ const FACES = [
   ['s', 0, 0, -1, [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]]],
 ];
 
+// Is the face of an axis-aligned box covered, in the plane just outside it, by the union of the other boxes? (rectangles taken away one by one)
+const COVER_EPS = 1e-4, COVER_TOL = 1e-6;
+function buried(f, solids) {
+  const b = f.rec, ax = f.ax, u = (ax + 1) % 3, v = (ax + 2) % 3, plane = f.up ? b.hi[ax] + COVER_EPS : b.lo[ax] - COVER_EPS;
+  let rem = [[b.lo[u], b.lo[v], b.hi[u], b.hi[v]]];
+  for (const o of solids) {
+    if (o === b || !(o.lo[ax] < plane && plane < o.hi[ax])) continue;
+    const r0 = o.lo[u], r1 = o.lo[v], r2 = o.hi[u], r3 = o.hi[v];
+    const next = [];
+    for (const q of rem) {
+      if (r0 >= q[2] - COVER_TOL || r2 <= q[0] + COVER_TOL || r1 >= q[3] - COVER_TOL || r3 <= q[1] + COVER_TOL) { next.push(q); continue; }
+      if (q[0] < r0 - COVER_TOL) next.push([q[0], q[1], r0, q[3]]);
+      if (q[2] > r2 + COVER_TOL) next.push([r2, q[1], q[2], q[3]]);
+      const x0 = Math.max(q[0], r0), x1 = Math.min(q[2], r2);
+      if (q[1] < r1 - COVER_TOL) next.push([x0, q[1], x1, r1]);
+      if (q[3] > r3 + COVER_TOL) next.push([x0, r3, x1, q[3]]);
+    }
+    rem = next;
+    if (!rem.length) return true;
+  }
+  return false;
+}
+
 export class Parts {
   constructor(seed = 1, cfg = UV_CFG) {
     this.cfg = cfg;
     this.acc = {};
+    this.boxes = [];   // the axis-aligned boxes added so far: { lo: [x, y, z], hi: [x, y, z] } (what cull() tests faces against)
     this.rng = mulberry32(seed);
   }
 
-  a(key) { return this.acc[key] || (this.acc[key] = { pos: [], nor: [], uv: [], col: [], idx: [] }); }
+  a(key) { return this.acc[key] || (this.acc[key] = { pos: [], nor: [], uv: [], col: [], idx: [], q: [] }); }
   empty() { for (const k in this.acc) if (this.acc[k].idx.length) return false; return true; }
   keys() { return Object.keys(this.acc).filter((k) => this.acc[k].idx.length); }
   triangles() { let n = 0; for (const k in this.acc) n += this.acc[k].idx.length / 3; return n; }
@@ -99,10 +124,13 @@ export class Parts {
     }
     const world = cfg.mode === 'world' && m;     // world projection of a rotated box: project the final position
     if (m) _nm.getNormalMatrix(m);
+    const rec = m ? null : { lo, hi };           // (an axis-aligned box is remembered, and so is where each of its faces went: see cull)
+    if (rec) this.boxes.push(rec);
     for (const [name, nx, ny, nz, corners] of FACES) {
       if (skip.indexOf(name) >= 0) continue;
       const base = a.pos.length / 3;
       const ax = nx ? 0 : ny ? 1 : 2;
+      if (rec) a.q.push({ rec, ax, up: nx + ny + nz > 0, at: a.idx.length });
       let wn = null;
       if (m) { _n.set(nx, ny, nz).applyMatrix3(_nm).normalize(); wn = _n; }
       for (const c of corners) {
@@ -196,6 +224,32 @@ export class Parts {
   }
   // append everything of another Parts as it is
   merge(src) { this.stamp(src, null, null); }
+
+  // ---- hidden faces ----
+  // Drop every face of an axis-aligned box that lies wholly inside other solids (this one's boxes and those of the `others` Parts, which must
+  // be there whenever this one is): a face buried in the stone next to it can be seen from nowhere, and a castle is made of boxes that
+  // overlap and abut each other all over (corbels on walls, towers on the wall corners, the footing round everything). Exact: a face goes only
+  // when the rectangles of the solids that cover the plane just outside it add up to the whole face. Call it once, before merging.
+  cull(others = []) {
+    const solids = this.boxes.concat(...others.map((o) => o.boxes));
+    let dropped = 0;
+    for (const key in this.acc) {
+      const a = this.acc[key];
+      if (!a.q.length) continue;
+      const dead = [];
+      for (const f of a.q) if (buried(f, solids)) dead.push(f.at);
+      a.q = [];
+      if (!dead.length) continue;
+      const idx = [];
+      for (let i = 0, k = 0; i < a.idx.length; i++) {
+        if (k < dead.length && i === dead[k]) { i += 5; k++; continue; }   // (a face is six consecutive indices)
+        idx.push(a.idx[i]);
+      }
+      a.idx = idx;
+      dropped += dead.length;
+    }
+    return dropped;
+  }
 
   // ---- result ----
   geometry(key) {
