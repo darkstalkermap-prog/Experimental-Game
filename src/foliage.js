@@ -134,6 +134,7 @@ function cardGeometry(cap) {
 
 const geoCache = new Map();   // species/lod geometries are built once per page and survive a world rebuild (three.js re-uploads them)
 function modelGeometry(kind, lod) {
+  if (kind === 1 && lod === 1) kind = 0;   // (a far pine is a dark cone like a spruce: its umbrella crown reads as a mushroom from afar)
   const key = kind + ':' + lod;
   let g = geoCache.get(key);
   if (!g) {
@@ -283,7 +284,7 @@ export class Foliage {
       _sph.radius = rad[i] + 8;
       if (!_fr.intersectsSphere(_sph)) continue;
       if (!tree) { const m = this.rocks[k - 4]; if (nR[k - 4] < m.instanceMatrix.count) put(m, nR[k - 4]++, mat, tint, i); continue; }
-      if (d2 < mid2) { const m = this.mid[k]; if (nM[k] < m.instanceMatrix.count) put(m, nM[k]++, mat, tint, i); continue; }
+      if (d2 < mid2) { const m = this.mid[k]; if (nM[k] < m.instanceMatrix.count) put(m, nM[k]++, mat, tint, i, 0.8); continue; }
       // a card: the instance matrix carries only the position and the size
       if (nC[0] < card.instanceMatrix.count) {
         const j = nC[0]++, a = card.instanceMatrix.array, w = this.card[i * 3], h = this.card[i * 3 + 1];
@@ -292,7 +293,7 @@ export class Foliage {
         a[j * 16 + 8] = 0; a[j * 16 + 9] = 0; a[j * 16 + 10] = w; a[j * 16 + 11] = 0;
         a[j * 16 + 12] = pos[i * 3]; a[j * 16 + 13] = mat[i * 16 + 13] + 0.1; a[j * 16 + 14] = pos[i * 3 + 2]; a[j * 16 + 15] = 1;
         const ca = card.instanceColor.array;
-        ca[j * 3] = tint[i * 3] * 0.9; ca[j * 3 + 1] = tint[i * 3 + 1] * 0.9; ca[j * 3 + 2] = tint[i * 3 + 2] * 0.9;
+        ca[j * 3] = tint[i * 3] * 0.72; ca[j * 3 + 1] = tint[i * 3 + 1] * 0.72; ca[j * 3 + 2] = tint[i * 3 + 2] * 0.72;
         cellAttr[j] = this.card[i * 3 + 2];
       }
     }
@@ -303,10 +304,10 @@ export class Foliage {
   }
 }
 
-function put(mesh, j, mat, tint, i) {
+function put(mesh, j, mat, tint, i, f = 1) {
   mesh.instanceMatrix.array.set(mat.subarray(i * 16, i * 16 + 16), j * 16);
   const c = mesh.instanceColor.array;
-  c[j * 3] = tint[i * 3]; c[j * 3 + 1] = tint[i * 3 + 1]; c[j * 3 + 2] = tint[i * 3 + 2];
+  c[j * 3] = tint[i * 3] * f; c[j * 3 + 1] = tint[i * 3 + 1] * f; c[j * 3 + 2] = tint[i * 3 + 2] * f;
 }
 function finish(mesh, n) {
   mesh.count = n;

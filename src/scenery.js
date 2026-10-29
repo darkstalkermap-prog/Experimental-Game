@@ -9,14 +9,15 @@ export function placeScenery(physics, terrain) {
   const P = WORLD.playHalf, nz = physics.noise;
   const rng = mulberry32(2024);
   const trees = [], rocks = [];
-  const lim = P + 300, sp = 7.2;
+  const lim = P + 260, sp = 8.4;
   const slopeAt = (x, z) => Math.hypot(physics.rawHeight(x + 2.5, z) - physics.rawHeight(x - 2.5, z), physics.rawHeight(x, z + 2.5) - physics.rawHeight(x, z - 2.5)) / 5;
   for (let gz = -lim; gz < lim; gz += sp) for (let gx = -lim; gx < lim; gx += sp) {
     const x = gx + (rng() - 0.5) * sp, z = gz + (rng() - 0.5) * sp;
     const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng();
     if (Math.max(Math.abs(x), Math.abs(z)) <= P + 1) continue;
-    const h = physics.rawHeight(x, z), tl = treeLineAt(nz, x, z);
     const dens = forestDensity(nz, x, z);
+    if (r1 > dens * 1.25 + 0.05 && r1 < 0.88) continue;   // (neither a tree nor a rock goes here: skip the costly height)
+    const h = physics.rawHeight(x, z), tl = treeLineAt(nz, x, z);
     const rockN = nz.fbm(x * 0.035 + 20, z * 0.035 - 8, 3) * 0.5 + 0.5;
     if (h < tl - 4) {
       const p = clamp(dens * 1.25 + 0.02 - 0.6 * smoothstep(tl - 36, tl - 6, h), 0, 1);
@@ -59,7 +60,7 @@ export function placeWallTrees(physics, ok) {
     const dens = forestDensity(nz, x, z);
     const rockN = nz.fbm(x * 0.035 + 20, z * 0.035 - 8, 3) * 0.5 + 0.5;
     const sl = slopeAt(x, z);
-    if (r1 > clamp(dens * 1.2 + 0.2, 0, 1) || sl > 2.1 || (sl + 0.8 * (rockN - 0.5) > 1.55)) continue;
+    if (r1 > clamp(dens * 1.2 + 0.2, 0, 1) || sl > 2.4 || (sl + 0.8 * (rockN - 0.5) > 2.0)) continue;
     const y = physics.terrainHeight(x, z);
     out.push({ x, y, z, s: 0.8 + r2 * 0.5, r: r3 * 6.283, c: r4, conifer: r2 + 0.3 > 0.62 });
   }

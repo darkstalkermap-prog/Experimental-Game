@@ -12,17 +12,17 @@ import { forestDensity } from './landscape.js';
 import { terrainMaterial, setRoads } from './terrainmat.js';
 import { Q } from './quality.js';
 
-const CHUNK = 32;   // cells per chunk side (64 m)
+const CHUNK = 64;   // cells per chunk side (128 m)
 // far rings: cell size and how wide the ring is (each ring starts where the last ended, snapped to the next cell size)
 const RINGS = [
-  { c: 2, w: 14 }, { c: 4, w: 36 }, { c: 8, w: 96 }, { c: 16, w: 224 }, { c: 32, w: 480 }, { c: 64, w: 1024 },
+  { c: 2, w: 8 }, { c: 4, w: 40 }, { c: 8, w: 96 }, { c: 16, w: 224 }, { c: 32, w: 480 }, { c: 64, w: 1024 },
 ];
 
 const grassA = new THREE.Color(0x5d7a32), grassB = new THREE.Color(0x7d8e3e), grassDry = new THREE.Color(0x9a9050);
 const dirt = new THREE.Color(0x7b6646), rock = new THREE.Color(0x77736a), rockWarm = new THREE.Color(0x8a8070), tmp = new THREE.Color();
 const trodden = new THREE.Color(0xa09572);   // the top of the hill in the middle: bare, pale, much walked on
 const sand = new THREE.Color(0xb39a68);      // the floor of the practice yard: packed sand
-const forestFloor = new THREE.Color(0x2c4420), scrub = new THREE.Color(0x5a6034), snow = new THREE.Color(0xe6edf2);
+const forestDark = new THREE.Color(0x1d361a), forestFloor = new THREE.Color(0x2c4420), scrub = new THREE.Color(0x5a6034), snow = new THREE.Color(0xe6edf2);
 
 export const TREE_LINE = 126;   // metres above the valley floor where the forest gives up (varies with the noise)
 export const SNOW_LINE = 186;
@@ -57,14 +57,15 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   const shade = 0.9 + n2 * 0.15;
   base.multiplyScalar(shade);
   // the same layers as masks, for the shader
-  let castle = 0;
-  for (const s of CASTLE_SITES) {
-    const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
-    castle = Math.max(castle, (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2));
+  let castle = 0, hill = 0, sandW = 0;
+  if (!o.far) {   // (beyond the play area there are no castles, hill or yard)
+    for (const s of CASTLE_SITES) {
+      const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
+      castle = Math.max(castle, (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2));
+    }
+    hill = (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8;
   }
-  const hill = (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8;
-  let sandW = 0;
-  if (physics.practice) {
+  if (physics.practice && !o.far) {
     const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
     sandW = (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92;
   }
@@ -75,11 +76,12 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   mask[0] = castle; mask[1] = hill; mask[2] = sandW; mask[3] = canopy;
   o.alt[0] = smoothstep(tl - 6, tl + 14, h);
   o.alt[1] = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5));
+  if (!o.bake) return o;
   // the baked colour (what Q.terrain 0 and 1 show): the ground layers, then rock where it is steep, bare above the trees, snow on top
   const all = o.all;
   all.copy(base);
   all.lerp(dirt, castle);
-  all.lerp(dirt, (1 - smoothstep(2.2, 4.5, roadDist(x, z))) * 0.85);
+  if (!o.far) all.lerp(dirt, (1 - smoothstep(2.2, 4.5, roadDist(x, z))) * 0.85);
   all.lerp(trodden, hill);
   if (sandW) all.lerp(sand, sandW);
   tmp.copy(rock).lerp(rockWarm, n1);
@@ -87,14 +89,15 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   const rockW = Math.max(smoothstep(1.65, 2.3, slope + 0.9 * (rockN - 0.5)) * smoothstep(10, 26, h), smoothstep(tl - 6, tl + 14, h) * (0.55 + 0.4 * rockN),
     smoothstep(0.85, 1.0, rockN) * smoothstep(0.9, 1.5, slope) * smoothstep(6, 20, h));
   tmp.multiplyScalar(0.75 + 0.35 * rockN);
-  all.lerp(tmp, rockW);
+  all.lerp(tmp, rockW * (1 - 0.92 * canopy));
+  all.lerp(forestDark, canopy * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
   all.multiplyScalar(shade);
   const sn = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5)) * (1 - smoothstep(0.8, 1.5, slope));
   if (sn > 0) all.lerp(snow, sn);
   return o;
 }
 
-const makeSample = () => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0], alt: [0, 0] });
+const makeSample = (far = false, bake = false) => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0], alt: [0, 0], far, bake });
 
 // A chunk's geometry is built from arrays that the caller fills; `quads` is the shared index list for an nx x nz grid of cells.
 const indexCache = new Map();
@@ -133,12 +136,12 @@ function makeGeometry(nv, withIndexFor) {
 }
 
 // write one vertex
-function put(a, v, x, y, z, nx, ny, nz, s) {
+function put(a, v, x, y, z, nx, ny, nz, s) {   // (the baked colour is only written when the sample has one)
   a.position[v * 3] = x; a.position[v * 3 + 1] = y; a.position[v * 3 + 2] = z;
   const l = Math.hypot(nx, ny, nz) || 1;
   a.normal[v * 3] = nx / l; a.normal[v * 3 + 1] = ny / l; a.normal[v * 3 + 2] = nz / l;
   a.uv[v * 2] = x / 6; a.uv[v * 2 + 1] = z / 6;
-  a.color[v * 3] = s.all.r; a.color[v * 3 + 1] = s.all.g; a.color[v * 3 + 2] = s.all.b;
+  if (s.bake) { a.color[v * 3] = s.all.r; a.color[v * 3 + 1] = s.all.g; a.color[v * 3 + 2] = s.all.b; }
   a.aBase[v * 3] = s.base.r; a.aBase[v * 3 + 1] = s.base.g; a.aBase[v * 3 + 2] = s.base.b;
   a.aMask[v * 4] = s.mask[0]; a.aMask[v * 4 + 1] = s.mask[1]; a.aMask[v * 4 + 2] = s.mask[2]; a.aMask[v * 4 + 3] = s.mask[3];
   a.aAlt[v * 2] = s.alt[0]; a.aAlt[v * 2 + 1] = s.alt[1];
@@ -157,10 +160,13 @@ export class Terrain {
     this.rings = [];
     this.level = -1;
     this.isTerrain = true;
+    this.colored = false;   // the baked colours (Q.terrain 0 and 1) are made the first time they are needed
     this.buildChunks();
     this.buildFar();
     scene.add(this.group);
-    this.setLevel(0);
+    const placeholder = terrainMaterial(0);   // (until the first frame says which quality to draw at: see update)
+    for (const m of this.chunks) m.material = placeholder;
+    for (const m of this.far) m.material = placeholder;
   }
 
   // ---- the play area: +-playHalf in chunks of CHUNK cells, heights straight from the physics grid ----
@@ -208,7 +214,7 @@ export class Terrain {
   }
 
   buildFar() {
-    const ph = this.physics, nz = ph.noise, s = makeSample();
+    const ph = this.physics, nz = ph.noise, s = makeSample(true);
     let a = WORLD.playHalf;
     const snap = (v, m) => Math.ceil(v / m - 1e-9) * m;
     for (let k = 0; k < RINGS.length; k++) {
@@ -240,17 +246,23 @@ export class Terrain {
       const index = new Uint32Array(ntri);
       let v = 0, ii = 0;
       for (const [k, x0, z0, x1, z1] of strips) {
-        const r = this.rings[k], c = r.c;
+        const r = this.rings[k], c = r.c, last = k === this.rings.length - 1;
         const w = (x1 - x0) / c + 1, d = (z1 - z0) / c + 1;
+        // the heights of the whole lattice and two rows beyond it (for the normals), each worked out once
+        const B = 2, W = w + 2 * B, hh = new Float32Array(W * (d + 2 * B));
+        for (let j = -B; j < d + B; j++) for (let i = -B; i < w + B; i++) hh[(j + B) * W + i + B] = ph.rawHeight(x0 + i * c, z0 + j * c);
+        const H = (i, j) => hh[(j + B) * W + i + B];
         const v0 = v;
         for (let j = 0; j < d; j++) for (let i = 0; i < w; i++, v++) {
           const x = x0 + i * c, z = z0 + j * c;
-          const h = this.ringHeight(k, x, z);
-          // normals from the same lattice: the seam vertices use the coarser step so both rings agree on them
-          const onSeam = Math.abs(Math.abs(x) - r.b) < 1e-6 || Math.abs(Math.abs(z) - r.b) < 1e-6;
-          const e = onSeam && k < this.rings.length - 1 ? c * 2 : c;
-          const hxm = ph.rawHeight(x - e, z), hxp = ph.rawHeight(x + e, z), hzm = ph.rawHeight(x, z - e), hzp = ph.rawHeight(x, z + e);
-          const dx = (hxp - hxm) / (2 * e), dz = (hzp - hzm) / (2 * e);
+          const onX = !last && Math.abs(Math.abs(x) - r.b) < 1e-6, onZ = !last && Math.abs(Math.abs(z) - r.b) < 1e-6;
+          // on the seam with the next ring (which has only every other vertex) the odd ones sit on the straight line between their neighbours,
+          // and the normals use that ring's coarser step so both rings light the seam the same
+          let h = H(i, j);
+          if (onZ && Math.round(x / c) % 2 !== 0) h = (H(i - 1, j) + H(i + 1, j)) / 2;
+          else if (onX && Math.round(z / c) % 2 !== 0) h = (H(i, j - 1) + H(i, j + 1)) / 2;
+          const e = onX || onZ ? 2 : 1;
+          const dx = (H(i + e, j) - H(i - e, j)) / (2 * e * c), dz = (H(i, j + e) - H(i, j - e)) / (2 * e * c);
           groundSample(nz, this.roadDist, ph, x, z, h, Math.hypot(dx, dz), s);
           put(arrays, v, x, h, z, -dx, 1, -dz, s);
         }
@@ -289,8 +301,25 @@ export class Terrain {
     return tx + tz <= 1 ? a + (b - a) * tx + (d - a) * tz : f + (d - f) * (1 - tx) + (b - f) * (1 - tz);
   }
 
+  // The whole baked colour of every vertex (for Q.terrain 0 and 1; the splat shader works from the other attributes and never needs it)
+  bakeColors() {
+    this.colored = true;
+    const nz = this.physics.noise, ph = this.physics;
+    for (const mesh of this.chunks.concat(this.far)) {
+      const g = mesh.geometry, p = g.attributes.position, n = g.attributes.normal, col = g.attributes.color;
+      const s = makeSample(!!mesh.userData.far, true);
+      for (let i = 0; i < p.count; i++) {
+        const ny = Math.max(n.getY(i), 0.05), slope = Math.sqrt(Math.max(0, 1 - ny * ny)) / ny;
+        groundSample(nz, this.roadDist, ph, p.getX(i), p.getZ(i), p.getY(i), slope, s);
+        col.setXYZ(i, s.all.r, s.all.g, s.all.b);
+      }
+      col.needsUpdate = true;
+    }
+  }
+
   setLevel(level) {
     if (level === this.level) return;
+    if (level < 2 && !this.colored) this.bakeColors();
     this.level = level;
     const mat = terrainMaterial(level);
     for (const m of this.chunks) m.material = mat;
