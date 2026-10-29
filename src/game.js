@@ -3,7 +3,7 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY, clock,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
   UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
@@ -40,6 +40,8 @@ import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
+import { startDecrees } from './decrees.js';
+import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -159,6 +161,7 @@ export class Game {
     mods.reset();
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
+    this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (Battle Decrees: set before the houses are built, one can change the starting gold; see decrees.js)
     this.hill.reset();
     this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
@@ -191,7 +194,7 @@ export class Game {
       const human = this.humans.find((h) => h.team === i) || null;
       return {
         team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
-        gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
+        gold: START_GOLD + Math.round(mods.sum('startGold')), spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
         recruitRole: 'garrison', armyOrder: null,
@@ -206,6 +209,7 @@ export class Game {
       h.spawn(c.spawnPoint, c.rot);
     }
     if (this.hero) this.hero.setup(setup);   // (the six heroes, the two sides, houses 2 and 3 switched off)
+    startComeback(this);   // (the underdog's wage, the Last Stand: see comeback.js)
 
     if (this.simulating && !this.practice && !this.hero) {
       for (const f of this.factions) {
@@ -244,7 +248,7 @@ export class Game {
     this.audio.play('horn');
     if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
-    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -648,6 +652,7 @@ export class Game {
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || ''); break;
+      case 'stand': standFlash(); break;
       case 'ping': this.pings.receive(ev); break;
       default: this.alerts.event(ev); break;
     }
@@ -742,7 +747,7 @@ export class Game {
 
   onUnitKilled(u, attacker) {
     const by = attacker && attacker.team !== undefined ? attacker.team : -1;
-    const bounty = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
+    const bounty = (u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10)) * mods.mul('bounty');
     if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
     if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
@@ -751,7 +756,7 @@ export class Game {
     if (u.isHero && u.type === 'lord') {
       const f = this.factions[u.team];
       f.heroDeaths++;
-      f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
+      f.respawnT = (PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1)) * mods.mul('respawn');
       this.announce(`${f.lord} has been slain!${f.castle.fallen ? ' Their house is finished.' : ''}`, u.team);
     }
     this.killFeed(attacker, u);
@@ -761,9 +766,9 @@ export class Game {
     if (this.hero) { this.hero.heroDown(p, attacker); return; }   // (Hero Game Mode: its own timers, score and win)
     const f = this.factions[p.team];
     f.heroDeaths++;
-    f.respawnT = PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1);
+    f.respawnT = (PLAYER.respawnBase + PLAYER.respawnPerDeath * (f.heroDeaths - 1)) * mods.mul('respawn');
     const by = attacker ? attacker.team : -1;
-    if (by >= 0 && by <= 3 && by !== p.team) this.credit(by, BOUNTY.hero);
+    if (by >= 0 && by <= 3 && by !== p.team) this.credit(by, BOUNTY.hero * mods.mul('bounty'));
     if (by >= 0 && !allied(by, p.team)) this.heroXp(attacker, killXp(p), p.pos);
     this.killFeed(attacker, p);
     this.audio.play('death', p.pos);
@@ -773,7 +778,7 @@ export class Game {
 
   onSiegeDestroyed(s, attacker) {
     const by = attacker ? attacker.team : -1;
-    if (by !== s.team) this.credit(by, BOUNTY[s.type] || 100, s.chest(new THREE.Vector3()));
+    if (by !== s.team) this.credit(by, (BOUNTY[s.type] || 100) * mods.mul('bounty'), s.chest(new THREE.Vector3()));
     if (by >= 0 && !allied(by, s.team)) this.heroXp(attacker, killXp(s), s.pos);
     const f = this.factions[s.team];
     if (f && f.isPlayer) f.player.notify(`Your ${s.name.toLowerCase()} was destroyed`, true);
@@ -839,11 +844,18 @@ export class Game {
       while (list.length > m) list.pop();
       while (list.length < m) list.push(list[Math.floor(Math.random() * 4)]);
     }
+    // rule modifiers (a Battle Decree): more or fewer soldiers, in the same mix
+    const k = mods.mul('waveSize');
+    if (k !== 1) {
+      const n = Math.max(1, Math.round(list.length * k)), base = list.slice();
+      list.length = Math.min(list.length, n);
+      for (let i = list.length; i < n; i++) list.push(base[i % base.length]);
+    }
     return list;
   }
 
   queueWave(f) {
-    const free = Math.max(0, f.troopCap - this.laneCount(f.team) - this.spawnQueue.filter((q) => q.lane && q.team === f.team).length);
+    const free = Math.max(0, Math.round(f.troopCap * mods.mul('waveSize')) - this.laneCount(f.team) - this.spawnQueue.filter((q) => q.lane && q.team === f.team).length);   // (bigger waves have more room to march in)
     this.waveList(f).slice(0, free).forEach((type, i) => {
       this.spawnQueue.push({ t: i * WAVES.spread + Math.random() * 0.25, lane: true, type, team: f.team });
     });
@@ -856,12 +868,12 @@ export class Game {
   startWave() {
     this.round++;
     this.phase = 'wave';
-    this.phaseT = WAVES.interval;
+    this.phaseT = WAVES.interval * mods.mul('waveGap');
     const r = this.round;
     if (this.hero) this.hero.escalate(r);   // (the armies get better trained, bigger and more elite as the rounds go by)
     for (const f of this.factions) {
       if (f.eliminated || f.castle.fallen) continue;
-      this.credit(f.team, WAVES.wage(r));
+      this.credit(f.team, WAVES.wage(r) * mods.mul('income'));
       this.queueWave(f);
     }
     // soldiers who are still alive learn from every wave they live through
@@ -869,7 +881,7 @@ export class Game {
     for (const h of this.humans) { h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5); h.gainXp(XP.wave, 'wave'); }
     if (r === 1) {
       this.audio.play('horn', this.camera.position);
-      this.bannerAll('The battle begins!', this.hero ? `A new army marches from each keep every ${WAVES.interval} seconds.` : `A new army marches from every castle every ${WAVES.interval} seconds.`);
+      this.bannerAll('The battle begins!', this.hero ? `A new army marches from each keep every ${WAVES.interval} seconds.` : `A new army marches from every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.`);
     } else if (r % 10 === 0) {
       this.audio.play('horn', this.camera.position);
       this.bannerAll(`${this.hero ? 'Round' : 'Wave'} ${r}`, 'The armies grow stronger. Hold your castle, break theirs.');
@@ -1163,6 +1175,7 @@ export class Game {
     if (this.ui.shopOpen) return;
     if (i.hit('KeyM')) this.ui.toggleMap();
     if (i.hit('KeyU')) this.localSummon();
+    if (i.hit('KeyL')) standKey(this);   // (the Last Stand: see comeback.js)
     if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
     if (i.hit('F3')) this.localOrder('charge');
@@ -1408,11 +1421,15 @@ export class Game {
       this.updateWaves(dt);
       this.processSpawns(dt);
       this.hill.update(dt);
+      updateComeback(this, dt);
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       if (this.hero) this.hero.update(dt);
       else this.updateHeroes(dt);
       // trickle income while the castle stands
-      if (!this.hero) for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
+      if (!this.hero) {
+        const trickle = dt * TRICKLE * mods.mul('income');
+        for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + trickle; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
+      }
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
     if (this.simulating) this.cleanup(dt);

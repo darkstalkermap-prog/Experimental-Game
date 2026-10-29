@@ -1,6 +1,8 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
 import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
+import { mods } from './mods.js';
+import { gateRepairFactor, noteGateRepair } from './comeback.js';
 
 function recruit(type) {
   return {
@@ -67,8 +69,9 @@ export const SHOP = [
   },
   {
     id: 'repair_gate', tab: 'castle', name: 'Repair Gate',
-    desc: (g, f) => (f.castle.gate.alive ? `Gate ${Math.round(f.castle.gate.hp)}/${Math.round(f.castle.gate.maxHp)}` : 'Rebuild the destroyed gate'),
+    desc: (g, f) => (f.castle.gate.alive ? `Gate ${Math.round(f.castle.gate.hp)}/${Math.round(f.castle.gate.maxHp)}` : `Rebuild the destroyed gate${gateRepairFactor(g, f) < 1 ? ': half price while it lies broken' : ''}`),
     cost: () => GATE_REPAIR_COST,
+    discount: (g, f) => gateRepairFactor(g, f),   // (a fallen gate is cheaper to rebuild: see comeback.js)
     can: (g, f) => {
       const c = f.castle;
       if (c.fallen) return 'Castle has fallen';
@@ -76,7 +79,7 @@ export const SHOP = [
       if (!c.gate.alive && g.enemyNear(c.gatePos, 8, f.team)) return 'Enemies in the gateway';
       return true;
     },
-    apply: (g, f) => f.castle.repairGate(),
+    apply: (g, f) => { const k = gateRepairFactor(g, f); f.castle.repairGate(); if (k < 1) noteGateRepair(g, f, GATE_REPAIR_COST * (1 - k)); },
   },
   {
     id: 'reinforce_gate', tab: 'castle', name: 'Iron-Banded Gate',
@@ -193,6 +196,35 @@ export const SHOP = [
 
   summon(0), summon(1), summon(2), summon(3),
 ];
+
+// Prices. Every item's price passes through the rule modifiers (mods.js): cost.<item>, cost.<group> and cost.all multiply it (the Battle Decrees put
+// them in), and an item may carry a `discount` of its own (the cheaper gate). The shop, the buying and the AI lords all read `cost`, so they always
+// agree; `baseCost` is the plain price, for showing what a modifier changed. In a classic match no modifier is set and nothing changes.
+//   cost.<item>: the shop ids (giant, ram, catapult, sword, towers, ...), a recruit by its soldier (swordsman, archer, horseman, ...), gateRepair
+//   cost.<group>: recruit (all soldiers), siege (giant, ram, catapult), upgrade (barracks, levies, training), gear (sword, shield, bow, horse, arrows, potion),
+//                 castle (gate, walls, keep, towers)
+const PRICE_GROUPS = {
+  siege: ['giant', 'ram', 'catapult'],
+  upgrade: ['barracks', 'levies', 'training'],
+  gear: ['sword', 'shield', 'bow', 'horse', 'arrows', 'potion'],
+  castle: ['repair_gate', 'reinforce_gate', 'repair_walls', 'fortify_walls', 'repair_keep', 'towers'],
+};
+function priceKeys(item) {
+  const id = item.id, keys = ['cost.all', 'cost.' + id];
+  if (id.startsWith('recruit_')) keys.push('cost.' + id.slice(8), 'cost.recruit');
+  if (id === 'repair_gate') keys.push('cost.gateRepair');
+  for (const [group, ids] of Object.entries(PRICE_GROUPS)) if (ids.includes(id)) keys.push('cost.' + group);
+  return keys;
+}
+for (const item of SHOP) {
+  const base = item.cost, keys = priceKeys(item), discount = item.discount;
+  item.baseCost = base;
+  item.cost = (g, f) => {
+    let k = discount ? discount(g, f) : 1;
+    if (mods.sources.size) for (const key of keys) k *= mods.mul(key);
+    return base(g, f) * k;
+  };
+}
 
 export const SHOP_BY_ID = Object.fromEntries(SHOP.map((i) => [i.id, i]));
 

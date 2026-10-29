@@ -10,6 +10,7 @@ import { DIRS, DIR_IDX } from './combat.js';
 import { mirrorTalents } from './talents.js';
 import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
+import { standFor } from './comeback.js';
 export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
@@ -121,6 +122,7 @@ export class HostSync {
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
+      case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
         if (d.target >= 0 && g.castles[d.target]) f.siegeTarget = g.castles[d.target];
@@ -165,6 +167,8 @@ export class HostSync {
         name: f.name,
         formation: f.formation,
         levies: f.levies,
+        wage: f.wage || 0,   // the underdog's wage in gold a minute, and whether the Last Stand is spent (comeback.js)
+        stand: f.stand ? 1 : 0,
       })),
       h: g.humans.map((h) => packHero({
         team: h.team,
@@ -331,6 +335,7 @@ export class ClientSync {
       f.lord = state.lord; f.name = state.name;
       if (!mine) f.formation = state.formation;
       f.levies = state.levies || 0;
+      f.wage = state.wage || 0; f.stand = state.stand || 0;
       if (!state.isPlayer && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);

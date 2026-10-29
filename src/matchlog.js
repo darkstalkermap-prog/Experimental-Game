@@ -5,7 +5,11 @@
 // Events are for sentences ("Your Fireball broke the north gate at 8:42"), counters are for numbers. Keep events few (hundreds per match at most).
 //
 // Counter / event names in use (add yours here):
-//   (none yet)
+//   event 'decrees' { ids }                      decrees.js: the Battle Decrees in force this match (once, at the start)
+//   event 'comeback' { kind, team, ... }         comeback.js: kind 'underdog' (a house became the underdog: wage gold a minute, ratio) · 'gate' (a fallen gate was
+//                                                rebuilt at half price: saved) · 'last_stand' (the Last Stand was called: keep = health left in %) ·
+//                                                'stand_held' (30 s after a Last Stand the keep still stands)
+//   counters wageGold, gateSaved, lastStand      comeback.js, the local house only: gold the underdog's wage paid · gold saved on a rebuilt gate · 1 once the Last Stand was called
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

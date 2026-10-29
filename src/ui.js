@@ -12,6 +12,8 @@ import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } fro
 import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
+import { updateDecreeHud, showPauseDecrees } from './decrees.js';
+import { updateComebackHud } from './comeback.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -603,8 +605,11 @@ export class UI {
       const cost = Math.round(c.item.cost(g, f));
       const desc = c.item.desc(g, f);
       if (c.p.textContent !== desc) c.p.textContent = desc;
-      const label = can !== true ? can : `Buy · <b>${cost}</b> <span class="coin">●</span>`;
+      const base = c.item.baseCost ? Math.round(c.item.baseCost(g, f)) : cost;   // (what a decree or a comeback rule changed shows beside the price)
+      const label = can !== true ? can : `Buy · ${base !== cost ? `<s class="was">${base}</s> ` : ''}<b>${cost}</b> <span class="coin">●</span>`;
       if (c.last !== label) { c.btn.innerHTML = can !== true ? esc(can) : label; c.last = label; }
+      c.btn.classList.toggle('cut', base > cost);
+      c.btn.classList.toggle('dear', base < cost);
       c.btn.classList.toggle('unavailable', can !== true);
       c.btn.classList.toggle('poor', can === true && f.gold < cost);
     }
@@ -687,7 +692,7 @@ export class UI {
   // ---------- menus ----------
   showPause(show) {
     $('pause').classList.toggle('hidden', !show);
-    if (show) this.toggleMap(false);
+    if (show) { this.toggleMap(false); showPauseDecrees(this.game); }
   }
 
   gameOver(won, winner = -1, reason = '') {
@@ -756,6 +761,8 @@ export class UI {
       this.hudT = 0.12;
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
+      updateDecreeHud(this, g);     // (the decrees in force, the underdog's wage, the Last Stand: see decrees.js and comeback.js)
+      updateComebackHud(this, g);
       $('round').textContent = g.round ? `Wave ${g.round}` : 'Preparation';
       if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;

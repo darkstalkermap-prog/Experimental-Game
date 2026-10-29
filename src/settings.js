@@ -1,8 +1,9 @@
 // Player settings, remembered in this browser.
 const KEY = 'cw-settings';
 
-// alerts, tips: 1 = on, 0 = off (see alerts.js); dynres: the renderer may lower its resolution to hold the frame rate (see gfx.js)
-export const DEFAULTS = { master: 100, music: 60, sfx: 70, sens: 35, fov: 75, alerts: 1, tips: 1, dynres: 1 };
+// alerts, tips: 1 = on, 0 = off (see alerts.js); dynres: the renderer may lower its resolution to hold the frame rate (see gfx.js);
+// decrees: Battle Decrees are rolled for the next battle (see decrees.js)
+export const DEFAULTS = { master: 100, music: 60, sfx: 70, sens: 35, fov: 75, alerts: 1, tips: 1, dynres: 1, decrees: 1 };
 export const settings = { ...DEFAULTS };
 
 try {

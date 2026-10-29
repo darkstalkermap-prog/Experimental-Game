@@ -420,6 +420,66 @@ away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, a
 that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
 `alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
 
+## Battle Decrees and comebacks
+
+**Battle Decrees.** When a battle ends, the game rolls one or two *decrees* for the next one: random rule changes such as
+"Giants cost half" or "Double waves: every house sends twice the soldiers". The end screen shows them under **Next battle**,
+each with its effect in a line, and two buttons: **Reroll** (as often as you like, it is a hook and not a currency) and
+**Classic battle** (play the next one without decrees). The main menu has the same row, and Play Again, Single Player and
+hosting all start with what you saw. At the start of the battle a banner names the decrees, a line under the wave timer keeps
+them in view, and the Esc menu lists them with their effects. The first battle you ever play is classic, and
+**Options -> Battle Decrees** switches the whole thing off (no roll, classic battles) and back on. Decrees rule every house,
+the AI lords included. Hero Game Mode and the practice courtyard have none.
+
+| Decree | What it does |
+| --- | --- |
+| Giants' Bargain | Giants cost half |
+| The Great Muster | Double waves: every house sends twice the soldiers (and has room for them) |
+| Gold Rain | Income +50% (the trickle and every wave's wage) |
+| Hard Winter | Soldiers cost 25% more and the waves come 25% less often |
+| Swift March | Soldiers march 20% faster |
+| Blood Price | Every kill pays double |
+| Siege Season | Battering rams and catapults cost half |
+| Iron Discipline | Barracks, Drill Sergeants and Elite Levies cost half |
+| Smiths' Holiday | Swords, shields, bows, horses and potions cost half |
+| War Chest | Start with 600 more gold, but earn 20% less |
+| Cavalry Fever | Cavalry and Lancers cost 40% less |
+| Heroes' Return | Heroes and lords rise in half the time; heroes walk 10% faster |
+| Lean Times | Income -30%, but every kill pays 50% more |
+| Long Siege | Waves come 40% less often and are 60% bigger |
+| Eager Armies | Waves come 30% faster |
+| Mercenary Fair | Soldiers cost 30% less, but kills pay 40% less |
+| Masons' Holiday | Gate, wall, keep and tower works cost half |
+| Archery Contest | Archers cost half |
+
+Two decrees rolled together never push the same rule (a pace decree with a gold decree, never two of a kind), and a roll never
+repeats the decrees of the battle just played. In the shop a price that a decree changed shows the usual price struck out beside
+the new one. Online the host rolls and rerolls; the decrees travel to the guests in the start message (`options.decrees`), the
+guests set the same rule modifiers and see the same prices, banner and line, and their end screen shows the host's roll read-only.
+
+**How it is built.** `src/decrees.js` holds the catalogue (`DECREES`: id, name, icon, one-line text and the rule modifiers each
+sets), the roll, the end-screen section (order 50) and the menu row; `Game.start` puts the decrees of `options.decrees` in force
+as `mods` sources (`decree:<id>`, see `src/mods.js` for the keys and where each is read: wave size and gap, income, bounty, march
+and hero speed, respawn time, starting gold, and the shop prices in `src/economy.js`). A new decree is one more entry.
+
+**Comeback mechanics** (`src/comeback.js`, numbers in `COMEBACK` in `src/config.js`). Losing should be a fight, not a slow defeat.
+All three rules are decided by the host and apply to the AI lords exactly as to people.
+- **Underdog's wage.** From wave 3 on, every second the game weighs each house: the health of its keep, gate and walls, what its
+  soldiers and engines are worth (their price, by health) and half its purse. A house far behind the average of its enemies
+  (below 60%, until it climbs above 80%) is paid a bonus wage, 30% to 80% of what it already earns without fighting (the more it
+  is behind the more it gets, about 60 to 200 gold a minute by mid-game), paid out in a lump every ten seconds. The HUD shows
+  "Underdog's wage +N gold/min" beside the gold, and a toast explains it the first time.
+- **Cheaper gate.** Rebuilding a gate that has fallen costs 750 instead of 1500 (stacking with decrees). The shop's Repair Gate
+  card says so and shows both prices.
+- **Last Stand** (**L**, or the glowing button above the minimap). Once a match, when your keep is below 25% of its health: your
+  hero is healed and refreshed (and rises at once at the keep if it had fallen), and for 20 seconds your soldiers and your hero hit 30%
+  harder and move 25% faster (the hero also takes 40% less damage for 10 s), and six militia rise in the courtyard. A war horn,
+  golden rings and a flash across the screen mark it, a banner says so. The AI lords call theirs the moment their keep drops that low.
+  Online a guest's L is sent to the host. There is none in Hero Game Mode (no gold, and a fallen keep ends the mode).
+
+The log (`matchlog`, see its header) records `decrees` and `comeback` events (`underdog`, `gate`, `last_stand`, `stand_held`),
+and the end screen adds a "Comeback" ribbon when they did something for your house.
+
 ## Hero Game Mode
 
 Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
@@ -502,6 +562,7 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
 | N | Talents: the shop on the Talents tab (press again to close) |
 | U | Co-op Conquest: call the first fallen ally back to life for 500 gold (the bar under the shop's tabs has a button for each) |
+| L | Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same) |
 | P | Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies) |
 | M | Big map (the mouse is free while it is up; press again to close) |
 | Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |
@@ -570,6 +631,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes |
 | `src/teams.js` | Who fights whom: co-op sides |
 | `src/economy.js` | Shop items, shared by the player and the AI |
+| `src/decrees.js`, `src/comeback.js` | Battle Decrees (the catalogue, the roll, the end-screen "Next battle" panel) and the comeback rules (underdog's wage, cheaper gate, Last Stand); both work through `src/mods.js` |
 | `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |
 | `src/terrain.js`, `src/landscape.js`, `src/terrainmat.js`, `src/terraintex.js` | The land: culled chunks that follow the physics heights exactly, the far mountains beyond the play area, the ground shader (grass, soil, road ruts, rock strata, snow) |
 | `src/foliage.js`, `src/foliagegeo.js`, `src/scenery.js`, `src/grass.js` | Trees and rocks as instanced models in three levels of detail with wind, the forest on the mountains, the grass that grows around the camera |
