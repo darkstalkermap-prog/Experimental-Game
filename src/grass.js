@@ -234,7 +234,7 @@ export class Grass {
           // the dense inner disc thins out towards its rim while the sparser ring takes over (by a per-cell number, so nothing flickers)
           const mixv = smoothstep(RA - 5, RA + 1, d), r3 = hash(i, j, 3), r9 = hash(i, j, 9);
           if (job.t === 0 ? r9 < mixv : r9 >= mixv) continue;
-          const dens = fbm(x * 0.05, z * 0.05, 2) * 0.5 + 0.62;
+          const dens = fbm((x + active.ox) * 0.05, (z + active.oz) * 0.05, 2) * 0.5 + 0.62;   // (a seed moves the patches of thick and thin grass, and of flowers, as it moves the colours)
           if (r3 > dens * this.look.density) continue;
           if (!this.allowed(x, z)) continue;
           const y = this.physics.terrainHeight(x, z);
@@ -249,7 +249,7 @@ export class Grass {
           st.t[k] = col.r * v * 1.12; st.t[k + 1] = col.g * v * (0.96 + hash(i, j, 8) * 0.12) * 1.12; st.t[k + 2] = col.b * v * 0.95; st.t[k + 3] = size;
           job.n++;
           // wild flowers: in patches, and a few on their own
-          const patch = fbm(x * 0.07 + 31, z * 0.07 - 17, 2) * 0.5 + 0.5;
+          const patch = fbm((x + active.ox) * 0.07 + 31, (z + active.oz) * 0.07 - 17, 2) * 0.5 + 0.5;
           if (job.nf < st.fa.length / 4 && hash(i, j, 11) < (patch > 0.6 ? 0.16 : 0.012) * (job.t === 0 ? 1 : 1.6)) {
             const f = job.nf * 4, c = this.look.flowers === 'cattail' ? CATTAIL : FLOWER_COLOURS[Math.floor((patch * 7 + hash(i, j, 12) * 1.6) % FLOWER_COLOURS.length)];
             st.fa[f] = x + (hash(i, j, 13) - 0.5) * 0.3; st.fa[f + 1] = y - 0.02; st.fa[f + 2] = z + (hash(i, j, 14) - 0.5) * 0.3; st.fa[f + 3] = hash(i, j, 15) * 6.2832;

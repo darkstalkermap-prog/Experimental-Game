@@ -184,7 +184,7 @@ function ensureMap(size, practice = false, landOpts = null) {
 let previewTimer = 0;
 initLandMenu({
   onChange: () => {
-    if (lobbyBroadcast) lobbyBroadcast();
+    if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();   // (the guests hear of it while they wait in the lobby)
     clearTimeout(previewTimer);
     previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land); }, 350);
   },
