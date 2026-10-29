@@ -27,7 +27,8 @@ export const PAINT = {
 };
 const teamCloth = (team, k = 0.85) => tone(paint(TEAM_COLORS[team] ?? TEAM_COLORS[0], 0, 0.88, PAT.cloth), k);
 
-const sidesFor = (detail) => [7, 9, 12][Math.max(0, Math.min(2, detail))];
+export const sidesFor = (detail) => [7, 9, 12][Math.max(0, Math.min(2, detail))];
+export { teamCloth };
 
 // ---------------------------------------------------------------- hands
 const FING = {
@@ -126,6 +127,7 @@ export function armGeometry(st, detail = 1) {
   const z = (n) => Array.from({ length: n }, (_, i) => [0, 0, (i / (n - 1)) * L2]);
   const bare = !st.sleeve;
   fm.tube(z(6), (t) => r(t, bare ? 0.0265 : 0.0285, bare ? 0.032 : 0.036), sides, { mat: (t) => tone(base, 1.0 - 0.14 * t), capStart: 'flat', capEnd: 'round' });
+  if (st.flare) fm.tube([[0, 0, -0.004], [0, 0, 0.03], [0, 0, 0.09]], [0.046, 0.043, 0.037], sides, { mat: tone(base, 1.08), cap: 'flat' });   // a robe's wide sleeve
   if (st.cuff) fm.tube([[0, 0, -0.004], [0, 0, 0.01], [0, 0, 0.036]], [0.0315, 0.0325, 0.0365], sides, { mat: st.cuff, cap: 'flat' });
   if (st.bracer) fm.tube([[0, 0, 0.03], [0, 0, 0.045], [0, 0, 0.12], [0, 0, 0.135]], [0.0305, 0.0335, 0.0365, 0.0335], sides, { mat: st.bracer, cap: 'flat' });
   if (st.vambrace) {
@@ -175,15 +177,26 @@ export function swordGeometry(o) {
     return [[hw, 0], [hw * 0.45, ht], [hw * 0.15, ht], [hw * 0.1, ht - g], [-hw * 0.1, ht - g], [-hw * 0.15, ht], [-hw * 0.45, ht],
       [-hw, 0], [-hw * 0.45, -ht], [-hw * 0.15, -ht], [-hw * 0.1, -(ht - g)], [hw * 0.1, -(ht - g)], [hw * 0.15, -ht], [hw * 0.45, -ht]];
   }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 2 || j === 3 || j === 4 || j === 9 || j === 10 || j === 11 ? inlay : j === 0 || j === 7 || j === 13 || j === 6 ? edge : face) });
-  return { geo: m.build(), tip: new THREE.Vector3(0, y0 + len, 0), base: new THREE.Vector3(0, y0 + len * 0.3, 0), guardY: 0.108 };
+  return { geo: m.build(), tip: new THREE.Vector3(0, y0 + len, 0), base: new THREE.Vector3(0, y0 + len - 0.17, 0), guardY: 0.108 };
 }
 
 // ---------------------------------------------------------------- shields
+const bronze = paint(0x8a6a3a, 1, 0.42, PAT.steel);
+const SHIELD_STYLE = {
+  knight: { rim: PAINT.steel, boss: PAINT.steel, k: 1 },
+  berserker: { rim: PAINT.iron, boss: PAINT.iron, k: 0.95 },
+  cavalier: { rim: PAINT.gold, boss: PAINT.steel, k: 1 },
+  ranger: { rim: bronze, boss: bronze, k: 0.88 },
+  mage: { rim: PAINT.gold, boss: PAINT.steelDull, k: 0.9 },
+  cleric: { rim: PAINT.gold, boss: PAINT.gold, k: 0.95 },
+};
 // o: { cls, team, lv (0 round, 1 kite), detail }
 export function shieldGeometry(o) {
   const m = new Mesher();
   const sides = sidesFor(o.detail) + 8;
-  const rimP = o.lv >= 1 ? PAINT.gold : PAINT.steel, white = paint(0xffffff, 0, 0.55, 0);
+  const sty = SHIELD_STYLE[o.cls] || SHIELD_STYLE.knight;
+  const rimP = o.cls === 'knight' && o.lv >= 1 ? PAINT.gold : sty.rim, bossP = sty.boss, white = paint(0xffffff, 0, 0.55, 0);
+  m.at(0, 0, 0, 0, 0, 0, sty.k);   // (the whole shield, a little smaller for the lighter classes)
   const back = PAINT.woodDark, strap = PAINT.leather;
   let shape, rimPts, half, bossAt = [0, 0];
   if (o.lv === 0) {
@@ -197,7 +210,7 @@ export function shieldGeometry(o) {
     half = R;
     // boss
     m.at(0, 0, depth - 0.004, Math.PI / 2, 0, 0);
-    m.lathe([[0, -0.004], [0.062, -0.004, 'h'], [0.062, 0.006], [0.052, 0.022], [0.03, 0.036], [0.012, 0.042], [0, 0.044]], sides + 4, { mat: PAINT.steel });
+    m.lathe([[0, -0.004], [0.062, -0.004, 'h'], [0.062, 0.006], [0.052, 0.022], [0.03, 0.036], [0.012, 0.042], [0, 0.044]], sides + 4, { mat: bossP });
     m.pop();
   } else {
     const W = 0.175, H = 0.6, bulge = 0.04;
@@ -215,7 +228,7 @@ export function shieldGeometry(o) {
     half = H / 2;
     bossAt = [0, H / 2 - 0.36 * H];
     m.at(bossAt[0], bossAt[1], pos(0.5, 0.36)[2] - 0.004, Math.PI / 2, 0, 0);
-    m.lathe([[0, -0.004], [0.04, -0.004, 'h'], [0.04, 0.004], [0.033, 0.016], [0.018, 0.026], [0, 0.03]], sides + 2, { mat: PAINT.steel });
+    m.lathe([[0, -0.004], [0.04, -0.004, 'h'], [0.04, 0.004], [0.033, 0.016], [0.018, 0.026], [0, 0.03]], sides + 2, { mat: bossP });
     m.pop();
   }
   m.tube(rimPts, 0.0125, 7, { mat: rimP, cap: 'round', smooth: true });
@@ -224,6 +237,7 @@ export function shieldGeometry(o) {
   m.at(0, o.lv === 0 ? 0 : bossAt[1], gz);
   m.tube([[-0.07, 0, 0], [0.07, 0, 0]], 0.011, 6, { mat: strap, cap: 'round' });
   m.tube([[0, 0.14, 0.012], [0, 0.12, 0], [0, -0.12, 0], [0, -0.14, 0.012]], 0.009, 5, { mat: strap, cap: 'round' });
+  m.pop();
   m.pop();
   const geo = m.build();
   return { geo, map: shieldFace(o.cls, o.team, shape), half, shape };
