@@ -946,7 +946,7 @@ export class UI {
     $('heroTop').querySelector('.hside.r .hn b').style.color = TEAM_CSS[1];
     if (g.state === 'playing') {   // (instead of the war modes' "Prepare for battle")
       const prep = h.prepLeft > 0 ? h.prepLeft : g.phaseT;
-      this.banner('Hero Game Mode', `${heroGoal(h)}. The armies march in ${clock(prep)} and every ${WAVES.interval} seconds after. N: talents · M: map · Q / R: abilities.`);
+      this.banner('Hero Game Mode', `${heroGoal(h)}. The armies march in ${clock(prep)} and every ${WAVES.interval} seconds after. N: talents · M: map · Q / R: abilities · Enter: ready, start now.`);
     }
   }
 

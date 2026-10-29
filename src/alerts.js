@@ -25,6 +25,7 @@ import { settings } from './settings.js';
 import { allied } from './teams.js';
 import { HILL, WAVES, SUMMON } from './config.js';
 import { HERO } from './herogame.js';
+import { mods } from './mods.js';
 import './alertsounds.js';
 
 // The hint bar. One short sentence each; [X] shows a key. Add yours anywhere in the list:
@@ -60,7 +61,7 @@ export const TIPS = [
   { id: 'army', learn: 'armytab', text: 'In [B] → Army you choose who garrisons the castle and who marches with you.' },
   { id: 'orders', learn: 'order', text: '[F1] follow · [F2] hold · [F3] charge · [F4] defend · [T] assault: your army obeys.' },
   { id: 'potion', learn: 'potion', text: 'Press [H] to drink your healing draught when you are low on health.' },
-  { id: 'waves', text: 'A new army leaves every castle every 30 seconds. Spend your gold in the quiet between them.' },
+  { id: 'waves', get text() { return `A new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds. Spend your gold in the quiet between them.`; } },   // (the gap depends on the match length)
   { id: 'castle', learn: 'castletab', text: 'Castle upgrades in [B] make the walls and gate tougher and put archers on the towers.' },
   { id: 'hill', koth: true, text: 'King of the Hill: stand on the hill alone to capture it. An enemy there makes it contested.' },
   { id: 'hillorder', koth: true, learn: 'hillorder', text: '[Y] sends your army up to hold the hill. Hold it long enough and you win outright.' },

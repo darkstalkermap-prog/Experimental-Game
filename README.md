@@ -465,7 +465,9 @@ comes 5 minutes before): then it is decided as the timed mode is, on hero kills,
 **Controls.** **B** or **N** open the **Talents** panel and nothing else: the shop with only its Talents tab, no gold and no
 other tabs. In single player the world waits while it is open, and closing it gives the mouse back as usual. **O**, **F1-F4**,
 **Z**, **X**, **V**, **T**, **Y**, **G**, **F** and the class switch do nothing, and the key hints and the Controls sheet leave
-them out and list the Hero Game Mode keys. **M** (the map), pings, **Tab** and **Esc** work as usual.
+them out and list the Hero Game Mode keys. **M** (the map), pings, **Tab** and **Esc** work as usual, and **Enter** is Ready:
+the 30 seconds before the first round can be skipped like the war modes' minute. There is nothing to concede here (a keep that
+falls ends the match) and the Short / Standard length does not apply.
 
 **The HUD.** The orders bar, the army line, the gold box, the castle list and the hill box are gone. A panel at the top centre
 shows the score (Blue's hero kills : Red's), the goal of the chosen mode, the battle clock (the time left in the timed mode), the
@@ -523,7 +525,7 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 | Esc | Game menu: resume, options, controls, quit (closes the shop or a panel first) |
 
 In **Hero Game Mode** (below) only some of these work: B and N both open the Talents panel (and nothing else), and O, F1-F4,
-Z, X, V, T, Y, G and F do nothing.
+Z, X, V, T, Y, G, F and K do nothing (Enter is still Ready).
 
 **Pings and markers.** Team mates can call out targets and places. A **ping** is a quick middle click on whatever the
 crosshair is on and lasts about 6 seconds; a **marker** (the held-button wheel, or a click on a map) lasts 45 seconds,

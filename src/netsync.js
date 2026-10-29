@@ -45,9 +45,11 @@ export class HostSync {
       const orig = g.fx[name].bind(g.fx);
       g.fx[name] = (p, ...a) => { orig(p, ...a); this.shared.push({ k: 'fx', f: name, p: v3(p), a }); };
     }
-    const play = g.audio.play.bind(g.audio);
+    // (the audio object belongs to the page, not to this world: its own play is kept once, so that the sync of a rematch replaces this wrapper instead of
+    // wrapping it again, and the finished world is not kept alive by a chain of them)
+    if (!g.audio.rawPlay) g.audio.rawPlay = g.audio.play.bind(g.audio);
     g.audio.play = (n, p = null) => {
-      play(n, p);
+      g.audio.rawPlay(n, p);
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
@@ -233,6 +235,7 @@ export class ClientSync {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
     else if (d.k === 'end') this.g.finish(d.winner, d.reason || '');
+    else if (d.k === 'rematch' && this.g.onRematch) this.g.onRematch();   // (the host took the room back to its lobby: main.js)
   }
 
   apply(d) {

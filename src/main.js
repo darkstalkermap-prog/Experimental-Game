@@ -121,7 +121,7 @@ const refreshOptions = () => { options = loadOptions(); };
 // match length (Standard / Short, options.length): the war modes only, the Hero Game Mode has its own length
 function showLength() {
   for (const id of ['length', 'lobbyLength']) document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('active', b.dataset.l === options.length));
-  document.querySelectorAll('#length button').forEach((b) => { b.querySelector('small').textContent = LENGTHS[b.dataset.l].time; });
+  document.querySelectorAll('#length button').forEach((b) => { b.querySelector('small').textContent = LENGTHS[b.dataset.l].time; b.title = LENGTHS[b.dataset.l].desc; });
   $('lengthDesc').textContent = heroOn ? 'Hero Game Mode has its own length: choose how to win above.' : LENGTHS[options.length].desc;
   $('length').classList.toggle('off', heroOn);
   document.querySelectorAll('#length button').forEach((b) => { b.disabled = heroOn; });
@@ -207,6 +207,7 @@ function begin(diff, setup = null, map = mapSize) {
   ui.showHud();
   flow.beganAt = performance.now();
   flow.left = false;
+  game.onRematch = guestRematch;   // (a guest follows the host back to the room's lobby, even from the middle of the ending: see ClientSync)
   game.start(diff, setup);
   input.lock();
 }
@@ -265,6 +266,7 @@ function toMenu() {
   ui.hideHud();
   showLength();
   refreshQuick();
+  dispatchEvent(new Event('cw-menu'));   // (the stored options may have changed while a match was played: menu rows of other features can read them again)
   $('menu').classList.remove('hidden');
   $('quickPlay').focus();
 }
@@ -446,8 +448,8 @@ $('leaveLobby').addEventListener('click', () => location.reload());
 // ---------------- a rematch in the same room ----------------
 // When a match ends the room goes back to lobby duty: the host's end screen has "Rematch", which takes everybody who is still here back to the room's lobby,
 // where classes are picked again and the host starts the next battle. (The room stays locked: nobody new can join a game that has started.)
-const endScreenUp = () => !$('gameover').classList.contains('hidden');
-const inRoom = () => !!net && !flow.left && (net.role === 'host' || net.role === 'client');
+function endScreenUp() { return !$('gameover').classList.contains('hidden'); }
+function inRoom() { return !!net && !flow.left && (net.role === 'host' || net.role === 'client'); }   // (functions, not consts: flow.bind above takes them at load)
 
 // the match is over: put the room's handlers back (the match's sync replaced them) and see who is still here
 function roomAfterMatch(s) {
@@ -572,9 +574,9 @@ input.onLockChange = (locked) => {
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
 // Ready (skip the first preparation) and the offer to end a decided battle: the keys are in flow.js, these are the buttons
-$('shopReady').addEventListener('click', () => pressReady(game, ui));
-$('readyBtn').addEventListener('click', () => pressReady(game, ui));
-$('offerBtn').addEventListener('click', () => pressOffer(game, ui));
+$('shopReady').addEventListener('click', (e) => { pressReady(game, ui); e.currentTarget.blur(); });   // (blur: a later Space is a jump, not another press)
+$('readyBtn').addEventListener('click', (e) => { pressReady(game, ui); e.currentTarget.blur(); });
+$('offerBtn').addEventListener('click', (e) => { pressOffer(game, ui); e.currentTarget.blur(); });
 $('pauseOffer').addEventListener('click', () => $('offerConfirm').classList.remove('hidden'));
 $('offerNo').addEventListener('click', () => $('offerConfirm').classList.add('hidden'));
 $('offerYes').addEventListener('click', () => confirmOffer(game, ui));

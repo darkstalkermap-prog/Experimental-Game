@@ -141,11 +141,12 @@ export function confirmOffer(g, ui) {
 }
 
 // ---------------------------------------------------------------- the HUD pieces (called a few times a second by ui.update)
-const last = { ready: '', offer: '' };
+const last = { ready: '', offer: '', told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
 const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 // a new match starts with nothing shown (ui.reset)
 export function resetHud() {
   last.ready = last.offer = '';
+  last.told.clear();
   armedUntil = 0;
   for (const id of ['readyRow', 'offerRow']) $(id).classList.add('hidden');
   $('hud').classList.remove('prep');
@@ -175,6 +176,10 @@ export function updateHud(g, ui) {
   if (okey !== last.offer) {
     last.offer = okey;
     or.classList.toggle('hidden', !o);
+    if (o && !last.told.has(o.kind)) {   // (the first time: a toast, so that the key is not a secret)
+      last.told.add(o.kind);
+      ui.toast(`${o.text} Press K twice to ${o.kind === 'finish' ? 'finish the war' : o.kind === 'leave' ? 'leave for the next battle' : 'concede and start the next battle'}, or keep fighting.`, -1, true);
+    }
     if (o) {
       setText($('offerText'), o.text);
       setText($('offerLabel'), armed ? `Press K again: ${o.yes}` : o.label);
