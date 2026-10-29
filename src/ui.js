@@ -12,6 +12,7 @@ import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } fro
 import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
+import { updateHud as updateFlowHud, resetHud as resetFlowHud } from './flow.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -662,7 +663,7 @@ export class UI {
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;
   }
 
-  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest') {
+  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest', length = 'standard') {
     const clsName = (p) => (CLASSES[p.cls] ? ` · ${CLASSES[p.cls].icon} ${CLASSES[p.cls].name}` : '');
     $('lobbyMode').textContent = coop
       ? (players.length >= 4
@@ -673,6 +674,7 @@ export class UI {
     const obj = OBJECTIVES[objective] ? objective : 'conquest';
     for (const b of document.querySelectorAll('#lobbyObjective button')) b.classList.toggle('active', b.dataset.o === obj);
     $('lobbyObjDesc').textContent = `${OBJECTIVES[obj].name}: ${OBJECTIVES[obj].desc}`;
+    for (const b of document.querySelectorAll('#lobbyLength button')) b.classList.toggle('active', b.dataset.l === (length === 'short' ? 'short' : 'standard'));
     const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
@@ -695,6 +697,12 @@ export class UI {
     const f = g.localFaction;
     const wf = g.factions[winner];
     const team = won && g.coop;
+    this.showPause(false);   // (the match may end while the game menu, the shop or the map is open: the end screen must not hide under them)
+    this.shopOpen = false;
+    $('shop').classList.add('hidden');
+    this.toggleMap(false);
+    $('options').classList.add('hidden');
+    $('controls').classList.add('hidden');
     $('gameover').classList.remove('hidden');
     if (g.hero) { this.heroGameOver(won, winner, reason); this.endSections(won, winner, reason); return; }
     $('goHeroes').classList.add('hidden');
@@ -720,6 +728,19 @@ export class UI {
   endSections(won, winner, reason) {
     this.lastSummary = buildSummary(this.game, won, winner, reason, matchlog);
     renderEndScreen(this.lastSummary, $('goSections'));
+  }
+
+  // A new match on the same page (Play Again): the pieces of screen the last one left behind are cleared. The world is a fresh one (main.js).
+  reset() {
+    this.shopOpen = false; this.mapOpen = false; this.practiceOpen = false;
+    for (const id of ['shop', 'bigmap', 'practice', 'pause', 'options', 'controls', 'gameover', 'scoreboard', 'respawn', 'away', 'target']) $(id).classList.add('hidden');
+    for (const id of ['toasts', 'killfeed', 'goldpops', 'xppops', 'dmgpops', 'alerts', 'goSections']) $(id).textContent = '';
+    for (const id of ['tip', 'streak', 'banner']) $(id).classList.remove('show');
+    this.tab = 'army';
+    this.lastPrompt = this.lastCmdKey = this.hillHtml = this.buffHtml = this.heroHtml = '';
+    this.goldShown = null;
+    this.hudT = 0;
+    resetFlowHud();
   }
 
   showHud() {
@@ -785,6 +806,7 @@ export class UI {
       } else $('respawn').classList.add('hidden');
       $('scoreboard').classList.toggle('hidden', !g.input.down('Tab'));
       if (g.input.down('Tab')) this.renderScoreboard();
+      updateFlowHud(g, this);   // (Ready in the first preparation, the offer to end a decided battle: src/flow.js)
     }
     this.targetT -= dt;
     if (this.targetT <= 0) { this.targetT = 0.15; this.updateTarget(); }

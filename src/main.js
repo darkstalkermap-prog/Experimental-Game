@@ -8,13 +8,14 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './config.js';
+import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
 import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
+import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -87,19 +88,24 @@ function setQuality(q) {
 document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => { if (b.dataset.q === 'auto') gfx.resetAuto(); setQuality(b.dataset.q); }));
 setQuality(quality);
 
-let difficulty = 'normal';
-document.querySelectorAll('#difficulty button').forEach((b) => {
-  b.addEventListener('click', () => {
-    difficulty = b.dataset.d;
-    document.querySelectorAll('#difficulty button').forEach((o) => o.classList.toggle('active', o === b));
-  });
-});
+// what the last match was set up with (difficulty and mode; the class, the map and the length are remembered where they are chosen): the page opens on it,
+// so Quick Play and a fresh page load agree
+let quickReady = false;   // (the Quick Play line is written once everything it reads has been set up: see the end of the menu wiring)
+const last = loadLast();
+let difficulty = last.diff;
+function selectDifficulty(d) {
+  difficulty = d;
+  document.querySelectorAll('#difficulty button').forEach((o) => o.classList.toggle('active', o.dataset.d === d));
+  refreshQuick();
+}
+document.querySelectorAll('#difficulty button').forEach((b) => b.addEventListener('click', () => { selectDifficulty(b.dataset.d); rememberLast(); }));
 
 function selectMap(size) {
   mapSize = size;
   document.querySelectorAll('#mapsize button').forEach((b) => b.classList.toggle('active', b.dataset.m === size));
   $('mapDesc').textContent = MAP_SIZES[size].desc;
   try { localStorage.setItem('cw-map', size); } catch (e) { /* ignore */ }
+  refreshQuick();
 }
 document.querySelectorAll('#mapsize button').forEach((b) => b.addEventListener('click', () => selectMap(b.dataset.m)));
 selectMap(mapSize);
@@ -108,6 +114,25 @@ selectMap(mapSize);
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
 const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
+// Between matches the stored options are the truth: the end screen's sections roll the next battle into them (decrees, land) and save, so a rematch reads them
+// afresh. The menu pieces change `options` in memory and the next start saves them.
+const refreshOptions = () => { options = loadOptions(); };
+
+// match length (Standard / Short, options.length): the war modes only, the Hero Game Mode has its own length
+function showLength() {
+  for (const id of ['length', 'lobbyLength']) document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('active', b.dataset.l === options.length));
+  document.querySelectorAll('#length button').forEach((b) => { b.querySelector('small').textContent = LENGTHS[b.dataset.l].time; });
+  $('lengthDesc').textContent = heroOn ? 'Hero Game Mode has its own length: choose how to win above.' : LENGTHS[options.length].desc;
+  $('length').classList.toggle('off', heroOn);
+  document.querySelectorAll('#length button').forEach((b) => { b.disabled = heroOn; });
+  refreshQuick();
+}
+function selectLength(l) {
+  options.length = l === 'short' ? 'short' : 'standard';
+  saveOptions(options);
+  showLength();
+}
+document.querySelectorAll('#length button').forEach((b) => b.addEventListener('click', () => selectLength(b.dataset.l)));
 
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
@@ -122,6 +147,7 @@ function showHeroWin(id) {
   heroWin = id;
   document.querySelectorAll('#heroWin button').forEach((b) => b.classList.toggle('active', b.dataset.w === id));
   $('heroWinDesc').textContent = HERO.modes[id].desc;
+  refreshQuick();
 }
 for (const [id, m] of Object.entries(HERO.modes)) {
   const b = document.createElement('button');
@@ -147,17 +173,20 @@ function selectObjective(o) {
   $('heroWin').classList.toggle('hidden', !hero);
   $('heroNote').classList.toggle('hidden', !hero);
   $('menu').classList.toggle('hero', hero);
+  showLength();   // (the length row is for the war modes: in Hero Mode it says so)
   // online play is for the war modes this round: the lobby cannot start a hero match
   $('mpBtn').disabled = hero;
   $('mpBtn').title = hero ? 'Hero Game Mode is single player for now' : '';
   if (hero) { $('online').classList.add('hidden'); $('offlineNote').classList.add('hidden'); $('mpBtn').classList.remove('active'); }
 }
-document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => selectObjective(b.dataset.o)));
-selectObjective(objective);
+document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => { selectObjective(b.dataset.o); rememberLast(); }));
+const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : objective);
 
-// rebuild the world if the chosen map size differs from the one on screen
+
+// Rebuild the world if the chosen map size differs from the one on screen, or if a match has been played in it: a world is for ONE match (castles, units,
+// engines and upgrades are all dirty afterwards), so the next one is built as soon as a match ends (freshWorldSoon) and starting it is then instant.
 function ensureMap(size, practice = false) {
-  if (WORLD.size === size && game.mapBuiltFor === size + (practice ? '+practice' : '')) return;
+  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === size + (practice ? '+practice' : '')) return;
   const net0 = game.net;
   game.dispose();
   buildGame(size, practice);
@@ -167,15 +196,36 @@ function ensureMap(size, practice = false) {
 }
 
 function begin(diff, setup = null, map = mapSize) {
+  clearTimeout(freshTimer);
   ensureMap(map, !!(setup && setup.practice));
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
   $('menu').classList.add('hidden');
   $('lobby').classList.add('hidden');
+  ui.reset();   // (a rematch: nothing of the last match's screen is left)
   ui.showHud();
+  flow.beganAt = performance.now();
+  flow.left = false;
   game.start(diff, setup);
   input.lock();
+}
+
+// The end screen is up: leave the finished world behind it for a moment (the ruins, the armies), then build the next one, so that Play Again only has to start.
+// (Building takes a fraction of a second; the end screen is still then.)
+let freshTimer = 0;
+const FRESH_DELAY = 2500;   // ms the end screen has been in view before the world behind it is replaced
+function freshWorldSoon() {
+  clearTimeout(freshTimer);
+  let seen = 0;
+  const tick = () => {
+    if (game.state !== 'over') return;   // (a new match has started, or the menu is up)
+    seen = endScreenUp() ? seen + 250 : 0;   // (the screen may be built before a finishing show has ended: wait until it is in view)
+    if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
+    const [size, practice] = game.mapBuiltFor.split('+');
+    ensureMap(size, !!practice);
+  };
+  freshTimer = setTimeout(tick, 250);
 }
 
 // hero class (remembered per browser)
@@ -185,12 +235,63 @@ if (!CLASSES[heroClass]) heroClass = 'knight';
 const rememberClass = (id) => {
   heroClass = id;
   try { localStorage.setItem('cw-class', id); } catch (e) { /* ignore */ }
+  refreshQuick();
 };
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
-$('play').addEventListener('click', () => begin(difficulty, heroOn
-  ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin }, options: matchOptions() }
-  : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective, options: matchOptions() }));
+// the line under Quick Play (and under Play Again): what a click will start
+const currentSetupLine = () => setupLine({ cls: heroClass, mode: heroOn ? 'hero' : objective, heroWin, map: mapSize, diff: difficulty, length: options.length });
+function refreshQuick() {
+  if (quickReady) $('quickInfo').textContent = currentSetupLine();
+}
+// everything the line reads exists now: show the remembered difficulty and mode (the page opens on the last match's setup)
+quickReady = true;
+selectDifficulty(difficulty);
+selectObjective(last.mode);
+$('quickPlay').focus();   // (Enter or Space on the main menu is then Quick Play)
+
+// ---------------- between matches (the end screen's actions, see flow.js) ----------------
+// Play Again: no reload. The world for it was built while the end screen was up (freshWorldSoon), so this only starts the match.
+function playAgain() {
+  refreshOptions();   // (the end screen may have rolled the next battle into the stored options)
+  startSolo();
+}
+function toMenu() {
+  if (net) { location.reload(); return; }   // an online game is left by starting the page afresh
+  clearTimeout(freshTimer);
+  refreshOptions();
+  ensureMap(mapSize);
+  ui.reset();
+  ui.hideHud();
+  showLength();
+  refreshQuick();
+  $('menu').classList.remove('hidden');
+  $('quickPlay').focus();
+}
+flow.bind({
+  playAgain, toMenu, renderClassPicker,
+  setClass(id) {
+    rememberClass(id);
+    renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);   // (the menu's picker follows)
+    if (!inRoom()) return;   // (online: the room's lobby hears of the new class)
+    if (net.role === 'client') net.toHost({ k: 'cls', cls: id });
+    else { const me = lobby.find((p) => p.netId === null); if (me) me.cls = id; }
+  },
+  classId: () => heroClass,
+  setupLine: currentSetupLine,
+  afterEnd: (s) => { freshWorldSoon(); roomAfterMatch(s); },
+  inRoom, rematch: hostRematch, leaveRoom,
+});
+
+// Single Player, Quick Play and Play Again all start this: a match of one lord against three, with what the menu says (which the last match left there)
+function startSolo() {
+  rememberLast();
+  begin(difficulty, heroOn
+    ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin }, options: matchOptions() }
+    : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective, options: matchOptions() });
+}
+$('play').addEventListener('click', startSolo);
+$('quickPlay').addEventListener('click', startSolo);
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], practice: true }, 'small'));
 
@@ -199,6 +300,7 @@ let net = null;
 let lobby = [];      // [{ team, name, netId, cls }]
 let coop = false;    // lobby game mode chosen by the host
 let lobbyBroadcast = null;
+let guestData = null;   // a guest's handler of the host's messages while in the lobby (a match replaces it with the sync's; a rematch puts it back)
 
 // the class buttons in the lobby: the host updates the list itself, a guest tells the host
 function showLobbyClassPicker() {
@@ -270,9 +372,11 @@ async function connect() {
   net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });
   net.on('closed', () => {
     if (game.state === 'playing' && game.mode === 'client') game.finish(-1, 'Lost connection to the server.');
+    else if (endScreenUp() && !flow.left) roomGone('The connection to the room was lost.');
   });
   net.on('hostleft', () => {
     if (game.state === 'playing') game.finish(-1, 'The host left the game.');
+    else if (endScreenUp()) roomGone('The host left the game.');
     else { ui.lobbyError('The host closed the game.'); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); }
   });
 }
@@ -282,7 +386,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass }];
-  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective }); };
+  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective, options.length); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, len: options.length }); };
   lobbyBroadcast = broadcast;
   // guests report the class they pick
   net.on('data', ({ from, d }) => {
@@ -295,6 +399,9 @@ $('hostBtn').addEventListener('click', async () => {
   }
   for (const b of document.querySelectorAll('#lobbyObjective button')) {
     b.onclick = () => { selectObjective(b.dataset.o); broadcast(); };
+  }
+  for (const b of document.querySelectorAll('#lobbyLength button')) {
+    b.onclick = () => { selectLength(b.dataset.l); broadcast(); };
   }
   net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); broadcast(); });
   net.on('peer', (m) => {
@@ -321,18 +428,64 @@ $('joinBtn').addEventListener('click', async () => {
   if (code.length !== 4) { ui.lobbyError('Enter the 4-letter room code from the host.'); return; }
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); });
-  net.on('data', ({ d }) => {
-    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj);
+  guestData = ({ d }) => {
+    if (d.k === 'rematch') guestRematch();
+    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.len);
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
       begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
-  });
+  };
+  net.on('data', guestData);
   net.join(code, playerName());
 });
 
 $('leaveLobby').addEventListener('click', () => location.reload());
+
+// ---------------- a rematch in the same room ----------------
+// When a match ends the room goes back to lobby duty: the host's end screen has "Rematch", which takes everybody who is still here back to the room's lobby,
+// where classes are picked again and the host starts the next battle. (The room stays locked: nobody new can join a game that has started.)
+const endScreenUp = () => !$('gameover').classList.contains('hidden');
+const inRoom = () => !!net && !flow.left && (net.role === 'host' || net.role === 'client');
+
+// the match is over: put the room's handlers back (the match's sync replaced them) and see who is still here
+function roomAfterMatch(s) {
+  if (!net || flow.left) return;
+  if (s.mode === 'client') { net.on('data', guestData); return; }
+  if (s.mode !== 'host') return;
+  const here = new Set(game.humans.filter((h) => !h.isBot && h !== game.player).map((h) => h.netId));
+  lobby = lobby.filter((p) => p.netId === null || here.has(p.netId));
+  const me = lobby.find((p) => p.netId === null);
+  if (me) me.cls = heroClass;
+  net.on('data', ({ from, d }) => {   // (guests may change class on their end screens)
+    if (!d || d.k !== 'cls' || !CLASSES[d.cls]) return;
+    const p = lobby.find((x) => x.netId === from);
+    if (p && p.cls !== d.cls) { p.cls = d.cls; if (lobbyBroadcast) lobbyBroadcast(); }
+  });
+  net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); if (lobbyBroadcast) lobbyBroadcast(); });
+}
+
+function backToLobby(isHost) {
+  if (game.state === 'playing') return;
+  clearTimeout(freshTimer);
+  const [size, practice] = game.mapBuiltFor.split('+');
+  ensureMap(size, !!practice);   // (a fresh world for the next match)
+  ui.reset();
+  ui.hideHud();
+  ui.showLobby($('roomCode').textContent, isHost);
+  $('invite').classList.add('hidden');   // (nobody new can join a game that has started)
+  $('inviteHelp').textContent = 'The same room, the same lords: pick your class, and the host starts the next battle.';
+  showLobbyClassPicker();
+}
+function hostRematch() {
+  if (!inRoom() || net.role !== 'host') return;
+  net.toAll({ k: 'rematch' });
+  backToLobby(true);
+  if (lobbyBroadcast) lobbyBroadcast();
+}
+function guestRematch() { backToLobby(false); }
+function leaveRoom() { if (net) { try { net.close(); } catch (e) { /* already gone */ } } }
 
 // ---------------- game menu (Esc), options and controls ----------------
 const shown = (id) => !$(id).classList.contains('hidden');
@@ -344,6 +497,10 @@ function openPause(hint = '') {
   $('pauseNote').textContent = game.mode === 'single' ? '' : 'The battle goes on while you are in the menu.';
   $('pauseHint').textContent = hint;
   $('quitConfirm').classList.add('hidden');
+  const offer = offerFor(game);   // (a decided battle: the menu offers to end it)
+  $('pauseOffer').classList.toggle('hidden', !offer);
+  $('offerConfirm').classList.add('hidden');
+  if (offer) { $('pauseOffer').textContent = offer.label; $('offerConfirmText').textContent = offer.ask; $('offerYes').textContent = offer.yes; }
   ui.showPause(true);
   input.unlock();
 }
@@ -365,7 +522,7 @@ $('optionsBack').addEventListener('click', () => $('options').classList.add('hid
 $('controlsBack').addEventListener('click', () => $('controls').classList.add('hidden'));
 $('quitBtn').addEventListener('click', () => $('quitConfirm').classList.remove('hidden'));
 $('quitNo').addEventListener('click', () => $('quitConfirm').classList.add('hidden'));
-$('quitYes').addEventListener('click', () => location.reload());
+$('quitYes').addEventListener('click', () => { if (net) location.reload(); else toMenu(); });   // (an online game is left by starting the page afresh)
 
 // sliders in the options panel
 const SLIDERS = [
@@ -414,7 +571,13 @@ input.onLockChange = (locked) => {
 };
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
-$('again').addEventListener('click', () => location.reload());
+// Ready (skip the first preparation) and the offer to end a decided battle: the keys are in flow.js, these are the buttons
+$('shopReady').addEventListener('click', () => pressReady(game, ui));
+$('readyBtn').addEventListener('click', () => pressReady(game, ui));
+$('offerBtn').addEventListener('click', () => pressOffer(game, ui));
+$('pauseOffer').addEventListener('click', () => $('offerConfirm').classList.remove('hidden'));
+$('offerNo').addEventListener('click', () => $('offerConfirm').classList.add('hidden'));
+$('offerYes').addEventListener('click', () => confirmOffer(game, ui));
 
 // Clicking the game view while playing re-captures the mouse.
 renderer.domElement.addEventListener('click', () => {
@@ -445,6 +608,11 @@ addEventListener('keydown', (e) => {
     input.pressed.delete(e.code);
     if (!e.repeat) ui.openTalents();
   }
+});
+
+addEventListener('keydown', (e) => {
+  flowKey(e, game, ui);
+  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls')) { e.preventDefault(); $('quickPlay').click(); }
 });
 
 // Browsers only allow sound after a click or key press: the music starts with the first one.

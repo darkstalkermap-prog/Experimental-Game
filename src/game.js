@@ -3,7 +3,7 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, DIFFICULTY, BOUNTY, clock,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, LENGTHS, START_GOLD, DIFFICULTY, BOUNTY, clock,
   UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
@@ -157,6 +157,9 @@ export class Game {
     this.options = sanitizeOptions(setup.options);
     matchlog.reset();
     mods.reset();
+    // the match length is a source of rule modifiers (the war modes only: the Hero Game Mode and the practice courtyard keep their own pace)
+    const length = LENGTHS[this.options.length];
+    if (length && length.mods && !setup.hero && !setup.practice) mods.set('length', length.mods);
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.hill.reset();
@@ -170,9 +173,13 @@ export class Game {
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
     this.state = 'playing';
+    this.quickEnd = false;      // set when the battle is ended early on purpose (a concession): the ending skips its show
+    this.readyTeams = new Set();   // houses that pressed Ready in the first preparation (see readyLive)
+    this.readySent = false;
+    this.readyInfo = null;
     this.round = 0;
     this.phase = 'prep';
-    this.phaseT = WAVES.firstPrep;
+    this.phaseT = Math.round(WAVES.firstPrep * mods.mul('prep'));
     this.spawnQueue = [];
 
     const lp = this.player;
@@ -244,7 +251,7 @@ export class Game {
     this.audio.play('horn');
     if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
-    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(this.phaseT)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities · Enter: ready, start now.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -293,7 +300,7 @@ export class Game {
     const u = new Unit(this, type, f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
     u.homeCastle = c;
     u.lane = !!lane;
-    if (lane) u.structMult *= 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 1);   // later armies break gates faster
+    if (lane) u.structMult *= 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * mods.mul('siegeGrowth') * Math.max(0, this.round - 1);   // later armies break gates faster
     u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
     u.setOrder('defend');
     this.units.push(u);
@@ -436,7 +443,7 @@ export class Game {
     const c = f.castle;
     const p = c.gateOut.clone().add(c.dirToWorld(0, 4));
     p.x += (Math.random() - 0.5) * 4;
-    const grow = 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 3);   // engines built later hit harder
+    const grow = 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * mods.mul('siegeGrowth') * Math.max(0, this.round - 3);   // engines built later hit harder
     const d = SIEGE_TYPES[type];
     const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f), { dmg: Math.round(d.dmg * grow), hp: Math.round(d.hp * Math.min(2, 1 + 0.015 * this.round)) });
     this.siege.push(s);
@@ -815,7 +822,7 @@ export class Game {
 
   // how tough this house's wave soldiers are: drill upgrades, and a little more with every wave
   waveScale(f) {
-    return this.trainMult(f) * (1 + (this.hero ? HERO.waveGrowth : WAVES.growth) * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
+    return this.trainMult(f) * (1 + (this.hero ? HERO.waveGrowth : WAVES.growth) * mods.mul('growth') * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
   }
 
   waveList(f) {
@@ -856,7 +863,7 @@ export class Game {
   startWave() {
     this.round++;
     this.phase = 'wave';
-    this.phaseT = WAVES.interval;
+    this.phaseT = WAVES.interval * mods.mul('waveGap');
     const r = this.round;
     if (this.hero) this.hero.escalate(r);   // (the armies get better trained, bigger and more elite as the rounds go by)
     for (const f of this.factions) {
@@ -869,7 +876,7 @@ export class Game {
     for (const h of this.humans) { h.arrows = Math.min(PLAYER.maxArrows, h.arrows + 5); h.gainXp(XP.wave, 'wave'); }
     if (r === 1) {
       this.audio.play('horn', this.camera.position);
-      this.bannerAll('The battle begins!', this.hero ? `A new army marches from each keep every ${WAVES.interval} seconds.` : `A new army marches from every castle every ${WAVES.interval} seconds.`);
+      this.bannerAll('The battle begins!', this.hero ? `A new army marches from each keep every ${WAVES.interval} seconds.` : `A new army marches from every castle every ${Math.round(this.phaseT)} seconds.`);
     } else if (r % 10 === 0) {
       this.audio.play('horn', this.camera.position);
       this.bannerAll(`${this.hero ? 'Round' : 'Wave'} ${r}`, 'The armies grow stronger. Hold your castle, break theirs.');
@@ -1297,6 +1304,66 @@ export class Game {
     this.buyForPlayer('summon_' + down[0].team);
   }
 
+  // ---------------- Ready: ending the first preparation early ----------------
+  // While the first preparation runs (before wave 1) everybody who plays can press Ready. When ALL of them have, the timer is cut to zero and the first wave
+  // marches by the same path as when it runs out (updateWaves -> startWave). A bot hero is always ready and a human who leaves counts as ready. Online a guest
+  // tells the host ('ready' in netsync.js) and sees "Ready 2/3" from the snapshots (readyInfo = [ready, of, mask of ready teams]). The practice courtyard has
+  // no preparation; the Hero Game Mode does (its 30 seconds), and Ready works there too.
+  get readyLive() { return this.state === 'playing' && !this.practice && this.phase === 'prep' && this.round === 0 && this.phaseT > 1.5; }
+
+  readyState() {
+    let n = 0, of = 0, mask = 0;
+    for (const h of this.humans) {
+      if (h.isBot) continue;
+      of++;
+      if (this.readyTeams.has(h.team)) { n++; mask |= 1 << h.team; }
+    }
+    return [n, of, mask];
+  }
+
+  setReady(team) {
+    if (!this.readyLive || !this.simulating) return;
+    this.readyTeams.add(team);
+    this.checkReady();
+  }
+
+  checkReady() {
+    if (!this.readyLive || !this.simulating) return;
+    const [n, of] = this.readyState();
+    if (of > 0 && n >= of) {
+      matchlog.add('prepSkipped', Math.round(this.phaseT));   // (seconds of preparation the lords chose not to wait for)
+      this.phaseT = 0;
+    }
+  }
+
+  // the local lord presses Ready
+  localReady() {
+    if (!this.readyLive) return;
+    if (this.mode === 'client') {
+      if (this.readySent) return;
+      this.readySent = true;
+      this.net.toHost({ a: 'ready' });
+      return;
+    }
+    this.setReady(this.localTeam);
+  }
+
+  // ---------------- ending a decided battle early ----------------
+  // flow.js offers it when the battle is decided and the lord says yes (never forced). 'concede' is a defeat and 'finish' a victory (a lord on their own, or
+  // the host once the friends have gone); 'leave' is a guest who is out leaving for the next battle: only its own screen ends. It is not a fight to the last
+  // keep, so the ending skips its show (`quickEnd`, and the `{ quick: true }` option of finish()).
+  endEarly(kind, reason) {
+    if (this.state !== 'playing' || this.practice || this.hero) return false;
+    if (kind !== 'leave' && this.mode === 'client') return false;
+    if (this.mode === 'host' && this.humans.some((h) => h !== this.player && !h.isBot)) return false;   // (the host does not end it for friends who are still in it)
+    this.quickEnd = true;
+    matchlog.record('concede', { kind });
+    if (kind !== 'finish') matchlog.add('conceded');
+    // (nobody else is in it, so nobody is told; the third argument says "no show": a finish() that has no show ignores it)
+    this.finish(kind === 'finish' ? this.localTeam : -1, reason, { quick: true });
+    return true;
+  }
+
   endGame(winner, reason = '') {
     if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason);
     this.finish(winner, reason);
@@ -1326,6 +1393,7 @@ export class Game {
       f.ai = new LordAI(this, f);
     }
     this.announce(`${p.name} left. An AI lord takes over ${f.name}.`, f.team);
+    this.checkReady();   // (a lord who leaves counts as ready: the others may be waiting for them)
   }
 
   // How tense the music should be: calm while preparing, building as enemies come close.

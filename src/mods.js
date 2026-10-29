@@ -11,6 +11,8 @@
 //   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item)
 //   mul  speed         march speed of soldiers                    mul  heroSpeed     walking speed of heroes
 //   sum  startGold     gold at the start of the match
+//   mul  prep          seconds of preparation before the first wave        mul  growth       how much tougher every wave's soldiers get (WAVES.growth)
+//   mul  siegeGrowth   how much harder later waves and engines hit gates and walls (WAVES.siegeGrowth)    [source 'length': the Short match, see config.js LENGTHS]
 export const mods = {
   version: 0,
   sources: new Map(),

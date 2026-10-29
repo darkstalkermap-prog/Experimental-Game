@@ -5,7 +5,9 @@
 // Events are for sentences ("Your Fireball broke the north gate at 8:42"), counters are for numbers. Keep events few (hundreds per match at most).
 //
 // Counter / event names in use (add yours here):
-//   (none yet)
+//   event   concede { kind }   a battle ended early on purpose (src/flow.js: 'concede' a defeat, 'finish' a won war, 'leave' a guest who was out leaving the room)
+//   counter conceded           1 when the local lord conceded or left (not for a won war that was finished early)
+//   counter prepSkipped        seconds of the first preparation that Ready skipped (what was left on the timer when the last lord pressed it)
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

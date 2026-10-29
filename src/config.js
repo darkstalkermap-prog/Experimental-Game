@@ -62,6 +62,15 @@ export const WAVES = {
   siegeLimit: 3,      // wave engines alive at once, per house
 };
 
+// Match length (options.length, see options.js): a Short match turns the same war faster, so that it is decided in about 10-12 minutes. It is a source of
+// rule modifiers (src/mods.js) that Game.start puts in for the war modes: the preparation and the gap between waves are shorter, the waves are a little bigger
+// and every wave grows tougher (and breaks gates faster) quicker than in a Standard match. Standard sets nothing: it is the war as it always was.
+export const LENGTHS = {
+  standard: { name: 'Standard', time: 'about 30 min', desc: 'The war as it always was: a new army every 30 seconds.', mods: null },
+  short: { name: 'Short', time: '10 to 12 min', desc: 'A quicker war: a shorter preparation, faster and tougher waves.',
+    mods: { prep: 0.6, waveGap: 0.7, growth: 2, siegeGrowth: 2 } },
+};
+
 // A countdown as m:ss (65 -> "1:05").
 export const clock = (sec) => {
   const s = Math.max(0, Math.ceil(sec));

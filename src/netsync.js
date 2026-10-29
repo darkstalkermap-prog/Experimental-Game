@@ -120,6 +120,7 @@ export class HostSync {
         break;
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
+      case 'ready': g.setReady(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
@@ -136,7 +137,7 @@ export class HostSync {
     this.t = 0;
     const g = this.g;
     const shared = {
-      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(),
+      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(), rd: g.readyLive ? g.readyState() : 0,
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
@@ -239,6 +240,7 @@ export class ClientSync {
     if (g.net.snapDelay) setInterpDelay(g.net.snapDelay);
     const s = d.s;
     g.round = s.r; g.phase = s.ph; g.phaseT = s.pt;
+    g.readyInfo = s.rd || null;   // [ready, of, mask]: who has pressed Ready in the first preparation
     g.spawnQueue.length = s.ql;
     g.hill.applyNet(s.hl);
 
