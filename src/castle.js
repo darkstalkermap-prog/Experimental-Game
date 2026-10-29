@@ -51,7 +51,7 @@ export class Castle {
     const off = onQuality((q) => {
       if (this.detail === undefined) return;
       if (!this.group.parent) { off(); return; }   // (the world was rebuilt: this castle is gone)
-      if (q.detail !== this.detail) this.buildVisuals();
+      if (q.detail !== this.detail || q.props !== this.props) this.buildVisuals();
     });
   }
 
@@ -283,6 +283,7 @@ export class Castle {
     this.clearVisuals();
     const d = Q.detail, g = this.group, seed = this.team * 101 + 5;
     this.detail = d;
+    this.props = Q.props;
     const fixed = new Parts(seed + 1), A = new Parts(seed + 2), R = new Parts(seed + 3), K = new Parts(seed + 4), cloth = new Cloth(), fires = [];
     G.gatehouse(fixed, A, d, fires);
     G.stairs(fixed, d);
@@ -292,7 +293,7 @@ export class Castle {
     G.keep(K, A, R, d, fires);
     this.dress(cloth, A, d);
     // barrels, stalls, a forge, a well...: decoration only (see props.js); the ground under them follows the terrain outside the walls
-    populate(A, fixed, fires, { team: this.team, detail: d, ground: (x, z) => { const w = this.toWorld(x, z); return Math.max(-2, Math.min(6, this.game.physics.terrainHeight(w.x, w.z) - this.center.y)); } });
+    populate(A, fixed, fires, { team: this.team, detail: Math.min(d, Q.props), ground: (x, z) => { const w = this.toWorld(x, z); return Math.max(-2, Math.min(6, this.game.physics.terrainHeight(w.x, w.z) - this.center.y)); } });
     this.fire.set('static', fires);
     const mesh = (parts, key, geo = null, cast = false) => {
       geo = geo || parts.geometry(key);

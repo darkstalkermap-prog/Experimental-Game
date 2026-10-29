@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { Q } from './quality.js';
 import { patchMaterial } from './shaderhook.js';
+import { shadowProxy } from './shadows.js';
 import { buildSpruce, buildPine, buildOak, buildBirch, buildRock } from './foliagegeo.js';
 
 // shared by everything that moves in the wind (trees here, grass in grass.js)
@@ -195,13 +196,32 @@ export class Foliage {
     });
     // ---- meshes ----
     const count = (f) => { let c = 0; for (let i = 0; i < N; i++) if (f(i)) c++; return c; };
-    this.near = []; this.mid = []; this.rocks = [];
+    this.near = []; this.mid = []; this.rocks = []; this.proxy = [];
     for (let k = 0; k < 4; k++) {
       const cnt = count((i) => this.kind[i] === k);
-      this.near.push(this.makeMesh(modelGeometry(k, 0), treeMat, Math.min(cnt, 600), true));
+      const near = this.makeMesh(modelGeometry(k, 0), treeMat, Math.min(cnt, 600), true);
+      this.near.push(near);
       this.mid.push(this.makeMesh(modelGeometry(k, 1), treeMat, cnt, false));
+      // the shadow maps get the simple model of the same trees (it shares the near mesh's instance matrices): a crown's outline is all a shadow shows
+      const proxy = new THREE.InstancedMesh(modelGeometry(k, 1), treeMat, 1);
+      proxy.instanceMatrix = near.instanceMatrix;
+      proxy.matrixAutoUpdate = false;
+      proxy.count = 0;
+      this.group.add(shadowProxy(scene, proxy, true));
+      this.proxy.push(proxy);
     }
-    for (let k = 0; k < 3; k++) this.rocks.push(this.makeMesh(modelGeometry(4 + k, 1), rockMat, count((i) => this.kind[i] === 4 + k), true));
+    this.rockProxy = [];
+    for (let k = 0; k < 3; k++) {
+      const rocks = this.makeMesh(modelGeometry(4 + k, 1), rockMat, count((i) => this.kind[i] === 4 + k), false);
+      this.rocks.push(rocks);
+      // only the rocks round the camera cast (they are written first, see rebuild); the proxy draws that many of the same instances
+      const proxy = new THREE.InstancedMesh(modelGeometry(4 + k, 1), rockMat, 1);
+      proxy.instanceMatrix = rocks.instanceMatrix;
+      proxy.matrixAutoUpdate = false;
+      proxy.count = 0;
+      this.group.add(shadowProxy(scene, proxy, true));
+      this.rockProxy.push(proxy);
+    }
     const nTrees = count((i) => this.kind[i] < 4);
     this.cards = new THREE.InstancedMesh(cardGeometry(nTrees), cardMat, nTrees);
     this.cards.frustumCulled = false;
@@ -238,12 +258,15 @@ export class Foliage {
     this.farR = Math.min(Q.viewDist, 900);
     this.keep = Math.min(1, Q.trees);
     const detail = Q.detail >= 1 ? 0 : 1;
+    this.useProxy = Q.shadows && detail === 0;   // (with the simple model already close up there is nothing to swap)
     for (let k = 0; k < 4; k++) {
       const g = modelGeometry(k, detail);
       if (this.near[k].geometry !== g) this.near[k].geometry = g;
-      this.near[k].castShadow = Q.shadows;
+      this.near[k].castShadow = Q.shadows && !this.useProxy;
+      this.proxy[k].userData.on = false;
     }
-    for (const r of this.rocks) r.castShadow = Q.shadows && Q.detail >= 1;
+    this.rockShadows = Q.shadows && Q.detail >= 1;
+    for (const p of this.rockProxy) p.userData.on = false;
     this.lastPos.set(1e9, 0, 1e9);   // rebuild now
   }
 
@@ -279,11 +302,11 @@ export class Foliage {
         if (nN[k] < m.instanceMatrix.count) { put(m, nN[k]++, mat, tint, i); }
         continue;
       }
+      if (!tree) continue;   // (rocks: below)
       // everything else only if it is in view
       _sph.center.set(pos[i * 3], pos[i * 3 + 1] + rad[i] * 0.8, pos[i * 3 + 2]);
       _sph.radius = rad[i] + 8;
       if (!_fr.intersectsSphere(_sph)) continue;
-      if (!tree) { const m = this.rocks[k - 4]; if (nR[k - 4] < m.instanceMatrix.count) put(m, nR[k - 4]++, mat, tint, i); continue; }
       if (d2 < mid2) { const m = this.mid[k]; if (nM[k] < m.instanceMatrix.count) put(m, nM[k]++, mat, tint, i, 0.8); continue; }
       // a card: the instance matrix carries only the position and the size
       if (nC[0] < card.instanceMatrix.count) {
@@ -297,7 +320,34 @@ export class Foliage {
         cellAttr[j] = this.card[i * 3 + 2];
       }
     }
-    for (let k = 0; k < 4; k++) { finish(this.near[k], nN[k]); finish(this.mid[k], nM[k]); }
+    // rocks: those within the shadow ring first (behind the camera too: their shadows fall into view), then the rest of what is in view
+    const ring2 = near2 * 0.36, rock2 = mid2 * 0.56, nRn = [0, 0, 0];   // (a rock beyond three quarters of the mid distance is a speck)
+    for (let i = 0; i < N; i++) {
+      const k = kind[i];
+      if (k < 4 || this.rank[i] > keep) continue;
+      const dx = pos[i * 3] - cx, dz = pos[i * 3 + 2] - cz;
+      if (dx * dx + dz * dz >= ring2) continue;
+      const m = this.rocks[k - 4];
+      if (nR[k - 4] < m.instanceMatrix.count) put(m, nR[k - 4]++, mat, tint, i);
+    }
+    for (let k = 0; k < 3; k++) nRn[k] = nR[k];
+    for (let i = 0; i < N; i++) {
+      const k = kind[i];
+      if (k < 4 || this.rank[i] > keep) continue;
+      const dx = pos[i * 3] - cx, dz = pos[i * 3 + 2] - cz, d2 = dx * dx + dz * dz;
+      if (d2 < ring2 || d2 > rock2) continue;
+      _sph.center.set(pos[i * 3], pos[i * 3 + 1] + rad[i] * 0.8, pos[i * 3 + 2]);
+      _sph.radius = rad[i] + 8;
+      if (!_fr.intersectsSphere(_sph)) continue;
+      const m = this.rocks[k - 4];
+      if (nR[k - 4] < m.instanceMatrix.count) put(m, nR[k - 4]++, mat, tint, i);
+    }
+    for (let k = 0; k < 3; k++) { this.rockProxy[k].count = nRn[k]; this.rockProxy[k].userData.on = this.rockShadows && nRn[k] > 0; }
+    for (let k = 0; k < 4; k++) {
+      finish(this.near[k], nN[k]); finish(this.mid[k], nM[k]);
+      this.proxy[k].count = nN[k];
+      this.proxy[k].userData.on = this.useProxy && nN[k] > 0;
+    }
     for (let k = 0; k < 3; k++) finish(this.rocks[k], nR[k]);
     finish(card, nC[0]);
     card.geometry.attributes.aCell.needsUpdate = true;

@@ -10,7 +10,12 @@
 //   shadowMap      shadow map size in pixels (per cascade: the far one; shadowNearMap is the near one)
 //   shadowDist     metres around the camera that get shadows (the far cascade; the near cascade covers the closest third)
 //   shadowTaps     samples of the soft shadow filter (4 to 16)
-//   crowdShadowDist  soldiers closer than this many metres cast shadows (0 = none do)
+//   crowdShadowDist  soldiers closer than this many metres cast shadows (0 = none do); about the reach of the near shadow map
+//   crowdNear      soldiers closer than this many metres wear the rich shapes (see crowdRich); farther ones are plainer but still animated
+//   crowdRich      the most soldiers that wear the rich shapes at once (the nearest: the distance above shrinks when more would)
+//   kitShadows     the first-person arms and weapon cast a shadow on the ground
+//   props          castle props: 0 none, 1 the yard, 2 the yard and the camps outside the walls
+//   decals         the most ground marks (blood, scorch) alive at once (0 = none)
 //   lodScale       multiplies every distance at which a model drops to a simpler version
 //   detail         0 plain · 1 rich · 2 richest: how much geometry and how many small parts models and props carry
 //   grass          grass density multiplier (0 = no grass)    grassDist  metres of grass around the camera
@@ -27,25 +32,25 @@ export const LEVELS = ['low', 'medium', 'high', 'ultra'];
 const PRESETS = {
   low: {
     level: 0, pixelRatio: 1, dynRes: true, dynMin: 0.6, shadows: false, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 0, shadowTaps: 4,
-    crowdShadowDist: 0, lodScale: 0.7, detail: 0,
+    crowdShadowDist: 0, crowdNear: 12, crowdRich: 40, kitShadows: false, props: 0, decals: 0, lodScale: 0.7, detail: 0,
     grass: 0, grassDist: 0, trees: 0.6, viewDist: 700, terrain: 0, wind: false, particles: 0.5, clouds: 1, msaa: 0,
     post: { bloom: false, aa: false, vignette: false, grade: false, ao: false }, exposure: 1.25,
   },
   medium: {
     level: 1, pixelRatio: 1.25, dynRes: true, dynMin: 0.55, shadows: true, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 70, shadowTaps: 8,
-    crowdShadowDist: 22, lodScale: 1, detail: 1,
+    crowdShadowDist: 20, crowdNear: 12, crowdRich: 32, kitShadows: false, props: 1, decals: 160, lodScale: 1, detail: 1,
     grass: 0.6, grassDist: 34, trees: 0.85, viewDist: 1000, terrain: 1, wind: true, particles: 0.8, clouds: 1, msaa: 2,
     post: { bloom: false, aa: false, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   high: {
     level: 2, pixelRatio: 1.75, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 2048, shadowNearMap: 2048, shadowDist: 90, shadowTaps: 12,
-    crowdShadowDist: 32, lodScale: 1.25, detail: 2,
+    crowdShadowDist: 26, crowdNear: 15, crowdRich: 28, kitShadows: true, props: 2, decals: 384, lodScale: 1.25, detail: 2,
     grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, wind: true, particles: 1, clouds: 2, msaa: 4,
     post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   ultra: {
     level: 3, pixelRatio: 2, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 3072, shadowNearMap: 2048, shadowDist: 120, shadowTaps: 16,
-    crowdShadowDist: 48, lodScale: 1.6, detail: 2,
+    crowdShadowDist: 34, crowdNear: 22, crowdRich: 48, kitShadows: true, props: 2, decals: 384, lodScale: 1.6, detail: 2,
     grass: 1.4, grassDist: 58, trees: 1.2, viewDist: 1600, terrain: 2, wind: true, particles: 1.3, clouds: 2, msaa: 4,
     post: { bloom: true, aa: true, vignette: true, grade: true, ao: true }, exposure: 1.25,
   },

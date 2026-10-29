@@ -13,7 +13,7 @@ import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
 import { gfx } from './gfx.js';
-import { LEVELS } from './quality.js';
+import { LEVELS, applyQuality } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,6 +30,13 @@ const input = new Input(renderer.domElement);
 let mapSize = 'medium';
 try { mapSize = localStorage.getItem('cw-map') || 'medium'; } catch (e) { /* storage unavailable */ }
 if (!MAP_SIZES[mapSize]) mapSize = 'medium';
+
+// graphics quality (remembered per browser), applied BEFORE the world is built so that every system (castles, terrain, crowd, trees,
+// effects) is built once at the right level instead of being rebuilt on the first change
+let quality = 'auto';   // 'auto' (a level picked for this machine) or a level of quality.js
+try { quality = localStorage.getItem('cw-quality') || 'auto'; } catch (e) { /* storage unavailable */ }
+if (quality !== 'auto' && !LEVELS.includes(quality)) quality = 'auto';
+applyQuality(gfx.levelFor(quality), quality);
 
 let game;
 // push the saved sensitivity and field of view into a freshly built game
@@ -70,10 +77,6 @@ function resize() { gfx.resize(); }
 addEventListener('resize', resize);
 resize();
 
-// graphics quality (remembered per browser)
-let quality = 'auto';   // 'auto' (a level picked for this machine) or a level of quality.js
-try { quality = localStorage.getItem('cw-quality') || 'auto'; } catch (e) { /* storage unavailable */ }
-if (quality !== 'auto' && !LEVELS.includes(quality)) quality = 'auto';
 function setQuality(q) {
   quality = q;
   game.setQuality(q);

@@ -5,18 +5,21 @@
 //   near  (lod 0)  the rich shapes
 //   mid   (lod 1)  plain shapes, animated
 //   far   (lod 2)  one static model per kind of rig, no animation
-// Soldiers closer than Q.crowdShadowDist cast shadows (near or mid), so the shadow pass scales with the shapes close by.
+// Soldiers closer than Q.crowdShadowDist cast shadows (near or mid), so the shadow pass scales with the shapes close by. They cast into
+// the near shadow map only (see shadows.js), and a rich shape is drawn into it as its plainest version (a proxy that shares the batch's
+// instance buffers): a silhouette needs no face.
 // A soldier outside the view frustum costs nothing but the test. Rigs whose owner is not in the scene graph are updated here.
 import * as THREE from 'three';
 import { Q } from './quality.js';
 import { shapeGeo } from './shapes.js';
 import { unitMaterial, crowdDepthMaterial, crowdUniforms } from './unitmat.js';
 import { farShapeOf, geoLevel, warmStep } from './models.js';
+import { limitShadow, shadowProxy } from './shadows.js';
 
 // the distances (metres) at which a soldier drops to the next level of detail, from the quality settings
-const LOD = { near: 32, mid: 85, far: 260 };
+const LOD = { near: 15, mid: 85, far: 260 };
 export function lodLimits(out = LOD) {
-  out.near = 20 * Q.lodScale;
+  out.near = Q.crowdNear;
   out.mid = 85 * Q.lodScale;
   out.far = 260 * Q.lodScale;
   return out;
@@ -26,14 +29,15 @@ const _sphere = new THREE.Sphere(), _frustum = new THREE.Frustum(), _proj = new 
 const STATIC = ['position', 'normal', 'color', 'aSurf', 'aFx'];
 
 class Batch {
-  constructor(crowd, geo, open, shadow) {
+  constructor(crowd, geo, open, shadow, plain = null) {
     this.crowd = crowd; this.geo = geo; this.open = open; this.shadow = shadow;
-    this.n = 0; this.cap = 0; this.mesh = null;
+    this.plain = plain;   // the plainest version of the shape, which stands in for it in the shadow map (null: the shape itself casts)
+    this.n = 0; this.cap = 0; this.mesh = null; this.proxy = null;
     this.grow(24);
   }
 
   grow(cap) {
-    const old = this.mesh;
+    const old = this.mesh, oldProxy = this.proxy;
     const mat = new Float32Array(cap * 16), look = new Float32Array(cap * 16);
     if (old) { mat.set(this.mat.subarray(0, this.n * 16)); look.set(this.look.subarray(0, this.n * 16)); }
     this.mat = mat; this.look = look; this.cap = cap;
@@ -48,13 +52,27 @@ class Batch {
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = false;
     mesh.receiveShadow = true;
-    mesh.castShadow = this.shadow;
+    mesh.castShadow = this.shadow && !this.plain;
     mesh.customDepthMaterial = crowdDepthMaterial();
     mesh.count = this.n;
     mesh.visible = false;
     this.buf = buf; this.mesh = mesh;
-    this.crowd.scene.add(mesh);
-    if (old) { this.crowd.scene.remove(old); old.geometry.dispose(); old.dispose(); }
+    const scene = this.crowd.scene;
+    scene.add(limitShadow(scene, mesh));
+    if (this.plain) {
+      const pg = new THREE.BufferGeometry();
+      for (const k of STATIC) pg.setAttribute(k, this.plain.attributes[k]);
+      pg.setIndex(this.plain.index);
+      ['iA', 'iB', 'iC', 'iD'].forEach((k, i) => pg.setAttribute(k, new THREE.InterleavedBufferAttribute(buf, 4, i * 4)));
+      const proxy = new THREE.InstancedMesh(pg, unitMaterial(this.open), 1);
+      proxy.instanceMatrix = mesh.instanceMatrix;
+      proxy.customDepthMaterial = crowdDepthMaterial();
+      proxy.count = this.n;
+      this.proxy = proxy;
+      scene.add(shadowProxy(scene, proxy));
+    }
+    if (old) { scene.remove(old); old.geometry.dispose(); old.dispose(); }
+    if (oldProxy) { scene.remove(oldProxy); oldProxy.geometry.dispose(); oldProxy.dispose(); }
   }
 
   push(e, inst) {
@@ -65,11 +83,12 @@ class Batch {
   }
 
   end(cast) {
-    const mesh = this.mesh, n = this.n;
+    const mesh = this.mesh, n = this.n, proxy = this.proxy;
     mesh.visible = n > 0;
-    if (!n) { mesh.count = 0; return; }
+    if (!n) { mesh.count = 0; if (proxy) { proxy.count = 0; proxy.userData.on = false; } return; }
     mesh.count = n;
-    mesh.castShadow = this.shadow && cast;
+    mesh.castShadow = this.shadow && cast && !proxy;
+    if (proxy) { proxy.count = n; proxy.userData.on = this.shadow && cast; }
     const im = mesh.instanceMatrix;
     im.clearUpdateRanges(); im.addUpdateRange(0, n * 16); im.needsUpdate = true;
     this.buf.clearUpdateRanges(); this.buf.addUpdateRange(0, n * 16); this.buf.needsUpdate = true;
@@ -85,11 +104,11 @@ export class Crowd {
     this.stats = { instances: 0, batches: 0 };
   }
 
-  batchFor(geo, open, shadow) {
+  batchFor(geo, open, shadow, shape = null, level = 2) {
     let pair = this.byGeo.get(geo);
     if (!pair) { pair = [null, null]; this.byGeo.set(geo, pair); }
     const k = shadow ? 1 : 0;
-    if (!pair[k]) { pair[k] = new Batch(this, geo, open, shadow); this.list.push(pair[k]); }
+    if (!pair[k]) { pair[k] = new Batch(this, geo, open, shadow, shadow && shape && level < 2 ? shapeGeo(shape, 2) : null); this.list.push(pair[k]); }
     return pair[k];
   }
 
@@ -99,7 +118,7 @@ export class Crowd {
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (!p.on) continue;
-      this.batchFor(shapeGeo(p.shape, level), p.shape.open, cast).push(p.node.matrixWorld.elements, inst);
+      this.batchFor(shapeGeo(p.shape, level), p.shape.open, cast, p.shape, level).push(p.node.matrixWorld.elements, inst);
     }
   }
 
@@ -172,7 +191,10 @@ export class Crowd {
   }
 
   dispose() {
-    for (const b of this.list) { this.scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.dispose(); }
+    for (const b of this.list) {
+      this.scene.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.dispose();
+      if (b.proxy) { this.scene.remove(b.proxy); b.proxy.geometry.dispose(); b.proxy.dispose(); }
+    }
     this.list.length = 0;
     this.byGeo.clear();
   }

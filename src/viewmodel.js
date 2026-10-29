@@ -4,6 +4,7 @@
 // vertex shader (vmmat.js), so it never pokes through a wall or the ground.
 import * as THREE from 'three';
 import { Q, onQuality } from './quality.js';
+import { limitShadow } from './shadows.js';
 import { TEAM_COLORS } from './config.js';
 import { VMU, kitMaterial, glowMaterial, glowTexture, syncKitFov } from './vmmat.js';
 import { handGeometry, armGeometry, shieldGeometry, bowGeometry, arrowGeometry, PAINT } from './vmkit.js';
@@ -184,7 +185,7 @@ export class ViewModel {
   // ------------------------------------------------------------ building
   keyNow() {
     const p = this.p;
-    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}`;
+    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}|${Q.kitShadows ? 1 : 0}`;
   }
 
   clearKit() {
@@ -196,7 +197,8 @@ export class ViewModel {
   mk(geo, mat, own = true) {
     const m = new THREE.Mesh(geo, mat);
     m.frustumCulled = false;   // (the kit has its own projection: the camera's view of it means nothing)
-    m.castShadow = false;
+    m.castShadow = !!Q.kitShadows && !mat.transparent;   // (the arms and the blade lay a shadow on the ground, in the near map only)
+    if (m.castShadow) limitShadow(this.p.game.scene, m);
     m.receiveShadow = false;
     m.renderOrder = ORDER_KIT;
     if (own) this.disposables.push(geo);

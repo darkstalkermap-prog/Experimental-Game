@@ -150,7 +150,7 @@ export class FX {
   }
 
   queueSplat(when, x, y, z, size) {
-    if (Q.particles < 0.8 || this.pendN >= 48) return;
+    if (Q.particles < 0.8 || !Q.decals || this.pendN >= 48) return;
     const o = this.pendN++ * 5, a = this.pend;
     a[o] = when; a[o + 1] = x; a[o + 2] = y; a[o + 3] = z; a[o + 4] = size;
   }
@@ -158,10 +158,10 @@ export class FX {
   // ---------- ground marks ----------
   // a decal of the given kind (D.*) lying on the ground at (x, z), following its slope
   mark(kind, x, y, z, size, life, r, g, b, a) {
-    if (!this.game || Q.particles < 0.8) return;
+    if (!this.game || Q.particles < 0.8 || !Q.decals) return;
     if (this.tokens < 1) return;
     this.tokens -= 1;
-    const cap = Math.max(48, Math.min(MAX_DECALS, Math.round(MAX_DECALS * Q.particles / 1.3)));
+    const cap = Math.max(48, Math.min(MAX_DECALS, Q.decals, Math.round(MAX_DECALS * Q.particles / 1.3)));
     this.decals.cap = cap;
     const ang = rr(0, TAU), cs = Math.cos(ang), sn = Math.sin(ang);
     const gy = (cx, cy) => this.ground(x + (cs * cx - sn * cy) * size, z + (sn * cx + cs * cy) * size, y);

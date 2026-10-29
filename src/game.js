@@ -118,6 +118,8 @@ export class Game {
     if (this.disposed) return;
     this.disposed = true;
     this.crowd.dispose();
+    this.lights.rig.dispose();   // (the shadow rig and the first-person kit listen for quality changes: let go of them, or they keep this world alive)
+    if (this.player.vm) this.player.vm.dispose();
     const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];
     // These resources may not currently be attached to a visible scene object.
     const extra = [this.grass.geo, this.grass.material, this.magic.boltMat,
@@ -1415,16 +1417,23 @@ export class Game {
   // quality settings (see lodLimits in crowd.js).
   updateLod() {
     const c = this.camera.position, lim = lodLimits();
-    let retier = 4;   // soldiers whose house has trained them further change into their new kit a few at a time
+    const k = this.nearK || 1;   // shrinks while more soldiers than Q.crowdRich would wear the rich shapes
+    let retier = 4, rich = 0;   // soldiers whose house has trained them further change into their new kit a few at a time
     for (const u of this.units) {
       const f = this.factions[u.team];
       if (f && retier > 0 && u.alive && !u.fixedTier && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
       const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
       const s = u.isGiant ? 3 : 1, h = u.lod;
       // (a little hysteresis, so a soldier on the edge does not flicker between two models)
-      const near = lim.near * s * (h === 0 ? 1.06 : 1), mid = lim.mid * s * (h <= 1 ? 1.06 : 1), far = lim.far * (h <= 2 ? 1.06 : 1);
-      u.setLod(d2 < near * near ? 0 : d2 < mid * mid ? 1 : d2 < far * far ? 2 : 3);
+      const near = lim.near * s * k * (h === 0 ? 1.06 : 1), mid = lim.mid * s * (h <= 1 ? 1.06 : 1), far = lim.far * (h <= 2 ? 1.06 : 1);
+      const lod = d2 < near * near ? 0 : d2 < mid * mid ? 1 : d2 < far * far ? 2 : 3;
+      if (lod === 0 && u.alive) rich++;
+      u.setLod(lod);
     }
+    // the rich shapes are the costly ones: when a crowd stands round the camera the distance they are worn at shrinks (quickly), and it
+    // grows back (slowly) once there is room again
+    const cap = Q.crowdRich;
+    this.nearK = rich > cap ? Math.max(0.35, k * 0.93) : rich < cap * 0.7 ? Math.min(1, k * 1.015) : k;
   }
 
   updateTowers(c, dt) {

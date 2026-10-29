@@ -4,7 +4,7 @@
 // take the empty seats, and a hero can climb aboard and steer it.
 import * as THREE from 'three';
 import { SIEGE_TYPES, UNIT_TYPES, WORLD, ENGINE_TURN } from './config.js';
-import { materials, box, shadowed } from './materials.js';
+import { buildEngine, flagGeometry } from './siegegeo.js';
 import { Unit } from './units.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
@@ -156,94 +156,24 @@ export class SiegeEngine {
 
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + 1.6, this.pos.z); }
 
+  // the models live in siegegeo.js: a few meshes each, shared geometry
   buildRam() {
-    const M = materials();
-    const g = new THREE.Group();
-    const frame = new THREE.Mesh(box(2.4, 0.3, 5.5, 2), M.plank);
-    frame.position.y = 0.9;
-    g.add(frame);
-    for (const s of [-1, 1]) {
-      const roof = new THREE.Mesh(box(1.7, 0.12, 5.8, 2), M.plank);
-      roof.position.set(s * 0.65, 2.75, 0);
-      roof.rotation.z = s * 0.75;
-      g.add(roof);
-      for (const z of [-2.4, 0, 2.4]) {
-        const post = new THREE.Mesh(box(0.18, 2.2, 0.18, 1), M.plank);
-        post.position.set(s * 1.1, 2, z);
-        g.add(post);
-      }
-    }
-    const hide = new THREE.Mesh(box(2.5, 0.06, 5.9, 2), new THREE.MeshStandardMaterial({ color: 0x6e5236, roughness: 1 }));
-    hide.position.y = 3.25;
-    g.add(hide);
-    const wheelGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.25, 12);
-    wheelGeo.rotateZ(Math.PI / 2);
-    this.wheels = [];
-    for (const x of [-1.25, 1.25]) for (const z of [-1.9, 1.9]) {
-      const w = new THREE.Mesh(wheelGeo, M.wood);
-      w.position.set(x, 0.55, z);
-      g.add(w);
-      this.wheels.push(w);
-    }
-    const log = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 6.2, 10), M.wood);
-    trunk.rotation.x = Math.PI / 2;
-    log.add(trunk);
-    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.3, 0.7, 10), M.iron);
-    head.rotation.x = Math.PI / 2;
-    head.position.z = 3.3;
-    log.add(head);
-    log.position.y = 1.7;
-    g.add(log);
-    this.log = log;
-    return shadowed(g);
+    const e = buildEngine('ram', this.team);
+    this.wheels = e.wheels; this.log = e.log; this.flag = e.flag; this.flagTeam = e.flagTeam;
+    return e.group;
   }
 
   buildCatapult() {
-    const M = materials();
-    const g = new THREE.Group();
-    for (const s of [-1, 1]) {
-      const rail = new THREE.Mesh(box(0.3, 0.35, 4.6, 2), M.plank);
-      rail.position.set(s * 1.0, 0.8, 0);
-      g.add(rail);
-      const upright = new THREE.Mesh(box(0.3, 2.2, 0.3, 1), M.plank);
-      upright.position.set(s * 1.0, 1.9, 0.4);
-      upright.rotation.x = -0.2;
-      g.add(upright);
-    }
-    for (const z of [-1.8, 1.8]) {
-      const cross = new THREE.Mesh(box(2.3, 0.25, 0.3, 2), M.plank);
-      cross.position.set(0, 0.8, z);
-      g.add(cross);
-    }
-    const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 2.3, 8), M.iron);
-    axle.rotation.z = Math.PI / 2;
-    axle.position.set(0, 2.8, 0.3);
-    g.add(axle);
-    const wheelGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.25, 12);
-    wheelGeo.rotateZ(Math.PI / 2);
-    this.wheels = [];
-    for (const x of [-1.25, 1.25]) for (const z of [-1.7, 1.7]) {
-      const w = new THREE.Mesh(wheelGeo, M.wood);
-      w.position.set(x, 0.6, z);
-      g.add(w);
-      this.wheels.push(w);
-    }
-    const arm = new THREE.Group();
-    arm.position.set(0, 2.8, 0.3);
-    const beam = new THREE.Mesh(box(0.25, 0.25, 4.4, 2), M.wood);
-    beam.position.z = -1.6;
-    arm.add(beam);
-    const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.3, 0.35, 10), M.plank);
-    bucket.position.set(0, 0.2, -3.7);
-    arm.add(bucket);
-    const weight = new THREE.Mesh(box(0.9, 0.9, 0.9, 1), M.stoneDark);
-    weight.position.set(0, -0.3, 0.9);
-    arm.add(weight);
-    arm.rotation.x = 0.55; // cocked
-    g.add(arm);
-    this.arm = arm;
-    return shadowed(g);
+    const e = buildEngine('catapult', this.team);
+    this.wheels = e.wheels; this.arm = e.arm; this.flag = e.flag; this.flagTeam = e.flagTeam;
+    return e.group;
+  }
+
+  // an engine that has changed hands flies the new house's colours
+  recolour() {
+    if (this.flagTeam === this.team || !this.flag) return;
+    this.flagTeam = this.team;
+    this.flag.geometry = flagGeometry(this.type === 'ram' ? 'ram' : 'cat', this.team);
   }
 
   takeDamage(amt, attacker) {
@@ -316,6 +246,7 @@ export class SiegeEngine {
       this.anim += dt * this.speedNow * 2;
     }
     this.glint(dt);
+    this.recolour();
     this.pos.y = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;
@@ -496,6 +427,7 @@ export class SiegeEngine {
     }
     this.timer -= dt;
     this.glint(dt);
+    this.recolour();
     this.animateWeapon();
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;

@@ -9,6 +9,43 @@ import { SUN_DIR, SUN_LIGHT_COLOR, SUN_INTENSITY, cascadesPatched } from './atmo
 const _fwd = new THREE.Vector3();
 const _p = new THREE.Vector3();
 
+// ---- who casts into which map ----
+// Most casters (castles, trees) belong in both maps. Moving crowds and engines do not belong in the wide one: it is redrawn only about
+// fifteen times a second and a small shadow that far away is not worth a draw call each. Those are registered as near-only and the rig
+// switches their castShadow off while the wide map is drawn. A shadow proxy is a cheaper stand-in for a caster (a plainer model that
+// shares its instance buffers): it is only visible while a shadow map is being drawn, never in the picture itself.
+const casterList = (scene) => scene.userData.casters || (scene.userData.casters = []);
+// obj keeps setting its own castShadow; `far` says whether it also casts into the wide map
+export function limitShadow(scene, obj, far = false) {
+  obj.userData.sh = { far, proxy: false, want: false };
+  casterList(scene).push(obj);
+  return obj;
+}
+// proxy: a mesh that casts instead of another one; its owner sets proxy.userData.on each frame to say whether it is needed
+export function shadowProxy(scene, proxy, far = false) {
+  proxy.castShadow = true;
+  proxy.receiveShadow = false;
+  proxy.visible = false;
+  proxy.frustumCulled = false;
+  proxy.userData.sh = { far, proxy: true, want: false };
+  proxy.userData.on = false;
+  casterList(scene).push(proxy);
+  return proxy;
+}
+// three.js draws the shadow maps inside renderer.render: this brackets that so the casters can be switched per map (see ShadowRig.pass)
+export function installShadowHooks(renderer) {
+  const sm = renderer.shadowMap, orig = sm.render;
+  if (orig.__rigHooked) return;
+  const hooked = function (lights, scene, camera) {
+    const rig = scene.userData.shadowRig;
+    if (!rig) return orig.call(this, lights, scene, camera);
+    rig.begin();
+    try { return orig.call(this, lights, scene, camera); } finally { rig.end(); }
+  };
+  hooked.__rigHooked = true;
+  sm.render = hooked;
+}
+
 export class ShadowRig {
   constructor(scene) {
     this.twoMaps = cascadesPatched;
@@ -20,7 +57,14 @@ export class ShadowRig {
     Object.defineProperty(far, 'castShadow', { get: () => this.twoMaps && sun.castShadow, set: () => {}, configurable: true });
     if (!this.twoMaps) far.visible = false;
     sun.userData.rig = this;
+    this.scene = scene;
+    scene.userData.shadowRig = this;
     scene.add(sun, sun.target, far, far.target);
+    // three.js calls updateMatrices on a light's shadow right before it draws that map: the near map comes first (the sun is added first)
+    for (const [light, name] of [[sun, 'near'], [far, 'far']]) {
+      const sh = light.shadow, proto = Object.getPrototypeOf(sh);
+      sh.updateMatrices = (...args) => { this.pass(name); return proto.updateMatrices.apply(sh, args); };
+    }
     // the shadow cameras look along the sun: their light-space axes never change, so the texel grid can be fixed in the world
     this.ax = new THREE.Vector3(0, 1, 0).cross(SUN_DIR).normalize();
     this.ay = new THREE.Vector3().crossVectors(SUN_DIR, this.ax);
@@ -125,7 +169,41 @@ export class ShadowRig {
     if (!this.throttle) this.farAge = 0;
   }
 
+  // a shadow phase starts: note what each registered caster wants (its owner decided that this frame)
+  begin() {
+    const list = this.scene.userData.casters;
+    if (!list) return;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i];
+      if (!o.parent) { list.splice(i, 1); continue; }   // (removed from the scene: its owner built a new one)
+      const sh = o.userData.sh;
+      sh.want = sh.proxy ? !!o.userData.on : o.castShadow;
+    }
+  }
+
+  // the map that is about to be drawn: 'near' or 'far'
+  pass(name) {
+    const list = this.scene.userData.casters;
+    if (!list) return;
+    const near = name === 'near';
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i], sh = o.userData.sh, on = sh.want && (near || sh.far);
+      if (sh.proxy) o.visible = on; else o.castShadow = on;
+    }
+  }
+
+  // the shadow phase is over: the picture itself sees the casters as their owners left them
+  end() {
+    const list = this.scene.userData.casters;
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i], sh = o.userData.sh;
+      if (sh.proxy) o.visible = false; else o.castShadow = sh.want;
+    }
+  }
+
   dispose() {
+    if (this.scene.userData.shadowRig === this) delete this.scene.userData.shadowRig;
     this.unsub();
     this.sun.shadow.dispose();
     this.far.shadow.dispose();

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Q, LEVELS } from './quality.js';
 import { Post } from './post.js';
 import { settings } from './settings.js';
+import { installShadowHooks } from './shadows.js';
 
 const AUTO_KEY = 'cw-auto';   // the level the Auto choice settled on (kept per browser)
 const WINDOW = 60;           // frames the adaptive resolution looks at
@@ -57,6 +58,7 @@ class Gfx {
     this.renderer = renderer;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFShadowMap;   // (the soft filter is our own: see atmosphere.js)
+    installShadowHooks(renderer);                     // (crowds and engines cast into the near map only: see shadows.js)
     renderer.toneMapping = THREE.CustomToneMapping;   // the neutral curve patched in by atmosphere.js
     renderer.toneMappingExposure = Q.exposure;
     renderer.info.autoReset = false;                  // reset once per frame here, so every pass of the frame is counted together
