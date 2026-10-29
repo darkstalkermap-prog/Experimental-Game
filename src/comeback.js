@@ -93,9 +93,10 @@ export function standBlock(game, f) {
   if (f.eliminated || f.castle.fallen) return 'Your keep has fallen';
   if (f.stand) return 'Your Last Stand is spent';
   const k = f.castle.keep;
-  if (k.hp >= k.maxHp * COMEBACK.stand.keep) return `Last Stand: only when your keep is below ${Math.round(COMEBACK.stand.keep * 100)}%`;
+  if (k.hp >= k.maxHp * COMEBACK.stand.keep) return STAND_LOW;
   return null;
 }
+const STAND_LOW = `Last Stand: only when your keep is below ${Math.round(COMEBACK.stand.keep * 100)}%`;
 
 // The rally. Host or single player only: a guest's request arrives through standFor.
 export function useLastStand(game, f) {
@@ -117,8 +118,9 @@ export function useLastStand(game, f) {
     p.buffs.add('haste', S.time, S.speed);
     p.buffs.add('rage', S.time, S.dmg);
     p.buffs.add('stand', S.time, 1);
-  } else if (!f.isPlayer) {
+  } else if (!f.isPlayer) {   // an AI lord: healed, or back on its feet in the courtyard if it had fallen
     if (!(f.hero && f.hero.alive)) { f.respawnT = 0; game.spawnLord(f); }
+    f.hero.hp = f.hero.maxHp;
   }
 
   // the soldiers: harder blows and quicker feet (the blow strength goes back when the time is up: see updateComeback)
@@ -216,7 +218,7 @@ const CSS = `
 #wageBadge b { color: #fff3cf; }
 #wageBadge i { font-style: normal; margin-right: 5px; }
 @media (max-width: 1150px) { #wageBadge { right: 16px; top: 60px; } }
-#lastStand { position: absolute; right: 16px; bottom: 214px; display: flex; align-items: center; gap: 12px; padding: 8px 18px 8px 12px; cursor: pointer; pointer-events: auto;
+#lastStand { position: absolute; right: 16px; bottom: 238px; display: flex; align-items: center; gap: 12px; padding: 8px 18px 8px 12px; cursor: pointer; pointer-events: auto;
   color: #fff3cf; background: linear-gradient(rgba(120,32,18,0.94), rgba(66,14,8,0.94)); border: 2px solid #f0c24e; border-radius: 6px; box-shadow: 0 0 18px rgba(240,194,78,0.65), 0 4px 14px rgba(0,0,0,0.6);
   animation: standPulse 1.1s ease-in-out infinite; }
 #lastStand:hover { background: linear-gradient(rgba(150,42,24,0.96), rgba(86,18,10,0.96)); }
@@ -228,8 +230,8 @@ const CSS = `
 #standFlash { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(255,226,140,0.0) 25%, rgba(255,205,90,0.55) 70%, rgba(255,170,40,0.85) 100%); }
 #standFlash.go { animation: standFlash 1.3s ease-out; }
 @keyframes standFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
-#hud.standing::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 110px 12px rgba(255,200,80,0.4); animation: standGlow 2.2s ease-in-out infinite; }
-@keyframes standGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+#hud.standing::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 130px 26px rgba(255,190,60,0.6); animation: standGlow 2.2s ease-in-out infinite; }
+@keyframes standGlow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 `;
 let refs = null;
 function hudRefs() {

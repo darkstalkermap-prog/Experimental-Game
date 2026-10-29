@@ -6,7 +6,7 @@
 //     showed. main.js asks pendingDecrees() when it builds the options of a start. Nothing is rolled before the first match ends: the first battle is classic.
 //   - The Options screen's "Battle Decrees" switch (settings.decrees) turns the whole thing off: no roll, no section, classic battles.
 //   - Hero Game Mode and the practice courtyard have no decrees (no gold, no waves of their own to bend); the end screen says nothing there.
-//   - Online, only the host rolls and rerolls; guests are sent the roll (a 'decrees' message) and see it read-only.
+//   - Online, only the host rolls and rerolls; guests are sent the roll (a private 'decrees' event, see Game.applyEvent) and see it read-only.
 import { mods } from './mods.js';
 import { loadOptions, saveOptions } from './options.js';
 import { settings, saveSettings } from './settings.js';
@@ -23,7 +23,7 @@ export const DECREES = [
   { id: 'blood_price', icon: '🩸', tone: 'boon', tag: 'gold', name: 'Blood Price', text: 'Every kill pays double.', rules: { bounty: 2 } },
   { id: 'siege_season', icon: '🪵', tone: 'boon', tag: 'siege', name: 'Siege Season', text: 'Battering rams and catapults cost half.', rules: { 'cost.ram': 0.5, 'cost.catapult': 0.5 } },
   { id: 'iron_discipline', icon: '🛡️', tone: 'boon', tag: 'army', name: 'Iron Discipline', text: 'Barracks, Drill Sergeants and Elite Levies cost half.', rules: { 'cost.upgrade': 0.5 } },
-  { id: 'smiths_holiday', icon: '🔨', tone: 'boon', tag: 'hero', name: 'Smiths\' Holiday', text: 'Swords, shields, bows, horses and potions cost half.', rules: { 'cost.gear': 0.5 } },
+  { id: 'smiths_holiday', icon: '🔨', tone: 'boon', tag: 'hero', name: 'Smiths\' Holiday', text: 'Swords, shields, bows, horses, potions and arrows cost half.', rules: { 'cost.gear': 0.5 } },
   { id: 'war_chest', icon: '💰', tone: 'edge', tag: 'gold', name: 'War Chest', text: 'Start with 600 more gold, but earn 20% less.', rules: { startGold: 600, income: 0.8 } },
   { id: 'cavalry_fever', icon: '🐎', tone: 'boon', tag: 'army', name: 'Cavalry Fever', text: 'Cavalry and Lancers cost 40% less.', rules: { 'cost.horseman': 0.6, 'cost.lancer': 0.6 } },
   { id: 'heroes_return', icon: '👑', tone: 'boon', tag: 'hero', name: 'Heroes\' Return', text: 'Heroes and lords rise in half the time; heroes walk 10% faster.', rules: { respawn: 0.5, heroSpeed: 1.1 } },
@@ -34,7 +34,7 @@ export const DECREES = [
   { id: 'masons_holiday', icon: '🧱', tone: 'boon', tag: 'castle', name: 'Masons\' Holiday', text: 'Gate, wall, keep and tower works cost half.', rules: { 'cost.castle': 0.5 } },
   { id: 'archery_contest', icon: '🏹', tone: 'boon', tag: 'army', name: 'Archery Contest', text: 'Archers cost half.', rules: { 'cost.archer': 0.5 } },
 ];
-export const DECREE_BY_ID = Object.fromEntries(DECREES.map((d) => [d.id, d]));
+export const DECREE_BY_ID = Object.assign(Object.create(null), Object.fromEntries(DECREES.map((d) => [d.id, d])));   // (no prototype: a made-up id like '__proto__' finds nothing)
 export const decreeNames = (defs) => defs.map((d) => d.name).join(' · ');
 
 // ---------------- rolling ----------------
@@ -68,13 +68,19 @@ export function setPendingDecrees(ids) {
   broadcast();
   paintMenuRow();
 }
+// online, the host tells every guest what the next battle will have (a private event rides on the next snapshot: see Game.applyEvent)
 function broadcast() {
   const g = lastGame;
-  if (g && g.mode === 'host' && g.net) g.net.toAll({ k: 'decrees', ids: next });
+  if (g && g.mode === 'host') for (const h of g.humans) if (h !== g.player) g.deliver(h, { k: 'decrees', ids: next });
+}
+// a guest hears the host's roll
+export function hearDecrees(ids) {
+  heard = (Array.isArray(ids) ? ids : []).filter((id) => DECREE_BY_ID[id]).slice(0, 2);
+  for (const el of document.querySelectorAll('.nb-decrees')) paint(el, el.cwSummary);
 }
 
 // ---------------- the match ----------------
-// Game.start: put the decrees of the options in force (before the houses are built, so one can change the starting gold). Returns the decrees in force.
+// Game.start: put the decrees of the options in force (as mods sources, before the houses are built). Returns the decrees in force.
 export function startDecrees(game) {
   lastGame = game;
   const defs = (game.options.decrees || []).map((id) => DECREE_BY_ID[id]).filter(Boolean);
@@ -82,15 +88,6 @@ export function startDecrees(game) {
   game.decrees = defs;
   game.decreeSeen = false;
   if (defs.length) matchlog.record('decrees', { ids: defs.map((d) => d.id) });
-  // a guest hears the host's roll for the next battle
-  if (game.mode === 'client' && game.net && !game.net.cwDecrees) {
-    game.net.cwDecrees = true;
-    game.net.on('data', ({ d }) => {
-      if (!d || d.k !== 'decrees' || !Array.isArray(d.ids)) return;
-      heard = d.ids.filter((id) => DECREE_BY_ID[id]).slice(0, 2);
-      for (const el of document.querySelectorAll('.nb-decrees')) paint(el, el.cwSummary);
-    });
-  }
   heard = [];
   return defs;
 }
@@ -153,10 +150,11 @@ const CSS = `
   background: linear-gradient(rgba(255,248,226,0.55), rgba(236,219,176,0.45)); box-shadow: inset 0 0 0 3px rgba(224,180,76,0.16), 0 1px 0 rgba(255,255,255,0.4); }
 .nb-row + .nb-row { margin-top: -10px; border-top: 1px dashed rgba(138,106,58,0.65); border-top-left-radius: 0; border-top-right-radius: 0; }
 .nb-row:has(+ .nb-row) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.nb-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+.nb-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
+.nb-ttl { display: flex; align-items: baseline; gap: 10px; }
 .nb-title { font: 700 15px Cinzel, Georgia, serif; letter-spacing: 0.14em; text-transform: uppercase; color: #5a1d12; }
 .nb-sub { font-size: 13.5px; font-style: italic; opacity: 0.75; }
-.nb-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.nb-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 8px; }
 .nb-list li { display: grid; grid-template-columns: 34px minmax(0, 1fr); column-gap: 10px; align-items: center; padding: 5px 10px 5px 8px; border-left: 4px solid #8a6a3a;
   background: rgba(255,255,255,0.3); border-radius: 0 3px 3px 0; animation: nbIn 0.38s ease-out both; animation-delay: calc(var(--i, 0) * 90ms); }
 .nb-list li.boon { border-left-color: #3f7a1c; }
@@ -167,7 +165,7 @@ const CSS = `
 .nb-list li.boon .tag { color: #2c5a12; } .nb-list li.edge .tag { color: #8a5410; }
 .nb-list .tx { font-size: 16px; line-height: 1.25; }
 .nb-note { font-size: 15.5px; line-height: 1.3; }
-.nb-acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.nb-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 #gameover .nb-acts button { padding: 6px 14px; font-size: 13.5px; }
 #gameover .nb-acts button.quiet { background: none; color: #5a1d12; border: 1px solid rgba(90,29,18,0.5); }
 #gameover .nb-acts button.quiet:hover { background: rgba(90,29,18,0.1); border-color: #5a1d12; }
@@ -181,7 +179,7 @@ const CSS = `
 #pauseDecrees .pd-h { font: 700 13px Cinzel, Georgia, serif; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; margin-bottom: 3px; }
 @media (prefers-reduced-motion: reduce) { .nb-list li, .nb-dice.roll { animation: none; } }
 #decreeRow .qlabel { font: 700 14px Cinzel, Georgia, serif; margin-right: 4px; }
-#decreeRow .dr-names { font-weight: 600; font-size: 16px; color: #3b120b; }
+#decreeRow .dr-names { font-style: normal; font-weight: 700; color: #3b120b; }
 #decreeRow button.small { padding: 5px 12px; font-size: 13px; }
 #menu.hero #decreeRow { display: none; }
 .card button s.was { opacity: 0.65; font-size: 0.88em; margin-right: 2px; }
@@ -206,22 +204,20 @@ function syncSwitch() {
   if (sw.nextElementSibling) sw.nextElementSibling.textContent = settings.decrees ? 'On' : 'Off';
 }
 
-// (re)draw the panel from the current state; `s` is the match summary
+// (re)draw the panel from the current state; `s` is the match summary. The buttons sit in the head, so the panel stays low.
 function paint(el, s) {
   el.cwSummary = s;
   el.textContent = '';
   const guest = s.mode === 'client';
   const ids = guest ? heard : next;
   const used = (s.options && s.options.decrees) || [];
-  const head = mk('div', 'nb-head');
-  head.append(mk('span', 'nb-title', 'Next battle'), mk('span', 'nb-sub', 'Battle Decrees'));
+  const head = mk('div', 'nb-head'), title = mk('div', 'nb-ttl'), acts = mk('div', 'nb-acts');
+  title.append(mk('span', 'nb-title', 'Next battle'), mk('span', 'nb-sub', 'Battle Decrees'));
+  head.append(title, acts);
   el.append(head);
   const note = (text, label, fn) => {
     el.append(mk('div', 'nb-note', text));
-    if (!label) return;
-    const acts = mk('div', 'nb-acts');
-    acts.append(button(label, '', fn));
-    el.append(acts);
+    if (label) acts.append(button(label, '', fn));
   };
   if (guest) {
     if (!ids.length) { note('The host picks the next battle\'s Battle Decrees.'); return; }
@@ -243,7 +239,6 @@ function paint(el, s) {
   });
   el.append(list);
   if (guest) return;
-  const acts = mk('div', 'nb-acts');
   const roll = button('', '', () => {
     setPendingDecrees(rollDecrees([...next, ...used]));
     if (lastGame && lastGame.audio) lastGame.audio.play('order');   // (a little chime for the roll)
@@ -254,7 +249,6 @@ function paint(el, s) {
   roll.append(mk('span', 'nb-dice', '🎲'), 'Reroll', mk('small', 'nb-key', 'R'));
   roll.title = 'Roll the decrees again (R)';
   acts.append(roll, button('Classic battle', 'quiet', () => { setPendingDecrees([]); paint(el, s); }));
-  el.append(acts);
 }
 
 // ---------------- the main menu: the same roll, for a match started from the menu (Single Player, or hosting) ----------------
@@ -264,16 +258,18 @@ function paintMenuRow() {
   row.textContent = '';
   row.append(mk('span', 'qlabel', 'Next battle'));
   const defs = settings.decrees ? next.map((id) => DECREE_BY_ID[id]).filter(Boolean) : [];
-  if (!settings.decrees) { row.append(mk('span', 'dr-names', 'Battle Decrees are off (Options)')); return; }
+  if (!settings.decrees) { row.append(mk('span', 'mapdesc', 'Battle Decrees are switched off in the Options: every battle is a classic one.')); return; }
   if (!defs.length) {
-    row.append(mk('span', 'dr-names', 'a classic one'), button('Roll decrees', 'small', () => setPendingDecrees(rollDecrees([]))));
-    row.append(mk('span', 'mapdesc', 'After every battle one or two random rule changes are rolled for the next. You can reroll them.'));
+    row.append(button('Roll decrees', 'small', () => setPendingDecrees(rollDecrees([]))));
+    row.append(mk('span', 'mapdesc', 'A classic battle. After every battle one or two random rule changes are rolled for the next; you can reroll them.'));
     return;
   }
   const roll = button('', 'small', () => setPendingDecrees(rollDecrees(next)));
   roll.append(mk('span', 'nb-dice', '🎲'), 'Reroll');
-  row.append(mk('span', 'dr-names', decreeNames(defs)), roll, button('Classic', 'small', () => setPendingDecrees([])));
-  row.append(mk('span', 'mapdesc', defs.map((d) => d.text).join(' ')));
+  row.append(roll, button('Classic', 'small', () => setPendingDecrees([])));
+  const desc = mk('span', 'mapdesc');
+  desc.append(mk('b', 'dr-names', decreeNames(defs)), ' ' + defs.map((d) => d.text).join(' '));
+  row.append(desc);
 }
 function mountMenuRow() {
   const anchor = document.getElementById('difficulty');

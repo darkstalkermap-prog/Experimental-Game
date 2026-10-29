@@ -40,7 +40,7 @@ import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
-import { startDecrees } from './decrees.js';
+import { startDecrees, hearDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
@@ -161,7 +161,7 @@ export class Game {
     mods.reset();
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
-    this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (Battle Decrees: set before the houses are built, one can change the starting gold; see decrees.js)
+    this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
     this.hill.reset();
     this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
@@ -194,7 +194,7 @@ export class Game {
       const human = this.humans.find((h) => h.team === i) || null;
       return {
         team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
-        gold: START_GOLD + Math.round(mods.sum('startGold')), spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
+        gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
         recruitRole: 'garrison', armyOrder: null,
@@ -209,6 +209,7 @@ export class Game {
       h.spawn(c.spawnPoint, c.rot);
     }
     if (this.hero) this.hero.setup(setup);   // (the six heroes, the two sides, houses 2 and 3 switched off)
+    for (const f of this.factions) f.gold += Math.round(mods.sum('startGold'));   // (a rule modifier: War Chest)
     startComeback(this);   // (the underdog's wage, the Last Stand: see comeback.js)
 
     if (this.simulating && !this.practice && !this.hero) {
@@ -653,6 +654,7 @@ export class Game {
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || ''); break;
       case 'stand': standFlash(); break;
+      case 'decrees': hearDecrees(ev.ids); break;   // (a guest: the host's roll for the next battle)
       case 'ping': this.pings.receive(ev); break;
       default: this.alerts.event(ev); break;
     }

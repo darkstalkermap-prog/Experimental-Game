@@ -885,7 +885,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>

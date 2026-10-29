@@ -441,7 +441,7 @@ the AI lords included. Hero Game Mode and the practice courtyard have none.
 | Blood Price | Every kill pays double |
 | Siege Season | Battering rams and catapults cost half |
 | Iron Discipline | Barracks, Drill Sergeants and Elite Levies cost half |
-| Smiths' Holiday | Swords, shields, bows, horses and potions cost half |
+| Smiths' Holiday | Swords, shields, bows, horses, potions and arrows cost half |
 | War Chest | Start with 600 more gold, but earn 20% less |
 | Cavalry Fever | Cavalry and Lancers cost 40% less |
 | Heroes' Return | Heroes and lords rise in half the time; heroes walk 10% faster |
@@ -452,7 +452,7 @@ the AI lords included. Hero Game Mode and the practice courtyard have none.
 | Masons' Holiday | Gate, wall, keep and tower works cost half |
 | Archery Contest | Archers cost half |
 
-Two decrees rolled together never push the same rule (a pace decree with a gold decree, never two of a kind), and a roll never
+The wave wage comes with each wave, so a decree that changes the pace changes the wages with it. Two decrees rolled together never push the same rule (a pace decree with a gold decree, never two of a kind), and a roll never
 repeats the decrees of the battle just played. In the shop a price that a decree changed shows the usual price struck out beside
 the new one. Online the host rolls and rerolls; the decrees travel to the guests in the start message (`options.decrees`), the
 guests set the same rule modifiers and see the same prices, banner and line, and their end screen shows the host's roll read-only.
