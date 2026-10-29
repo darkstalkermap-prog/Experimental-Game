@@ -1,0 +1,4 @@
+{"q":"high","name":"new","castle":826,"field":929,"sun":862,"mean":872,"calls":144,"tris":262228}
+{"q":"high","name":"newNoTier","castle":842,"field":938,"sun":900,"mean":893,"calls":144,"tris":273934}
+{"q":"high","name":"newIrrConst","castle":807,"field":890,"sun":834,"mean":844,"calls":144,"tris":273934}
+{"q":"high","name":"newNoRad","castle":824,"field":919,"sun":872,"mean":872,"calls":144,"tris":273934}

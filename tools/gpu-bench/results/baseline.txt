@@ -1,0 +1,6 @@
+Fixed scene (gfx/fixed.js: the game just started, garrisons only; three cameras: castle front 38 m from the gate, field, sunward), 1280x720, pixel ratio 1,
+software GPU, median of 5 frames per view, mean of the three views, milliseconds. Noise between runs is about +-5%, more on a busy machine.
+                          low   medium   high
+original (1db6e51, port 8250)   506    568     642      programs 22/29/29, calls 225/242/242, triangles 181k/215k/247k
+main (6a392fb, port 8252)       347    706    1073      programs 33/42/48, calls  71/115/144, triangles 108k/185k/274k
+resolution scaling at High on main: 640x360 = 492 ms, 1280x720 = 1069, 1920x1080 = 1892: about 300 ms fixed cost + 835 ms per megapixel (fill-bound).

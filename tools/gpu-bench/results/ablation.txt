@@ -1,0 +1,18 @@
+Where a frame goes in the FIXED scene (gpu/cost.js with FF=0 EXTRA=0: the game just started, the 'field' camera at (0, 60), 1280x720, software GPU,
+steady frames, ms). Each row switches ONE thing off from the baseline; the rows overlap (a pixel pays for lighting, shadow and environment together).
+                       High    Medium
+baseline                903      648
+castles hidden          479      296    (-424 / -352: 52 meshes, 88k triangles, only a few percent of the pixels: heavy per-pixel cost and overdraw)
+  castle -> unlit basic 586  (-300)            (same geometry with MeshBasicMaterial: the lit shading and shadow lookups cost ~300 ms, the rest ~130 ms)
+  castle no map         769  (-117)  castle no receive-shadow 811 (-75)  castle no normal map 848 (-38)  castle aniso 1: 855 (-31)  castle no cast: 883 (steady frames)
+environment map off     624      412    (-279 / -236: every lit pixel reads the PMREM sky: irradiance, and the specular lookup for smooth surfaces)
+MSAA off (post on)      676      440    (-227 / -208; 2 samples cost the same as 4 in software GL)
+post passes + MSAA off  738      584    (direct to the canvas, whose own antialias is on)
+all shadows off         709      512    (-194 / -136);  one cascade 822/598;  4 taps 843/604;  1 tap 796/575
+terrain hidden          645      475    (-258 / -173; the near chunks are all of it);  terrain with plain vertex colours (no splat) 836/634: the splat shader itself is only ~65 ms
+empty scene (post only) 110       55    (clear, resolve, composite, FXAA)
+resolution 75% / 50%    573/329  393/221   (fill-bound: cost follows the pixel count)
+bloom off 866/631, FXAA off 855/633, grade+vignette off 863/578, anisotropy 1: 868/607, terrain not receiving shadows 860/611,
+HDR target as R11F_G11F_B10F instead of RGBA16F: 807/566 (-96 / -64)
+grass 860/629, foliage 873/635, sky 878/617, siege 871/645, fx 879/630, crowd 895/626 (no battle: garrisons only)
+Earlier, in a LATE-BATTLE frame (146 soldiers, 12 engines) at High: crowd hidden -520 of 1800 ms (vertex-bound: 375k triangles in 220 calls).

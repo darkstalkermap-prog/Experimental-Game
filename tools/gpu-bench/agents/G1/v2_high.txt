@@ -1,0 +1,11 @@
+{"name":"base","castle":999,"field":1132,"sun":1037,"mean":1056,"programs":71}
+{"name":"noFetch","castle":759,"field":835,"sun":807,"mean":800,"programs":99}
+{"name":"noFetchNoMS","castle":744,"field":812,"sun":811,"mean":789,"programs":127}
+{"name":"noIrr","castle":870,"field":927,"sun":910,"mean":902,"programs":155}
+{"name":"noGGX","castle":1032,"field":1134,"sun":1084,"mean":1083,"programs":183}
+{"name":"noFog","castle":982,"field":1084,"sun":1029,"mean":1032,"programs":211}
+{"name":"fogNoHaze","castle":995,"field":1108,"sun":1041,"mean":1048,"programs":239}
+{"name":"kitHidden","castle":990,"field":1036,"sun":1013,"mean":1013,"programs":264}
+{"terrainMeshes":13}
+{"name":"terrainLast","castle":1000,"field":1173,"sun":1081,"mean":1085,"programs":292}
+ERRORS ["[.WebGL-0x378c001a7200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels","[.WebGL-0x378c001a7200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels","[.WebGL-0x378c001a7200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels","[.WebGL-0x378c001a7200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)"]

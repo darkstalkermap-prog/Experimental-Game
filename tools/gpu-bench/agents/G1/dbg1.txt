@@ -1,0 +1,53 @@
+{"programs":43,"calls":160,"tris":228259} messages: 125
+---
+error: THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false
+
+Program Info Log: Fragment shader is not compiled.
+
+FRAGMENT
+
+ERROR: 0:492: '7.584962500721156.0' : invalid number
+ERROR: 0:492: 'exp2' : no matching overloaded function found
+ERROR: 0:526: '7.584962500721156.0' : invalid number
+ERROR: 0:526: ')' : syntax error
+
+  487: 			uv.y += faceSize;
+  488: 			face -= 3.0;
+  489: 		}
+  490: 		uv.x += face * faceSize;
+  491: 		uv.x += filterInt * 3.0 * cubeUV_minTileSize;
+> 492: 		uv.y += 4.0 * ( exp2( CUBEUV_MAX_MIP ) - faceSize );
+  493: 		uv.x *= CUBEUV_TEXEL_WIDTH;
+  494: 		uv.y *= CUBEUV_TEXEL_HEIGHT;
+  495: 		#ifdef texture2DGradEXT
+  496: 			return texture2DGradEXT( envMap, uv, vec2( 0.0 ), vec2( 0.0 ) ).rgb;
+  497: 		#else
+  498: 			return texture2D( envMap, uv ).rgb;
+---
+warning: WebGL: INVALID_OPERATION: useProgram: program not valid
+---
+error: THREE.WebGLProgram: Shader Error 1282 - VALIDATE_STATUS false
+
+Program Info Log: Fragment shader is not compiled.
+
+FRAGMENT
+
+ERROR: 0:499: '7.584962500721156.0' : invalid number
+ERROR: 0:499: 'exp2' : no matching overloaded function found
+ERROR: 0:533: '7.584962500721156.0' : invalid number
+ERROR: 0:533: ')' : syntax error
+
+  494: 			uv.y += faceSize;
+  495: 			face -= 3.0;
+  496: 		}
+  497: 		uv.x += face * faceSize;
+  498: 		uv.x += filterInt * 3.0 * cubeUV_minTileSize;
+> 499: 		uv.y += 4.0 * ( exp2( CUBEUV_MAX_MIP ) - faceSize );
+  500: 		uv.x *= CUBEUV_TEXEL_WIDTH;
+  501: 		uv.y *= CUBEUV_TEXEL_HEIGHT;
+  502: 		#ifdef texture2DGradEXT
+  503: 			return texture2DGradEXT( envMap, uv, vec2( 0.0 ), vec2( 0.0 ) ).rgb;
+  504: 		#else
+  505: 			return texture2D( envMap, uv ).rgb;
+---
+warning: WebGL: INVALID_OPERATION: useProgram: program not valid

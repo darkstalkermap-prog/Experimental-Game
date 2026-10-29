@@ -1,0 +1,4 @@
+high programs: 48 errors: 0 
+medium programs: 42 errors: 0 
+low programs: 33 errors: 0 
+battle programs: 48 errors: 0 

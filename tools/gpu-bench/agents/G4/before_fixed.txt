@@ -1,0 +1,3 @@
+{"quality":"high","map":"small","size":"1280x720","castle":1013,"field":1132,"sun":1046,"mean":1064,"calls":144,"tris":261981,"programs":48,"errors":0}
+{"quality":"medium","map":"small","size":"1280x720","castle":681,"field":734,"sun":728,"mean":714,"calls":115,"tris":185854,"programs":42,"errors":0}
+{"quality":"low","map":"small","size":"1280x720","castle":328,"field":367,"sun":379,"mean":358,"calls":71,"tris":108625,"programs":33,"errors":0}

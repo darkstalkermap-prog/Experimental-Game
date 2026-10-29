@@ -1,0 +1,1 @@
+(() => { const fol = window.__game.scene.userData.worldSystems.find((s) => s.near); fol.useProxy = false; fol.near.forEach((m) => { m.castShadow = true; }); fol.proxy.forEach((p) => { p.userData.on = false; }); fol.rockProxy.forEach((p) => { p.userData.on = false; }); fol.rocks.forEach((m) => { m.castShadow = true; }); fol.lastPos.set(1e9, 0, 1e9); })()
