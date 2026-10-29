@@ -5,8 +5,12 @@
 //   gfx.renderFrame(dt)     the frame: sky and shadow maps follow the camera, the scene is drawn, post passes run
 //   gfx.resize()            the window changed size
 import * as THREE from 'three';
-import { Q } from './quality.js';
+import { Q, LEVELS } from './quality.js';
 import { Post } from './post.js';
+import { settings } from './settings.js';
+
+const AUTO_KEY = 'cw-auto';   // the level the Auto choice settled on (kept per browser)
+const WINDOW = 60;           // frames the adaptive resolution looks at
 
 // a guess at how strong the GPU is from its name (Auto picks the first quality level from it); automation always gets 'medium'
 export function guessLevel(renderer) {
@@ -33,6 +37,20 @@ class Gfx {
     this.lastW = 0;
     this.lastH = 0;
     this.size = new THREE.Vector2();
+    // adaptive resolution: a ring of the last frame intervals, and what the governor remembers
+    this.frames = new Float32Array(WINDOW);
+    this.fi = 0; this.fn = 0;
+    this.lastAt = 0;
+    this.pending = 0;       // a scale to switch to at the start of the next frame (never in the middle of one: that would blank the canvas)
+    this.calm = 0;          // seconds since the last slow frame
+    this.lastChange = -1e9;
+    this.ceiling = 1;       // the highest scale tried again for now: the one just above the last that was too slow
+    this.ceilingAt = 0;
+    this.backoff = 45000;   // ms before the ceiling relaxes by one step; it doubles each time a try above it fails at once
+    this.lastUp = -1e9;
+    this.auto = { floorT: 0, drops: 0, lastDrop: -1e9 };
+    // automated browsers (tests, benchmarks) keep a fixed resolution so pictures and numbers are repeatable (?dynres=1 turns it on there too)
+    this.automation = typeof navigator !== 'undefined' && !!navigator.webdriver && !/[?&]dynres=1/.test(location.search);
   }
 
   init(renderer) {
@@ -81,11 +99,29 @@ class Gfx {
 
   setGame(game) { this.game = game; this.lastRatio = 0; }
 
-  // the level a quality choice stands for: Auto is a guess from the GPU (and what the first seconds of play showed: see governor below)
+  // the level a quality choice stands for: Auto is what it settled on before in this browser, else a guess from the GPU name; while
+  // playing, the governor below steps it down if even the lowest resolution cannot hold the frame rate
   levelFor(choice) {
     if (choice !== 'auto') return choice;
-    if (!this.autoLevel) this.autoLevel = guessLevel(this.renderer);
+    if (!this.autoLevel) {
+      let saved = null;
+      try { saved = localStorage.getItem(AUTO_KEY); } catch (e) { /* storage unavailable */ }
+      this.autoLevel = LEVELS.includes(saved) ? saved : guessLevel(this.renderer);
+    }
     return this.autoLevel;
+  }
+
+  // the player pressed Auto again: forget what it settled on and guess afresh
+  resetAuto() {
+    this.autoLevel = null;
+    try { localStorage.removeItem(AUTO_KEY); } catch (e) { /* ignore */ }
+  }
+
+  stepDownAuto() {
+    const lv = LEVELS[Math.max(0, Q.level - 1)];
+    this.autoLevel = lv;
+    try { localStorage.setItem(AUTO_KEY, lv); } catch (e) { /* ignore */ }
+    if (this.game) this.game.setQuality('auto');
   }
 
   // pixel ratio of the drawing buffer: what the device and the quality allow, times the adaptive share
@@ -114,12 +150,58 @@ class Gfx {
     if (!r) return;
     r.toneMappingExposure = Q.exposure;
     if (this.game) { this.game.camera.far = Math.max(400, Q.viewDist); this.game.camera.updateProjectionMatrix(); }
+    this.scale = 1; this.pending = 0; this.fn = 0; this.ceiling = 1; this.backoff = 45000; this.lastChange = performance.now();
     this.resize(true);
   }
 
-  renderFrame(dt) {
+  dynEnabled() { return !!(Q.dynRes && settings.dynres) && !this.automation; }
+
+  // "62 fps · 85%": the share of the full resolution next to the frame rate
+  scaleLabel() { return ` · ${Math.round(this.scale * 100)}%`; }
+
+  // Adaptive resolution. Looks at the real time between frames: when a good share of the last second was slow and the CPU was not the
+  // reason (the GPU was), the render scale steps down at once; it steps up again only after several calm seconds, never above the
+  // last scale that failed (that ceiling relaxes slowly), so it settles instead of pumping.
+  govern(now, cpuMs) {
+    const dtMs = now - this.lastAt;
+    this.lastAt = now;
+    if (!this.dynEnabled()) { if (this.scale !== 1) this.pending = 1; return; }
+    if (dtMs > 250 || dtMs <= 0 || document.hidden) { this.fn = 0; this.calm = 0; return; }   // a stall or a hidden tab says nothing about the GPU
+    this.frames[this.fi] = dtMs;
+    this.fi = (this.fi + 1) % WINDOW;
+    this.fn = Math.min(WINDOW, this.fn + 1);
+    if (dtMs > 20.5) this.calm = 0; else this.calm += dtMs / 1000;
+    if (now - this.lastChange < 1500) return;
+    let slow = 0, sum = 0;
+    for (let i = 0; i < this.fn; i++) { const f = this.frames[i]; sum += f; if (f > 20.5) slow++; }
+    const ceil = Math.min(1, this.ceiling + 0.05 * Math.floor((now - this.ceilingAt) / this.backoff));
+    if (this.fn >= 40 && slow / this.fn > 0.3 && cpuMs < 0.75 * dtMs) {
+      const mean = sum / this.fn;
+      const f = Math.min(0.95, Math.max(0.78, Math.sqrt(16.7 / mean)));
+      const next = Math.max(Q.dynMin, Math.min(this.scale - 0.05, Math.round((this.scale * f) / 0.05) * 0.05));
+      if (next < this.scale - 1e-3) {
+        if (now - this.lastUp < 8000) this.backoff = Math.min(this.backoff * 2, 480000);   // the step up just failed: wait longer next time
+        this.ceiling = Math.max(next, this.scale - 0.05); this.ceilingAt = now;
+        this.pending = +next.toFixed(2); this.lastChange = now; this.fn = 0; this.calm = 0;
+      }
+    } else if (this.calm > 8 && this.scale < ceil - 1e-3 && now - this.lastChange > 8000) {
+      this.pending = +Math.min(ceil, this.scale + 0.05).toFixed(2); this.lastChange = now; this.lastUp = now; this.fn = 0;
+    }
+    // Auto only: stuck at the lowest resolution and still slow for a good while: the level is too high for this machine
+    const a = this.auto, g = this.game;
+    if (Q.choice === 'auto' && g && g.state === 'playing' && !g.paused) {
+      const floor = this.scale <= Q.dynMin + 0.001;
+      if (floor && dtMs > 24) a.floorT += dtMs / 1000; else a.floorT = Math.max(0, a.floorT - dtMs / 1000);
+      if (a.floorT > 6 && Q.level > 0 && a.drops < 3 && now - a.lastDrop > 20000) { a.drops++; a.lastDrop = now; a.floorT = 0; this.stepDownAuto(); }
+    }
+  }
+
+  // t0: when this animation frame began (so the governor can tell CPU-bound frames from GPU-bound ones)
+  renderFrame(dt, t0 = 0) {
     const game = this.game, r = this.renderer;
     const scene = game.scene, camera = game.camera;
+    if (this.pending && this.pending !== this.scale) { this.scale = this.pending; this.resize(true); }
+    this.pending = 0;
     const atm = scene.userData.atmosphere;
     if (atm) atm.update(dt);
     const rig = game.lights && game.lights.rig;
@@ -127,6 +209,8 @@ class Gfx {
     r.info.reset();
     if (this.post && this.post.active) this.post.render(scene, camera);
     else r.render(scene, camera);
+    const now = performance.now();
+    this.govern(now, t0 ? now - t0 : 0);
   }
 }
 

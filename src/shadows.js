@@ -38,6 +38,7 @@ export class ShadowRig {
   apply() {
     const R = Math.max(30, Q.shadowDist || 90);
     const sun = this.sun, far = this.far;
+    sun.castShadow = !!Q.shadows;   // (the far map follows: see the castShadow accessor above)
     this.farC.R = R;
     this.near.R = Math.max(14, Math.round(R * 0.28));
     for (const [c, size] of [[this.near, Q.shadowNearMap || Q.shadowMap], [this.farC, Q.shadowMap]]) {

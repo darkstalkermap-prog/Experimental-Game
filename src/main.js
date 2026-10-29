@@ -77,7 +77,7 @@ function setQuality(q) {
   document.querySelectorAll('.quality button').forEach((b) => b.classList.toggle('active', b.dataset.q === q));
   try { localStorage.setItem('cw-quality', q); } catch (e) { /* ignore */ }
 }
-document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
+document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => { if (b.dataset.q === 'auto') gfx.resetAuto(); setQuality(b.dataset.q); }));
 setQuality(quality);
 
 let difficulty = 'normal';
@@ -446,9 +446,10 @@ addEventListener('keydown', wakeAudio);
 
 const clock = new THREE.Clock();
 let frameErrors = 0;
-let fpsT = 0, frames = 0;
+let fpsT0 = performance.now(), frames = 0;
 function frame() {
   requestAnimationFrame(frame);
+  const t0 = performance.now();
   const dt = Math.min(0.05, clock.getDelta());
   // one bad frame must never freeze the game: report it once and keep going
   try {
@@ -458,9 +459,8 @@ function frame() {
     if (!frameErrors++) console.error('Frame error (the game keeps running):', e);
   }
   input.endFrame();
-  gfx.renderFrame(dt);
+  gfx.renderFrame(dt, t0);
   frames++;
-  fpsT += dt;
-  if (fpsT > 1) { $('fps').textContent = `${frames} fps`; frames = 0; fpsT = 0; }
+  if (t0 - fpsT0 > 1000) { $('fps').textContent = `${Math.round(frames * 1000 / (t0 - fpsT0))} fps${gfx.scaleLabel()}`; frames = 0; fpsT0 = t0; }
 }
 frame();
