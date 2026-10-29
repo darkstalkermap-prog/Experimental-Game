@@ -73,7 +73,7 @@ function ramFrame(team, d) {
   // the roof: boards, then sheets of hide overlapping like tiles, battens over the joints, a board along each eave, a ridge pole
   for (const s of [-1, 1]) {
     const m = place(s * 0.75, 3.0, 0, 0, 0, -s * 0.6);
-    P.obox('wood', m, 0.9, 0.05, 2.98, J(DRK, 0.12));
+    P.obox('wood', m, 0.9, 0.05, 2.98, J(PLK, 0.12));   // (light enough that the underside of the eaves, seen from the ground, is not black)
     const zs = d > 0 ? [-2.25, -0.75, 0.75, 2.25] : [-1.5, 1.5], half = d > 0 ? 0.8 : 1.6;
     zs.forEach((zc, i) => P.obox('hide', at(m, 0, 0.068 + i * 0.008, zc), 0.93, 0.02, half, J(HIDE, 0.2), { off: [P.rng(), P.rng()] }));
     if (d > 0) for (const zj of [-2.9, -1.5, 0, 1.5, 2.9]) P.obox('wood', at(m, 0, 0.1, zj), 0.95, 0.02, 0.045, J(DRK));
