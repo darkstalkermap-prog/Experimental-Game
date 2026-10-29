@@ -206,6 +206,13 @@ export function installShaderChunks() {
     C.lights_fragment_begin = patched;
     cascadesPatched = true;
   } else console.warn('atmosphere: the shadow chunks changed; the sun uses a single plain shadow map');
+
+  // image-based light: its specular half is a second cube-map lookup (up to eight texture reads). On a rough surface that is the same blurred
+  // sky the diffuse half has just read, so there it is reused (smooth surfaces, steel and armour, keep their own reflection)
+  const radianceLine = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
+  if (C.lights_fragment_maps.includes(radianceLine)) {
+    C.lights_fragment_maps = C.lights_fragment_maps.replace(radianceLine, `if ( material.roughness > 0.85 ) radiance += iblIrradiance * RECIPROCAL_PI; else ${radianceLine}`);
+  } else console.warn('atmosphere: the environment-map chunk changed; rough surfaces read the sky twice');
 }
 installShaderChunks();
 

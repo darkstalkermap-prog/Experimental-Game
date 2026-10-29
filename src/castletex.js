@@ -3,6 +3,7 @@
 // agree. Everything wraps seamlessly. They are raw RGBA arrays (no canvas, so nothing is premultiplied or rounded).
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
+import { aniso } from './aniso.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
@@ -61,7 +62,7 @@ function dataTexture(data, w, h, { srgb = true, repeat = true } = {}) {
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
-  t.anisotropy = 8;
+  aniso(t, 8);
   t.needsUpdate = true;
   return t;
 }
@@ -385,7 +386,7 @@ export function noiseTexture(size = 128) {
     const a = fbm(N, N, 4, 4, rng), b = fbm(N, N, 8, 3, rng), c = fbm(N, N, 2, 3, rng), d = fbm(N, N, 16, 2, rng);
     for (let i = 0; i < N * N; i++) { data[i * 4] = a[i] * 255; data[i * 4 + 1] = b[i] * 255; data[i * 4 + 2] = c[i] * 255; data[i * 4 + 3] = d[i] * 255; }
     const t = dataTexture(data, N, N, { srgb: false });
-    t.anisotropy = 1;
+    aniso(t, 1);
     return t;
   });
 }

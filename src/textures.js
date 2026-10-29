@@ -1,6 +1,7 @@
 // Procedurally painted canvas textures, so the game ships with no image assets.
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
+import { aniso } from './aniso.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -12,8 +13,7 @@ function finish(c, repeat = true) {
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.anisotropy = 8;
-  return t;
+  return aniso(t, 8);
 }
 
 function speckle(ctx, w, h, rng, count, alpha, light = true) {

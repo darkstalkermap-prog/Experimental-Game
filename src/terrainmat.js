@@ -10,19 +10,21 @@ import { patchMaterial } from './shaderhook.js';
 
 const cache = [];
 let detail1 = null;
-const U = { uDetail: { value: null }, uNoise: { value: null }, uRoads: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) } };
+const U = { uDetail: { value: null }, uNoise: { value: null }, uRoads: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uRoadExt: { value: 1e5 } };
 
 // the four roads from the castle gates to the middle (the ring road round the middle is built into the shader)
 export function setRoads(roads) {
+  let ext = 34;
   for (let i = 0; i < 4; i++) {
     const r = roads[i];
-    if (r) U.uRoads.value[i].set(r.ax, r.az, r.bx, r.bz); else U.uRoads.value[i].set(0, 0, 0, 1);
+    if (r) { U.uRoads.value[i].set(r.ax, r.az, r.bx, r.bz); ext = Math.max(ext, Math.abs(r.ax), Math.abs(r.az), Math.abs(r.bx), Math.abs(r.bz)); } else U.uRoads.value[i].set(0, 0, 0, 1);
   }
+  U.uRoadExt.value = ext + 9;   // (a road's edge, its wobble and the wet verge reach about 8 m from the line)
 }
 
 const VERT_DECL = `attribute vec3 aBase; attribute vec4 aMask; attribute vec2 aAlt;
 varying vec3 vWPos; varying vec3 vWN; varying vec3 vBase; varying vec4 vMask; varying vec2 vAlt;`;
-const FRAG_DECL = `uniform sampler2D uDetail; uniform sampler2D uNoise; uniform vec4 uRoads[4];
+const FRAG_DECL = `uniform sampler2D uDetail; uniform sampler2D uNoise; uniform vec4 uRoads[4]; uniform float uRoadExt;
 varying vec3 vWPos; varying vec3 vWN; varying vec3 vBase; varying vec4 vMask; varying vec2 vAlt;
 float gBump = 0.0;`;
 
@@ -35,7 +37,6 @@ const FRAG_COLOR = `
   float fine = 1.0 - smoothstep(25.0, 170.0, dist);           // small detail fades out with distance
   float strokes = 1.0 - smoothstep(10.0, 60.0, dist);         // the blade strokes repeat every 2.3 m: gone before the repeat can show as a grid
   float steep = 1.0 - N.y;
-  vec4 n1 = texture2D(uNoise, p * 0.0047 + vec2(0.13, 0.71));
   vec4 n2 = texture2D(uNoise, p * 0.021 + vec2(0.57, 0.29));
   vec4 n3 = texture2D(uNoise, p * 0.083 + vec2(0.31, 0.93));
   float peb = texture2D(uNoise, p * 0.9).a;
@@ -50,12 +51,14 @@ const FRAG_COLOR = `
 
   // the foot of the mountains: a canopy of round crowns, lit like real tree tops through the bump
   float canopy = vMask.w;
-  vec4 c1 = texture2D(uDetail, p * 0.0278);
-  vec4 c2 = texture2D(uDetail, mat2(0.6, 0.8, -0.8, 0.6) * p * 0.0091 + vec2(0.21, 0.67));
-  float dome = c1.a * (0.5 + c2.a);
-  vec3 canopyCol = mix(vec3(0.005, 0.018, 0.010), vec3(0.05, 0.12, 0.034), smoothstep(0.05, 0.8, dome)) * (0.7 + 0.6 * n2.g);
-  col = mix(col, canopyCol, canopy);
-  bump = mix(bump, dome * 2.6, canopy);
+  if (canopy > 0.002) {   // (only on the foot of the mountains: everywhere else the two reads below would be thrown away)
+    vec4 c1 = texture2D(uDetail, p * 0.0278);
+    vec4 c2 = texture2D(uDetail, mat2(0.6, 0.8, -0.8, 0.6) * p * 0.0091 + vec2(0.21, 0.67));
+    float dome = c1.a * (0.5 + c2.a);
+    vec3 canopyCol = mix(vec3(0.005, 0.018, 0.010), vec3(0.05, 0.12, 0.034), smoothstep(0.05, 0.8, dome)) * (0.7 + 0.6 * n2.g);
+    col = mix(col, canopyCol, canopy);
+    bump = mix(bump, dome * 2.6, canopy);
+  }
 
   // trampled earth round the castles, the bare hill, the practice yard's sand
   float soil = d1.g * (0.6 + d2.g * 0.8);
@@ -71,16 +74,18 @@ const FRAG_COLOR = `
 
   // the roads: worked out from their lines, with an irregular edge, wheel ruts, a worn strip between them and pebbles
   float rd = 1e5, rs = 0.0;
-  for (int i = 0; i < 4; i++) {
-    vec2 a = uRoads[i].xy, ab = uRoads[i].zw - a;
-    float len = max(length(ab), 0.001);
-    float t = clamp(dot(p - a, ab) / (len * len), 0.0, 1.0);
-    vec2 dv = p - (a + ab * t);
-    float dd = length(dv);
-    if (dd < rd) { rd = dd; rs = dot(dv, vec2(-ab.y, ab.x)) / len; }
+  if (max(abs(p.x), abs(p.y)) < uRoadExt) {   // (the roads, and the wet verge beside them, all lie inside this square: the mountains skip the lot)
+    for (int i = 0; i < 4; i++) {
+      vec2 a = uRoads[i].xy, ab = uRoads[i].zw - a;
+      float len = max(length(ab), 0.001);
+      float t = clamp(dot(p - a, ab) / (len * len), 0.0, 1.0);
+      vec2 dv = p - (a + ab * t);
+      float dd = length(dv);
+      if (dd < rd) { rd = dd; rs = dot(dv, vec2(-ab.y, ab.x)) / len; }
+    }
+    float rr = length(p) - 34.0;
+    if (abs(rr) < rd) { rd = abs(rr); rs = rr; }
   }
-  float rr = length(p) - 34.0;
-  if (abs(rr) < rd) { rd = abs(rr); rs = rr; }
   float edge = rd + (n3.g - 0.5) * 1.8 + (d1.g - 0.5) * 0.6;
   float road = 1.0 - smoothstep(2.0, 3.5, edge);
   float rut = (1.0 - smoothstep(0.12, 0.42, abs(abs(rs) - 0.85))) * road;
@@ -96,15 +101,21 @@ const FRAG_COLOR = `
 
   // rock: cliffs where it is steeper than about 60 degrees, and bare mountain above the trees; strata run in bands, cracks in plates
   float rockW = max(smoothstep(0.56, 0.74, steep + (n2.g - 0.5) * 0.3), vAlt.x * (0.6 + 0.4 * n2.r)) * (1.0 - 0.92 * canopy);
-  float wx = N.x * N.x / (N.x * N.x + N.z * N.z + 1e-4);
-  vec4 rA = texture2D(uDetail, vec2(vWPos.z, y) * 0.23), rB = texture2D(uDetail, vec2(p.x, y) * 0.23), rT = texture2D(uDetail, p * 0.23);
-  vec4 rk = mix(mix(rB, rA, wx), rT, smoothstep(0.35, 0.8, N.y));
-  float band = smoothstep(-0.6, 0.6, sin(y * 0.41 + n1.r * 11.0 + n2.g * 4.0 + dot(p, vec2(0.03, 0.02))));
-  vec3 rockCol = mix(vec3(0.17, 0.155, 0.13), vec3(0.30, 0.25, 0.19), band * (0.5 + 0.5 * n2.b));
-  rockCol = mix(rockCol, vec3(0.11, 0.105, 0.10), smoothstep(0.6, 0.95, rk.b) * 0.6);
-  rockCol *= 0.65 + 0.7 * rk.g;
-  col = mix(col, rockCol, rockW);
-  bump = mix(bump, ((rk.b - 0.5) * 0.5 + (rk.g - 0.5) * 0.3) * (0.4 + 0.6 * fine), rockW);
+  if (rockW > 0.003) {   // (flat ground has none: the four reads and the strata are only for cliffs and the bare mountain)
+    vec4 n1 = texture2D(uNoise, p * 0.0047 + vec2(0.13, 0.71));
+    float wx = N.x * N.x / (N.x * N.x + N.z * N.z + 1e-4);
+    float topW = smoothstep(0.35, 0.8, N.y);
+    vec4 rS = vec4(0.5), rU = vec4(0.5);
+    if (topW < 0.999) rS = mix(texture2D(uDetail, vec2(p.x, y) * 0.23), texture2D(uDetail, vec2(vWPos.z, y) * 0.23), wx);
+    if (topW > 0.001) rU = texture2D(uDetail, p * 0.23);
+    vec4 rk = mix(rS, rU, topW);
+    float band = smoothstep(-0.6, 0.6, sin(y * 0.41 + n1.r * 11.0 + n2.g * 4.0 + dot(p, vec2(0.03, 0.02))));
+    vec3 rockCol = mix(vec3(0.17, 0.155, 0.13), vec3(0.30, 0.25, 0.19), band * (0.5 + 0.5 * n2.b));
+    rockCol = mix(rockCol, vec3(0.11, 0.105, 0.10), smoothstep(0.6, 0.95, rk.b) * 0.6);
+    rockCol *= 0.65 + 0.7 * rk.g;
+    col = mix(col, rockCol, rockW);
+    bump = mix(bump, ((rk.b - 0.5) * 0.5 + (rk.g - 0.5) * 0.3) * (0.4 + 0.6 * fine), rockW);
+  }
   // scree at the foot of the bare slopes
   float scree = smoothstep(0.16, 0.3, steep) * (1.0 - rockW) * vAlt.x;
   col = mix(col, vec3(0.22, 0.20, 0.17) * (0.7 + 0.6 * peb), scree * 0.8);
@@ -141,7 +152,7 @@ export function terrainMaterial(level) {
     U.uNoise.value = noiseTexture();
     m = new THREE.MeshStandardMaterial({ roughness: 0.97, metalness: 0 });
     patchMaterial(m, 'terrain-splat', (shader) => {
-      shader.uniforms.uDetail = U.uDetail; shader.uniforms.uNoise = U.uNoise; shader.uniforms.uRoads = U.uRoads;
+      shader.uniforms.uDetail = U.uDetail; shader.uniforms.uNoise = U.uNoise; shader.uniforms.uRoads = U.uRoads; shader.uniforms.uRoadExt = U.uRoadExt;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\n' + VERT_DECL)
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWPos = position; vWN = normal; vBase = aBase; vMask = aMask; vAlt = aAlt;');

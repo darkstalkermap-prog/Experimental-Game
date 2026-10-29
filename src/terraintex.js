@@ -3,6 +3,7 @@
 //   noise  (128x128 RGBA)  R, G, B smooth noise at three seeds (macro colour and edge wobble), A pebbles
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
+import { aniso } from './aniso.js';
 
 const smooth = (t) => t * t * (3 - 2 * t);
 
@@ -51,13 +52,13 @@ function worley(size, cells, rng) {
   return { f1, id };
 }
 
-function texture(data, size) {
+function texture(data, size, maxAniso) {
   const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.magFilter = THREE.LinearFilter;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.generateMipmaps = true;
-  t.anisotropy = 8;
+  aniso(t, maxAniso);
   t.needsUpdate = true;
   return t;
 }
@@ -90,7 +91,7 @@ export function detailTexture() {
     d[i * 4 + 2] = clamp01(Math.pow(cr, 3) * 0.7 + rk[i] * 0.5) * 255;
     d[i * 4 + 3] = clamp01(dome * (0.6 + 0.4 * w.id[i])) * 255;
   }
-  detail = texture(d, S);
+  detail = texture(d, S, 8);
   return detail;
 }
 
@@ -104,6 +105,6 @@ export function noiseTexture() {
     d[i * 4] = a[i] * 255; d[i * 4 + 1] = b[i] * 255; d[i * 4 + 2] = c[i] * 255;
     d[i * 4 + 3] = Math.sqrt(peb) * (0.5 + 0.5 * w.id[i]) * 255;
   }
-  noise = texture(d, S);
+  noise = texture(d, S, 1);   // (smooth noise: filtering it along the view only blurs it)
   return noise;
 }

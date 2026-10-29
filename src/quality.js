@@ -21,6 +21,7 @@
 //   grass          grass density multiplier (0 = no grass)    grassDist  metres of grass around the camera
 //   trees          tree and rock density multiplier           viewDist   metres to the end of the world (fog and far plane)
 //   terrain        0 vertex colours · 1 detail texture · 2 splat shader (detail textures, normals, tile-breaking)
+//   aniso          the most anisotropic filtering a texture may use (1 = trilinear only; see aniso.js)
 //   wind           foliage, grass and cloth move in the wind
 //   particles      multiplier on how many particles an effect may spawn
 //   clouds         sky: 0 plain gradient · 1 one cloud layer · 2 two layers with sun lighting
@@ -33,25 +34,25 @@ const PRESETS = {
   low: {
     level: 0, pixelRatio: 1, dynRes: true, dynMin: 0.6, shadows: false, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 0, shadowTaps: 4,
     crowdShadowDist: 0, crowdNear: 12, crowdRich: 40, kitShadows: false, props: 0, decals: 0, lodScale: 0.7, detail: 0,
-    grass: 0, grassDist: 0, trees: 0.6, viewDist: 700, terrain: 0, wind: false, particles: 0.5, clouds: 1, msaa: 0,
+    grass: 0, grassDist: 0, trees: 0.6, viewDist: 700, terrain: 0, aniso: 1, wind: false, particles: 0.5, clouds: 1, msaa: 0,
     post: { bloom: false, aa: false, vignette: false, grade: false, ao: false }, exposure: 1.25,
   },
   medium: {
     level: 1, pixelRatio: 1.25, dynRes: true, dynMin: 0.55, shadows: true, shadowMap: 1024, shadowNearMap: 1024, shadowDist: 70, shadowTaps: 8,
     crowdShadowDist: 20, crowdNear: 12, crowdRich: 32, kitShadows: false, props: 1, decals: 160, lodScale: 1, detail: 1,
-    grass: 0.6, grassDist: 34, trees: 0.85, viewDist: 1000, terrain: 1, wind: true, particles: 0.8, clouds: 1, msaa: 2,
+    grass: 0.6, grassDist: 34, trees: 0.85, viewDist: 1000, terrain: 1, aniso: 2, wind: true, particles: 0.8, clouds: 1, msaa: 2,
     post: { bloom: false, aa: false, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   high: {
     level: 2, pixelRatio: 1.75, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 2048, shadowNearMap: 2048, shadowDist: 90, shadowTaps: 12,
     crowdShadowDist: 23, crowdNear: 15, crowdRich: 20, kitShadows: true, props: 1, decals: 384, lodScale: 1.25, detail: 2,
-    grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, wind: true, particles: 1, clouds: 2, msaa: 4,
+    grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, aniso: 4, wind: true, particles: 1, clouds: 2, msaa: 4,
     post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   ultra: {
     level: 3, pixelRatio: 2, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 3072, shadowNearMap: 2048, shadowDist: 120, shadowTaps: 16,
     crowdShadowDist: 34, crowdNear: 22, crowdRich: 48, kitShadows: true, props: 2, decals: 384, lodScale: 1.6, detail: 2,
-    grass: 1.4, grassDist: 58, trees: 1.2, viewDist: 1600, terrain: 2, wind: true, particles: 1.3, clouds: 2, msaa: 4,
+    grass: 1.4, grassDist: 58, trees: 1.2, viewDist: 1600, terrain: 2, aniso: 8, wind: true, particles: 1.3, clouds: 2, msaa: 4,
     post: { bloom: true, aa: true, vignette: true, grade: true, ao: true }, exposure: 1.25,
   },
 };
