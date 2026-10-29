@@ -168,6 +168,8 @@ export class Abilities {
         while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n, e.n === e.hits - 1); e.n++; }
       } else if (e.kind === 'pulse') {
         if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
+      } else if (e.kind === 'bwave') {
+        if (e.t >= e.delay) { this.bulwarkWave(p, e.wave); this.active.splice(i, 1); }
       } else this.chargeSweep(p, e);
     }
     this.burn(dt);
@@ -259,9 +261,20 @@ export class Abilities {
     p.buffs.add('steady', t);
     const reflect = talentFx(p, 'reflect', 0);
     if (reflect) p.buffs.add('reflect', t, reflect);   // Avenging Wall (Knight talent): see Player.takeDamage
-    if (talentFx(p, 'bulwarkBash', 0)) p.abilCd.q = 0;   // Bastion Strike (alternative to Avenging Wall): the shield is ready to bash again
+    const wave = talentFx(p, 'bulwarkWave', null);   // Bastion Strike (alternative to Avenging Wall): the shield slams down when Bulwark ends
+    if (wave) this.active.push({ kind: 'bwave', p, t: 0, dur: t + 1, delay: t, wave });
     this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => { if (o !== p) this.guard(o, t, 0.6 - talentFx(p, 'bulwarkAlly', 0)); });
     this.emit('bulwark', p.pos, ZERO, null, reach / 8);
+  }
+
+  // Knight talent (Bastion Strike): the end of the Bulwark, a slam of the planted shield all around
+  bulwarkWave(p, w) {
+    const g = this.g, dmg = p.meleeDmg * 2 * w.dmg;
+    this.eachFoe(p.team, p.pos.x, p.pos.z, w.radius, (o) => {
+      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5 });
+      if (o.alive && o.stagger) o.stagger(w.stun, p);
+    }, p.pos.y, 3);
+    this.emit('bwave', p.pos, ZERO, null, w.radius / 5);
   }
 
   // ---------- Berserker ----------
@@ -625,6 +638,15 @@ export class Abilities {
         fx.ring(at, 1.3, this.col.set(0x9cc4ff), 22, { up: 1.8, size: 0.3 });
         fx._sparks(chest, 14);
         snd('block');
+        break;
+      }
+      case 'bwave': {   // Bastion Strike (Knight talent): the planted shield comes down and a ring runs out
+        const r = 5 * sz;
+        gf.glyph('shock', at.x, at.y, at.z, r * 1.2, 0xdfeaff, 0.6, { team: house, strength: 1.8 });
+        fx.ring(at, r * 0.5, this.col.set(0x9cc4ff), 26, { up: 1.2, size: 0.4 });
+        fx._dust(at.clone().setY(at.y + 0.2), 16, 3, '');
+        fx._sparks(chest, 14);
+        snd('clang'); snd('thud');
         break;
       }
       case 'whirl': {

@@ -22,7 +22,7 @@ export const TUNE = {
     bulwarkRadius: 4,      // Phalanx: metres added to the reach ...
     bulwarkAlly: 0.1,      //   ... and more of the damage allies do not take (on top of 40%)
     reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker
-    bastion: 1,            // Bastion Strike (an unlockable alternative to Avenging Wall): Bulwark readies Shield Bash at once
+    bastion: { dmg: 0.4, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): when Bulwark ends the shield slams down: this share of a Shield Bash's damage to the foes within this reach, and a stagger
   },
   berserker: {
     whirlRadius: 0.2,      // Cyclone: a longer reach
@@ -35,7 +35,7 @@ export const TUNE = {
     hp: 0.1,               //   ... and health
     rageTime: 3,           // Endless Fury: seconds added to Blood Rage ...
     rageDmg: 0.1,          //   ... and more damage during it (on top of 25%)
-    tithe: 0.1,            // Blood Tithe (alternative to Reaper): the share of your health the last strike of a Whirlwind gives back
+    tithe: 0.08,           // Blood Tithe (alternative to Reaper): the share of your health the last strike of a Whirlwind gives back (Reaper gives 1.5% a foe, a strike)
   },
   ranger: {
     volleyRadius: 0.15,    // Wide Volley: a wider circle
@@ -197,7 +197,7 @@ export const TALENTS = [
 // They are kept out of TALENTS (and talentsOf) on purpose: everything that walks "the tree" (bots, the practice yard's All talents) stays as it was.
 export const ALT_TALENTS = {
   kn_bastion: { id: 'kn_bastion', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', alt: 'kn_avenge', icon: '🔨', name: 'Bastion Strike',
-    desc: 'Planting Bulwark readies your Shield Bash at once.', fx: { bulwarkBash: K.bastion } },
+    desc: `When Bulwark ends the shield slams down: foes within ${K.bastion.radius} m take ${pc(K.bastion.dmg)} of a Shield Bash's damage and are staggered for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
   bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
     desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
   rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', alt: 'rg_wave', icon: '👁', name: 'Steady Aim',
