@@ -1,14 +1,14 @@
 // The Talents tab of the shop (B, or N for short): the hero's class tree drawn as nodes in tiers with lines between them,
 // the hint on the HUD while a talent point is waiting, and the small icons of what is learnt beside the ability icons.
 import { CLASSES } from './classes.js';
-import { talentsOf, altsOf, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
-import { progress, renownTo } from './progress.js';
+import { talentsOf, altsOf, altEarned, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const BRANCH_COL = { q: 2, r: 3 };   // the grid column of each branch (the first holds the level of each row)
 
-// the alternate capstone sits one row below the capstone it can stand in for, with "or" between them
+// the alternate capstone (one the account has earned with Renown, or any in the practice yard) sits one row below the capstone it can stand in for, with "or" between
+// them. A tree without one is exactly the tree it always was: the ones not earned are in the Renown panel of the menu, not here
 function injectAltCss() {
   if (document.getElementById('cw-talent-alt')) return;
   const st = document.createElement('style');
@@ -27,7 +27,7 @@ export function buildTalentTab(ui, grid) {
   root.className = 'tal-wrap';
   root.style.setProperty('--cls', cls.color);
   root.innerHTML = `<div class="tal-head"><h5>${esc(cls.icon)} ${esc(cls.name)} talents</h5><span class="tal-pts"></span><button class="respec">Respec</button></div>
-    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose. A capstone you have unlocked with Renown stands under the usual one, as a different choice. <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
+    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose.${g.player.cos && g.player.cos.alts.length ? ' A capstone you unlocked with Renown stands under the usual one, as a different choice.' : ''} <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
     <div class="tal-tree"></div>`;
   const tree = root.querySelector('.tal-tree');
   const put = (el, row, col) => { el.style.gridRow = row; el.style.gridColumn = col; tree.appendChild(el); return el; };
@@ -44,9 +44,9 @@ export function buildTalentTab(ui, grid) {
     put(lv, tier + 1, 1);
   }
   const nodes = [];
-  const acct = progress.get();   // (the alternate capstones say how far off they are)
-  injectAltCss();
-  for (const t of [...talentsOf(p.classId), ...altsOf(p.classId)]) {
+  const alts = altsOf(p.classId).filter((t) => altEarned(p, t.id));
+  if (alts.length) injectAltCss();
+  for (const t of [...talentsOf(p.classId), ...alts]) {
     const el = document.createElement('button');
     el.className = 'tnode locked' + (t.alt ? ' alt' : t.needs ? ' child' : '');
     el.dataset.talent = t.id;
@@ -60,7 +60,7 @@ export function buildTalentTab(ui, grid) {
       ui.refreshShop();
     });
     put(el, t.tier + 1 + (t.alt ? 1 : 0), BRANCH_COL[t.br]);
-    nodes.push({ t, el, status: el.querySelector('.ts'), last: '', earn: t.alt ? `Earn it with Renown (${renownTo(acct, 'capstone:' + t.id).toLocaleString('en-US')} to go)` : '' });
+    nodes.push({ t, el, status: el.querySelector('.ts'), last: '' });
   }
   const respec = root.querySelector('.respec');
   respec.addEventListener('click', () => { g.localRespec(); ui.refreshShop(); });
@@ -81,7 +81,7 @@ export function refreshTalentTab(ui) {
   if (v.ptsLast !== pts) { v.pts.innerHTML = pts; v.ptsLast = pts; }
   for (const n of v.nodes) {
     const t = n.t, learned = !!p.talents[t.id], lock = learned ? null : talentLock(p, t.id);
-    const label = learned ? '✓ Learned' : lock === 'Unlocked with Renown' ? n.earn : lock || (left > 0 ? 'Click to learn' : 'No talent points left');
+    const label = learned ? '✓ Learned' : lock || (left > 0 ? 'Click to learn' : 'No talent points left');
     if (n.last !== label) { n.status.textContent = label; n.last = label; }
     n.el.classList.toggle('learned', learned);
     n.el.classList.toggle('locked', !learned && !!lock);

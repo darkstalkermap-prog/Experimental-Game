@@ -71,7 +71,7 @@ const PAINT = {
     path(ctx, [[34, -20], [46, -42], [20, -28]]); ctx.fill();
     ellipse(ctx, 0, 20, 19, 15);                                                                                  // the snout
     for (const s of [-1, 1]) {   // the tusks: tapering curves that rise from the corners of the mouth
-      ctx.beginPath(); ctx.moveTo(s * 14, 28); ctx.quadraticCurveTo(s * 40, 40, s * 36, 6); ctx.quadraticCurveTo(s * 29, 26, s * 21, 34); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(s * 16, 31); ctx.quadraticCurveTo(s * 37, 37, s * 34, 5); ctx.quadraticCurveTo(s * 28, 22, s * 22, 32); ctx.closePath(); ctx.fill();
     }
     ctx.fillStyle = ink; ellipse(ctx, -6, 21, 3.4, 5); ellipse(ctx, 6, 21, 3.4, 5);                                // the nostrils
     path(ctx, [[-25, -6], [-12, -9], [-11, -3], [-24, 0]]); ctx.fill();                                           // the eyes

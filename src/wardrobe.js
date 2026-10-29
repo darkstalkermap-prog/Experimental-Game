@@ -76,9 +76,14 @@ const NAMES = () => Object.fromEntries(Object.entries(CLASSES).map(([id, c]) => 
 
 let panel = null, open = false;
 
+// (the style is in the page from the start: the button of the menu and the badges of the class buttons use it before the panel is ever opened)
+function injectCss() {
+  if (document.getElementById('cw-wardrobe')) return;
+  const st = el('style'); st.id = 'cw-wardrobe'; st.textContent = CSS; document.head.appendChild(st);
+}
+
 function build() {
   if (panel) return panel;
-  const st = el('style'); st.id = 'cw-wardrobe'; st.textContent = CSS; document.head.appendChild(st);
   panel = el('div', 'screen hidden'); panel.id = 'wardrobe';
   panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Renown');
   document.body.appendChild(panel);
@@ -269,6 +274,7 @@ export function refreshBadges() {
 }
 
 function install() {
+  injectCss();
   const anchor = $('menuOptions');
   const row = anchor ? anchor.parentElement : document.querySelector('#menu .scroll');   // (beside Options, or at the end of the menu if the row is gone)
   if (!row || $('renownBtn')) return;
