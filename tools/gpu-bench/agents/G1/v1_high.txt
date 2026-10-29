@@ -1,0 +1,8 @@
+{"name":"base","castle":285,"field":322,"sun":380,"mean":329,"programs":71}
+{"name":"noIrr","castle":284,"field":325,"sun":418,"mean":342,"programs":99}
+{"name":"noRad","error":"edit not found in lights_fragment_maps: if ( material.roughness > 0.85 ) radiance += iblIrradiance *"}
+{"name":"noFetch","error":"edit not found in lights_fragment_maps: if ( material.roughness > 0.85 ) radiance += iblIrradiance *"}
+{"name":"noMS","castle":293,"field":331,"sun":415,"mean":346,"programs":127}
+{"name":"noFetchNoMS","error":"edit not found in lights_fragment_maps: if ( material.roughness > 0.85 ) radiance += iblIrradiance *"}
+{"name":"noGGX","castle":302,"field":330,"sun":450,"mean":361,"programs":155}
+RUN ERROR page.evaluate: Target page, context or browser has been closed

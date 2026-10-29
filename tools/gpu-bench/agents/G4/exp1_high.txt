@@ -1,0 +1,17 @@
+{"castle":1027,"field":1150,"sun":1054,"mean":1077,"label":"base","calls":144,"tris":262011,"programs":48}
+{"castle":611,"field":657,"sun":679,"mean":649,"label":"tHidden","calls":134,"tris":201589,"programs":48}
+{"castle":845,"field":928,"sun":846,"mean":873,"label":"tFlat","calls":144,"tris":262011,"programs":48}
+{"castle":893,"field":938,"sun":882,"mean":904,"label":"tLambert","calls":144,"tris":262011,"programs":49}
+{"castle":989,"field":1118,"sun":1066,"mean":1058,"label":"tNoFog","calls":144,"tris":273717,"programs":50}
+{"castle":1001,"field":1107,"sun":1061,"mean":1056,"label":"tNoBump","calls":144,"tris":273717,"programs":51}
+{"castle":990,"field":1131,"sun":1043,"mean":1055,"label":"tNoRoad","calls":144,"tris":273717,"programs":52}
+{"castle":975,"field":1098,"sun":1062,"mean":1045,"label":"tNoRecv","calls":144,"tris":273717,"programs":52}
+{"castle":718,"field":821,"sun":839,"mean":793,"label":"tChunks","calls":138,"tris":236853,"programs":52}
+{"castle":874,"field":974,"sun":955,"mean":934,"label":"tFar","calls":140,"tris":238453,"programs":52}
+{"castle":944,"field":1078,"sun":987,"mean":1003,"label":"sky","calls":143,"tris":262010,"programs":52}
+{"castle":1013,"field":1114,"sun":1094,"mean":1074,"label":"sky1","calls":144,"tris":273717,"programs":53}
+{"castle":931,"field":1026,"sun":1013,"mean":990,"label":"grass","calls":142,"tris":233772,"programs":53}
+{"castle":981,"field":1038,"sun":1039,"mean":1019,"label":"foliage","calls":128,"tris":243907,"programs":53}
+{"castle":998,"field":1114,"sun":1078,"mean":1063,"label":"fx","calls":144,"tris":273717,"programs":53}
+{"castle":997,"field":1141,"sun":1039,"mean":1059,"label":"base","calls":144,"tris":262011,"programs":53}
+errors []

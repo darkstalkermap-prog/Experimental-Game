@@ -1,0 +1,15 @@
+{
+  "base": {},
+  "noIrr": { "edits": [["lights_fragment_maps", "iblIrradiance += getIBLIrradiance( geometryNormal );", "iblIrradiance += vec3( 0.9 );"]] },
+  "noRad": { "edits": [["lights_fragment_maps", "if ( material.roughness > 0.85 ) radiance += iblIrradiance * RECIPROCAL_PI; else radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );", "radiance += iblIrradiance * RECIPROCAL_PI;"]] },
+  "noFetch": { "edits": [
+    ["lights_fragment_maps", "iblIrradiance += getIBLIrradiance( geometryNormal );", "iblIrradiance += vec3( 0.9 );"],
+    ["lights_fragment_maps", "if ( material.roughness > 0.85 ) radiance += iblIrradiance * RECIPROCAL_PI; else radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );", "radiance += iblIrradiance * RECIPROCAL_PI;"]] },
+  "noMS": { "edits": [["lights_physical_pars_fragment", "computeMultiscattering( geometryNormal, geometryViewDir, material.specularColor, material.specularF90, material.roughness, singleScattering, multiScattering );", "singleScattering = material.specularColor * 0.1;"]] },
+  "noFetchNoMS": { "edits": [
+    ["lights_fragment_maps", "iblIrradiance += getIBLIrradiance( geometryNormal );", "iblIrradiance += vec3( 0.9 );"],
+    ["lights_fragment_maps", "if ( material.roughness > 0.85 ) radiance += iblIrradiance * RECIPROCAL_PI; else radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );", "radiance += iblIrradiance * RECIPROCAL_PI;"],
+    ["lights_physical_pars_fragment", "computeMultiscattering( geometryNormal, geometryViewDir, material.specularColor, material.specularF90, material.roughness, singleScattering, multiScattering );", "singleScattering = material.specularColor * 0.1;"]] },
+  "noGGX": { "edits": [["lights_physical_pars_fragment", "reflectedLight.directSpecular += irradiance * BRDF_GGX( directLight.direction, geometryViewDir, geometryNormal, material );", ""]] },
+  "noFog": { "edits": [["fog_fragment", "gl_FragColor.rgb = atmFog( gl_FragColor.rgb, vFogRay, fogDensity );", "gl_FragColor.rgb = mix( gl_FragColor.rgb, vec3( 0.6, 0.7, 0.8 ), clamp( vFogRay.x * 0.0001, 0.0, 0.2 ) );"]] }
+}

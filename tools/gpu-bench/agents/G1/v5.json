@@ -1,0 +1,11 @@
+{
+  "new": {},
+  "noSun": { "edits": [["lights_fragment_begin", "RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", ""]] },
+  "noAmbient": { "edits": [
+    ["lights_fragment_end", "RE_IndirectDiffuse( irradiance, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", ""],
+    ["lights_fragment_end", "RE_IndirectSpecular( radiance, iblIrradiance, clearcoatRadiance, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", ""]] },
+  "unlit": { "edits": [
+    ["lights_fragment_begin", "RE_Direct( directLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", ""],
+    ["lights_fragment_end", "RE_IndirectDiffuse( irradiance, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", "reflectedLight.indirectDiffuse += material.diffuseColor * 0.5;"],
+    ["lights_fragment_end", "RE_IndirectSpecular( radiance, iblIrradiance, clearcoatRadiance, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );", ""]] }
+}

@@ -1,0 +1,24 @@
+{"label":"order","n":216,"seq":"Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 inst:142#2 inst:142#2 inst:90#2 inst:80#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 inst:142#2 inst:142#2 inst:90#2 inst:80#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 Mesh#2 inst:142#16 inst:80#16 inst:90#16 inst:142#16 inst:460#16 inst:902#16 inst:488#16 inst:394#16 inst:80#17 inst:80#17 inst:80#17 inst:2#18 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#20 Mesh#43 Mesh#43 Mesh#43 Mesh#43 Mesh#43 Mesh#43 Mesh#43 Mesh#43 Mesh#44 Mesh#44 Mesh#44 Mesh#45 Mesh#45 Mesh#45 Mesh#45 Mesh#45 Mesh#45 Mesh#45 Mesh#46 Mesh#46 Mesh#46 Mesh#46 Mesh#47 Mesh#47 Mesh#47 Mesh#47 Mesh#48 Mesh#48 Mesh#48 Mesh#49 Mesh#49 Mesh#49 Mesh#49 Mesh#49 Mesh#49 a3 grass#53 a3 grass#54 arrows-flying#58 arrows-stuck#58 Mesh#88 Mesh#89 Mesh#90 Mesh#91 Mesh#92 Mesh#93 Mesh#94 Mesh#95 chunk#101 chunk#101 chunk#101 far#101 far#101 chunk#101 chunk#101 chunk#101 far#101 far#101 inst:64#106 inst:68#106 inst:98#106 inst:64#106 inst:64#106 inst:64#106 inst:98#106 inst:68#106 inst:168#106 inst:64#106 inst:98#106 inst:100#106 inst:68#106 inst:172#106 inst:206#107 inst:134#107 inst:108#107 inst:303#107 inst:218#107 inst:144#107 inst:126#107 inst:96#107 inst:118#107 inst:397#107 inst:294#107 inst:30#107 inst:134#107 inst:40#107 inst:337#107 inst:614#107 inst:940#107 inst:794#107 inst:836#107 Mesh#102 Mesh#102 Mesh#103 Mesh#104 sky#11 Mesh#96 Mesh#96 Mesh#96 Mesh#97 Mesh#51t Mesh#51t Mesh#51t fx-decals#57t Mesh#51t fx-smoke#55t fx-glow#56t lightning#62t Mesh#63t Mesh#64t Mesh#65t Mesh#66t Mesh#67t Mesh#68t Mesh#69t Mesh#70t Mesh#71t Mesh#72t Mesh#6 Mesh#7 Mesh#7 Mesh#7 Mesh#7 Mesh#7 Mesh#8t Mesh#8t Mesh#8t Mesh#8t Mesh#8t Mesh#9 Mesh#10"}
+{"castle":1006,"field":1115,"sun":1088,"mean":1070,"label":"base","calls":144,"tris":273687,"programs":48}
+{"castle":948,"field":1021,"sun":1031,"mean":1000,"label":"tFarK3","calls":144,"tris":255799,"programs":48}
+{"castle":961,"field":1072,"sun":1034,"mean":1022,"label":"tFarK4","calls":144,"tris":261399,"programs":48}
+{"castle":991,"field":1125,"sun":1051,"mean":1056,"label":"tFirst","calls":144,"tris":261981,"programs":48}
+{"castle":993,"field":1147,"sun":1084,"mean":1075,"label":"tLast","calls":144,"tris":273687,"programs":48}
+{"castle":975,"field":1087,"sun":997,"mean":1020,"label":"sNoCanopy","calls":144,"tris":261981,"programs":49}
+{"castle":974,"field":1081,"sun":1024,"mean":1026,"label":"sNoRock","calls":144,"tris":273687,"programs":50}
+{"castle":960,"field":1053,"sun":1015,"mean":1009,"label":"sNoD","calls":144,"tris":273687,"programs":51}
+{"castle":967,"field":1076,"sun":1010,"mean":1018,"label":"sNoN","calls":144,"tris":261981,"programs":52}
+{"castle":937,"field":1072,"sun":1045,"mean":1018,"label":"sAniso1","calls":144,"tris":273687,"programs":52}
+{"castle":925,"field":1073,"sun":1039,"mean":1012,"label":"sky","calls":143,"tris":273686,"programs":52}
+{"castle":1020,"field":1085,"sun":1072,"mean":1059,"label":"gNoRecv","calls":144,"tris":273687,"programs":52}
+{"castle":932,"field":1124,"sun":1123,"mean":1060,"label":"gHalf","calls":144,"tris":273687,"programs":52}
+{"castle":973,"field":1033,"sun":1029,"mean":1012,"label":"gVert","calls":144,"tris":273687,"programs":52}
+{"castle":955,"field":1093,"sun":1034,"mean":1027,"label":"gLambert","calls":144,"tris":273687,"programs":54}
+{"castle":978,"field":1113,"sun":1060,"mean":1050,"label":"fNoRecv","calls":144,"tris":273687,"programs":54}
+{"castle":940,"field":1045,"sun":1042,"mean":1009,"label":"fVert","calls":144,"tris":273687,"programs":54}
+{"castle":983,"field":1114,"sun":1081,"mean":1059,"label":"fCards","calls":144,"tris":273687,"programs":54}
+{"castle":980,"field":1102,"sun":1099,"mean":1060,"label":"fNear","calls":144,"tris":273687,"programs":54}
+{"castle":1007,"field":1078,"sun":1059,"mean":1048,"label":"fMid","calls":144,"tris":273687,"programs":54}
+{"castle":979,"field":1109,"sun":1055,"mean":1048,"label":"fRocks","calls":144,"tris":273687,"programs":54}
+{"castle":1002,"field":1107,"sun":1056,"mean":1055,"label":"base","calls":144,"tris":273687,"programs":54}
+errors []

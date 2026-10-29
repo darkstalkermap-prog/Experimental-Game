@@ -1,0 +1,13 @@
+{"label":"crowd report","per":{"far":{"batches":5,"inst":37,"tris":25306,"shTris":0},"L0+sh":{"batches":14,"inst":112,"tris":44940,"shTris":12223},"L2":{"batches":34,"inst":1734,"tris":180633,"shTris":0}},"units":203,"alive":178,"lods":[11,144,48,0,0],"stats":{"instances":1883,"batches":53,"tris":250879,"shadowBatches":14,"shadowTris":44940}}
+{"label":"base","steady":1678,"calls":264,"tris":632207}
+{"label":"crowd","steady":1243,"calls":211,"tris":381328}
+{"label":"crowdNoShadow","steady":1654,"calls":250,"tris":619984}
+{"label":"crowdVertexOnly","steady":1311,"calls":264,"tris":632207}
+{"label":"terrain","steady":1230,"calls":254,"tris":560079}
+{"label":"grass","steady":1556,"calls":262,"tris":603968}
+{"label":"foliage","steady":1582,"calls":248,"tris":581841}
+{"label":"sky","steady":1645,"calls":263,"tris":632206}
+{"label":"fx","steady":1634,"calls":261,"tris":620417}
+{"label":"base","steady":1660,"calls":264,"tris":632207}
+{"q":"high","units":178,"siege":11,"canvas":[1280,720]}
+errors []

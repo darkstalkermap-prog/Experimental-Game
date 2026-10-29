@@ -1,0 +1,6 @@
+{
+  "new": {},
+  "newNoTier": { "edits": [["lights_physical_pars_fragment", "bool slSmooth( const in PhysicalMaterial material ) { return material.roughness < 0.7 || material.specularColor.g > 0.1; }", "bool slSmooth( const in PhysicalMaterial material ) { return true; }"]] },
+  "newIrrConst": { "edits": [["envmap_physical_pars_fragment", "return PI * slFetch( slCoord( ( vec4( normal, 0.0 ) * viewMatrix ).xyz ), 15.0 ) * envMapIntensity;", "return vec3( 0.9 ) * envMapIntensity;"]] },
+  "newNoRad": { "edits": [["lights_fragment_maps", "if ( slSmooth( material ) ) radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );", "radiance += iblIrradiance * RECIPROCAL_PI;"]] }
+}

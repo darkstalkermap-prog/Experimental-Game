@@ -1,0 +1,9 @@
+gfx/A1 crowdtest.js
+gfx/A4 qcycle.js
+gfx/A4 dynres.js
+gfx/A4 shimmer.js
+gfx/A7 leaks.js medium 0 6
+gfx/A7 leaks.js medium 6 0
+gfx/A7 bench.js reg1 small 10 6 high
+gfx/A7 bench.js reg1 medium 10 6 high
+gfx/A7 bench.js reg1 large 10 6 high
