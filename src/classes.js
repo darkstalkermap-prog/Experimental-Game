@@ -163,13 +163,13 @@ export class Abilities {
         if (e.n >= e.shots.length) this.active.splice(i, 1);
         continue;
       }
-      if (!p.alive || e.t > e.dur) { this.active.splice(i, 1); continue; }
+      if (!p.alive || e.t > e.dur) { if (e.kind === 'bwave') p.bwave = null; this.active.splice(i, 1); continue; }
       if (e.kind === 'whirl') {
         while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n, e.n === e.hits - 1); e.n++; }
       } else if (e.kind === 'pulse') {
         if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
       } else if (e.kind === 'bwave') {
-        if (e.t >= e.delay) { this.bulwarkWave(p, e.wave); this.active.splice(i, 1); }
+        if (e.t >= e.delay) { this.bulwarkWave(p, e); this.active.splice(i, 1); }
       } else this.chargeSweep(p, e);
     }
     this.burn(dt);
@@ -262,18 +262,21 @@ export class Abilities {
     const reflect = talentFx(p, 'reflect', 0);
     if (reflect) p.buffs.add('reflect', t, reflect);   // Avenging Wall (Knight talent): see Player.takeDamage
     const wave = talentFx(p, 'bulwarkWave', null);   // Bastion Strike (alternative to Avenging Wall): the shield slams down when Bulwark ends
-    if (wave) this.active.push({ kind: 'bwave', p, t: 0, dur: t + 1, delay: t, wave });
+    if (wave) this.active.push(p.bwave = { kind: 'bwave', p, t: 0, dur: t + 1, delay: t, wave, sum: 0 });   // (Player.takeDamage fills the store)
     this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => { if (o !== p) this.guard(o, t, 0.6 - talentFx(p, 'bulwarkAlly', 0)); });
     this.emit('bulwark', p.pos, ZERO, null, reach / 8);
   }
 
   // Knight talent (Bastion Strike): the end of the Bulwark, a slam of the planted shield all around
-  bulwarkWave(p, w) {
-    const g = this.g, dmg = p.meleeDmg * 2 * w.dmg;
-    this.eachFoe(p.team, p.pos.x, p.pos.z, w.radius, (o) => {
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5 });
+  bulwarkWave(p, e) {
+    const g = this.g, w = e.wave, foes = [];
+    p.bwave = null;
+    this.eachFoe(p.team, p.pos.x, p.pos.z, w.radius, (o) => { foes.push(o); }, p.pos.y, 3);
+    const each = foes.length ? e.sum / foes.length : 0;   // (what the shield took in is shared out among the foes around it)
+    for (const o of foes) {
+      if (each > 0) g.damage(o, each, p, { magic: true, splash: true });
       if (o.alive && o.stagger) o.stagger(w.stun, p);
-    }, p.pos.y, 3);
+    }
     this.emit('bwave', p.pos, ZERO, null, w.radius / 5);
   }
 

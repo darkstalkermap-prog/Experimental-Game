@@ -22,7 +22,7 @@ export const TUNE = {
     bulwarkRadius: 4,      // Phalanx: metres added to the reach ...
     bulwarkAlly: 0.1,      //   ... and more of the damage allies do not take (on top of 40%)
     reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker
-    bastion: { dmg: 0.4, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): when Bulwark ends the shield slams down: this share of a Shield Bash's damage to the foes within this reach, and a stagger
+    bastion: { share: 0.3, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): this share of every melee blow taken under Bulwark is stored, and when it ends the shield slams down: the store strikes the foes within this reach (shared between them) and staggers them. Avenging Wall hands back 40% at once, to the one who struck; the slam comes to about the same in all
   },
   berserker: {
     whirlRadius: 0.2,      // Cyclone: a longer reach
@@ -197,7 +197,7 @@ export const TALENTS = [
 // They are kept out of TALENTS (and talentsOf) on purpose: everything that walks "the tree" (bots, the practice yard's All talents) stays as it was.
 export const ALT_TALENTS = {
   kn_bastion: { id: 'kn_bastion', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', alt: 'kn_avenge', icon: '🔨', name: 'Bastion Strike',
-    desc: `When Bulwark ends the shield slams down: foes within ${K.bastion.radius} m take ${pc(K.bastion.dmg)} of a Shield Bash's damage and are staggered for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
+    desc: `While Bulwark stands ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
   bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
     desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
   rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', alt: 'rg_wave', icon: '👁', name: 'Steady Aim',

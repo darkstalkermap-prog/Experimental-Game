@@ -110,6 +110,7 @@ export class Player {
     this.kills = 0;
     this.deaths = 0;
     this.st = blankStats();    // what the end screen counts about this hero (stats.js)
+    this.bwave = null;         // the Bulwark that is storing the blows taken, for Bastion Strike (classes.js)
     this.cos = opts.cos ? sanitizeLoadout(opts.cos) : noLoadout();   // what the account behind this hero wears and has earned (progress.js)
     this.sensitivity = 0.0022;
     this.baseFov = 75;   // field of view setting
@@ -331,6 +332,7 @@ export class Player {
   adoptClass(id) {
     if (this.isLocal && id !== this.classId) matchlog.record('class', { cls: id, from: this.classId });   // (class mastery is shared by the time spent in each)
     this.classId = id;
+    this.bwave = null;
     this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
     this.dash = null;
@@ -1162,6 +1164,8 @@ export class Player {
     if (this.buffs.has('ghost')) return;              // mid-roll: nothing touches you
     const reflect = this.buffs.get('reflect');        // Avenging Wall (Knight talent): part of a melee blow is dealt back
     if (reflect && info.melee && attacker && attacker !== this && attacker.alive) this.game.damage(attacker, amount * reflect, this, { magic: true, splash: true });
+    const store = this.bwave;                         // Bastion Strike (Knight talent): the same blows are kept for the slam that ends Bulwark
+    if (store && info.melee && attacker && attacker !== this && attacker.alive && store.t < store.delay) store.sum += amount * store.wave.share;
     const guard = this.buffs.get('guard');
     if (guard) amount *= guard;
     if (this.buffs.has('ward')) {
