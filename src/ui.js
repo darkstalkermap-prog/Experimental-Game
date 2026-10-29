@@ -12,6 +12,7 @@ import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } fro
 import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
+import { progress, rankOf } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -48,11 +49,13 @@ export function renderClassPicker(root, info, selected, onPick) {
     describe(id);
     onPick(id);
   };
+  const mastery = progress.get().mastery;   // (a small badge on a class you have risen in: progress.js)
   for (const id of CLASS_IDS) {
     const c = CLASSES[id];
     const b = document.createElement('button');
     b.dataset.cls = id;
-    b.innerHTML = `<span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small>`;
+    const rk = rankOf(mastery[id] || 0);
+    b.innerHTML = `<span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small>${rk.rank > 1 ? `<i class="mrk" title="${esc(c.name)} mastery: ${esc(rk.name)} (rank ${rk.rank} of 10)">${rk.roman}</i>` : ''}`;
     b.addEventListener('click', () => pick(id));
     root.appendChild(b);
     buttons[id] = b;

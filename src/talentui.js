@@ -1,11 +1,22 @@
 // The Talents tab of the shop (B, or N for short): the hero's class tree drawn as nodes in tiers with lines between them,
 // the hint on the HUD while a talent point is waiting, and the small icons of what is learnt beside the ability icons.
 import { CLASSES } from './classes.js';
-import { talentsOf, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
+import { talentsOf, altsOf, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
+import { progress, renownTo } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const BRANCH_COL = { q: 2, r: 3 };   // the grid column of each branch (the first holds the level of each row)
+
+// the alternate capstone sits one row below the capstone it can stand in for, with "or" between them
+function injectAltCss() {
+  if (document.getElementById('cw-talent-alt')) return;
+  const st = document.createElement('style');
+  st.id = 'cw-talent-alt';
+  st.textContent = `.tnode.alt::before { content: 'or'; position: absolute; left: 50%; top: -19px; transform: translateX(-50%); font: italic 14px 'EB Garamond', Georgia, serif; opacity: 0.75; }
+.tnode.alt .tag { display: inline-block; margin-left: 6px; padding: 0 5px; font: 600 9.5px/15px Cinzel, serif; letter-spacing: 0.06em; border: 1px solid rgba(224,180,76,0.6); border-radius: 3px; color: var(--gold); vertical-align: 2px; }`;
+  document.head.appendChild(st);
+}
 
 // Build the tree of the hero's class into the shop grid. Afterwards only classes, texts and states change (see refresh),
 // so a node is never replaced under the cursor and every click lands.
@@ -33,12 +44,14 @@ export function buildTalentTab(ui, grid) {
     put(lv, tier + 1, 1);
   }
   const nodes = [];
-  for (const t of talentsOf(p.classId)) {
+  const acct = progress.get();   // (the alternate capstones say how far off they are)
+  injectAltCss();
+  for (const t of [...talentsOf(p.classId), ...altsOf(p.classId)]) {
     const el = document.createElement('button');
-    el.className = 'tnode locked' + (t.needs ? ' child' : '');
+    el.className = 'tnode locked' + (t.alt ? ' alt' : t.needs ? ' child' : '');
     el.dataset.talent = t.id;
     el.dataset.tier = t.tier;
-    el.innerHTML = `<span class="ti">${esc(t.icon)}</span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small><em class="ts"></em>`;
+    el.innerHTML = `<span class="ti">${esc(t.icon)}</span><b>${esc(t.name)}${t.alt ? '<span class="tag">RENOWN</span>' : ''}</b><small>${esc(t.desc)}</small><em class="ts"></em>`;
     el.addEventListener('click', () => {
       const ok = g.localLearnTalent(t.id);
       el.classList.remove('bought', 'nope');
@@ -46,8 +59,8 @@ export function buildTalentTab(ui, grid) {
       el.classList.add(ok ? 'bought' : 'nope');
       ui.refreshShop();
     });
-    put(el, t.tier + 1, BRANCH_COL[t.br]);
-    nodes.push({ t, el, status: el.querySelector('.ts'), last: '' });
+    put(el, t.tier + 1 + (t.alt ? 1 : 0), BRANCH_COL[t.br]);
+    nodes.push({ t, el, status: el.querySelector('.ts'), last: '', earn: t.alt ? `Earn it with Renown (${renownTo(acct, 'capstone:' + t.id).toLocaleString('en-US')} to go)` : '' });
   }
   const respec = root.querySelector('.respec');
   respec.addEventListener('click', () => { g.localRespec(); ui.refreshShop(); });
@@ -68,7 +81,7 @@ export function refreshTalentTab(ui) {
   if (v.ptsLast !== pts) { v.pts.innerHTML = pts; v.ptsLast = pts; }
   for (const n of v.nodes) {
     const t = n.t, learned = !!p.talents[t.id], lock = learned ? null : talentLock(p, t.id);
-    const label = learned ? '✓ Learned' : lock || (left > 0 ? 'Click to learn' : 'No talent points left');
+    const label = learned ? '✓ Learned' : lock === 'Unlocked with Renown' ? n.earn : lock || (left > 0 ? 'Click to learn' : 'No talent points left');
     if (n.last !== label) { n.status.textContent = label; n.last = label; }
     n.el.classList.toggle('learned', learned);
     n.el.classList.toggle('locked', !learned && !!lock);

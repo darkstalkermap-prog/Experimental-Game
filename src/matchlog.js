@@ -5,7 +5,10 @@
 // Events are for sentences ("Your Fireball broke the north gate at 8:42"), counters are for numbers. Keep events few (hundreds per match at most).
 //
 // Counter / event names in use (add yours here):
-//   (none yet)
+//   counters  dmg · streak · slain · breaches · engines · keeps     what THE HERO ON THIS SCREEN did (stats.js; a guest is told its numbers at the end):
+//             damage dealt to foes, the longest run of kills without falling, enemy heroes killed, gates and walls broken, siege engines destroyed, keeps
+//             brought down. (kills, deaths and gold are the hero's and the house's own fields: see buildSummary in endscreen.js)
+//   event     'class' { cls, from }                                 the hero on this screen took up another class (progress.js shares class mastery by time)
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

@@ -11,6 +11,7 @@ import { Parts, place } from './parts.js';
 import { Cloth, clothMaterial, updateWind, FireSet } from './castlefx.js';
 import * as G from './castlegeo.js';
 import { populate } from './props.js';
+import { customBanner } from './textures.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
 const TC = H + towerOff; // corner tower centres
@@ -42,6 +43,8 @@ export class Castle {
     this.bucket = game.physics.addBucket(site.x, site.z, H + 8);
     this.mats = materials();
     this.clothMat = clothMaterial(this.mats.banners[team].map);   // (its own: the fallen keep scorches it)
+    this.flagMat = this.mats.banners[team];   // the cloth of the levy standards (see setBanner)
+    this.bannerId = '';
     this.vis = [];
     this.fire = new FireSet(this.group, this.mats.fire);   // torches, braziers, chimneys, the burning ruin
     this.build();
@@ -53,6 +56,18 @@ export class Castle {
       if (!this.group.parent) { off(); return; }   // (the world was rebuilt: this castle is gone)
       if (q.detail !== this.detail || q.props !== this.props) this.buildVisuals();
     });
+  }
+
+  // The emblem this house flies, from its lord's account ('' is the house's own, as it always was): the hanging banners, the flags and the standards.
+  // The field stays the house colour, so the houses can still be told apart.
+  setBanner(id) {
+    id = id || '';
+    if (this.bannerId === id) return;
+    this.bannerId = id;
+    const base = this.mats.banners[this.team];
+    const map = id ? customBanner(TEAM_COLORS[this.team], this.team, id) : base.map;
+    this.clothMat.map = map;
+    if (id) { this.flagMat = base.clone(); this.flagMat.map = map; } else this.flagMat = base;
   }
 
   toWorld(lx, lz, y = 0) {

@@ -36,6 +36,7 @@ export const BESTS = [
   { key: 'armyKills', label: 'Army kills', unit: 'army kills', better: 1 },
   { key: 'gold', label: 'Gold earned', unit: 'gold', better: 1 },
   { key: 'breaches', label: 'Gates and walls broken', unit: 'breaches', better: 1 },
+  { key: 'time', label: 'Longest battle', unit: '', better: 1 },
   { key: 'fastWin', label: 'Fastest victory', unit: '', better: -1 },
 ];
 export const BEST_BY_KEY = Object.fromEntries(BESTS.map((b) => [b.key, b]));
@@ -197,6 +198,7 @@ export function applyMatch(old, m) {
   const st = m.stats || {}, made = {};
   made.kills = m.kills | 0; made.streak = st.streak | 0; made.dmg = Math.round(st.dmg || 0); made.waves = m.waves | 0;
   made.armyKills = st.armyKills | 0; made.gold = st.gold | 0; made.breaches = st.breaches | 0;
+  made.time = Math.round(m.time || 0);
   made.fastWin = m.won && m.time >= FASTEST_WIN_MIN ? Math.round(m.time) : 0;
   const records = [], firsts = [];
   for (const b of BESTS) {

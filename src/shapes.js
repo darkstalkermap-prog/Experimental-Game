@@ -525,3 +525,35 @@ def('cape.long', (b) => {
 def('cape.cloak', (b) => {
   b.sheet([0, -0.38, -0.03], 0.54, 0.78, b.pick(8, 5, 3), b.pick(10, 6, 3), { ...clothDk, w: [1.95, 1.0], dz: (x) => -0.07 * (x / 0.27) ** 2, a: [0.7, 1] });
 }, true);
+
+// ---- the cloaks a lord can earn with Renown (unlocks.js): the colours are fixed, so they never take the house colour. They hang where the others do.
+const hang = (b, w, h, o, bend = 0.08) => b.sheet([0, -h / 2, -0.03], w, h, b.pick(8, 5, 3), b.pick(12, 8, 4), { ...o, w: [1.95, 1.0], dz: (x) => -bend * (x / (w / 2)) ** 2, a: [0.7, 1] });
+// a band along the hem (swaying with the cloth) or the collar (still)
+const hem = (b, w, h, y, o, bend = 0.08) => b.sheet([0, y, -0.034], w, 0.05, b.pick(8, 5, 3), 1, { ...o, w: [1.95, 1.9], dz: (x) => -bend * (x / (w / 2)) ** 2 });
+const collar = (b, w, hgt, o, bend = 0.07) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(8, 5, 3), 1, { ...o, dz: (x) => -bend * (x / (w / 2)) ** 2 });
+def('cape.crimson', (b) => {   // deep red wool, a gold hem and collar, a gold clasp
+  hang(b, 0.58, 1.0, { c: 0x8c1f24, m: 'wool', p: PAT.weave });
+  hem(b, 0.58, 1.0, -0.99, { ...gold });
+  collar(b, 0.62, 0.075, { ...gold });
+  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...gold, e: 0.4 });
+}, true);
+def('cape.greenwood', (b) => {   // a shorter travelling cloak, a leather hem, a rolled hood at the neck
+  hang(b, 0.56, 0.86, { c: 0x2f5a34, m: 'wool', p: PAT.weave }, 0.07);
+  hem(b, 0.56, 0.86, -0.85, { c: K.leather, m: 'leather', p: PAT.leather }, 0.07);
+  collar(b, 0.6, 0.11, { c: 0x25472a, m: 'wool', p: PAT.weave });
+  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.04, 0.02], { c: K.brass, m: 'brass', e: 0.4 });
+}, true);
+def('cape.wolfpelt', (b) => {   // grey wool under a deep collar and shoulders of wolf fur
+  const fur = { c: 0xcfc8b8, m: 'fur', p: PAT.fur };
+  hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', p: PAT.weave }, 0.07);
+  hem(b, 0.6, 0.9, -0.89, fur, 0.07);
+  collar(b, 0.7, 0.17, fur, 0.07);
+  for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, -0.045], [0.11, 0.06, 0.09], { ...fur, seg: [8, 6] });
+}, true);
+def('cape.midnight', (b) => {   // dark blue silk edged in silver
+  const silver = { c: 0xc8ced8, m: 'steel' };
+  hang(b, 0.58, 1.0, { c: 0x1c2756, m: 'silk', p: PAT.weave });
+  hem(b, 0.58, 1.0, -0.99, silver);
+  collar(b, 0.62, 0.06, silver);
+  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.05, 0.02], { ...silver, e: 0.4 });
+}, true);

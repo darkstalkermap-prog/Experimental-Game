@@ -4,6 +4,7 @@
 // can point at the white margin and take only their vertex colour.
 import * as THREE from 'three';
 import { TEAM_COLORS } from './config.js';
+import { paintEmblem } from './emblems.js';
 
 export const FACE_PX = 480, ATLAS_PX = 512;
 const cache = new Map();
@@ -137,9 +138,22 @@ function wear(ctx, w, h, kind, seed) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 }
 
+// The emblem of the lord's banner (progress.js) as a small plaque near the top of the face: a dark roundel in a gold ring
+function plaque(ctx, shape, emblem) {
+  const r = shape.w * 0.16, x = shape.w / 2, y = shape.h * (shape.kind === 'round' ? 0.2 : 0.14);
+  ctx.save();
+  ctx.translate(x, y);
+  disc(ctx, 0, 0, r, '#17110a');
+  ring(ctx, 0, 0, r * 0.95, r * 0.12, GOLD);
+  ring(ctx, 0, 0, r * 0.8, r * 0.025, GOLD_D);
+  paintEmblem(ctx, emblem, r * 0.7, '#efe2b3', '#17110a');
+  ctx.restore();
+}
+
 // The atlas texture of a class's shield in a house colour. shape: { kind: 'round' | 'kite', w, h } in metres (bounding box of the face).
-export function shieldFace(cls, team, shape) {
-  const key = `${cls}:${team}:${shape.kind}`;
+// `emblem`: the banner the account wears ('' for none), which adds a plaque to the face.
+export function shieldFace(cls, team, shape, emblem = '') {
+  const key = `${cls}:${team}:${shape.kind}${emblem ? ':' + emblem : ''}`;
   if (cache.has(key)) return cache.get(key);
   const c = document.createElement('canvas');
   c.width = c.height = ATLAS_PX;
@@ -150,6 +164,7 @@ export function shieldFace(cls, team, shape) {
   ctx.beginPath(); ctx.rect(0, 0, FACE_PX, FACE_PX); ctx.clip();
   ctx.scale(FACE_PX / shape.w, FACE_PX / shape.h);
   (DESIGN[cls] || DESIGN.knight)(ctx, shape.w, shape.h, TEAM_COLORS[team] ?? TEAM_COLORS[0], shape.kind);
+  if (emblem) plaque(ctx, shape, emblem);
   wear(ctx, shape.w, shape.h, shape.kind, key.length * 131 + team);
   ctx.restore();
   const tex = new THREE.CanvasTexture(c);

@@ -185,7 +185,7 @@ export class ViewModel {
   // ------------------------------------------------------------ building
   keyNow() {
     const p = this.p;
-    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}|${Q.kitShadows ? 1 : 0}`;
+    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}|${Q.kitShadows ? 1 : 0}|${p.cos.banner}`;
   }
 
   clearKit() {
@@ -254,7 +254,7 @@ export class ViewModel {
     R.flask.scale.setScalar(0.8);
     R.grp.add(R.flask);
     // the shield, and the hand that holds it (its rod axis lies along the shield's strap)
-    const sh = shieldGeometry({ cls, team, lv: p.lv.shield, detail });
+    const sh = shieldGeometry({ cls, team, lv: p.lv.shield, detail, emblem: p.cos.banner });
     const shMat = kitMaterial({ map: sh.map });
     this.disposables.push(shMat);
     L.grp = new THREE.Group();

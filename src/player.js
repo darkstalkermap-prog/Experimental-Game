@@ -12,6 +12,10 @@ import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './her
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
 import { ViewModel } from './viewmodel.js';
+import { matchlog } from './matchlog.js';
+import { blankStats } from './stats.js';
+import { sanitizeLoadout, noLoadout } from './progress.js';
+import { CLOAKS } from './unlocks.js';
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -105,6 +109,8 @@ export class Player {
     this.lastHurt = -99;
     this.kills = 0;
     this.deaths = 0;
+    this.st = blankStats();    // what the end screen counts about this hero (stats.js)
+    this.cos = opts.cos ? sanitizeLoadout(opts.cos) : noLoadout();   // what the account behind this hero wears and has earned (progress.js)
     this.sensitivity = 0.0022;
     this.baseFov = 75;   // field of view setting
     this.bob = 0;
@@ -133,15 +139,17 @@ export class Player {
 
   // ---------- third-person body for other people's heroes ----------
   buildBody() {
-    this.body = buildHeroBody(this.classId, this.team, 2);
+    const cloak = CLOAKS.find((c) => c.id === this.cos.cloak);   // (the cloak the account behind this hero wears, if any)
+    this.body = buildHeroBody(this.classId, this.team, 2, cloak ? cloak.shape : null);
     this.bodyClass = this.classId;
+    this.bodyCloak = this.cos.cloak;
     this.game.scene.add(this.body.root);
     this.buildTag();
   }
 
   // (another class: a new look)
   restyleBody() {
-    if (!this.body || this.bodyClass === this.classId) return;
+    if (!this.body || (this.bodyClass === this.classId && this.bodyCloak === this.cos.cloak)) return;
     this.game.scene.remove(this.body.root);
     this.buildBody();
   }
@@ -321,6 +329,7 @@ export class Player {
 
   // The class itself and what hangs off it on every screen (the abilities need a moment to ready).
   adoptClass(id) {
+    if (this.isLocal && id !== this.classId) matchlog.record('class', { cls: id, from: this.classId });   // (class mastery is shared by the time spent in each)
     this.classId = id;
     this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
