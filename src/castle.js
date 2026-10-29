@@ -8,7 +8,7 @@ import { materials, box, shadowed, partsMaterial } from './materials.js';
 import { Upgrades } from './upgrades.js';
 import { Q, onQuality } from './quality.js';
 import { Parts, place } from './parts.js';
-import { Cloth, clothMaterial, updateWind, FireSet } from './castlefx.js';
+import { Cloth, clothMaterial, updateWind, FireSet, dustBank } from './castlefx.js';
 import * as G from './castlegeo.js';
 import { populate } from './props.js';
 import { highlights } from './highlights.js';
@@ -623,11 +623,13 @@ export class Castle {
       case 'blast':
         fx.flash(p, _gold, 16, 0.6, 1);
         fx.shock(_cq.copy(p).setY(this.center.y + 0.5), 2, 26, _gold, 0.7, 0.8);
+        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.3), 7, 30, 15);
         if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); g.audio.play('boom', p); }
         g.camfx.boom(p, 1);
         if (near) fin.jolt(0.7);
         break;
       case 'tower':
+        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.5), 4.5, 16, 10);
         if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 1), 30, 5.5, 'stone'); g.audio.play('collapse', p); }
         g.camfx.boom(p, 0.7);
         if (near) fin.jolt(0.3);
@@ -804,7 +806,12 @@ export class Castle {
       gate.openAmt += (want - gate.openAmt) * Math.min(1, dt * 3);
       for (const l of gate.leaves) l.pivot.rotation.y = -l.s * 1.35 * gate.openAmt;
     }
-    if (this.collapse && !this.collapse.done) this.collapse.update(dt, this);
+    if (this.collapse && !this.collapse.done) {
+      try { this.collapse.update(dt, this); } catch (e) {   // (a fault in the show must never stop the game: the keep goes to its end state at once)
+        console.error('keep collapse', e);
+        try { this.collapse.settle(); } catch (err) { this.collapse.done = true; }
+      }
+    }
     if (this.smokeSpots && Math.random() < dt * 8) this.game.fx.smoke(this.smokeSpots[(Math.random() * this.smokeSpots.length) | 0]);
   }
 }

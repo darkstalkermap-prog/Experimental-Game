@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { patchMaterial } from './shaderhook.js';
 import { Q } from './quality.js';
+import { F, R } from './fxtex.js';
 
 // the wind: one clock for every cloth; `amp` is 0 when the quality setting has the wind off
 export const WIND = { time: { value: 0 }, amp: { value: 1 } };
@@ -207,4 +208,21 @@ export class FireSet {
     this.group.add(this.mesh);
   }
   update() { if (this.dirty) this.rebuild(); }
+}
+
+// ---------------------------------------------------------------- the dust of a fall
+// A bank of big, slow, soft puffs thrown up round p when a keep or a tower comes down: they rise and spread for several seconds, so that the fall
+// is seen through dust. (Each screen makes its own: nothing here is replicated.) r: how wide the bank starts, n: how many puffs, size: how big they grow.
+export function dustBank(fx, p, r, n, size) {
+  const A = fx.alpha, TAU = Math.PI * 2, k = fx.q(n);
+  for (let i = 0; i < k; i++) {
+    const th = Math.random() * TAU, d = Math.sqrt(Math.random()) * r, sp = 0.5 + Math.random() * 1.7;
+    const s0 = size * (0.22 + Math.random() * 0.2), s1 = size * (0.8 + Math.random() * 0.7);
+    const o = A.spawn(F.PUFF1 + ((Math.random() * 3) | 0), R.DUST, p.x + Math.cos(th) * d, p.y + Math.random() * 2.5, p.z + Math.sin(th) * d,
+      Math.cos(th) * sp, 0.7 + Math.random() * 2.3, Math.sin(th) * sp, 3.2 + Math.random() * 2.6, s0, s1);
+    const g = 0.72 + Math.random() * 0.2;
+    A.tint(o, g, g * 0.98, g * 0.95, 0.5 + Math.random() * 0.3);
+    A.motion(o, 0.9, -0.12, 0.7, -1.3);
+    A.spin(o, Math.random() * TAU, (Math.random() - 0.5) * 0.35);
+  }
 }

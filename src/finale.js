@@ -18,6 +18,8 @@ const QUICK = /conced|connection|host left|left the game|disconnect/i;   // endi
 const GRACE = 0.45;           // seconds before a key or click may skip: the one that landed the last blow must not
 const SLOW = 0.3;             // the time scale of the slow motion
 const KEEP_Z = -6;            // where the keep stands in the castle (castlegeo.js KEEP_Z)
+// the directions (from the keep, castle-local, turned by the castle's own rotation below) to the four corner towers: atan2(x, z) of (+-22.7, 22.7 - KEEP_Z) and (+-22.7, -22.7 - KEEP_Z)
+const TOWER_AZ = [Math.atan2(22.7, 22.7 - KEEP_Z), -Math.atan2(22.7, 22.7 - KEEP_Z), Math.atan2(22.7, -22.7 - KEEP_Z), -Math.atan2(22.7, -22.7 - KEEP_Z)];
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -66,7 +68,7 @@ export class Finale {
     this.highlight = null;
     this.moment = null;         // the last rival keep has fallen but the match goes on: { t } (a moment of slow motion, see keepFell)
     this.slow = SLOW;
-    this.az0 = 0; this.sweep = 0.5; this.d0 = 62; this.d1 = 48; this.h0 = 26; this.h1 = 17; this.fov0 = 54; this.fov1 = 46;
+    this.az0 = 0; this.sweep = 0.5; this.d0 = 62; this.d1 = 48; this.h0 = 26; this.h1 = 17; this.fov0 = 46; this.fov1 = 54;
     this.K = new THREE.Vector3(); this.T = new THREE.Vector3();
     this.el = null;
     this.vmHidden = false;
@@ -140,6 +142,11 @@ export class Finale {
       if (g.hero) { a.play(won ? 'fanfare' : 'dirge'); a.duck(0.35, 2.2, 1.4); } else a.play(won ? 'victory' : 'defeat');
       return;
     }
+    try { this.begin(mode, won); } catch (e) { this.fail(e); }
+  }
+
+  begin(mode, won) {
+    const g = this.g, a = g.audio;
     a.play(won ? 'fanfare' : 'dirge');
     a.duck(0.3, mode === 'grand' ? 3 : 2, 1.6);
     if (g.mode === 'single') a.slowmo(1);
@@ -174,12 +181,18 @@ export class Finale {
     this.K.copy(c.toWorld(0, KEEP_Z, 0));
     let dx = p.pos.x - this.K.x, dz = p.pos.z - this.K.z;
     if (Math.hypot(dx, dz) < 38) { dx = Math.sin(c.rot); dz = Math.cos(c.rot); }
-    this.az0 = Math.atan2(dx, dz);
-    // sweep round toward the open side (away from a neighbouring wall is not needed: the camera is well outside every wall)
-    this.sweep = (Math.sin(c.team * 2.3 + this.K.x * 0.013) > 0 ? 1 : -1) * 0.5;
-    const burning = !(c.collapse && !c.collapse.done);
-    this.d0 = burning ? 64 : 72; this.d1 = burning ? 54 : 58;
-    this.h0 = burning ? 32 : 40; this.h1 = burning ? 22 : 28;
+    this.sweep = (Math.sin(c.team * 2.3 + this.K.x * 0.013) > 0 ? 1 : -1) * 0.25;
+    // not in line with a corner tower, where the shot would end up beside the tower that is coming down: turn it to the nearest side that is clear
+    const az = Math.atan2(dx, dz), clear = (a) => TOWER_AZ.every((t) => Math.abs(Math.atan2(Math.sin(a - t - c.rot), Math.cos(a - t - c.rot))) > 0.42);   // (a castle's own angles turned by how it stands)
+    this.az0 = az;
+    for (const off of [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42, 0.56, -0.56]) {
+      if (clear(az + off) && clear(az + off + this.sweep)) { this.az0 = az + off; break; }
+    }
+    // The shot starts far and high (the whole castle) and pushes in over the wall to a spot 47 m from the keep, clear of the towers whichever side it is
+    // on (their outer corners are 43 m from it), just above the front wall: the keep is the subject, the towers frame it.
+    const falling = !!(c.collapse && !c.collapse.done);   // (a keep that is coming down is framed from a little further: there is more to see)
+    this.d0 = falling ? 78 : 66; this.d1 = 47;
+    this.h0 = falling ? 42 : 34; this.h1 = falling ? 18 : 17;
   }
 
   // ---------------------------------------------------------------- the overlay
@@ -208,6 +221,11 @@ export class Finale {
   // ---------------------------------------------------------------- every frame
   // Called by Game.update with the real step. Returns what the world's step is multiplied by.
   timeScale(dt) {
+    if (!this.active && !this.orbit && !this.moment) return 1;
+    try { return this.step(dt); } catch (e) { this.fail(e); return 1; }
+  }
+
+  step(dt) {
     if (this.orbit) { this.t += dt; return 1; }
     if (this.moment) return this.momentScale(dt);
     if (!this.active) return 1;
@@ -246,6 +264,10 @@ export class Finale {
   // The camera of a grand show (and the slow drift behind the end screen). Called after the hero has placed the camera for the frame.
   camera() {
     if (!(this.active && this.mode === 'grand') && !this.orbit) return;
+    try { this.place(); } catch (e) { this.fail(e); }
+  }
+
+  place() {
     if (!this.focus && this.active) {          // (a guest: the snapshot that says which keep has fallen may still be on its way)
       const c = this.pickFocus(this.won);
       if (c) { this.focus = c; this.aim(c); this.vmHide(); } else if (this.t > 1.2) this.mode = 'light';
@@ -264,6 +286,13 @@ export class Finale {
     cam.lookAt(this.T);
     const fov = lerp(this.fov0, this.fov1, e);
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
+  }
+
+  // a fault in the show must never stop the game: say so once, and let the end screen come up at once
+  fail(e) {
+    console.error('ending', e);
+    this.reset();
+    try { this.g.input.unlock(); } catch (err) { /* nothing to do */ }
   }
 
   // something heavy came down while the camera was watching: a jolt of shake, however far away it was
@@ -311,17 +340,30 @@ export class Finale {
     if (cam.fov !== g.player.baseFov) { cam.fov = g.player.baseFov; cam.updateProjectionMatrix(); }
   }
 
-  dispose() {
+  // a new match starts on this game (or the game is let go): nothing of the last ending may be left
+  reset() {
     this.active = false;
     this.orbit = false;
     this.moment = null;
+    this.mode = 'none';
+    this.focus = null;
+    this.hostEvents = null;
+    this.highlight = null;
+    this.scale = 1;
+    this.t = 0;
     if (this.g.audio) this.g.audio.slowmo(0);
     if (this.g.camfx) { this.g.camfx.push = 1; this.g.camfx.grade = 0; }
     removeEventListener('keydown', this.onInput, true);
     removeEventListener('pointerdown', this.onInput, true);
     document.removeEventListener('pointerlockchange', this.onInput);
     if (this.el) { this.el.remove(); this.el = null; }
+    const old = typeof document !== 'undefined' && document.getElementById('finale');
+    if (old) old.remove();
     const go = typeof document !== 'undefined' && document.getElementById('gameover');
     if (go) go.classList.remove('finale-wait', 'finale-fade');
+    this.vmHidden = false;
+    if (this.g.player && this.g.player.viewModel && this.g.player.alive) this.g.player.viewModel.visible = true;
   }
+
+  dispose() { this.reset(); }
 }

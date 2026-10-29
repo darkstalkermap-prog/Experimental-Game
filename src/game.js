@@ -40,6 +40,7 @@ import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
 import { Finale } from './finale.js';
+import { warmCollapse } from './castlecollapse.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
 
@@ -161,6 +162,7 @@ export class Game {
     this.options = sanitizeOptions(setup.options);
     matchlog.reset();
     highlights.reset(this);
+    this.finale.reset();
     mods.reset();
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
@@ -265,6 +267,7 @@ export class Game {
     this.scene.add(grp);
     try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* not fatal */ }
     this.scene.remove(grp);
+    try { warmCollapse(this.castles[0].detail); } catch (e) { /* not fatal: the first keep to fall makes its own pieces */ }   // (the cut-up keep, made now so that no keep falls with a hitch)
   }
 
   // The rival lords grow tougher as the war goes on (a lord who falls comes back stronger).

@@ -178,6 +178,84 @@ function stumpAt(s, x, z) {
 }
 const structOf = (cx, cz) => (Math.abs(cx) > 14 && Math.abs(cz) > 14 ? 1 + (cx > 0 ? 1 : 0) + (cz > 0 ? 2 : 0) : 0);
 
+// Rubble and scorch marks: more pieces of the same meshes, folded to a point until the dust hides them (see plan)
+function addExtras(K, A, rng, d) {
+  const HW = keepW / 2, z0 = KEEP_Z - HW, z1 = KEEP_Z + HW;
+  // scorch marks on the floor
+  for (const [cx, cz, r] of [[0, z1 + 2.6, 3.4], [-3.4, z1 + 4.6, 2], [3.6, z1 + 3.6, 2.3], [1, z0 - 2, 2.6], [-8, 6, 1.8], [7, -2, 2.2], [0, 9, 2.6]]) {
+    const k = 0.18, c = [k, k * 0.9, k * 0.8], n = 9, a = A.a('plain');
+    A.piece(cx, 0.09, cz, r, 0.05, r);
+    const base = a.pos.length / 3;
+    A._vert(a, cx, 0.09, cz, 0, 1, 0, 0, 0, c);
+    for (let i = 0; i < n; i++) { const an = (i / n) * TAU, rr = r * (0.7 + rng() * 0.5); A._vert(a, cx + Math.cos(an) * rr, 0.09, cz + Math.sin(an) * rr, 0, 1, 0, 0, 0, c); }
+    for (let i = 0; i < n; i++) a.idx.push(base, base + 1 + ((i + 1) % n), base + 1 + i);
+  }
+  // rubble round the foot of the keep
+  for (let i = 0; i < 10 + 6 * d; i++) {
+    const side = Math.floor(rng() * 4), t = (rng() - 0.5) * (keepW + 2), off = 0.7 + rng() * 3.2;
+    const x = side < 2 ? t : side === 2 ? -HW - off : HW + off, z = side === 0 ? z1 + off : side === 1 ? z0 - off : KEEP_Z + t;
+    const size = 0.35 + rng() * 0.8, sy = size * (0.45 + rng() * 0.35);
+    K.add('masonry', new THREE.IcosahedronGeometry(1, 0), place(x, sy * 0.4, z, rng() * 6.28, rng() * 0.6, rng() * 0.6, size, sy, size), K.jitter([0.7, 0.68, 0.64], 0.2));
+  }
+}
+
+
+// The shapes of a keep and its four towers cut into pieces are the same for every castle (castle-local metres), so they are made once for each level of detail
+// and shared: a castle that falls only copies the arrays it moves and works out its own plan. (`warmCollapse` makes them ahead of time.)
+const BASES = new Map();
+function baseFor(d) {
+  let B = BASES.get(d);
+  if (B) return B;
+  const rng = mulberry32(4711), table = new Table(), seed = 5;
+  const K = new ChunkParts(seed + 4, table), A = new ChunkParts(seed + 2, table), R = new ChunkParts(seed + 3, table);
+  const fires = [];
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
+  G.keep(K, A, R, d, fires);
+  const extraFrom = table.n;
+  addExtras(K, A, rng, d);
+  const n = table.n;
+  // the three meshes: stone (with the metal and the dark glass), tiles, timber
+  const defs = [
+    { mat: 'masonry', accs: [K.acc.masonry, A.acc.metal, A.acc.plain] },
+    { mat: 'roof', accs: [R.acc.roof] },
+    { mat: 'timber', accs: [A.acc.timber] },
+  ];
+  const v0 = new Int32Array(n).fill(-1), vn = new Int32Array(n), mesh = new Int8Array(n).fill(-1);
+  const groups = defs.map((def, gi) => {
+    const accs = def.accs.filter((a) => a && a.idx.length);
+    let nv = 0;
+    for (const a of accs) nv += a.pos.length / 3;
+    if (!nv) return null;
+    const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 3);
+    const idx = [];
+    let o = 0;
+    for (const a of accs) {
+      const m = a.pos.length / 3;
+      pos.set(a.pos, o * 3); nor.set(a.nor, o * 3); uv.set(a.uv, o * 2); col.set(a.col, o * 3);
+      for (let i = 0; i < a.idx.length; i++) idx.push(a.idx[i] + o);
+      // which vertices belong to which piece (every piece's vertices are one run)
+      let last = -1;
+      for (let i = 0; i < m; i++) {
+        const p = a.pid[i];
+        if (p !== last) { v0[p] = o + i; mesh[p] = gi; last = p; }
+        vn[p]++;
+      }
+      o += m;
+    }
+    return { mat: def.mat, pos, nor, uv, col, idx: nv > 65535 ? new Uint32Array(idx) : new Uint16Array(idx) };
+  });
+  B = { n, extraFrom, table, v0, vn, mesh, groups };
+  BASES.set(d, B);
+  return B;
+}
+// make the shared shapes now (the game does it while a match is being set up, so that no keep ever falls with a hitch)
+export function warmCollapse(d) {
+  const B = baseFor(d);
+  const o = Object.create(Collapse.prototype);   // (a plan worked out and thrown away, so that the first real one is not the first run of its code)
+  o.n = B.n; o.table = B.table; o.extraFrom = B.extraFrom;
+  o.plan(mulberry32(1));
+}
+
 export class Collapse {
   constructor(castle, instant = false) {
     this.castle = castle;
@@ -188,69 +266,34 @@ export class Collapse {
     this.ev = 0;
     const t0 = performance.now();
     this.build();
-    this.writeAll(0);
+    for (let p = this.extraFrom; p < this.n; p++) this.write(p, 0);   // (the rubble and scorch marks are folded away until the dust hides them; the rest starts where it stands)
+    this.touch();
     this.buildMs = performance.now() - t0;   // (for the tests: the one-off cost of the fall)
     if (instant) this.settle();
   }
 
   build() {
-    const c = this.castle, d = c.detail, seed = c.team * 101 + 5;
-    const rng = mulberry32(seed * 7 + 13);
-    const table = new Table();
-    const K = new ChunkParts(seed + 4, table), A = new ChunkParts(seed + 2, table), R = new ChunkParts(seed + 3, table);
-    const fires = [];
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
-    G.keep(K, A, R, d, fires);
-    this.extraFrom = table.n;
-    this.addExtras(K, A, rng, d);
-    const n = table.n;
-    this.n = n;
-    // the three meshes: stone (with the metal and the dark glass), tiles, timber
-    const groups = [
-      { mat: 'masonry', accs: [K.acc.masonry, A.acc.metal, A.acc.plain] },
-      { mat: 'roof', accs: [R.acc.roof] },
-      { mat: 'timber', accs: [A.acc.timber] },
-    ];
-    this.v0 = new Int32Array(n).fill(-1); this.vn = new Int32Array(n); this.mesh = new Int8Array(n).fill(-1);
-    groups.forEach((gr, gi) => {
-      const accs = gr.accs.filter((a) => a && a.idx.length);
-      let nv = 0;
-      for (const a of accs) nv += a.pos.length / 3;
-      if (!nv) { this.meshes.push(null); return; }
-      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), uv = new Float32Array(nv * 2), col = new Float32Array(nv * 3);
-      const idx = [];
-      let o = 0;
-      for (const a of accs) {
-        const m = a.pos.length / 3;
-        pos.set(a.pos, o * 3); nor.set(a.nor, o * 3); uv.set(a.uv, o * 2);
-        col.set(a.col, o * 3);
-        for (let i = 0; i < a.idx.length; i++) idx.push(a.idx[i] + o);
-        // which vertices belong to which piece (every piece's vertices are one run)
-        let last = -1;
-        for (let i = 0; i < m; i++) {
-          const p = a.pid[i];
-          if (p !== last) { this.v0[p] = o + i; this.mesh[p] = gi; last = p; }
-          this.vn[p]++;
-        }
-        o += m;
-      }
+    const c = this.castle, B = baseFor(c.detail), rng = mulberry32((c.team * 101 + 5) * 7 + 13);
+    this.n = B.n; this.table = B.table; this.extraFrom = B.extraFrom; this.v0 = B.v0; this.vn = B.vn; this.mesh = B.mesh;
+    // the live arrays are this castle's own copies of the shared shapes; the unmoved shapes stay in `base` (shared, never written)
+    this.groups = B.groups.map((g) => {
+      if (!g) { this.meshes.push(null); return null; }
+      const pos = g.pos.slice(), nor = g.nor.slice(), col = g.col.slice();
       const geo = new THREE.BufferGeometry();
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
-      geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      geo.setAttribute('uv', new THREE.BufferAttribute(g.uv, 2));
       geo.setAttribute('color', new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage));
-      geo.setIndex(new THREE.BufferAttribute(nv > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
+      geo.setIndex(new THREE.BufferAttribute(g.idx, 1));
       geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 8, 0), 70);   // (pieces fly: never culled while the castle is on screen)
       geo.boundingBox = new THREE.Box3(new THREE.Vector3(-70, -2, -70), new THREE.Vector3(70, 40, 70));
-      const mesh = new THREE.Mesh(geo, c.partsMaterial(gr.mat));
+      const mesh = new THREE.Mesh(geo, c.partsMaterial(g.mat));
       mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
-      gr.pos = pos; gr.nor = nor; gr.col = col;
       this.meshes.push(mesh);
       c.group.add(mesh);
       c.vis.push(mesh);
+      return { pos, nor, col, base: g.pos, baseN: g.nor, baseC: g.col };
     });
-    this.groups = groups.map((gr) => ({ pos: gr.pos, nor: gr.nor, col: gr.col, base: gr.pos ? gr.pos.slice() : null, baseN: gr.nor ? gr.nor.slice() : null, baseC: gr.col ? gr.col.slice() : null }));
-    this.table = table;
     this.plan(rng);
   }
 
@@ -360,27 +403,6 @@ export class Collapse {
     P[p * 3] = hx + vx * cs + (-uz * vy) * sn + ux * dot * (1 - cs);               // (u x v = (-uz vy, uz vx - ux vz, ux vy))
     P[p * 3 + 1] = hy + vy * cs + (uz * vx - ux * vz) * sn - sag;
     P[p * 3 + 2] = hz + vz * cs + (ux * vy) * sn + uz * dot * (1 - cs);
-  }
-
-  // rubble, scorch marks and a few burnt beams: parts of the same meshes that appear under the dust
-  addExtras(K, A, rng, d) {
-    const HW = keepW / 2, z0 = KEEP_Z - HW, z1 = KEEP_Z + HW;
-    // scorch marks on the floor
-    for (const [cx, cz, r] of [[0, z1 + 2.6, 3.4], [-3.4, z1 + 4.6, 2], [3.6, z1 + 3.6, 2.3], [1, z0 - 2, 2.6], [-8, 6, 1.8], [7, -2, 2.2], [0, 9, 2.6]]) {
-      const k = 0.18, c = [k, k * 0.9, k * 0.8], n = 9, a = A.a('plain');
-      A.piece(cx, 0.09, cz, r, 0.05, r);
-      const base = a.pos.length / 3;
-      A._vert(a, cx, 0.09, cz, 0, 1, 0, 0, 0, c);
-      for (let i = 0; i < n; i++) { const an = (i / n) * TAU, rr = r * (0.7 + rng() * 0.5); A._vert(a, cx + Math.cos(an) * rr, 0.09, cz + Math.sin(an) * rr, 0, 1, 0, 0, 0, c); }
-      for (let i = 0; i < n; i++) a.idx.push(base, base + 1 + ((i + 1) % n), base + 1 + i);
-    }
-    // rubble round the foot of the keep
-    for (let i = 0; i < 10 + 6 * d; i++) {
-      const side = Math.floor(rng() * 4), t = (rng() - 0.5) * (keepW + 2), off = 0.7 + rng() * 3.2;
-      const x = side < 2 ? t : side === 2 ? -HW - off : HW + off, z = side === 0 ? z1 + off : side === 1 ? z0 - off : KEEP_Z + t;
-      const size = 0.35 + rng() * 0.8, sy = size * (0.45 + rng() * 0.35);
-      K.add('masonry', new THREE.IcosahedronGeometry(1, 0), place(x, sy * 0.4, z, rng() * 6.28, rng() * 0.6, rng() * 0.6, size, sy, size), K.jitter([0.7, 0.68, 0.64], 0.2));
-    }
   }
 
   // flames and smoke on the tops of the stumps, in castle-local metres: { fires: [[kind, x, y, z, size, phase]], spots: [[x, y, z]] } (see FireSet)

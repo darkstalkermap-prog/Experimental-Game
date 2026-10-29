@@ -446,8 +446,9 @@ The end of a match is a short show, not a cut to a menu (`src/finale.js`). When 
   first section ("Moment of the battle").
 - **Skip**: any key or click (after half a second, so that the blow that ended it does not skip it), or Esc, goes straight to
   the end screen. The end screen is built the moment the match is decided and waits see-through behind the show, so nothing
-  that reads it is late. A concede, a lost connection, the practice yard and Hero Game Mode (which gets the horn and the
-  highlight line, and the end screen at once) have no show. **Options → Big finishes** switches it all off.
+  that reads it is late. A concede, a lost connection and the practice yard have no show. Hero Game Mode has it when a keep
+  decided the battle; a win on kills or on the clock gets the horn and the highlight line and the end screen at once.
+  **Options → Big finishes** switches it all off.
 
 The highlight line (`src/highlights.js`) is worked out from the match log (`src/matchlog.js`): gates, wall segments and keeps
 remember who hurt them (a Fireball, a sword, a Smite, a catapult, a ram, the army), and the hero who did a fifth of the damage
