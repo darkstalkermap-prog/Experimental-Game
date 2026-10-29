@@ -32,6 +32,7 @@ import { disposeWorld } from './resources.js';
 import { allied, setSides } from './teams.js';
 import { applyQuality, Q } from './quality.js';
 import { gfx } from './gfx.js';
+import { Crowd, lodLimits } from './crowd.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
@@ -70,6 +71,7 @@ export class Game {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.05, 1600);
     this.scene.add(this.camera);
+    this.crowd = new Crowd(this.scene);   // draws every soldier, horse and hero as instances of shared shapes (see crowd.js)
     this.time = 0;
     this.state = 'loading';
     this.mode = 'single';
@@ -115,6 +117,7 @@ export class Game {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.crowd.dispose();
     const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];
     // These resources may not currently be attached to a visible scene object.
     const extra = [this.grass.geo, this.grass.material, this.magic.boltMat,
@@ -1359,6 +1362,7 @@ export class Game {
     this.audio.setListener(this.camera.position);
     this.pings.update(dt);
 
+    this.updateLod();   // (before the soldiers pose themselves: only the ones in view animate)
     if (this.simulating) {
       for (const u of this.units) u.update(dt);
       for (const s of this.siege) s.update(dt);
@@ -1392,7 +1396,7 @@ export class Game {
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
     if (this.simulating) this.cleanup(dt);
-    this.updateLod();
+    this.crowd.update(this, dt);
     if (this.warmQueue && this.warmQueue.length) {
       const t0 = performance.now();
       while (this.warmQueue.length && performance.now() - t0 < 2) prewarmSoldier(...this.warmQueue.shift());
@@ -1400,16 +1404,19 @@ export class Game {
     followShadow(this.lights.sun, this.camera.position);
   }
 
-  // Pick each soldier's level of detail by distance to the camera (giants stay detailed further out).
+  // Pick each soldier's level of detail by distance to the camera (giants stay detailed further out). The distances scale with the
+  // quality settings (see lodLimits in crowd.js).
   updateLod() {
-    const c = this.camera.position;
+    const c = this.camera.position, lim = lodLimits();
     let retier = 4;   // soldiers whose house has trained them further change into their new kit a few at a time
     for (const u of this.units) {
       const f = this.factions[u.team];
       if (f && retier > 0 && u.alive && !u.fixedTier && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
       const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
-      const s = u.isGiant ? 3 : 1;
-      u.setLod(d2 < (32 * s) ** 2 ? 0 : d2 < (85 * s) ** 2 ? 1 : d2 < 260 * 260 ? 2 : 3);
+      const s = u.isGiant ? 3 : 1, h = u.lod;
+      // (a little hysteresis, so a soldier on the edge does not flicker between two models)
+      const near = lim.near * s * (h === 0 ? 1.06 : 1), mid = lim.mid * s * (h <= 1 ? 1.06 : 1), far = lim.far * (h <= 2 ? 1.06 : 1);
+      u.setLod(d2 < near * near ? 0 : d2 < mid * mid ? 1 : d2 < far * far ? 2 : 3);
     }
   }
 

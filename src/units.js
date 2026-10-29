@@ -1,7 +1,7 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL } from './config.js';
-import { buildSoldier, poseSoldier, buildHorse, poseHorse, SADDLE_Y, bakedMesh, getModelGeos, prewarmSoldier, TIER_SCALE } from './models.js';
+import { buildSoldier, poseSoldier, poseDeath, buildHorse, poseHorse, poseHorseDead, SADDLE_Y, rigSetTier, rigSetRank } from './models.js';
 import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
@@ -97,16 +97,14 @@ export class Unit {
     } else {
       this.mesh = m.root;
     }
-    // resting pose, then bake the distant version
+    // resting pose. The rig is only joints: crowd.js draws it as instances of shared shapes (it is not added to the scene)
     poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: this.mounted });
     if (this.horse) poseHorse(this.horse, 0, 0);
     this.tier = 0;         // Drill Sergeants: the house's training level shows in the soldier's kit (see setTier)
-    this.far = bakedMesh(`${type}:${team}:${this.variant}:${this.mounted ? 1 : 0}:0`, this.mesh);
-    this.mesh.add(this.far);
     this.lod = 0;
+    this.shownHp = this.hp; this.hurtT = 0; this.lookS = 0;   // (what the model shows of a hit, and where the head turns)
     this.mesh.position.copy(this.pos);
     this.mesh.userData.unit = this;
-    game.scene.add(this.mesh);
   }
 
   get footY() { return this.pos.y; }
@@ -195,33 +193,17 @@ export class Unit {
     this.setRankVisual(this.rank);
   }
 
-  // Better training, better kit: swap the soldier's torso (and shield) for the look of this training level, and the
-  // distant, baked version with it. Heroes, giants and engineers don't train.
+  // Better training, better kit (the rig shows it: see rigSetTier). Heroes, giants and engineers don't train.
   setTier(tier) {
     if (tier === this.tier || this.isHero || this.isGiant || this.isCrew || this.team === RAIDER_TEAM) return;
     this.tier = tier;
-    const m = this.model;
-    const geos = getModelGeos(this.type, this.team, this.variant, tier);
-    m.torso.children[0].geometry = geos.torso;
-    m.elL.children[0].geometry = geos.foreL;
-    m.body.scale.setScalar((this.def.scale || 1) * TIER_SCALE(tier));
-    this.far.geometry = prewarmSoldier(this.type, this.team, this.variant, tier).geometry;
+    rigSetTier(this.model, tier);
   }
 
   // veterans wear a plume: team colour from rank 3, gold at rank 5
   setRankVisual(rank) {
     this.rank = rank;
-    if (this.plume) { this.plume.parent.remove(this.plume); this.plume = null; }
-    if (rank < 3 || this.mounted && !this.model) return;
-    const color = rank >= 5 ? 0xe8b830 : TEAM_COLORS[this.team] ?? 0xffffff;
-    if (!PLUME_MATS.has(color)) PLUME_MATS.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.8 }));
-    const m = new THREE.Mesh(PLUME_GEO, PLUME_MATS.get(color));
-    m.position.set(0, 1.93 + (rank >= 4 ? 0.03 : 0), -0.03);
-    m.scale.setScalar(rank >= 4 ? 1.25 : 1);
-    m.rotation.x = -0.35;
-    m.castShadow = true;
-    this.model.torso.add(m);
-    this.plume = m;
+    if (this.model) rigSetRank(this.model, rank);
   }
 
   stagger(sec, from) {
@@ -521,7 +503,7 @@ export class Unit {
       if (sp > 0.2) this.walkPhase += dt * sp * 2.1;
       poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT });
       const c = this.model;
-      c.shL.rotation.set(-1.35, 0, 0.2); c.shR.rotation.set(-1.35, 0, -0.2);   // hands on the frame
+      c.shL.rotation.set(-1.35, 0, -0.2); c.shR.rotation.set(-1.35, 0, 0.2);   // hands on the frame
       c.elL.rotation.x = c.elR.rotation.x = -0.3;
       c.torso.rotation.x = 0.25;
     }
@@ -739,22 +721,18 @@ export class Unit {
     if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1;
   }
 
-  // 0 near (animated, shadows) · 1 mid (animated) · 2 far (static mesh) · 3 hidden
+  // 0 near (animated, shadows) · 1 mid (animated) · 2 far (a static model) · 3 hidden (crowd.js draws them accordingly)
   setLod(level) {
-    if (level === this.lod) return;
-    const m = this.model;
-    const rig = this.horse ? [this.horse.root, m.root] : [m.body];
-    for (const r of rig) r.visible = level <= 1;
-    this.far.visible = level === 2;
-    this.mesh.visible = level <= 2;
-    if ((level === 0) !== (this.lod === 0)) {
-      const cast = level === 0;
-      for (const r of rig) r.traverse((o) => { if (o.isMesh) o.castShadow = cast; });
-    }
     this.lod = level;
   }
 
   animate(dt, moving) {
+    const m = this.model;
+    // a blow makes the soldier flinch and flash for a moment (nothing but looks: read off the health that went)
+    if (this.hp < this.shownHp - 0.01 && this.alive) this.hurtT = 1;
+    this.shownHp = this.hp;
+    if (this.hurtT > 0) this.hurtT = Math.max(0, this.hurtT - dt * 4);
+    m.inst[14] = this.hurtT * this.hurtT;
     if (this.lod >= 2) return; // nobody can see the limbs from here
     const sp = Math.hypot(this.vel.x, this.vel.z);
     if (moving) this.walkPhase += dt * sp * (this.mounted ? 0.0 : 2.1);
@@ -776,9 +754,17 @@ export class Unit {
         if (d < 30) p.shake = Math.max(p.shake, 0.2 * (1 - d / 30));
       }
     }
-    poseSoldier(this.model, {
+    // the head turns towards whoever the soldier is facing off against
+    const tg = this.target;
+    let look = 0;
+    if (tg && tg.alive && tg.pos && !tg.isStructure) {
+      const dx = tg.pos.x - this.pos.x, dz = tg.pos.z - this.pos.z;
+      if (dx * dx + dz * dz < 900) { look = Math.atan2(dx, dz) - this.yaw; while (look > Math.PI) look -= Math.PI * 2; while (look < -Math.PI) look += Math.PI * 2; }
+    }
+    this.lookS += (look - this.lookS) * Math.min(1, dt * 6);
+    poseSoldier(m, {
       phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, attackDir: this.attackDir,
-      stagger: stag, blocking: this.blockFlash > 0 || this.braced, mounted: this.mounted, idle: this.idleT,
+      stagger: stag, hurt: this.hurtT, blocking: this.blockFlash > 0 || this.braced, mounted: this.mounted, idle: this.idleT, look: this.lookS,
     });
   }
 
@@ -809,12 +795,20 @@ export class Unit {
     this.mesh.rotation.y = this.yaw;
   }
 
+  // Falls (backwards, to the knees and forward, or to the side: the same on every screen), lies there a while, then sinks and fades.
   animateDeath(dt) {
     this.deathT += dt;
+    const m = this.model;
     const t = Math.min(1, this.deathT / 0.55);
+    if (m) {
+      poseDeath(m, this.deathT, this.mounted ? 2 : this.id % 3, this.id & 2 ? 1 : -1);
+      if (this.horse) poseHorseDead(this.horse, this.deathT);
+      const fade = Math.max(0, Math.min(1, (this.deathT - 8) / 3.2));
+      m.inst[14] = 0; m.inst[15] = fade;
+      if (this.horse) this.horse.inst[15] = fade;
+    }
     if (this.mounted) this.mesh.rotation.z = t * t * Math.PI / 2 * 0.95;
-    else this.mesh.rotation.x = -t * t * Math.PI / 2;
-    this.mesh.position.y = this.pos.y + 0.15 * t;
+    this.mesh.position.y = this.pos.y + 0.02 * t;
     if (this.deathT > 9) this.mesh.position.y = this.pos.y - (this.deathT - 9) * 0.4;
   }
 }
@@ -826,5 +820,3 @@ export function isEnemy(a, b) {
 export { RAIDER_TEAM };
 
 const NET_SAMPLE = { x: 0, y: 0, z: 0, yaw: 0, extra: 0 };
-const PLUME_GEO = new THREE.ConeGeometry(0.07, 0.34, 6);
-const PLUME_MATS = new Map();
