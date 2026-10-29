@@ -11,7 +11,8 @@ import * as THREE from 'three';
 import { Q } from './quality.js';
 import { patchMaterial } from './shaderhook.js';
 import { shadowProxy } from './shadows.js';
-import { buildSpruce, buildPine, buildOak, buildBirch, buildRock } from './foliagegeo.js';
+import { buildSpruce, buildPine, buildOak, buildBirch, buildRock, buildBare, buildPalm, buildCactus, buildShrub } from './foliagegeo.js';
+import { active, treeSlot } from './biomes.js';
 
 // shared by everything that moves in the wind (trees here, grass in grass.js)
 export const WIND = { time: { value: 0 }, amp: { value: 1 } };
@@ -25,52 +26,128 @@ float windGust(vec2 p) {
 `;
 const windUniforms = (shader) => { shader.uniforms.uWindTime = WIND.time; shader.uniforms.uWindAmp = WIND.amp; };
 
-const SPECIES = ['spruce', 'pine', 'oak', 'birch'];
-const BUILD = [buildSpruce, buildPine, buildOak, buildBirch];
-const HEIGHT = [10.2, 9.8, 8.6, 8.8];       // metres of the 1.0-scale model (for the cards and the bounding spheres)
-const CROWN_W = [5.6, 4.6, 6.2, 3.4];
+// ---- the plants of a biome (biomes.js `flora`): four tree slots and three rock shapes, each filled by a species ----
+// build(lod) is the model; h and w the height and the crown width of the 1.0-scale model (for the cards and the bounding spheres); paint draws the
+// species on a far card (see treeAtlas). The meadow's four are the game's old trees.
 const hash01 = (x, z, k) => { const s = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return s - Math.floor(s); };
 
-// ---- the cards of the far forest: trees painted on a canvas, four across ----
-let atlas = null;
-function treeAtlas() {
-  if (atlas) return atlas;
-  const W = 128, H = 256, c = document.createElement('canvas');
-  c.width = W * 4; c.height = H;
-  const g = c.getContext('2d');
-  const blob = (cx, cy, rx, ry, a, b) => {
-    const grd = g.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, 2, cx, cy, Math.max(rx, ry));
-    grd.addColorStop(0, a); grd.addColorStop(1, b);
-    g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
-  };
-  // 0 spruce: stacked ragged tiers
-  let ox = 0;
+const SPRUCE = { dark: [0.02, 0.075, 0.05], lite: [0.06, 0.17, 0.08], snow: 0.95 }, PINE_S = { dark: [0.028, 0.1, 0.06], lite: [0.09, 0.2, 0.1], snow: 0.9 };
+const SPECIES = {
+  spruce: { build: (l) => buildSpruce(l), h: 10.2, w: 5.6, paint: (g, ox) => paintSpruce(g, ox, {}) },
+  pine: { build: (l) => buildPine(l), h: 9.8, w: 4.6, paint: (g, ox) => paintPine(g, ox, {}) },
+  oak: { build: (l) => buildOak(l), h: 8.6, w: 6.2, paint: (g, ox) => paintOak(g, ox, {}) },
+  birch: { build: (l) => buildBirch(l), h: 8.8, w: 3.4, paint: (g, ox) => paintBirch(g, ox, {}) },
+  spruceSnow: { build: (l) => buildSpruce(l, SPRUCE), h: 10.2, w: 5.6, paint: (g, ox) => paintSpruce(g, ox, { snow: true }) },
+  pineSnow: { build: (l) => buildPine(l, PINE_S), h: 9.8, w: 4.6, paint: (g, ox) => paintPine(g, ox, { snow: true }) },
+  oakBare: { build: (l) => buildBare(l, { snow: true, bark: [0.1, 0.08, 0.07], barkLite: [0.17, 0.14, 0.12] }), h: 8.6, w: 6.0, paint: (g, ox) => paintBare(g, ox, { bark: '#2b2420', snow: true, big: true }) },
+  birchBare: { build: (l) => buildBare(l, { snow: true, birch: true, phase: 1.1 }), h: 8.8, w: 3.6, paint: (g, ox) => paintBare(g, ox, { bark: '#d6d3c8', twig: '#3a3530', snow: true }) },
+  spruceDrab: { build: (l) => buildSpruce(l, { dark: [0.025, 0.06, 0.04], lite: [0.07, 0.12, 0.06] }), h: 10.2, w: 5.4, paint: (g, ox) => paintSpruce(g, ox, { lo: '#3d6038', mid: '#264a30', hi: '#16301f' }) },
+  mossOak: { build: (l) => buildOak(l, { dark: [0.02, 0.05, 0.03], lite: [0.09, 0.17, 0.07] }), h: 8.6, w: 6.2, paint: (g, ox) => paintOak(g, ox, { a: '#5c7a44', b: '#233624', trunk: '#3a3326' }) },
+  birchDrab: { build: (l) => buildBirch(l, { dark: [0.05, 0.1, 0.03], lite: [0.2, 0.27, 0.06] }), h: 8.8, w: 3.4, paint: (g, ox) => paintBirch(g, ox, { a: '#8a9a4c', b: '#3a4a26' }) },
+  deadTree: { build: (l) => buildBare(l, { bark: [0.1, 0.09, 0.075], barkLite: [0.17, 0.15, 0.12], lean: 0.8, height: 7.6, count: 6, spread: 0.85, phase: 0.4 }), h: 8.0, w: 4.2, paint: (g, ox) => paintBare(g, ox, { bark: '#4a4338', lean: 18 }) },
+  bleachedTree: { build: (l) => buildBare(l, { bark: [0.3, 0.26, 0.2], barkLite: [0.42, 0.37, 0.29], lean: -0.6, height: 6.8, count: 5, spread: 0.8, phase: 2 }), h: 7.2, w: 4.0, paint: (g, ox) => paintBare(g, ox, { bark: '#b4a68c', lean: -16 }) },
+  palm: { build: (l) => buildPalm(l), h: 10.6, w: 6.6, paint: (g, ox) => paintPalm(g, ox) },
+  cactus: { build: (l) => buildCactus(l), h: 5.8, w: 2.8, paint: (g, ox) => paintCactus(g, ox) },
+  shrub: { build: (l) => buildShrub(l), h: 1.3, w: 2.4, paint: (g, ox) => paintShrub(g, ox) },
+};
+// rock colours by biome (see buildRock in foliagegeo.js)
+const ROCKS = {
+  stone: {},
+  snow: { stone: [[0.15, 0.16, 0.18], [0.2, 0.21, 0.23], [0.12, 0.13, 0.15]], warm: [0.22, 0.22, 0.24], moss: [0.1, 0.12, 0.1], mossAmt: 0.15, snow: 0.95 },
+  marsh: { stone: [[0.12, 0.13, 0.11], [0.16, 0.17, 0.14], [0.09, 0.1, 0.09]], warm: [0.19, 0.19, 0.14], moss: [0.05, 0.12, 0.05], mossAmt: 1 },
+  desert: { stone: [[0.3, 0.17, 0.1], [0.38, 0.22, 0.13], [0.26, 0.15, 0.09]], warm: [0.5, 0.32, 0.18], moss: [0.3, 0.2, 0.1], mossAmt: 0 },
+};
+const style = () => active.def.flora;
+const spec = (k) => SPECIES[style().slots[k]];
+
+// ---- the cards of the far forest: trees painted on a canvas, four across (one atlas per biome) ----
+const blobAt = (g, cx, cy, rx, ry, a, b) => {
+  const grd = g.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, 2, cx, cy, Math.max(rx, ry));
+  grd.addColorStop(0, a); grd.addColorStop(1, b);
+  g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
+};
+function paintSpruce(g, ox, c) {   // stacked ragged tiers (snow: a white cap on each)
   g.fillStyle = '#3a2a1c'; g.fillRect(ox + 60, 205, 8, 51);
   for (let i = 0; i < 7; i++) {
     const t = i / 6, y = 214 - i * 28, w = 52 - 44 * Math.pow(t, 0.85);
     const grd = g.createLinearGradient(ox + 64 - w, 0, ox + 64 + w, 0);
-    grd.addColorStop(0, '#46803f'); grd.addColorStop(0.45, '#2c5e38'); grd.addColorStop(1, '#173d2a');
+    grd.addColorStop(0, c.lo || '#46803f'); grd.addColorStop(0.45, c.mid || '#2c5e38'); grd.addColorStop(1, c.hi || '#173d2a');
     g.fillStyle = grd; g.beginPath(); g.moveTo(ox + 64, y - 46);
     for (let k = 0; k <= 6; k++) g.lineTo(ox + 64 + w - (k / 6) * 2 * w, y + (k % 2 ? 0 : 7));
     g.closePath(); g.fill();
+    if (c.snow) {
+      g.fillStyle = 'rgba(232,240,248,0.95)'; g.beginPath(); g.moveTo(ox + 64, y - 46);
+      g.lineTo(ox + 64 + w * 0.82, y - 6); g.lineTo(ox + 64 + w * 0.3, y - 10); g.lineTo(ox + 64, y - 3); g.lineTo(ox + 64 - w * 0.3, y - 10); g.lineTo(ox + 64 - w * 0.82, y - 6);
+      g.closePath(); g.fill();
+    }
   }
-  // 1 pine: bare trunk, a few cloud-like clumps on top
-  ox = W;
+}
+function paintPine(g, ox, c) {   // bare trunk, a few cloud-like clumps on top
   g.fillStyle = '#6b4a30'; g.fillRect(ox + 60, 96, 7, 160);
-  [[64, 58, 38, 22], [92, 96, 30, 18], [38, 108, 30, 17], [66, 132, 26, 14]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#4f8a4a', '#1f4a30'));
-  // 2 oak: a short trunk under a lumpy round crown
-  ox = W * 2;
-  g.fillStyle = '#4a3322'; g.fillRect(ox + 59, 150, 10, 106);
-  [[64, 96, 52, 46], [32, 124, 30, 26], [98, 124, 30, 26], [64, 60, 34, 28], [86, 78, 26, 24]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#7aa63c', '#2d5a22'));
-  // 3 birch: white trunk, a narrow light crown
-  ox = W * 3;
+  [[64, 58, 38, 22], [92, 96, 30, 18], [38, 108, 30, 17], [66, 132, 26, 14]].forEach(([x, y, rx, ry]) => {
+    blobAt(g, ox + x, y, rx, ry, '#4f8a4a', '#1f4a30');
+    if (c.snow) blobAt(g, ox + x, y - ry * 0.35, rx * 0.9, ry * 0.55, '#f2f6fa', '#b9c6d2');
+  });
+}
+function paintOak(g, ox, c) {   // a short trunk under a lumpy round crown
+  g.fillStyle = c.trunk || '#4a3322'; g.fillRect(ox + 59, 150, 10, 106);
+  [[64, 96, 52, 46], [32, 124, 30, 26], [98, 124, 30, 26], [64, 60, 34, 28], [86, 78, 26, 24]].forEach(([x, y, rx, ry]) => blobAt(g, ox + x, y, rx, ry, c.a || '#7aa63c', c.b || '#2d5a22'));
+}
+function paintBirch(g, ox, c) {   // white trunk, a narrow light crown
   g.fillStyle = '#d8d4c6'; g.fillRect(ox + 61, 70, 5, 186);
   g.fillStyle = '#35332c'; for (let y = 90; y < 250; y += 17) g.fillRect(ox + 61, y, 5, 3);
-  [[64, 70, 30, 40], [50, 118, 22, 26], [80, 110, 22, 28], [64, 36, 20, 24]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#9cc650', '#3f7a2a'));
-  const tex = new THREE.CanvasTexture(c);
+  [[64, 70, 30, 40], [50, 118, 22, 26], [80, 110, 22, 28], [64, 36, 20, 24]].forEach(([x, y, rx, ry]) => blobAt(g, ox + x, y, rx, ry, c.a || '#9cc650', c.b || '#3f7a2a'));
+}
+// a leafless tree: a tapering trunk and branches that fork twice (snow lies on the forks)
+function paintBare(g, ox, c) {
+  const lean = c.lean || 0;
+  g.lineCap = 'round'; g.strokeStyle = c.bark;
+  g.lineWidth = c.big ? 10 : 6;
+  g.beginPath(); g.moveTo(ox + 64, 256); g.quadraticCurveTo(ox + 64 + lean * 0.4, 150, ox + 64 + lean, 52); g.stroke();
+  const fork = (x, y, ang, len, w, depth) => {
+    const x2 = x + Math.sin(ang) * len, y2 = y - Math.cos(ang) * len;
+    g.strokeStyle = depth < 2 && c.twig ? c.twig : c.bark; g.lineWidth = w;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke();
+    if (c.snow && depth === 1) { g.fillStyle = 'rgba(238,244,250,0.95)'; g.beginPath(); g.ellipse(x2, y2 - 1, 5, 2.4, 0, 0, Math.PI * 2); g.fill(); }
+    if (depth > 0) { fork(x2, y2, ang - 0.55, len * 0.68, w * 0.62, depth - 1); fork(x2, y2, ang + 0.5, len * 0.64, w * 0.6, depth - 1); }
+  };
+  [[0.36, -0.9, 52], [0.42, 0.95, 50], [0.58, -0.75, 44], [0.64, 0.85, 42], [0.78, -0.5, 36], [0.86, 0.45, 34], [0.97, 0, 30]].forEach(([t, a, l]) => {
+    fork(ox + 64 + lean * Math.pow(t, 1.3), 256 - t * 204, a, l, c.big ? 5 : 3.2, 2);
+  });
+}
+function paintPalm(g, ox) {
+  g.lineCap = 'round'; g.strokeStyle = '#6b563a'; g.lineWidth = 7;
+  g.beginPath(); g.moveTo(ox + 52, 256); g.quadraticCurveTo(ox + 58, 150, ox + 80, 70); g.stroke();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2, dx = Math.cos(a), up = 0.5 + 0.5 * Math.sin(a * 2 + 1);
+    g.strokeStyle = i % 2 ? '#2f6a2a' : '#4c8a34'; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(ox + 80, 70);
+    g.quadraticCurveTo(ox + 80 + dx * 36, 70 - 22 - up * 16, ox + 80 + dx * 58, 70 + 26 - up * 6);
+    g.stroke();
+  }
+}
+function paintCactus(g, ox) {
+  const col = (x0, y0, x1, y1, r) => { g.beginPath(); g.roundRect(x0, y0, x1 - x0, y1 - y0, r); g.fill(); };
+  g.fillStyle = '#2f6a38';
+  col(ox + 50, 90, ox + 78, 256, 14); col(ox + 20, 128, ox + 56, 146, 8); col(ox + 14, 82, ox + 32, 142, 9); col(ox + 74, 160, ox + 108, 178, 8); col(ox + 98, 112, ox + 116, 172, 9);
+  g.fillStyle = '#4c9552'; g.fillRect(ox + 58, 100, 4, 150);
+}
+function paintShrub(g, ox) {
+  [[48, 230, 34, 22], [84, 232, 36, 20], [66, 214, 30, 20]].forEach(([x, y, rx, ry]) => blobAt(g, ox + x, y, rx, ry, '#b49a52', '#5e4e22'));
+}
+
+const atlases = new Map();
+function treeAtlas() {
+  let tex = atlases.get(active.def.id);
+  if (tex) return tex;
+  const W = 128, H = 256, c = document.createElement('canvas');
+  c.width = W * 4; c.height = H;
+  const g = c.getContext('2d');
+  for (let k = 0; k < 4; k++) spec(k).paint(g, W * k);
+  tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
-  atlas = tex;
+  atlases.set(active.def.id, tex);
   return tex;
 }
 
@@ -135,11 +212,12 @@ function cardGeometry(cap) {
 
 const geoCache = new Map();   // species/lod geometries are built once per page and survive a world rebuild (three.js re-uploads them)
 function modelGeometry(kind, lod) {
-  if (kind === 1 && lod === 1) kind = 0;   // (a far pine is a dark cone like a spruce: its umbrella crown reads as a mushroom from afar)
-  const key = kind + ':' + lod;
+  let name = kind < 4 ? style().slots[kind] : 'rock' + (kind - 4);
+  if (lod === 1 && (name === 'pine' || name === 'pineSnow')) name = name === 'pine' ? 'spruce' : 'spruceSnow';   // (a far pine is a dark cone like a spruce: its umbrella crown reads as a mushroom from afar)
+  const key = name + ':' + (kind < 4 ? lod : style().rock);
   let g = geoCache.get(key);
   if (!g) {
-    g = kind < 4 ? BUILD[kind](lod) : buildRock(kind - 4, 1);
+    g = kind < 4 ? SPECIES[name].build(lod) : buildRock(kind - 4, 1, ROCKS[style().rock]);
     geoCache.set(key, g);
   }
   return g;
@@ -160,8 +238,7 @@ export class Foliage {
     // ---- entries ----
     const all = [];
     for (const t of trees) {
-      const k = t.conifer ? (hash01(t.x, t.z, 1) < 0.66 ? 0 : 1) : (hash01(t.x, t.z, 2) < 0.62 ? 2 : 3);
-      all.push({ kind: k, ...t });
+      all.push({ kind: treeSlot(t.x, t.z, t.conifer), ...t });
     }
     for (const r of rocks) all.push({ kind: 4 + Math.floor(hash01(r.x, r.z, 3) * 3), ...r });
     const N = this.n = all.length;
@@ -185,14 +262,14 @@ export class Foliage {
       _m.toArray(this.mat, i * 16);
       this.pos[i * 3] = t.x; this.pos[i * 3 + 1] = t.y; this.pos[i * 3 + 2] = t.z;
       this.kind[i] = k;
-      this.rad[i] = tree ? HEIGHT[k] * sy * 0.55 + 2 : 2.2 * t.s + 1;
+      this.rad[i] = tree ? spec(k).h * sy * 0.55 + 2 : 2.2 * t.s + 1;
       this.rank[i] = t.extra ? hash01(t.x, t.z, 9) : -1;
       // tint: brightness and a little hue, applied on top of the colours painted into the model
       const b = 0.86 + 0.28 * t.c, h = hash01(t.x, t.z, 10) - 0.5;
       if (tree) col.setRGB(b * (1 + h * 0.22), b * (1 + h * 0.06), b * (1 - h * 0.28));
       else col.setRGB(b, b * 0.99, b * 0.96);
       this.tint[i * 3] = col.r; this.tint[i * 3 + 1] = col.g; this.tint[i * 3 + 2] = col.b;
-      if (tree) { this.card[i * 3] = CROWN_W[k] * sxz * 1.12; this.card[i * 3 + 1] = HEIGHT[k] * sy * 1.04; this.card[i * 3 + 2] = k; }
+      if (tree) { this.card[i * 3] = spec(k).w * sxz * 1.12; this.card[i * 3 + 1] = spec(k).h * sy * 1.04; this.card[i * 3 + 2] = k; }
     });
     // ---- meshes ----
     const count = (f) => { let c = 0; for (let i = 0; i < N; i++) if (f(i)) c++; return c; };

@@ -11,6 +11,8 @@
 //   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item)
 //   mul  speed         march speed of soldiers                    mul  heroSpeed     walking speed of heroes
 //   sum  startGold     gold at the start of the match
+//   mul  offroadSpeed  march speed of soldiers away from the roads (snow)          mul  mudSpeed      march speed of soldiers wading through a pond (marsh)
+//   mul  archerRange   range of archers (the marsh's mist)                          mul  staminaDrain / staminaRegen   a hero's sprint stamina: how fast it drains and returns (desert)
 export const mods = {
   version: 0,
   sources: new Map(),

@@ -9,6 +9,7 @@ import { Q } from './quality.js';
 import { ParticleLayer, DecalLayer } from './particles.js';
 import { F, R, D } from './fxtex.js';
 import * as WORLD from './world.js';
+import { active } from './biomes.js';
 
 const MAX_ALPHA = 3200;
 const MAX_ADD = 2400;
@@ -576,7 +577,7 @@ export class FX {
   // ---------- feet and hooves (derived on every screen from where the soldiers are) ----------
   dry(x, z) {
     const rd = WORLD.roadDist ? WORLD.roadDist(x, z) : 99;
-    return 1 - ss(2.2, 4.8, rd);
+    return (1 - ss(2.2, 4.8, rd)) * active.def.dry;   // (the snow muffles the dust and the marsh has none: biomes.js)
   }
   walk(dt) {
     const g = this.game;

@@ -15,6 +15,8 @@ import { initPerf } from './perf.js';
 import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
+import { setWorldLand, landKey, land, loadLand } from './biomes.js';
+import { initLandMenu, showLobbyLand } from './landui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -50,20 +52,31 @@ audio.vol.master = settings.master / 100;
 audio.vol.music = settings.music / 100;
 audio.vol.sfx = settings.sfx / 100;
 
-function buildGame(size, practice = false) {
+// the key of a world: its map size, the practice yard and the land it is dressed as (a different land is another world, built again)
+const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed));
+
+function buildGame(size, practice = false, landOpts = null) {
+  const o = sanitizeOptions(landOpts);
   setMapSize(size);
   setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
+  setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
-  game.mapBuiltFor = size + (practice ? '+practice' : '');
+  game.mapBuiltFor = worldKey(size, practice, o);
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
   window.__gfx = gfx;
   gfx.setGame(game);
   applySettings();
 }
+// the land for the next battle (the biome and seed chosen on the menu, or rolled after the last battle), remembered per browser
+loadLand(loadOptions());
+{   // ?land=snow:4321 opens the page on that land (to share a land, and for tests): the choice is not remembered unless the menu changes it
+  const m = /^([a-z]+)(?::(\d{1,6}))?$/.exec(new URLSearchParams(location.search).get('land') || '');
+  if (m) { const o = sanitizeOptions({ biome: m[1], seed: Number(m[2] || 0) }); land.mode = 'fixed'; land.biome = o.biome; land.seed = o.seed; }
+}
 try {
-  buildGame(mapSize);
+  buildGame(mapSize, false, land);
 } catch (e) {
   console.error(e);
   $('loading').textContent = 'Failed to start: ' + e.message;
@@ -107,7 +120,7 @@ selectMap(mapSize);
 // the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
-const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
+const matchOptions = () => { options.biome = land.biome; options.seed = land.seed; options = sanitizeOptions(options); saveOptions(options); return options; };
 
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
@@ -156,18 +169,29 @@ document.querySelectorAll('#objective button').forEach((b) => b.addEventListener
 selectObjective(objective);
 
 // rebuild the world if the chosen map size differs from the one on screen
-function ensureMap(size, practice = false) {
-  if (WORLD.size === size && game.mapBuiltFor === size + (practice ? '+practice' : '')) return;
+function ensureMap(size, practice = false, landOpts = null) {
+  const o = sanitizeOptions(landOpts);
+  if (WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o)) return;
   const net0 = game.net;
   game.dispose();
-  buildGame(size, practice);
+  buildGame(size, practice, o);
   game.net = net0;
   game.setQuality(quality);
   resize();
 }
 
+// the Land row of the menu (and the lobby's): changing it rebuilds the world behind the menu a moment later, so the biome can be seen before it is picked
+let previewTimer = 0;
+initLandMenu({
+  onChange: () => {
+    if (lobbyBroadcast) lobbyBroadcast();
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land); }, 350);
+  },
+});
+
 function begin(diff, setup = null, map = mapSize) {
-  ensureMap(map, !!(setup && setup.practice));
+  ensureMap(map, !!(setup && setup.practice), setup && setup.options);
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
@@ -282,7 +306,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass }];
-  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective }); };
+  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, land: { biome: land.biome, seed: land.seed } }); };
   lobbyBroadcast = broadcast;
   // guests report the class they pick
   net.on('data', ({ from, d }) => {
@@ -296,7 +320,7 @@ $('hostBtn').addEventListener('click', async () => {
   for (const b of document.querySelectorAll('#lobbyObjective button')) {
     b.onclick = () => { selectObjective(b.dataset.o); broadcast(); };
   }
-  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); broadcast(); });
+  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); broadcast(); });
   net.on('peer', (m) => {
     const used = new Set(lobby.map((p) => p.team));
     const team = [1, 2, 3].find((t) => !used.has(t));
@@ -320,9 +344,13 @@ $('joinBtn').addEventListener('click', async () => {
   const code = $('joinCode').value.trim().toUpperCase();
   if (code.length !== 4) { ui.lobbyError('Enter the 4-letter room code from the host.'); return; }
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); });
+  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); });
   net.on('data', ({ d }) => {
-    if (d.k === 'lobby') ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj);
+    if (d.k === 'lobby') {
+      ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj);
+      const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)
+      showLobbyLand(false, { biome: l.biome, seed: l.seed });
+    }
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;

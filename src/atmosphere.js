@@ -6,8 +6,9 @@
 // (post.js) that is stored as it is and tone-mapped once at the end; when it is drawn straight to the canvas the fog converts its colour
 // the same way the material did (tone map, then the output encoding), so the two paths agree.
 import * as THREE from 'three';
-import { Q } from './quality.js';
+import { Q, usesPost } from './quality.js';
 import { skyLightGLSL } from './skylight.js';
+import { active } from './biomes.js';
 
 // the sun stands still: a warm afternoon, about 30 degrees above the horizon (everything that needs it reads this one vector)
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
@@ -26,7 +27,9 @@ ${SUN_CONST}
 const vec3 ATM_SUN_TINT = vec3(1.0, 0.80, 0.55);
 vec3 atmSrgb(vec3 c) { return pow(c, vec3(2.2)); }
 float atmHg(float mu, float g) { float g2 = g * g; return (1.0 - g2) / (12.5663706 * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5)); }
-vec3 atmHaze(vec3 d) {
+// tint: the colour of the haze at the horizon (1 = the meadow's), fading out overhead; murk 0..1: overcast and mist (0 = the clear meadow sky). Both are
+// 1 and 0 in the meadow, where every line below gives back exactly the value it had before biomes (see the air of a biome in biomes.js).
+vec3 atmHazeB(vec3 d, vec3 tint, float murk) {
   float y = clamp(d.y, 0.0, 1.0);
   float mu = clamp(dot(d, ATM_SUN), -1.0, 1.0);
   vec3 zenith = atmSrgb(vec3(0.27, 0.46, 0.79));
@@ -36,12 +39,14 @@ vec3 atmHaze(vec3 d) {
   vec3 sky = mix(hor, low, smoothstep(0.0, 0.10, y));
   sky = mix(sky, mid, smoothstep(0.06, 0.42, y));
   sky = mix(sky, zenith, smoothstep(0.30, 1.0, y));
+  sky = mix(sky, hor, murk * smoothstep(0.0, 0.25, y));                   // overcast: the sky above pales to the colour of the horizon
   sky *= 0.86 + 0.28 * mu * mu;                                          // Rayleigh phase: dimmest about 90 degrees from the sun
   float glow = atmHg(mu, 0.70) * 0.50 + pow(max(mu, 0.0), 3.0) * 0.14;   // forward scattering by the haze
-  sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y));
-  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y));   // golden horizon on the sun side
-  return sky;
+  sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y)) * (1.0 - 0.8 * murk);
+  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y)) * (1.0 - 0.9 * murk);   // golden horizon on the sun side
+  return sky * mix(tint, vec3(1.0), smoothstep(0.0, 0.55, y));
 }
+vec3 atmHaze(vec3 d) { return atmHazeB(d, vec3(1.0), 0.0); }
 `;
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -84,8 +89,8 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
   const float ATM_K0 = 1.0 / 400.0;   // the clear-air density that fogDensity is measured against
   const float ATM_MIST = 0.0030;      // valley mist: extinction per metre at the valley floor
   const float ATM_MIST_H = 30.0;      // ... falling to 1/e at this height above it
-  vec3 atmFogColor(vec3 dir, float f) {
-    vec3 haze = atmHaze(dir);
+  vec3 atmFogColor(vec3 dir, float f, vec3 tint, float murk) {
+    vec3 haze = atmHazeB(dir, tint, murk);
     float mu = max(dot(dir, ATM_SUN), 0.0);
     haze *= 1.0 + 1.4 * pow(mu, 6.0) * f;   // looking into the sun the haze glows
     #ifdef TONE_MAPPING
@@ -94,6 +99,12 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     return haze;
   }
   vec3 atmFog(vec3 color, vec3 ray, float k) {
+    // the biome's haze: fogColor carries the horizon tint and fogNear the murk (a linear Fog is used for nothing else; the meadow's are 1,1,1 and 0)
+    #ifdef FOG_EXP2
+      vec3 tint = vec3(1.0); float murk = 0.0;
+    #else
+      vec3 tint = fogColor; float murk = fogNear;
+    #endif
     float dist = length(ray);
     vec3 dir = ray / max(dist, 1e-3);
     float t = dist * k;
@@ -103,9 +114,9 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     float dy = h1 - h0;
     float la = exp(-h0 / ATM_MIST_H), lb = exp(-h1 / ATM_MIST_H);
     float mist = abs(dy) > 0.02 ? (la - lb) * ATM_MIST_H / dy : la;
-    tau += ATM_MIST * (k / ATM_K0) * dist * mist * smoothstep(6.0, 110.0, dist);
+    tau += ATM_MIST * (1.0 + 2.5 * murk) * (k / ATM_K0) * dist * mist * smoothstep(6.0, 110.0, dist);
     float f = 1.0 - exp(-tau);
-    vec3 haze = atmFogColor(dir, f);
+    vec3 haze = atmFogColor(dir, f, tint, murk);
     #ifdef TONE_MAPPING
       // straight to the canvas: the object's colour is display-encoded already, so blend in linear light as the HDR path does
       vec3 lin = mix(color / 12.92, pow((color + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), color));
@@ -290,6 +301,8 @@ const SKY_FRAGMENT = `
   uniform sampler2D tNoise;
   uniform float uTime;
   uniform float uCover;
+  uniform vec3 uTint;
+  uniform float uMurk;
   varying vec3 vDir;
   ${ATM_GLSL}
   #if CLOUDS > 0
@@ -306,7 +319,7 @@ const SKY_FRAGMENT = `
   void main() {
     vec3 d = normalize(vDir);
     float mu = dot(d, ATM_SUN);
-    vec3 col = atmHaze(d);
+    vec3 col = atmHazeB(d, uTint, uMurk);
     #ifdef ENV
       // environment map for the reflections and the ambient light: no sun disc, no clouds; the ground bounces warm light back up
       vec3 ground = atmSrgb(vec3(0.42, 0.40, 0.30)) * 0.42;
@@ -331,8 +344,11 @@ const SKY_FRAGMENT = `
           vec3 belly = mix(atmSrgb(vec3(0.46, 0.52, 0.64)), atmHaze(vec3(0.0, 0.6, 0.8)) * 0.9, 0.35) * 0.80;
           vec3 top = ATM_SUN_TINT * 1.45 + vec3(0.12, 0.13, 0.15);
           vec3 cc = mix(belly, top, shade);
+          // an overcast biome (uMurk): the clouds are the grey of its haze, lit from within, with no sunlit edges
+          vec3 grey = atmHazeB(vec3(0.0, 0.35, 0.94), uTint, uMurk);
+          cc = mix(cc, mix(grey * 0.62, grey * 1.04, shade), uMurk);
           // silver lining: thin edges near the sun glow
-          cc += ATM_SUN_TINT * 1.6 * pow(max(mu, 0.0), 10.0) * (1.0 - dens) * smoothstep(0.0, 0.35, dens);
+          cc += ATM_SUN_TINT * 1.6 * pow(max(mu, 0.0), 10.0) * (1.0 - dens) * smoothstep(0.0, 0.35, dens) * (1.0 - uMurk);
           float a = smoothstep(0.0, 0.55, dens) * fade;
           col = mix(col, cc, a);
           vis *= 1.0 - a;
@@ -341,7 +357,7 @@ const SKY_FRAGMENT = `
         // high thin streaks
         vec2 q = d.xz * (1.0 / (d.y + 0.10)) * 0.55;
         float sn = texture2D(tNoise, q * vec2(0.11, 0.045) + vec2(uTime * 0.0016, 0.3)).a;
-        float cirrus = smoothstep(0.50, 0.92, sn) * smoothstep(0.02, 0.28, d.y) * 0.38;
+        float cirrus = smoothstep(0.50, 0.92, sn) * smoothstep(0.02, 0.28, d.y) * 0.38 * (1.0 - uMurk);
         vec3 cc2 = mix(vec3(1.0, 0.95, 0.90) * 0.95, ATM_SUN_TINT * 1.3, pow(max(mu, 0.0), 4.0));
         col = mix(col, cc2, cirrus);
         vis *= 1.0 - cirrus * 0.7;
@@ -352,7 +368,7 @@ const SKY_FRAGMENT = `
       float disc = smoothstep(0.99985, 0.99994, mu);
       col += ATM_SUN_TINT * (disc * 34.0 + pow(max(mu, 0.0), 2000.0) * 5.0) * vis * smoothstep(-0.02, 0.03, d.y);
       // below the horizon: haze fading to a darker tone (the far edge of the world seen past the ground)
-      col = mix(col, atmHaze(vec3(d.x, 0.0, d.z)) * 0.70, smoothstep(0.0, -0.20, d.y));
+      col = mix(col, atmHazeB(vec3(d.x, 0.0, d.z), uTint, uMurk) * 0.70, smoothstep(0.0, -0.20, d.y));
     #endif
     gl_FragColor = vec4(col, 1.0);
     #include <tonemapping_fragment>
@@ -371,7 +387,7 @@ function skyMaterial(env) {
   const mat = new THREE.ShaderMaterial({
     vertexShader: SKY_VERTEX,
     fragmentShader: SKY_FRAGMENT,
-    uniforms: { tNoise: { value: null }, uTime: { value: 0 }, uCover: { value: 0.5 } },
+    uniforms: { tNoise: { value: null }, uTime: { value: 0 }, uCover: { value: 0.5 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uMurk: { value: 0 } },
     defines: { CLOUDS: Q.clouds },
     depthWrite: false,
     fog: false,
@@ -408,7 +424,11 @@ function sharedEnvironment(renderer) {
 
 // Build the sky dome, the fog and the environment map for a scene. Returns the dome mesh (its `userData.atmosphere` has the per-frame update).
 export function createAtmosphere(scene, renderer = null) {
+  const air = active.def.air;
   const mat = skyMaterial(false);
+  mat.uniforms.uCover.value = air.cover;
+  mat.uniforms.uTint.value.set(air.tint[0], air.tint[1], air.tint[2]);
+  mat.uniforms.uMurk.value = air.murk;
   const sky = new THREE.Mesh(fullScreenTriangle(), mat);
   sky.frustumCulled = false;
   sky.renderOrder = 1000;   // after every opaque object, before the transparent ones: early depth rejection keeps the clouds cheap
@@ -417,7 +437,17 @@ export function createAtmosphere(scene, renderer = null) {
 
   // image-based lighting from the same sky, so steel and armour reflect it and shadows take the colour of the sky
   if (renderer) scene.environment = sharedEnvironment(renderer).texture;
-  scene.fog = new THREE.FogExp2(0xffffff, 1 / 400);
+  // The fog is a linear Fog only because it has two spare numbers: fog.color is the haze tint and fog.near the murk of the biome (biomes.js `air`); the
+  // shader reads the reach from fog.far (see the fog chunk above)
+  scene.fog = new THREE.Fog(0xffffff, air.murk, 400);
+  // The renderer hands a fog colour to the shader display-encoded when the frame goes straight to the canvas (no post pass: Low) and as it is when it goes
+  // to the HDR target. The shader wants the tint as it is, so for the canvas it is stored decoded (and 1, the meadow's, is 1 either way).
+  const linear = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  let direct = null;
+  const setTint = () => {
+    const t = air.tint, f = direct ? linear : (c) => c;
+    scene.fog.color.setRGB(f(t[0]), f(t[1]), f(t[2]));
+  };
   scene.background = null;
 
   const atm = {
@@ -428,7 +458,8 @@ export function createAtmosphere(scene, renderer = null) {
       mat.uniforms.uTime.value = this.time;
       const clouds = Q.clouds | 0;
       if (mat.defines.CLOUDS !== clouds) { mat.defines.CLOUDS = clouds; mat.needsUpdate = true; }
-      scene.fog.density = (1 / 400) * (1000 / Math.max(300, Q.viewDist));
+      scene.fog.far = 1 / ((1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog);
+      if (direct !== !usesPost()) { direct = !usesPost(); setTint(); }
     },
   };
   atm.update(0);

@@ -40,6 +40,9 @@ import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
+import { Weather } from './weather.js';
+import { setBiomeDust } from './biomedust.js';
+import { applyBiomeRules, twistLine } from './biometwist.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -90,8 +93,10 @@ export class Game {
     createTerrain(this.scene, this.physics);
     createForest(this.scene, this.physics);
     createCentrePiece(this.scene, this.physics, materials().stoneDark);
+    setBiomeDust(materials());   // (snow on the roofs and the tops of the walls: see biomedust.js)
     this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene, this);
+    this.weather = new Weather(this);   // (flakes in the snow, dust in the desert: see weather.js)
     this.camfx = new CamFx(this);   // shake, kicks, field-of-view punch and the colour hooks of the post pass (see camfx.js)
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
@@ -157,6 +162,7 @@ export class Game {
     this.options = sanitizeOptions(setup.options);
     matchlog.reset();
     mods.reset();
+    applyBiomeRules(this);   // (the land's small rule twist: biometwist.js)
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.hill.reset();
@@ -242,9 +248,13 @@ export class Game {
       return;
     }
     this.audio.play('horn');
-    if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
+    if (this.hero) {   // (the Hero Game Mode HUD opens the match with its own banner; the land's twist gets a notice beside it)
+      const twist = twistLine(this).trim();
+      if (twist) this.ui.toast(twist, -1, true);
+      return;
+    }
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
-    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.`);
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${WAVES.interval} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.${twistLine(this)}`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -1351,6 +1361,8 @@ export class Game {
     if (this.state === 'loading' || this.state === 'menu') {
       this.menuCamera(dt);
       this.grass.update(dt, this.camera.position);
+      this.fx.update(dt);   // (the weather of the land is written into its smoke layer: see weather.js)
+      this.weather.update(dt, this.camera.position);
       for (const c of this.castles) c.update(dt, this.time);
       this.time += dt;
       return;
@@ -1396,6 +1408,7 @@ export class Game {
       if (this.simulating) this.updateTowers(c, dt);
     }
     this.fx.update(dt);
+    this.weather.update(dt, this.camera.position);
     this.abilities.updateFx(dt);
     this.aimRing.update(dt);
     this.hill.visual(dt);

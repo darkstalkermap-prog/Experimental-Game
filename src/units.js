@@ -6,6 +6,8 @@ import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
 import { allied } from './teams.js';
+import { mods } from './mods.js';
+import { groundMul } from './biometwist.js';
 
 const tmp = new THREE.Vector3();
 let NEXT_ID = 1;
@@ -27,7 +29,8 @@ export class Unit {
     this.dmg = stats.dmg ?? t.dmg;
     this.armor = stats.armor ?? t.armor;
     this.speed = t.speed * (0.94 + Math.random() * 0.12);
-    this.range = t.range;
+    this.range = t.range * (t.ranged ? mods.mul('archerRange') : 1);   // (the mist of the marsh: see biometwist.js)
+    this.groundT = 0; this.groundM = 1;                                   // (how the ground under it slows it: worked out a few times a second)
     this.cd = t.cd;
     this.mounted = !!t.mounted;
     this.radius = this.mounted ? 0.85 : 0.42 * (t.scale || 1);
@@ -607,6 +610,7 @@ export class Unit {
     let sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
     if (this.slowT > 0) sp *= 0.5;
     if (this.hasteT > 0) sp *= this.hasteMul;
+    sp *= groundMul(this.game, this, dt);   // deep snow, mud (biometwist.js)
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;
     const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
     let ux = dx / d, uz = dz / d;

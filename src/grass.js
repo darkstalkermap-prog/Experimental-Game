@@ -12,6 +12,7 @@ import { Q } from './quality.js';
 import { patchMaterial } from './shaderhook.js';
 import { WIND, WIND_GLSL } from './foliage.js';
 import { grassBase } from './terrain.js';
+import { active } from './biomes.js';
 
 function hash(x, z, s) {
   let n = Math.imul(x | 0, 374761393) + Math.imul(z | 0, 668265263) + Math.imul(s, 1442695041);
@@ -20,18 +21,19 @@ function hash(x, z, s) {
   return (n >>> 0) / 4294967295;
 }
 
-// a clump: nine single-triangle blades, dark at the root and bright at the tip, leaning outwards
-function clumpGeometry() {
+// a clump: nine single-triangle blades, dark at the root and bright at the tip, leaning outwards (g: the biome's grass, see biomes.js: taller blades for the
+// reeds of the marsh, frosted tips for the snow; the meadow's numbers are the game's old ones)
+function clumpGeometry(g0 = active.def.grass) {
   const rng = mulberry32(5);
   const pos = [], col = [], nor = [];
   for (let b = 0; b < 9; b++) {
     const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * 0.27;
     const bx = Math.cos(a) * r, bz = Math.sin(a) * r;
     const yaw = rng() * Math.PI, cx = Math.cos(yaw), cz = Math.sin(yaw);
-    const h = 0.3 + rng() * 0.4, w = 0.02 + rng() * 0.02, lean = (0.1 + rng() * 0.28) * h;
+    const h = (0.3 + rng() * 0.4) * g0.height, w = (0.02 + rng() * 0.02) * g0.width, lean = (0.1 + rng() * 0.28) * h * g0.lean;
     const v = 0.88 + rng() * 0.24;
     pos.push(bx - cx * w, 0, bz - cz * w, bx + cx * w, 0, bz + cz * w, bx + Math.cos(a) * lean, h, bz + Math.sin(a) * lean);
-    col.push(0.46 * v, 0.52 * v, 0.4 * v, 0.46 * v, 0.52 * v, 0.4 * v, 1.22 * v, 1.2 * v, 0.9 * v);
+    col.push(g0.root[0] * v, g0.root[1] * v, g0.root[2] * v, g0.root[0] * v, g0.root[1] * v, g0.root[2] * v, g0.tip[0] * v, g0.tip[1] * v, g0.tip[2] * v);
     nor.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
   }
   const g = new THREE.InstancedBufferGeometry();
@@ -41,8 +43,29 @@ function clumpGeometry() {
   return g;
 }
 
+// a cattail clump of the marsh: three tall stems, each with a brown spike near the top (aKind 0 stem, 1 spike: its colour is the clump's tint)
+function cattailGeometry() {
+  const rng = mulberry32(23);
+  const pos = [], col = [], nor = [], kind = [];
+  const tri = (a, b, c, k) => { pos.push(...a, ...b, ...c); for (let i = 0; i < 3; i++) { col.push(1, 1, 1); nor.push(0, 1, 0); kind.push(k); } };
+  for (let s = 0; s < 3; s++) {
+    const a = rng() * Math.PI * 2, r = 0.05 + rng() * 0.15, bx = Math.cos(a) * r, bz = Math.sin(a) * r, h = 0.85 + rng() * 0.5;
+    const tx = bx + Math.cos(a) * 0.08, tz = bz + Math.sin(a) * 0.08, w = 0.03, y0 = h - 0.22, y1 = h + 0.08;
+    tri([bx - 0.012, 0, bz], [bx + 0.012, 0, bz], [tx, h, tz], 0);
+    tri([tx - w, y0, tz], [tx + w, y0, tz], [tx + w * 0.5, y1, tz], 1); tri([tx - w, y0, tz], [tx + w * 0.5, y1, tz], [tx - w * 0.5, y1, tz], 1);
+    tri([tx, y0, tz - w], [tx, y0, tz + w], [tx, y1, tz + w * 0.5], 1); tri([tx, y0, tz - w], [tx, y1, tz + w * 0.5], [tx, y1, tz - w * 0.5], 1);
+  }
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setAttribute('aKind', new THREE.Float32BufferAttribute(kind, 1));
+  return g;
+}
+
 // a wild flower clump: three stems with a flat five-petal head each (aKind 0 stem, 1 petals, 2 the yellow middle)
-function flowerGeometry() {
+function flowerGeometry(which = 'meadow') {
+  if (which === 'cattail') return cattailGeometry();
   const rng = mulberry32(17);
   const pos = [], col = [], nor = [], kind = [];
   const tri = (a, b, c, k, n = [0, 1, 0]) => { pos.push(...a, ...b, ...c); for (let i = 0; i < 3; i++) { col.push(1, 1, 1); nor.push(...n); kind.push(k); } };
@@ -111,6 +134,7 @@ function flowerMaterial(fade) {
 }
 
 const FLOWER_COLOURS = [[0.8, 0.8, 0.74], [0.8, 0.55, 0.04], [0.28, 0.1, 0.55], [0.8, 0.2, 0.3], [0.1, 0.18, 0.7], [0.85, 0.82, 0.3]];
+const CATTAIL = [0.2, 0.1, 0.045];
 
 export class Grass {
   constructor(scene, physics) {
@@ -124,8 +148,9 @@ export class Grass {
     this.fade = { uFadeA: { value: 30 }, uFadeB: { value: 44 } };
     this.material = grassMaterial(this.fade);
     this.flowerMat = flowerMaterial(this.fade);
-    this.geo = clumpGeometry();
-    this.flowerGeo = flowerGeometry();
+    this.look = active.def.grass;
+    this.geo = clumpGeometry(this.look);
+    this.flowerGeo = flowerGeometry(this.look.flowers);
     this.sig = '';
     this.job = null;
     this.tint = { base: new THREE.Color() };
@@ -142,7 +167,7 @@ export class Grass {
     // room for the dense inner disc and the sparser outer ring
     const cells = Math.PI * this.RA * this.RA / (this.spA * this.spA) + Math.PI * Math.max(0, this.radius * this.radius - 100) / (this.spB * this.spB);
     const max = this.radius ? Math.ceil(cells * 0.78) : 0;
-    const fmax = this.radius ? Math.ceil(max * 0.05) : 0;
+    const fmax = this.radius && this.look.flowers !== 'none' ? Math.ceil(max * 0.05) : 0;
     this.center.set(1e9, 1e9);
     this.job = null;
     if (max === this.max && this.mesh) return;
@@ -150,7 +175,7 @@ export class Grass {
     for (const key of ['mesh', 'flowers']) if (this[key]) { this.scene.remove(this[key]); this[key].geometry.dispose(); this[key] = null; }
     if (!max) return;
     this.mesh = this.build(this.geo, this.material, max);
-    this.flowers = this.build(this.flowerGeo, this.flowerMat, fmax);
+    this.flowers = fmax ? this.build(this.flowerGeo, this.flowerMat, fmax) : null;
     this.stage = { a: new Float32Array(max * 4), t: new Float32Array(max * 4), fa: new Float32Array(fmax * 4), ft: new Float32Array(fmax * 4) };
   }
 
@@ -210,7 +235,7 @@ export class Grass {
           const mixv = smoothstep(RA - 5, RA + 1, d), r3 = hash(i, j, 3), r9 = hash(i, j, 9);
           if (job.t === 0 ? r9 < mixv : r9 >= mixv) continue;
           const dens = fbm(x * 0.05, z * 0.05, 2) * 0.5 + 0.62;
-          if (r3 > dens) continue;
+          if (r3 > dens * this.look.density) continue;
           if (!this.allowed(x, z)) continue;
           const y = this.physics.terrainHeight(x, z);
           // not on steep ground (the foot of the mountains is forest floor)
@@ -226,7 +251,7 @@ export class Grass {
           // wild flowers: in patches, and a few on their own
           const patch = fbm(x * 0.07 + 31, z * 0.07 - 17, 2) * 0.5 + 0.5;
           if (job.nf < st.fa.length / 4 && hash(i, j, 11) < (patch > 0.6 ? 0.16 : 0.012) * (job.t === 0 ? 1 : 1.6)) {
-            const f = job.nf * 4, c = FLOWER_COLOURS[Math.floor((patch * 7 + hash(i, j, 12) * 1.6) % FLOWER_COLOURS.length)];
+            const f = job.nf * 4, c = this.look.flowers === 'cattail' ? CATTAIL : FLOWER_COLOURS[Math.floor((patch * 7 + hash(i, j, 12) * 1.6) % FLOWER_COLOURS.length)];
             st.fa[f] = x + (hash(i, j, 13) - 0.5) * 0.3; st.fa[f + 1] = y - 0.02; st.fa[f + 2] = z + (hash(i, j, 14) - 0.5) * 0.3; st.fa[f + 3] = hash(i, j, 15) * 6.2832;
             st.ft[f] = c[0]; st.ft[f + 1] = c[1]; st.ft[f + 2] = c[2]; st.ft[f + 3] = 0.8 + hash(i, j, 16) * 0.5;
             job.nf++;
@@ -242,7 +267,7 @@ export class Grass {
       g.instanceCount = n;
     };
     set(this.mesh, st.a, st.t, job.n);
-    set(this.flowers, st.fa, st.ft, job.nf);
+    if (this.flowers) set(this.flowers, st.fa, st.ft, job.nf);
     this.job = null;
   }
 

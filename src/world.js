@@ -1,52 +1,33 @@
 // Scenery: sky, lighting, terrain mesh, roads, forests and rocks.
 import * as THREE from 'three';
-import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
-import { CASTLE_SITES } from './physics.js';
-import { mulberry32, smoothstep } from './noise.js';
+import { WORLD } from './config.js';
 import { box } from './materials.js';
 import { SUN_DIR, createAtmosphere } from './atmosphere.js';
 import { ShadowRig } from './shadows.js';
 import { Terrain } from './terrain.js';
 import { Foliage } from './foliage.js';
 import { placeScenery } from './scenery.js';
+import { active, treeSlot } from './biomes.js';
+import { ROADS, layoutRoads, roadDist } from './roads.js';
+import { scatterSolid } from './scatter.js';
 
 export { SUN_DIR };   // (the sun and the sky live in atmosphere.js)
 
-// Roads run from each castle gate to the centre of the map.
-export const ROADS = [];
-export function layoutRoads() {
-  ROADS.length = 0;
-  for (const s of CASTLE_SITES) {
-    const len = Math.hypot(s.x, s.z);
-    const gx = s.x - (s.x / len) * (CASTLE.H + 4), gz = s.z - (s.z / len) * (CASTLE.H + 4);
-    ROADS.push({ ax: gx, az: gz, bx: 0, bz: 0 });
-  }
-}
-layoutRoads();
-
-function distToSeg(px, pz, r) {
-  const vx = r.bx - r.ax, vz = r.bz - r.az;
-  const t = Math.max(0, Math.min(1, ((px - r.ax) * vx + (pz - r.az) * vz) / (vx * vx + vz * vz)));
-  return Math.hypot(px - (r.ax + vx * t), pz - (r.az + vz * t));
-}
-export function roadDist(x, z) {
-  let d = Infinity;
-  for (const r of ROADS) d = Math.min(d, distToSeg(x, z, r));
-  // ring road around the centre
-  d = Math.min(d, Math.abs(Math.hypot(x, z) - 34));
-  return d;
-}
+export { ROADS, layoutRoads, roadDist };   // (the roads live in roads.js; the modules that always imported them from here still can)
 
 // The sky dome, the fog and the environment map (see atmosphere.js).
 export function createSky(scene, renderer = null) {
   return createAtmosphere(scene, renderer);
 }
 
-// The sun (warm key light with cascaded shadows: shadows.js), and a cool sky / warm ground hemisphere as the fill.
+// The sun (warm key light with cascaded shadows: shadows.js), and a cool sky / warm ground hemisphere as the fill. The biome sets their colours (biomes.js).
 export function createLights(scene) {
-  const hemi = new THREE.HemisphereLight(0xb4ccee, 0x6a6030, 0.62);
+  const air = active.def.air;
+  const hemi = new THREE.HemisphereLight(air.hemiSky, air.hemiGround, air.hemiI);
   scene.add(hemi);
   const rig = new ShadowRig(scene);
+  rig.sun.color.set(air.sun);
+  rig.sun.intensity = air.sunI;
   return { hemi, sun: rig.sun, far: rig.far, rig };
 }
 
@@ -63,39 +44,9 @@ export function createTerrain(scene, physics) {
   return terrain;
 }
 
-function okForProp(x, z, physics) {
-  for (const s of CASTLE_SITES) {
-    if (Math.max(Math.abs(x - s.x), Math.abs(z - s.z)) < CASTLE.H + 30) return false;
-  }
-  if (roadDist(x, z) < 7) return false;
-  if (Math.hypot(x, z) < 44) return false;
-  if (physics.practice && Math.abs(x - physics.practice.x) < PRACTICE.hw + 16 && Math.abs(z - physics.practice.z) < PRACTICE.hd + 16) return false;   // the practice yard
-  return true;
-}
-
 export function createForest(scene, physics) {
-  const rng = mulberry32(42);
-  const pines = [], oaks = [], rocks = [];
-  const { fbm } = physics.noise;
-  let tries = 0;
-  const area = (WORLD.half / 220) ** 2;
-  while ((pines.length + oaks.length) < 900 * area && tries++ < 20000 * area) {
-    const x = (rng() * 2 - 1) * (WORLD.half - 4);
-    const z = (rng() * 2 - 1) * (WORLD.half - 4);
-    if (!okForProp(x, z, physics)) continue;
-    const density = fbm(x * 0.012 + 50, z * 0.012, 3) * 0.5 + 0.5;
-    const edge = Math.max(Math.abs(x), Math.abs(z)) > WORLD.half - 35 ? 0.35 : 0;
-    if (rng() > density * 1.25 - 0.25 + edge) continue;
-    const y = physics.terrainHeight(x, z);
-    (rng() < 0.6 ? pines : oaks).push({ x, y, z, s: 0.8 + rng() * 0.6, r: rng() * Math.PI * 2, c: rng() });
-  }
-  tries = 0;
-  while (rocks.length < 160 * area && tries++ < 5000 * area) {
-    const x = (rng() * 2 - 1) * (WORLD.half - 4);
-    const z = (rng() * 2 - 1) * (WORLD.half - 4);
-    if (!okForProp(x, z, physics)) continue;
-    rocks.push({ x, y: physics.terrainHeight(x, z), z, s: 0.4 + rng() * 1.6, r: rng() * 6, c: rng() });
-  }
+  const F = active.def.flora;
+  const { pines, oaks, rocks } = scatterSolid(physics);
 
   // What is drawn lives in foliage.js; this keeps only where the solid things stand. The trees stand a little way into the slope they are on.
   const terrain = (scene.userData.worldSystems || []).find((s) => s.isTerrain);
@@ -111,11 +62,14 @@ export function createForest(scene, physics) {
   const foliage = new Foliage(scene, trees.concat(scenery.trees), rockItems.concat(scenery.rocks));
   (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(foliage);
 
-  // Collision for tree trunks (only the playable area matters)
-  for (const t of pines.concat(oaks)) {
-    if (Math.max(Math.abs(t.x), Math.abs(t.z)) > WORLD.playHalf) continue;
-    const r = 0.4 * t.s;
-    physics.add({ minX: t.x - r, maxX: t.x + r, minZ: t.z - r, maxZ: t.z + r, top: t.y + 8, kind: 'tree', noWalk: true });
+  // Collision for tree trunks (only the playable area matters; a dry shrub is something to walk through)
+  for (const [list, conifer] of [[pines, true], [oaks, false]]) {
+    for (const t of list) {
+      if (Math.max(Math.abs(t.x), Math.abs(t.z)) > WORLD.playHalf) continue;
+      if (!F.solid[treeSlot(t.x, t.z, conifer)]) continue;
+      const r = 0.4 * t.s;
+      physics.add({ minX: t.x - r, maxX: t.x + r, minZ: t.z - r, maxZ: t.z + r, top: t.y + F.top, kind: 'tree', noWalk: true });
+    }
   }
   // Rocks are solid too: nobody walks through them, and soldiers steer round them like the standing stones. Only the
   // knee-high ones are low enough to step onto.

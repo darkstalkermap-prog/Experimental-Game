@@ -9,8 +9,9 @@ import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { smoothstep, clamp } from './noise.js';
 import { forestDensity } from './landscape.js';
-import { terrainMaterial, setRoads } from './terrainmat.js';
+import { terrainMaterial, setRoads, setBiomeLook } from './terrainmat.js';
 import { Q } from './quality.js';
+import { active } from './biomes.js';
 
 const CHUNK = 64;   // cells per chunk side (128 m)
 // far rings: cell size and how wide the ring is (each ring starts where the last ended, snapped to the next cell size)
@@ -18,46 +19,77 @@ const RINGS = [
   { c: 2, w: 8 }, { c: 4, w: 40 }, { c: 8, w: 96 }, { c: 16, w: 224 }, { c: 32, w: 480 }, { c: 64, w: 1024 },
 ];
 
-const grassA = new THREE.Color(0x5d7a32), grassB = new THREE.Color(0x7d8e3e), grassDry = new THREE.Color(0x9a9050);
-const dirt = new THREE.Color(0x7b6646), rock = new THREE.Color(0x77736a), rockWarm = new THREE.Color(0x8a8070), tmp = new THREE.Color();
-const trodden = new THREE.Color(0xa09572);   // the top of the hill in the middle: bare, pale, much walked on
-const sand = new THREE.Color(0xb39a68);      // the floor of the practice yard: packed sand
-const forestDark = new THREE.Color(0x1d361a), forestFloor = new THREE.Color(0x2c4420), scrub = new THREE.Color(0x5a6034), snow = new THREE.Color(0xe6edf2);
+// The colours of the ground (see biomes.js: the meadow's are the game's old ones), made once per biome: grassA/B/Dry the ground cover, dirt the trampled
+// earth, trodden the top of the hill in the middle (bare, pale, much walked on), sand the floor of the practice yard, forestFloor/forestDark under
+// and on the trees, scrub above the forest, rock/rockWarm the bare stone, snow the cap on the highest ground, patch the biome's ponds or ice.
+const tmp = new THREE.Color();
+const colourSets = new Map();
+let setFor = null, set = null;
+function colours() {
+  if (setFor === active.def) return set;
+  let c = colourSets.get(active.def.id);
+  if (!c) { c = {}; for (const k in active.def.ground) c[k] = new THREE.Color(active.def.ground[k]); colourSets.set(active.def.id, c); }
+  setFor = active.def; set = c;
+  return c;
+}
 
-export const TREE_LINE = 126;   // metres above the valley floor where the forest gives up (varies with the noise)
+export const TREE_LINE = 126;   // metres above the valley floor where the forest gives up (varies with the noise); the meadow's, see biomes.js for the rest
 export const SNOW_LINE = 186;
-export const treeLineAt = (nz, x, z) => TREE_LINE + 12 * nz.noise(x * 0.01 + 4, z * 0.01 - 2);
+export const treeLineAt = (nz, x, z) => active.def.treeLine + 12 * nz.noise(x * 0.01 + 4, z * 0.01 - 2);
+
+// how much of a spot is a pond, a sheet of ice or a pale patch of hardpan (0 .. 1; biomes.js `patch`): a noise field, kept off the slopes, the roads,
+// the castles, the middle of the map and the rim. The same field paints the ground and tells the marsh where the mud is.
+export function patchAt(nz, roadDist, x, z, slope) {
+  const P = active.def.patch;
+  if (!P) return 0;
+  const f = nz.fbm((x + active.ox) * P.scale + P.ox, (z + active.oz) * P.scale + P.oz, 3) * 0.5 + 0.5;
+  let w = smoothstep(P.thr, P.thr + P.soft, f);
+  if (w <= 0) return 0;
+  w *= (1 - smoothstep(0.25, 0.6, slope)) * smoothstep(44, 56, Math.hypot(x, z)) * smoothstep(7, 13, roadDist(x, z));
+  w *= 1 - smoothstep(WORLD.playHalf - 26, WORLD.playHalf - 8, Math.max(Math.abs(x), Math.abs(z)));
+  for (const s of CASTLE_SITES) w *= smoothstep(CASTLE.H + 8, CASTLE.H + 22, Math.max(Math.abs(x - s.x), Math.abs(z - s.z)));
+  return w * P.max;
+}
+
+// soft wind-blown bands across the land (dunes, drifts): a gentle light-and-dark pattern for the ground colour, 0 where the biome has none
+function bands(nz, sx, sz, amp) {
+  return amp * Math.sin((sx * 0.62 + sz * 0.78) * 0.3 + 5 * nz.fbm(sx * 0.011, sz * 0.011, 2));
+}
 
 // The colour of the grass at a spot (the meadow, darker under the forest and thinning out towards the treeline): what the grass blades take
 export function grassBase(nz, x, z, h, base) {
-  const { fbm } = nz;
-  const n1 = fbm(x * 0.02, z * 0.02, 3) * 0.5 + 0.5, n2 = fbm(x * 0.09 + 10, z * 0.09, 2) * 0.5 + 0.5;
-  const forest = forestDensity(nz, x, z), tl = treeLineAt(nz, x, z);
-  base.copy(grassA).lerp(grassB, n1).lerp(grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
-  base.lerp(forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
-  base.lerp(forestFloor, smoothstep(10, 36, h) * 0.45 * (1 - smoothstep(tl - 14, tl, h)));
+  const { fbm } = nz, C = colours(), B = active.def;
+  const sx = x + active.ox, sz = z + active.oz;
+  const n1 = fbm(sx * 0.02, sz * 0.02, 3) * 0.5 + 0.5, n2 = fbm(sx * 0.09 + 10, sz * 0.09, 2) * 0.5 + 0.5;
+  const forest = forestDensity(nz, sx, sz), tl = treeLineAt(nz, x, z);
+  base.copy(C.grassA).lerp(C.grassB, n1).lerp(C.grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
+  base.lerp(C.forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
+  base.lerp(C.forestFloor, smoothstep(10, 36, h) * 0.45 * (1 - smoothstep(tl - 14, tl, h)));
+  if (B.bands) base.multiplyScalar(1 + bands(nz, sx, sz, B.bands));
   return base.multiplyScalar(0.9 + n2 * 0.15);
 }
 
-// Everything the ground colour depends on, for one spot. Fills `o` ({ base, all: Color, mask: [castle, hill, sand, forest] }).
+// Everything the ground colour depends on, for one spot. Fills `o` ({ base, all: Color, mask: [castle, hill, sand or patch, forest] }).
 // slope is the gradient |grad h|. `roadDist` comes from world.js.
 export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
-  const { fbm } = nz;
-  const n1 = fbm(x * 0.02, z * 0.02, 3) * 0.5 + 0.5;
-  const n2 = fbm(x * 0.09 + 10, z * 0.09, 2) * 0.5 + 0.5;
-  const forest = forestDensity(nz, x, z);
+  const { fbm } = nz, C = colours(), B = active.def;
+  const sx = x + active.ox, sz = z + active.oz;   // (where the dressing noise is read: a seed moves it, seed 0 does not)
+  const n1 = fbm(sx * 0.02, sz * 0.02, 3) * 0.5 + 0.5;
+  const n2 = fbm(sx * 0.09 + 10, sz * 0.09, 2) * 0.5 + 0.5;
+  const forest = forestDensity(nz, sx, sz);
   const base = o.base;
-  base.copy(grassA).lerp(grassB, n1).lerp(grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
+  base.copy(C.grassA).lerp(C.grassB, n1).lerp(C.grassDry, smoothstep(0.55, 0.9, n2) * 0.6);
   // under the trees the grass is thin and dark; higher up the meadow gives way to forest floor and then to scrub
-  base.lerp(forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
+  base.lerp(C.forestFloor, smoothstep(0.35, 0.9, forest) * 0.38 * (0.4 + 0.6 * smoothstep(4, 22, h)));
   const tl = treeLineAt(nz, x, z);
   const forestZone = smoothstep(5, 24, h) * (1 - smoothstep(tl - 16, tl + 4, h));
-  base.lerp(forestFloor, forestZone * (0.55 + 0.3 * n1));
-  base.lerp(scrub, smoothstep(tl - 8, tl + 10, h) * 0.8);
+  base.lerp(C.forestFloor, forestZone * (0.55 + 0.3 * n1));
+  base.lerp(C.scrub, smoothstep(tl - 8, tl + 10, h) * 0.8);
+  if (B.bands) base.multiplyScalar(1 + bands(nz, sx, sz, B.bands));
   const shade = 0.9 + n2 * 0.15;
   base.multiplyScalar(shade);
   // the same layers as masks, for the shader
-  let castle = 0, hill = 0, sandW = 0;
+  let castle = 0, hill = 0, sandW = 0, patchW = 0;
   if (!o.far) {   // (beyond the play area there are no castles, hill or yard)
     for (const s of CASTLE_SITES) {
       const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
@@ -69,31 +101,33 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
     const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
     sandW = (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92;
   }
+  if (B.patch && !o.far && !physics.practice) patchW = patchAt(nz, roadDist, x, z, slope);
   const mask = o.mask;
   // the forest on the foot of the mountains: the same inputs as the trees' placement (scenery.js), so the canopy is where the trees are
-  const rockN = fbm(x * 0.035 + 20, z * 0.035 - 8, 3) * 0.5 + 0.5;
-  const canopy = smoothstep(12, 34, h) * (1 - smoothstep(tl - 18, tl + 2, h)) * clamp(forest * 1.6 + 0.4, 0, 1) * (1 - smoothstep(1.5, 2.2, slope + 0.8 * (rockN - 0.5)));
-  mask[0] = castle; mask[1] = hill; mask[2] = sandW; mask[3] = canopy;
+  const rockN = fbm(sx * 0.035 + 20, sz * 0.035 - 8, 3) * 0.5 + 0.5;
+  const canopy = smoothstep(12, 34, h) * (1 - smoothstep(tl - 18, tl + 2, h)) * clamp(forest * 1.6 + 0.4, 0, 1) * (1 - smoothstep(1.5, 2.2, slope + 0.8 * (rockN - 0.5))) * B.canopy;
+  mask[0] = castle; mask[1] = hill; mask[2] = sandW || patchW; mask[3] = canopy;
   o.alt[0] = smoothstep(tl - 6, tl + 14, h);
-  o.alt[1] = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5));
+  o.alt[1] = smoothstep(B.snowLine - 14, B.snowLine + 8, h + 14 * (n1 - 0.5));
   if (!o.bake) return o;
   // the baked colour (what Q.terrain 0 and 1 show): the ground layers, then rock where it is steep, bare above the trees, snow on top
   const all = o.all;
   all.copy(base);
-  all.lerp(dirt, castle);
-  if (!o.far) all.lerp(dirt, (1 - smoothstep(2.2, 4.5, roadDist(x, z))) * 0.85);
-  all.lerp(trodden, hill);
-  if (sandW) all.lerp(sand, sandW);
-  tmp.copy(rock).lerp(rockWarm, n1);
+  all.lerp(C.dirt, castle);
+  if (!o.far) all.lerp(C.dirt, (1 - smoothstep(2.2, 4.5, roadDist(x, z))) * 0.85);
+  all.lerp(C.trodden, hill);
+  if (sandW) all.lerp(C.sand, sandW);
+  if (patchW) all.lerp(C.patch, patchW);
+  tmp.copy(C.rock).lerp(C.rockWarm, n1);
   // bare rock: patches on the steep faces (the cliffs of the wall), and everything above the trees
   const rockW = Math.max(smoothstep(1.65, 2.3, slope + 0.9 * (rockN - 0.5)) * smoothstep(10, 26, h), smoothstep(tl - 6, tl + 14, h) * (0.55 + 0.4 * rockN),
     smoothstep(0.85, 1.0, rockN) * smoothstep(0.9, 1.5, slope) * smoothstep(6, 20, h));
   tmp.multiplyScalar(0.75 + 0.35 * rockN);
   all.lerp(tmp, rockW * (1 - 0.92 * canopy));
-  all.lerp(forestDark, canopy * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
+  all.lerp(C.forestDark, canopy * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
   all.multiplyScalar(shade);
-  const sn = smoothstep(SNOW_LINE - 14, SNOW_LINE + 8, h + 14 * (n1 - 0.5)) * (1 - smoothstep(0.8, 1.5, slope));
-  if (sn > 0) all.lerp(snow, sn);
+  const sn = smoothstep(B.snowLine - 14, B.snowLine + 8, h + 14 * (n1 - 0.5)) * (1 - smoothstep(0.8, 1.5, slope));
+  if (sn > 0) all.lerp(C.snow, sn);
   return o;
 }
 
@@ -153,6 +187,7 @@ export class Terrain {
     this.physics = physics;
     this.roadDist = env.roadDist;
     setRoads(env.roads);
+    setBiomeLook(active.def);   // (the splat shader's palette: uniforms, so every biome shares one program)
     this.group = new THREE.Group();
     this.group.userData.owner = 'a3 terrain';
     this.chunks = [];

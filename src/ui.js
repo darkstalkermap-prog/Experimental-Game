@@ -12,6 +12,7 @@ import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } fro
 import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
+import { active } from './biomes.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -1059,16 +1060,17 @@ export class UI {
       const wz = (y / S) * span - WORLD.half;
       const h = P.terrainHeight(wx, wz);
       const k = Math.min(1, Math.max(0, (h - 0) / 30));
-      let r = 70 + k * 70, gr = 92 + k * 50, b = 50 + k * 50;
+      const T = active.def.map;   // (the colours of the land: biomes.js)
+      let r = T.lo[0] + k * (T.hi[0] - T.lo[0]), gr = T.lo[1] + k * (T.hi[1] - T.lo[1]), b = T.lo[2] + k * (T.hi[2] - T.lo[2]);
       if (detailed) {
-        r = 66 + k * 50; gr = 90 + k * 34; b = 52 + k * 30;   // the hills round the edge fade to dry grass, not sand
+        r = T.dlo[0] + k * (T.dhi[0] - T.dlo[0]); gr = T.dlo[1] + k * (T.dhi[1] - T.dlo[1]); b = T.dlo[2] + k * (T.dhi[2] - T.dlo[2]);   // the hills round the edge fade to dry grass, not sand
         // light from the upper left, and roads worn into the grass
         const sx = (P.terrainHeight(wx + d, wz) - P.terrainHeight(wx - d, wz)) / (2 * d);
         const sz = (P.terrainHeight(wx, wz + d) - P.terrainHeight(wx, wz - d)) / (2 * d);
         const lit = Math.min(1.3, Math.max(0.7, 1 + (sx + sz) * 0.55));
         r *= lit; gr *= lit; b *= lit;
         const road = Math.max(0, 1 - roadDist(wx, wz) / 3) * 0.9;
-        r += (158 - r) * road; gr += (132 - gr) * road; b += (92 - b) * road;
+        r += (T.road[0] - r) * road; gr += (T.road[1] - gr) * road; b += (T.road[2] - b) * road;
       }
       const i = (y * S + x) * 4;
       img.data[i] = r; img.data[i + 1] = gr; img.data[i + 2] = b; img.data[i + 3] = 255;
