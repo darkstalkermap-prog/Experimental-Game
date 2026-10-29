@@ -230,9 +230,9 @@ export class Post {
   setup(w, h) {
     const p = Q.post;
     const samples = this.floatMsaa ? Math.min(Q.msaa | 0, this.maxSamples) : 0;
-    // FXAA runs where the level asks for it, and also where nothing else would smooth the edges: a canvas that has no samples of its
-    // own (main.js leaves them off where the post target has some) showing a scene drawn without any
-    this.aa = !!p.aa || (!this.canvasAA && samples === 0);
+    // FXAA runs where the level asks for it, and also where nothing else would smooth the edges: a scene drawn into a target without
+    // samples (a GPU that cannot multisample it), or straight to a canvas that has none (Low, switched to from a level that made it so)
+    this.aa = !!p.aa || (samples === 0 && !!(p.bloom || p.vignette || p.grade || p.ao || !this.canvasAA));
     const wanted = this.ok && !!(p.bloom || this.aa || p.vignette || p.grade || p.ao);
     this.active = wanted;
     if (!wanted) { this.release(); return false; }
