@@ -105,3 +105,106 @@ export function clothMaterial(map) {
   });
   return m;
 }
+
+// ---------------------------------------------------------------- fire, glow and smoke
+// Torches, braziers, cooking fires and chimneys are billboards of one shared material that animates itself from the clock (flicker, the
+// way smoke rises and fades): no dynamic lights and no per-frame work. Each source is [kind, x, y, z, size, phase]: kind 0 flame
+// (the point is its middle), 1 a soft glow, 2 smoke (a puff that loops: x y z is where it starts).
+let FIRE = null;
+export function fireMaterial() {
+  if (FIRE) return FIRE;
+  FIRE = new THREE.MeshBasicMaterial({
+    transparent: true, depthWrite: false, fog: false, toneMapped: false,
+    blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+  });
+  patchMaterial(FIRE, 'cwFire', (shader) => {
+    shader.uniforms.cwTime = WIND.time;
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>
+        attribute vec2 corner;
+        attribute vec4 fx;
+        uniform float cwTime;
+        varying vec2 vCorner;
+        varying vec3 vFire;
+        varying float vDist;`)
+      .replace('#include <project_vertex>', `
+        float kind = fx.x, ph = fx.y, size = fx.z;
+        float flick = 1.0 + 0.13 * sin(cwTime * 11.0 + ph * 6.283) + 0.08 * sin(cwTime * 23.0 + ph * 13.0 + 1.7) + 0.05 * sin(cwTime * 41.0 + ph * 5.0);
+        float age = 0.0;
+        vec3 centre = transformed;
+        if (kind > 1.5) {
+          age = fract(cwTime * fx.w + ph);
+          centre += vec3(sin(ph * 40.0 + age * 2.5) * 0.5 * age * size, age * 5.5 * size, cos(ph * 33.0 + age * 2.0) * 0.4 * age * size);
+          size *= 0.45 + age * 1.7;
+        }
+        vec4 mvPosition = modelViewMatrix * vec4(centre, 1.0);
+        vDist = -mvPosition.z;
+        vec2 sc = kind < 0.5 ? vec2(0.5, 0.5 + 0.12 * (flick - 1.0)) : vec2(1.0);
+        mvPosition.xy += corner * size * sc;
+        gl_Position = projectionMatrix * mvPosition;
+        vCorner = corner;
+        vFire = vec3(kind, flick, age);`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform float cwTime;\nvarying vec2 vCorner;\nvarying vec3 vFire;\nvarying float vDist;')
+      .replace('#include <map_fragment>', `
+        {
+          float kind = vFire.x;
+          vec3 col = vec3(0.0);
+          float a = 0.0, ab = 0.0;
+          vec2 p = vCorner;
+          if (kind < 0.5) {
+            float y = p.y * 0.5 + 0.5;
+            float sway = sin(cwTime * 7.0 + y * 4.0 + vFire.y * 6.0) * 0.14 * y;
+            float w = (1.0 - y) * (0.85 - 0.4 * y);
+            float d = abs(p.x - sway) / max(0.07, w);
+            float shape = (1.0 - smoothstep(0.45, 1.0, d)) * smoothstep(0.0, 0.1, y) * (1.0 - smoothstep(0.5, 1.0, y));
+            float heat = clamp((1.0 - y) * (1.15 - d * 0.7), 0.0, 1.0);
+            col = mix(vec3(0.85, 0.16, 0.03), vec3(1.0, 0.6, 0.14), smoothstep(0.0, 0.5, heat));
+            col = mix(col, vec3(1.0, 0.95, 0.65), smoothstep(0.5, 0.95, heat));
+            a = shape * 1.4;
+          } else if (kind < 1.5) {
+            a = pow(max(0.0, 1.0 - length(p)), 2.4) * 0.27 * vFire.y;
+            col = vec3(1.0, 0.55, 0.2);
+          } else {
+            float r = length(p) + sin(atan(p.y, p.x) * 3.0 + vFire.z * 4.0 + vFire.y * 3.0) * 0.08;
+            a = (1.0 - smoothstep(0.35, 1.0, r)) * 0.26 * smoothstep(0.0, 0.12, vFire.z) * pow(1.0 - vFire.z, 1.4);
+            col = mix(vec3(0.34, 0.32, 0.31), vec3(0.62, 0.6, 0.58), vFire.z);
+            ab = a;
+          }
+          float fade = 1.0 - smoothstep(110.0, 230.0, vDist);
+          diffuseColor = vec4(col * a * fade, ab * fade);
+        }`);
+  });
+  return FIRE;
+}
+
+// The fire sources of one castle, grouped by who owns them ('static' architecture, 'tower' upgrades, 'ruin'): one mesh in all.
+export class FireSet {
+  constructor(group, material) { this.group = group; this.material = material; this.sets = new Map(); this.mesh = null; this.dirty = false; }
+  set(name, list) { if (list && list.length) this.sets.set(name, list); else this.sets.delete(name); this.dirty = true; }
+  rebuild() {
+    this.dirty = false;
+    const pos = [], corner = [], fx = [], idx = [];
+    let n = 0;
+    for (const list of this.sets.values()) for (const [kind, x, y, z, size, phase = (n * 0.6180339) % 1] of list) {
+      const speed = kind === 2 ? 0.14 + (n % 3) * 0.03 : 0;
+      for (const [cx, cy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { pos.push(x, y, z); corner.push(cx, cy); fx.push(kind, phase, size, speed); }
+      idx.push(n * 4, n * 4 + 1, n * 4 + 2, n * 4, n * 4 + 2, n * 4 + 3);
+      n++;
+    }
+    if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh = null; }
+    if (!n) return;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('corner', new THREE.Float32BufferAttribute(corner, 2));
+    g.setAttribute('fx', new THREE.Float32BufferAttribute(fx, 4));
+    g.setIndex(n * 4 > 65535 ? new THREE.Uint32BufferAttribute(idx, 1) : new THREE.Uint16BufferAttribute(idx, 1));
+    g.computeBoundingSphere();
+    g.boundingSphere.radius += 10;          // (smoke rises well above where it starts)
+    this.mesh = new THREE.Mesh(g, this.material);
+    this.mesh.matrixAutoUpdate = false;
+    this.mesh.renderOrder = 2;
+    this.group.add(this.mesh);
+  }
+  update() { if (this.dirty) this.rebuild(); }
+}

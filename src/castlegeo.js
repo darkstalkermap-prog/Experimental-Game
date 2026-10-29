@@ -14,7 +14,7 @@ export const MERLON_H = 1.3;
 
 // tints (multipliers on the textures, linear)
 export const C = {
-  stone: [1, 1, 1], pale: [1.16, 1.1, 0.94], dark: [0.56, 0.54, 0.5], plinth: [0.72, 0.7, 0.66], black: [0.04, 0.04, 0.045], step: [0.8, 0.78, 0.74],
+  stone: [1, 1, 1], pale: [1.08, 1.04, 0.92], dark: [0.72, 0.7, 0.66], plinth: [0.72, 0.7, 0.66], black: [0.04, 0.04, 0.045], step: [0.8, 0.78, 0.74],
   wood: [1, 1, 1], woodDark: [0.55, 0.47, 0.4], woodLight: [1.2, 1.1, 0.98], old: [0.78, 0.74, 0.7],
   iron: rgb(0x34353a), ironLight: rgb(0x5b5d66), gold: rgb(0xd8a83a), slate: [1, 1, 1],
 };
@@ -44,9 +44,19 @@ export function merlonSlots(seg) {
 }
 
 // a rough stone, half buried: `size` is its radius
-function rock(P, x, z, size, rng, tint = C.old, flat = 0.6) {
+function rock(P, x, z, size, rng, tint = C.old, flat = 0.6, y0 = 0) {
   const sy = size * (flat * (0.7 + rng() * 0.5));
-  P.add('masonry', new THREE.IcosahedronGeometry(1, 0), place(x, sy * 0.45, z, rng() * 6.28, rng() * 0.6, rng() * 0.6, size * (0.8 + rng() * 0.5), sy, size * (0.8 + rng() * 0.5)), P.jitter(tint, 0.18));
+  P.add('masonry', new THREE.IcosahedronGeometry(1, 0), place(x, y0 + sy * 0.45, z, rng() * 6.28, rng() * 0.6, rng() * 0.6, size * (0.8 + rng() * 0.5), sy, size * (0.8 + rng() * 0.5)), P.jitter(tint, 0.18));
+}
+
+// A wall torch at (x, y, z) on a wall facing (ax, az): an iron arm and cup, a wooden brand, and the flame and glow sources for the fire set.
+export function torch(A, fires, x, y, z, ax, az) {
+  const hx = x + ax * 0.4, hz = z + az * 0.4;
+  A.box('metal', Math.min(x, hx) - 0.04, Math.max(x, hx) + 0.04, y - 0.05, y + 0.05, Math.min(z, hz) - 0.04, Math.max(z, hz) + 0.04, C.iron);
+  A.cyl('metal', 0.11, 0.07, 0.17, 8, place(hx, y - 0.02, hz), C.iron);
+  A.cyl('timber', 0.04, 0.05, 0.8, 6, place(hx, y, hz), C.woodDark);
+  A.cyl('plain', 0.09, 0.05, 0.2, 6, place(hx, y + 0.72, hz), C.black);
+  fires.push([0, hx, y + 1.12, hz, 1.1], [1, hx, y + 1.0, hz, 2.6]);
 }
 
 // One curtain wall segment in its three states: intact, damaged (under half its hit points: a jagged top, fallen blocks) and gone (rubble).
@@ -111,7 +121,7 @@ export function wallParts(seg, d, seed) {
 }
 
 // ---------------------------------------------------------------- gatehouse, stairs, lever
-export function gatehouse(F, A, d) {
+export function gatehouse(F, A, d, fires) {
   const M = 'masonry', zi = H - T, zo = H;
   // dressed jambs: courses alternate long and short, standing a little proud of both faces
   for (const s of [-1, 1]) for (let i = 0; i < 12; i++) {
@@ -146,6 +156,7 @@ export function gatehouse(F, A, d) {
       A.add('metal', new THREE.ConeGeometry(0.07, 0.3, 4), place(x, gateH - 1.25, zi + 0.54, 0, Math.PI), C.ironLight);
     }
     for (const y of [gateH - 0.3, gateH + 0.35]) A.box('metal', -GW + 0.4, GW - 0.4, y, y + 0.08, zi + 0.46, zi + 0.62, C.iron);
+    for (const s of [-1, 1]) { torch(A, fires, s * (GW + 1.4), 3.4, zo + 0.12, 0, 1); torch(A, fires, s * (GW + 1.2), 3.4, zi - 0.1, 0, -1); }
   }
   // the battlements above the gate
   for (let i = 0; i < 3; i++) {
@@ -264,7 +275,17 @@ export function tower(K, A, R, sx, sz, d) {
     m(SB[0], SB[1], z0, z1, lowered, FLOOR + RISE + RISE * (i + 1) / N, C.step, { skip: 'd' });
   }
   m(A1, F1 - W, SA[0], SA[1], lowered, FLOOR + RISE, C.step, { skip: 'd' });          // the landing
-  void R;
+  if (d >= 1) {                                                                       // a round turret on the outer corner (clear of the stairs and the walkable roof)
+    const cx = sx * (F1 + 0.55), cz = sz * (F1 + 0.55);
+    K.cyl(M, 1.35, 0.55, 2.4, 12, place(cx, towerH - 3.6, cz), C.stone);
+    K.cyl(M, 1.35, 1.35, 3.3, 12, place(cx, towerH - 1.2, cz), C.stone);
+    K.cyl(M, 1.6, 1.35, 0.35, 12, place(cx, towerH + 2.1, cz), C.pale);
+    R.cyl('roof', 0, 1.75, 2.8, 12, place(cx, towerH + 2.45, cz), C.slate);
+    for (let i = 0; i < 3; i++) {
+      const a = Math.atan2(sx, sz) + (i - 1) * 0.9, px = cx + Math.sin(a) * 1.33, pz = cz + Math.cos(a) * 1.33;
+      K.box(M, px - 0.07, px + 0.07, towerH + 0.4, towerH + 1.6, pz - 0.07, pz + 0.07, C.black);
+    }
+  }
 }
 
 // ---------------------------------------------------------------- the keep
@@ -277,7 +298,7 @@ function hip(R, key, cx, cz, ax, az, y0, rise, rh, tint, s = 2) {
   R.quad(key, [cx - ax, y0, cz - az], [cx - ax, y0, cz + az], [cx - rh, y1, cz], [cx - rh, y1, cz], tint, [0, 0, 2 * az / s, 0, az / s, Ls / s, az / s, Ls / s]);
 }
 
-export function keep(K, A, R, d) {
+export function keep(K, A, R, d, fires) {
   const M = 'masonry', x0 = -HW, x1 = HW, z0 = KEEP_Z - HW, z1 = KEEP_Z + HW;
   K.box(M, x0, x1, 0, keepH, z0, z1, C.stone, { skip: 'd' });
   K.box(M, x0 - 0.35, x1 + 0.35, 0, 1.2, z0 - 0.35, z1 + 0.35, C.plinth, { skip: 'd' });
@@ -356,6 +377,8 @@ export function keep(K, A, R, d) {
     }
     if (d >= 2) for (const s of [-1, 1]) A.obox('timber', place(x + s * 0.62, y, zf + 0.12, s * 0.9), 0.16, 0.66, 0.025, C.woodDark);
   }
+  if (d >= 1) for (const s of [-1, 1]) torch(A, fires, s * 2.75, 3.1, zf + 0.22, 0, 1);
+  if (d >= 2) for (const [x, z] of [[-2.4, KEEP_Z + 1.2], [2.2, KEEP_Z - 1.6]]) for (const ph of [0, 0.5]) fires.push([2, x, keepH + 4.4, z, 1.1, ph]);
 }
 
 // ---------------------------------------------------------------- the courtyard floor
@@ -378,4 +401,47 @@ export function courtyard(A, d, seed) {
     for (const [x, z, c] of v) A._vert(a, x, y, z, 0, 1, 0, x / 4, z / 4, c);
     a.idx.push(base, base + 3, base + 2, base, base + 2, base + 1);
   }
+}
+
+// ---------------------------------------------------------------- the ruin
+// What is left when the keep has fallen: rubble heaped round its foot, the burnt skeleton of its roof, scorch marks on the floor, and
+// fires and smoke columns for the fire set. Returns { P: Parts, fires }.
+export function ruin(seed, d) {
+  const P = new Parts(seed), rng = mulberry32(seed + 17), fires = [];
+  const x0 = -HW, x1 = HW, z0 = KEEP_Z - HW, z1 = KEEP_Z + HW, char = [0.09, 0.075, 0.065];
+  for (let i = 0; i < 24 + 14 * d; i++) {                      // rubble round the foot of the keep
+    const side = Math.floor(rng() * 4), t = (rng() - 0.5) * (keepW + 2), off = 0.7 + rng() * 2.8;
+    const x = side < 2 ? t : side === 2 ? x0 - off : x1 + off, z = side === 0 ? z1 + off : side === 1 ? z0 - off : KEEP_Z + t;
+    rock(P, x, z, 0.35 + rng() * 0.85, rng, mul(C.stone, 0.25 + rng() * 0.2), 0.7);
+  }
+  for (let i = 0; i < 9; i++) rock(P, (rng() - 0.5) * 8, KEEP_Z + (rng() - 0.5) * 8, 0.4 + rng() * 0.6, rng, mul(C.stone, 0.22), 0.7, keepH);   // blocks fallen on the top
+  const ridge = keepH + 3.2;
+  const beam = (ax, ay, az, bx, by, bz, w = 0.1) => { const b = between(ax, ay, az, bx, by, bz); P.obox('timber', b.m, w, w * 1.2, b.half, P.jitter(char, 0.2)); };
+  beam(-1.8, ridge, KEEP_Z, 1.8, ridge, KEEP_Z, 0.13);          // the burnt roof: a ridge beam and rafters, most of them broken short
+  for (let i = 0; i < 9; i++) {
+    const t = -3.6 + i * 0.9, cut = 0.4 + rng() * 0.6;
+    for (const sz of [-1, 1]) {
+      const ex = Math.max(-4.7, Math.min(4.7, t * 1.15)), ez = KEEP_Z + sz * 4.6, rx = Math.max(-1.8, Math.min(1.8, t));
+      beam(ex, keepH, ez, ex + (rx - ex) * cut, keepH + (ridge - keepH) * cut, ez + (KEEP_Z - ez) * cut);
+    }
+  }
+  for (let i = 0; i < 5; i++) {                                // beams that came down
+    const x = (rng() - 0.5) * 7, z = KEEP_Z + (rng() - 0.5) * 7, a = rng() * 3.14;
+    beam(x - Math.cos(a) * 1.4, keepH + 0.15, z - Math.sin(a) * 1.4, x + Math.cos(a) * 1.4, keepH + 0.35, z + Math.sin(a) * 1.4);
+  }
+  const blob = (cx, cz, r, k) => {                             // scorch marks on the floor
+    const n = 9, a = P.a('plain'), base = a.pos.length / 3, c = [k, k * 0.9, k * 0.8];
+    P._vert(a, cx, 0.09, cz, 0, 1, 0, 0, 0, c);
+    for (let i = 0; i < n; i++) { const an = (i / n) * Math.PI * 2, rr = r * (0.7 + rng() * 0.5); P._vert(a, cx + Math.cos(an) * rr, 0.09, cz + Math.sin(an) * rr, 0, 1, 0, 0, 0, c); }
+    for (let i = 0; i < n; i++) a.idx.push(base, base + 1 + ((i + 1) % n), base + 1 + i);
+  };
+  for (const [x, z, r] of [[0, z1 + 2.6, 3.4], [-3.4, z1 + 4.6, 2], [3.6, z1 + 3.6, 2.3], [1, z0 - 2, 2.6], [-8, 6, 1.8], [7, -2, 2.2], [0, 9, 2.6]]) blob(x, z, r, 0.05);
+  for (let i = 0; i < 6; i++) {                                // fires and smoke on the roofless keep
+    const x = (rng() - 0.5) * 7, z = KEEP_Z + (rng() - 0.5) * 7, big = 2 + rng() * 1.4;
+    fires.push([0, x, keepH + big * 0.45, z, big], [1, x, keepH + big * 0.5, z, big * 2.0]);
+    if (i < 4) fires.push([2, x, keepH + 1.5, z, 3 + rng(), i * 0.25]);
+  }
+  for (const [x, z] of [[-4.6, KEEP_Z + 5.4], [5.2, KEEP_Z + 5.4], [0.4, KEEP_Z + 7.2]]) fires.push([0, x, 0.7, z, 1.3], [1, x, 0.8, z, 3.4], [2, x, 1, z, 1.6, rng()]);
+  for (const [sx, sz] of [[1, 1], [-1, 1], [1, -1]]) fires.push([0, sx * 24, towerH + 0.9, sz * 24, 1.7], [1, sx * 24, towerH + 1, sz * 24, 3.4], [2, sx * 24, towerH + 1.5, sz * 24, 2.6, rng()]);
+  return { P, fires };
 }

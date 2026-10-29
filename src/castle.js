@@ -8,7 +8,7 @@ import { materials, box, shadowed, partsMaterial } from './materials.js';
 import { Upgrades } from './upgrades.js';
 import { Q, onQuality } from './quality.js';
 import { Parts, place } from './parts.js';
-import { Cloth, clothMaterial, updateWind } from './castlefx.js';
+import { Cloth, clothMaterial, updateWind, FireSet } from './castlefx.js';
 import * as G from './castlegeo.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
@@ -42,6 +42,7 @@ export class Castle {
     this.mats = materials();
     this.clothMat = clothMaterial(this.mats.banners[team].map);   // (its own: the fallen keep scorches it)
     this.vis = [];
+    this.fire = new FireSet(this.group, this.mats.fire);   // torches, braziers, chimneys, the burning ruin
     this.build();
     this.group.updateMatrix();
     this.group.matrixAutoUpdate = false;
@@ -274,20 +275,22 @@ export class Castle {
     for (const m of this.vis) { this.group.remove(m); m.geometry.dispose(); }
     this.vis.length = 0;
     this.wallMesh = this.keepMesh = this.tilesMesh = null;
+    this.ruinBuilt = false;
   }
 
   buildVisuals() {
     this.clearVisuals();
     const d = Q.detail, g = this.group, seed = this.team * 101 + 5;
     this.detail = d;
-    const fixed = new Parts(seed + 1), A = new Parts(seed + 2), R = new Parts(seed + 3), K = new Parts(seed + 4), cloth = new Cloth();
-    G.gatehouse(fixed, A, d);
+    const fixed = new Parts(seed + 1), A = new Parts(seed + 2), R = new Parts(seed + 3), K = new Parts(seed + 4), cloth = new Cloth(), fires = [];
+    G.gatehouse(fixed, A, d, fires);
     G.stairs(fixed, d);
     G.deck(A, d);
     G.courtyard(A, d, seed);
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
-    G.keep(K, A, R, d);
+    G.keep(K, A, R, d, fires);
     this.dress(cloth, A, d);
+    this.fire.set('static', fires);
     const mesh = (parts, key, geo = null, cast = false) => {
       geo = geo || parts.geometry(key);
       if (!geo) return null;
@@ -353,7 +356,10 @@ export class Castle {
       cloth.flag([x, y + size * 1.6, z], size, tag);
     };
     const F1 = TC + towerR;
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) flag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      if (d >= 1) flag(sx * (F1 + 0.55), towerH + 5.2, sz * (F1 + 0.55), 0.9);   // on the point of the corner turret's roof
+      else flag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
+    }
     if (d >= 1) flag(0, keepH + 3.0, KEEP_Z, 2.2, 1); else flag(-keepW / 2 + 1, keepH + 1.2, KEEP_Z + keepW / 2 - 1, 2.2, 1);
     // the courtyard props that were always here (more of them come with props.js)
     if (d >= 1) {
@@ -559,6 +565,20 @@ export class Castle {
     }
     if (this.tilesMesh) this.tilesMesh.visible = false;
     this.clothMat.userData.cwFall.value = 1;
+    if (!this.ruinBuilt) {                       // rubble, the burnt roof beams, scorch marks, fires and smoke
+      this.ruinBuilt = true;
+      const r = G.ruin(this.team * 53 + 11, this.detail);
+      for (const key of ['masonry', 'timber', 'plain']) {
+        const geo = r.P.geometry(key);
+        if (!geo) continue;
+        const m = new THREE.Mesh(geo, partsMaterial(key));
+        m.receiveShadow = true;
+        m.matrixAutoUpdate = false;
+        this.group.add(m);
+        this.vis.push(m);
+      }
+      this.fire.set('ruin', r.fires);
+    }
   }
 
   // --- damage (simulation only) ---
@@ -686,6 +706,7 @@ export class Castle {
   update(dt, time) {
     this.upg.tick(dt, time);
     updateWind(time);   // (every castle sets the one shared clock the cloth waves by)
+    this.fire.update();
     if (this.wallsDirty) this.rebuildWalls();
     // gate opens for friendly troops when no enemy is close
     const gate = this.gate;

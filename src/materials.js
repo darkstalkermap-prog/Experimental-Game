@@ -4,6 +4,7 @@ import { bannerTexture, soilTexture } from './textures.js';
 import { stoneSet, flagSet, cobbleSet, timberSet, gateSet, roofSet, noiseTexture } from './castletex.js';
 import { patchMaterial } from './shaderhook.js';
 import { Q, onQuality } from './quality.js';
+import { fireMaterial } from './castlefx.js';
 import { TEAM_COLORS } from './config.js';
 
 let M = null;
@@ -73,6 +74,7 @@ export function materials() {
     metal: std({ vertexColors: true, metalness: 0.65, roughness: 0.5 }),
     plain: std({ vertexColors: true, roughness: 0.92 }),
     gate: std({ map: gt.map, normalMap: gt.normalMap, color: 0xffffff, roughness: 0.85 }),
+    fire: fireMaterial(),
     gateBurnt: std({ map: gt.map, normalMap: gt.normalMap, color: 0x3a322c, roughness: 1 }),
     // geometries shared by every castle live here so that Game.dispose keeps them (it keeps everything this object holds)
     geos: [],

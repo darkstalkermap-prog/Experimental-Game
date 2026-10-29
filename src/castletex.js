@@ -210,7 +210,7 @@ function boards(N, rowsOfNails, seed, o = {}) {
   for (let b = 0; b < n; b++) {
     const bw = ws[b] * N / sum, xs = Math.round(x0), xe = Math.round(x0 + bw), tone = 0.8 + rng() * 0.4, joint = Math.floor(rng() * N);
     const kx = bw * (0.3 + rng() * 0.4), ky = rng() * N, hasKnot = rng() < 0.55, freq = 0.5 + rng() * 0.35;
-    const base = o.base || [128, 88, 56];
+    const base = o.base || [122, 94, 70];
     for (let y = 0; y < N; y++) for (let px = xs; px < xe; px++) {
       const x = px % N, idx = y * N + x, lx = px - xs, edge = Math.min(lx, xe - 1 - px);
       let gx = lx + (warp[idx] - 0.5) * 34;
@@ -282,7 +282,7 @@ export function roofSet(size = 256) {
     const fine = fbm(N, N, 32, 2, rng, 0.6), coarse = fbm(N, N, 4, 3, rng);
     const tile = [];
     for (let i = 0; i < cols * rows; i++) tile.push({ t: rng(), b: 0.82 + rng() * 0.3, moss: rng() < 0.12 });
-    const pal = [[64, 68, 80], [74, 78, 90], [58, 62, 72], [82, 80, 88], [68, 72, 82]];
+    const pal = [[96, 100, 114], [108, 112, 126], [88, 92, 104], [118, 114, 122], [100, 104, 116]];
     const color = new Uint8Array(N * N * 4), height = new Float32Array(N * N);
     for (let y = 0; y < N; y++) {
       const r = Math.min(rows - 1, Math.floor(y / th)), ly = y - r * th;
