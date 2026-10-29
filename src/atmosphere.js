@@ -28,7 +28,8 @@ const vec3 ATM_SUN_TINT = vec3(1.0, 0.80, 0.55);
 vec3 atmSrgb(vec3 c) { return pow(c, vec3(2.2)); }
 float atmHg(float mu, float g) { float g2 = g * g; return (1.0 - g2) / (12.5663706 * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5)); }
 // tint: the colour of the haze at the horizon (1 = the meadow's), fading out overhead; murk 0..1: overcast and mist (0 = the clear meadow sky). Both are
-// 1 and 0 in the meadow, where every line below gives back exactly the value it had before biomes (see the air of a biome in biomes.js).
+// 1 and 0 in the meadow, where the two branches below are skipped (they test uniforms, so they cost a compare) and every other line gives back exactly the
+// value it had before biomes (see the air of a biome in biomes.js).
 vec3 atmHazeB(vec3 d, vec3 tint, float murk) {
   float y = clamp(d.y, 0.0, 1.0);
   float mu = clamp(dot(d, ATM_SUN), -1.0, 1.0);
@@ -39,12 +40,14 @@ vec3 atmHazeB(vec3 d, vec3 tint, float murk) {
   vec3 sky = mix(hor, low, smoothstep(0.0, 0.10, y));
   sky = mix(sky, mid, smoothstep(0.06, 0.42, y));
   sky = mix(sky, zenith, smoothstep(0.30, 1.0, y));
-  sky = mix(sky, hor, murk * smoothstep(0.0, 0.25, y));                   // overcast: the sky above pales to the colour of the horizon
+  float gk = 1.0, hk = 1.0;                                              // how much of the sun's glow and of the golden horizon a murky sky keeps
+  if (murk > 0.0) { sky = mix(sky, hor, murk * smoothstep(0.0, 0.25, y)); gk = 1.0 - 0.8 * murk; hk = 1.0 - 0.9 * murk; }   // overcast: the sky above pales to the horizon's colour
   sky *= 0.86 + 0.28 * mu * mu;                                          // Rayleigh phase: dimmest about 90 degrees from the sun
   float glow = atmHg(mu, 0.70) * 0.50 + pow(max(mu, 0.0), 3.0) * 0.14;   // forward scattering by the haze
-  sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y)) * (1.0 - 0.8 * murk);
-  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y)) * (1.0 - 0.9 * murk);   // golden horizon on the sun side
-  return sky * mix(tint, vec3(1.0), smoothstep(0.0, 0.55, y));
+  sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y)) * gk;
+  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y)) * hk;   // golden horizon on the sun side
+  if (tint != vec3(1.0)) sky *= mix(tint, vec3(1.0), smoothstep(0.0, 0.55, y));
+  return sky;
 }
 vec3 atmHaze(vec3 d) { return atmHazeB(d, vec3(1.0), 0.0); }
 `;
@@ -130,7 +133,7 @@ const FOG_FRAGMENT = `#ifdef USE_FOG
   #ifdef FOG_EXP2
     gl_FragColor.rgb = atmFog( gl_FragColor.rgb, vFogRay, fogDensity );
   #else
-    gl_FragColor.rgb = atmFog( gl_FragColor.rgb, vFogRay, 1.0 / max( fogFar, 1.0 ) );
+    gl_FragColor.rgb = atmFog( gl_FragColor.rgb, vFogRay, fogFar );
   #endif
 #endif`;
 
@@ -437,8 +440,8 @@ export function createAtmosphere(scene, renderer = null) {
 
   // image-based lighting from the same sky, so steel and armour reflect it and shadows take the colour of the sky
   if (renderer) scene.environment = sharedEnvironment(renderer).texture;
-  // The fog is a linear Fog only because it has two spare numbers: fog.color is the haze tint and fog.near the murk of the biome (biomes.js `air`); the
-  // shader reads the reach from fog.far (see the fog chunk above)
+  // The fog is a linear Fog only because it has spare numbers: fog.color is the haze tint, fog.near the murk of the biome (biomes.js `air`) and fog.far the
+  // density that FogExp2 carried (the fog chunk above reads all three; nothing else looks at the fog)
   scene.fog = new THREE.Fog(0xffffff, air.murk, 400);
   // The renderer hands a fog colour to the shader display-encoded when the frame goes straight to the canvas (no post pass: Low) and as it is when it goes
   // to the HDR target. The shader wants the tint as it is, so for the canvas it is stored decoded (and 1, the meadow's, is 1 either way).
@@ -458,7 +461,7 @@ export function createAtmosphere(scene, renderer = null) {
       mat.uniforms.uTime.value = this.time;
       const clouds = Q.clouds | 0;
       if (mat.defines.CLOUDS !== clouds) { mat.defines.CLOUDS = clouds; mat.needsUpdate = true; }
-      scene.fog.far = 1 / ((1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog);
+      scene.fog.far = (1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog;   // (the shader takes it as the density: see the fog chunk)
       if (direct !== !usesPost()) { direct = !usesPost(); setTint(); }
     },
   };

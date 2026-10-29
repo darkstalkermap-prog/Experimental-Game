@@ -481,6 +481,35 @@ movement, swing, shot and ability paths as a person); `Game.start` switches the 
 `hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
 controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handleInput`).
 
+## Biomes and seeds
+
+The same battlefield (castle sites, roads, the hill in the middle, the valley and every height) can be dressed four ways, each with one small rule twist. The
+**Land** row of the menu (and the host's lobby) picks the biome; **Seed** varies the land inside it. Heights, castles, gates and the hill never change, so a
+biome never makes the war easier to read or harder to reach.
+
+| Biome | Look | Twist |
+| --- | --- | --- |
+| Meadow | the classic land (seed 0 is exactly the old arrangement) | none |
+| Snow | white ground and drifts, frozen ponds, snow-laden pines and bare birches, pale overcast sky, falling flakes, snow on the castle roofs | **Deep snow**: soldiers off the roads march 12% slower; the roads, the castle yards and the hill in the middle are trampled |
+| Marsh | mud, standing water and reeds, dead and mossy trees, green-grey mist that hides the far hills | **Fens**: the mist cuts archers' range by 20%, and soldiers wading through a pond (the dark water you can see) march 22% slower |
+| Desert | sand and bands of dunes, red sandstone mountains, palms, cacti and dry shrubs, a hot orange haze and a long clear sight, drifting dust | **Scorching sun**: a hero's sprint drains stamina 50% faster and it returns 35% slower |
+
+**Seeds** (0 to 999999) move the trees, the rocks, the forest on the mountains and the colour patches and ponds of the ground. Seed 0 is each biome's classic
+arrangement; a random seed gives a new arrangement every time. Nothing is placed on a road, in a castle's yard or on the hill, whatever the seed
+(`okForProp` in `src/scatter.js`), and the same biome and seed always build the same world: nothing in a build uses `Math.random`, so the host and its guests
+each build their own copy from the `biome` and `seed` of the match options. Types of land the game does not know (an older client) play as the meadow.
+
+**Choosing.** The first battle is the classic land. After it the choice turns to **Random** (unless you picked a biome yourself): every battle ends with a
+"Next battle: the land" section on the end screen that shows the land that comes next, with a little picture, its twist and a **Reroll land** button (a fixed
+biome only rerolls its seed). Play Again and Quick Play start on what the preview shows. The page also opens on `?land=snow:4321` (a biome and a seed), which is
+also how to share a land. The practice courtyard is always the meadow. Online, the host picks and the guests see it in the lobby; Hero Game Mode takes biomes too.
+
+**How it is built.** `src/biomes.js` is the table of everything a biome changes (the ground colours and the splat shader's palette, the haze, the sun and sky
+light, the plants, the grass, the weather, the twist) and the land state; the world is built after `setWorldLand(biome, seed)` (main.js `ensureMap` builds it
+again when the biome or the seed differs). The colours of the splat shader are uniforms, so every biome shares one program; the fog is a linear `THREE.Fog`
+whose colour and near distance carry the haze tint and the murk (see `atmosphere.js`). The twists are mods (`offroadSpeed`, `mudSpeed`, `archerRange`,
+`staminaDrain`, `staminaRegen`, see `src/mods.js` and `src/biometwist.js`). `src/landui.js` has the menu row and the end-screen section; `src/weather.js` the flakes, the
+mist banks and the dust (written into the smoke layer of the effects: no extra draw call); `src/biomedust.js` the snow on the castles.
 ## Controls
 
 | Key | Action |
@@ -573,6 +602,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |
 | `src/terrain.js`, `src/landscape.js`, `src/terrainmat.js`, `src/terraintex.js` | The land: culled chunks that follow the physics heights exactly, the far mountains beyond the play area, the ground shader (grass, soil, road ruts, rock strata, snow) |
 | `src/foliage.js`, `src/foliagegeo.js`, `src/scenery.js`, `src/grass.js` | Trees and rocks as instanced models in three levels of detail with wind, the forest on the mountains, the grass that grows around the camera |
+| `src/biomes.js`, `src/landui.js`, `src/scatter.js`, `src/roads.js`, `src/biometwist.js`, `src/biomedust.js`, `src/weather.js` | Biomes and seeds: the table of what a biome changes and the land state, the menu row and the end-screen preview of the next land, where the solid trees and rocks stand (a pure function of the land), the roads, the twists, the dusting of the castles, the flakes and the dust |
 | `src/castlegeo.js`, `src/castletex.js`, `src/castlefx.js`, `src/parts.js`, `src/props.js`, `src/materials.js`, `src/siegegeo.js` | How castles and siege engines look: static geometry merged by material, relief stone and timber, torches, banners in the wind, props, the engines' few meshes |
 | `src/viewmodel.js`, `src/vmkit.js`, `src/vmgeo.js`, `src/vmweapons.js`, `src/vmmat.js`, `src/vmtex.js` | The first-person kit: arms, hands, weapons and shields of the six classes, their motion, the swing trail |
 | `src/fx.js`, `src/particles.js`, `src/fxtex.js`, `src/groundfx.js`, `src/camfx.js` | Effects: GPU particles and ground marks, the ability glyphs, and the camera (shake, kicks, field-of-view punch, colour drain on low health, death fade) |
