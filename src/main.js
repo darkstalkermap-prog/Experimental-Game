@@ -17,7 +17,7 @@ import { LEVELS, applyQuality } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = new THREE.WebGLRenderer({ antialias: !/[?&]noaa=1/.test(location.search), powerPreference: 'high-performance' });
 renderer.setSize(innerWidth, innerHeight);
 gfx.init(renderer);   // (tone curve, shadow filter and the rest of the renderer set-up: see gfx.js)
 $('app').appendChild(renderer.domElement);
