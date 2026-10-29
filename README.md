@@ -506,12 +506,18 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
 - **Cloaks** (Crimson Mantle, Greenwood Cloak, Wolfskin Mantle, Midnight Cape): a cloak on your hero's body, which the other
   players see. In first person you cannot see your own back, and in single player nobody else is looking, so the Renown panel
   shows it on a small figure.
-- **Alternate capstone talents**, one for each class, in the capstone's own place in the talent tree (Knight: Bastion Strike,
-  Berserker: Blood Tithe, Ranger: Steady Aim, Mage: Cold Snap, Cleric: Mercy, Cavalier: Shieldwall Charge). Each costs one
-  point like the capstone it can stand in for, replaces it (a hero has one or the other, and Respec lets them change their
-  mind) and is a **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` in `src/talents.js`
-  says what each does and compares it to the capstone). They are kept out of the lists that walk the tree (bots, the practice
-  yard's "All talents"), and the practice yard lets anybody try them.
+- **Alternate capstone talents**, one for each class, in the capstone's own place in the talent tree. Each costs one point like
+  the capstone it can stand in for, replaces it (a hero has one or the other, and Respec lets them change their mind) and is a
+  **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` and its numbers, in `src/talents.js`).
+  Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
+  the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
+  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
+  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Second Wave): 90% of a volley's arrows
+  seek out a foe, not 70%. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
+  harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
+  Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
+  tree, under the capstone, only for an account that has earned them (and in the practice yard, where anybody may try them), and
+  they stay out of the lists that walk the tree (bots, the practice yard's "All talents").
 
 A new banner or cloak is put on at once if you wear nothing in its place (so it is seen in the very next battle, even if you
 never visit the menu); what you chose to wear is never swapped.
