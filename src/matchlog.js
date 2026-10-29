@@ -9,7 +9,8 @@
 //     weapon = 'Fireball' | 'sword' | 'catapult' | 'army' ...):
 //     gate · wall · keep (a gate, a wall segment or a keep fell; `at` = where the castle stands on the map) · lord (a lord was slain)
 //     engine (a siege engine was destroyed; `what` = ram | catapult) · multikill (n foes to one sweep of an ability) · firstblood (the local hero's first kill)
-//     laststand ({ saved }: the comeback rules may record it) · none of these is recorded on a guest: the host sends the notable ones with the end of the match
+//     laststand (a Last Stand saved a keep: the comeback rules record { by: the house, kind: 'hero', weapon: 'Last Stand' } and the end screen tells it) ·
+//     none of these is recorded on a guest: the host sends the notable ones with the end of the match
 //   counters (highlights.js): gates · walls · keeps (parts that fell) · gateHit (damage the local gate took)
 export const matchlog = {
   t: 0,            // seconds of match played

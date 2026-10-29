@@ -178,7 +178,7 @@ export function tell(game, e, me) {
     case 'multikill': return `${subject} ${(SWEEPS[e.weapon] || 'felled {n} foes at once').replace('{n}', e.n)}${at}`;
     case 'firstblood': return `You drew first blood${at}`;
     case 'held': return `Your army held the gate through ${e.n} waves`;
-    case 'laststand': return `Your last stand saved the keep${at}`;
+    case 'laststand': return `${mine || e.by === undefined ? 'Your' : `${lordOf(e.by)}'s`} last stand saved ${e.house === undefined || e.house === me || e.house === e.by ? (mine || e.by === undefined ? 'the' : 'your') : `${nameOf(e.house)}'s`} keep${at}`;
     default: return '';
   }
 }

@@ -335,7 +335,8 @@ export class Finale {
     if (this.el) {
       const el = this.el;
       el.classList.add('leave');
-      setTimeout(() => el.remove(), 800);
+      el.classList.remove('on');   // (the letterbox slides away)
+      setTimeout(() => el.remove(), 900);
       this.el = null;
     }
     // behind the end screen the camera goes on drifting round the ruin; with no keep to look at the hero's own view comes back

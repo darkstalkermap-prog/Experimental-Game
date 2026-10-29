@@ -429,8 +429,9 @@ The end of a match is a short show, not a cut to a menu (`src/finale.js`). When 
   shared world, so only what you see and hear changes (the camera, the effects, the sound and the short wait).
 - **The war horn** (`src/horn.js`, built from WebAudio nodes like everything else): a rising call and a long full chord over
   timpani for a victory, one low dark horn that sags at its end over a slowing heartbeat of drums for a defeat. The music is
-  ducked under it and comes back. (A shorter call sounds when the last rival keep falls but the match goes on, with a moment
-  of slow motion in your own view.)
+  ducked under it and comes back, and the sounds of the world are dulled while time is slowed. (A shorter call sounds when the
+  last rival keep falls but the match goes on, with a moment of slow motion in your own view; the horn that opens a battle and
+  every tenth wave has the same brass voice now.)
 - **The keep falls** (`src/castlecollapse.js`). The keep and the four corner towers are drawn again from the same shapes cut
   into blocks about 3 m across and roof patches; each block has a plan worked out once (the structure shakes and leans, the
   stone lets go from the top downwards, tumbles, lands in a ring of rubble and hops once), and a frame only evaluates the plan
@@ -439,8 +440,9 @@ The end of a match is a short show, not a cut to a menu (`src/finale.js`). When 
   with it. A stump (with one tooth of wall left standing) and its rubble burn for the rest of the match, the same state a
   castle is redrawn in after a change of graphics quality.
 - **The camera** frames the keep that decided it (the last rival keep for a victory, your own for a defeat) from the side you
-  were on, high and wide, easing in and sweeping round it, under a letterbox; after the show it goes on drifting round the ruin
-  behind the end screen. With no keep to look at (King of the Hill, a keep that fell long ago) the same slow motion, horn and
+  were on: high and wide at first, then pushing in over the wall and sweeping a little, under a letterbox (if you stand in sight of
+  the keep, the first third of a second is your own view in slow motion before the cut); after the show it goes on drifting round
+  the ruin behind the end screen. With no keep to look at (King of the Hill, a keep that fell long ago) the same slow motion, horn and
   banner play in your own view, shorter.
 - **The banner** closes the show: Victory or Defeat and the best moment of the match, and the same line is the end screen's
   first section ("Moment of the battle").
