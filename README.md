@@ -555,7 +555,8 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
-| `src/models.js` | Soldier and horse models (two-segment limbs, armour, heraldry) and their poses |
+| `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs), their poses, and the catalogue of parts they wear (helmets, armour, weapons, shields, heraldry) built from primitives with baked shading |
+| `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share and its face and emblem atlases |
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs |
@@ -569,7 +570,14 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes |
 | `src/teams.js` | Who fights whom: co-op sides |
 | `src/economy.js` | Shop items, shared by the player and the AI |
-| `src/world.js`, `src/textures.js` | Terrain, sky, forests and procedural textures |
+| `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |
+| `src/terrain.js`, `src/landscape.js`, `src/terrainmat.js`, `src/terraintex.js` | The land: culled chunks that follow the physics heights exactly, the far mountains beyond the play area, the ground shader (grass, soil, road ruts, rock strata, snow) |
+| `src/foliage.js`, `src/foliagegeo.js`, `src/scenery.js`, `src/grass.js` | Trees and rocks as instanced models in three levels of detail with wind, the forest on the mountains, the grass that grows around the camera |
+| `src/castlegeo.js`, `src/castletex.js`, `src/castlefx.js`, `src/parts.js`, `src/props.js`, `src/materials.js`, `src/siegegeo.js` | How castles and siege engines look: static geometry merged by material, relief stone and timber, torches, banners in the wind, props, the engines' few meshes |
+| `src/viewmodel.js`, `src/vmkit.js`, `src/vmgeo.js`, `src/vmweapons.js`, `src/vmmat.js`, `src/vmtex.js` | The first-person kit: arms, hands, weapons and shields of the six classes, their motion, the swing trail |
+| `src/fx.js`, `src/particles.js`, `src/fxtex.js`, `src/groundfx.js`, `src/camfx.js` | Effects: GPU particles and ground marks, the ability glyphs, and the camera (shake, kicks, field-of-view punch, colour drain on low health, death fade) |
+| `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js`, `src/quality.js`, `src/shaderhook.js` | The renderer: sky, fog and the tone curve, the two shadow cascades, the HDR post passes, the frame path and adaptive resolution, the quality tunables `Q`, and the helper that lets several modules extend one material's shader |
+| `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/settings.js` | Volume, sensitivity, field-of-view and alerts/tips settings, kept in the browser |
@@ -592,8 +600,11 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 
 ## Performance
 
-- Distant soldiers switch to a single pre-built mesh, and only nearby ones cast shadows. Stuck arrows,
-  trees and grass are instanced, so a big battle stays cheap to draw.
+- Soldiers, horses and heroes are drawn as instances of shared shapes (rich near the camera, plain farther, one static
+  model far away), so 150 of them cost about a hundred draw calls; castles are merged by material, the land is culled
+  in chunks, and trees, rocks, arrows and grass are instanced. Crowds, engines and the first-person kit cast shadows
+  into the near shadow map only, drawn there as their plainest model. The profiler overlay (backquote) shows where a
+  frame goes.
 - Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
   models are prepared in the background during the preparation minute, so nothing stutters on first use.
 - Online, other players and soldiers are interpolated between the host's updates for smooth movement, and

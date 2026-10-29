@@ -33,6 +33,7 @@ import { allied, setSides } from './teams.js';
 import { applyQuality, Q } from './quality.js';
 import { gfx } from './gfx.js';
 import { Crowd, lodLimits } from './crowd.js';
+import { CamFx } from './camfx.js';
 import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
@@ -88,6 +89,7 @@ export class Game {
     createCentrePiece(this.scene, this.physics, materials().stoneDark);
     this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene, this);
+    this.camfx = new CamFx(this);   // shake, kicks, field-of-view punch and the colour hooks of the post pass (see camfx.js)
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
     this.abilities = new Abilities(this);
@@ -118,6 +120,7 @@ export class Game {
     if (this.disposed) return;
     this.disposed = true;
     this.crowd.dispose();
+    this.camfx.dispose();
     this.lights.rig.dispose();   // (the shadow rig and the first-person kit listen for quality changes: let go of them, or they keep this world alive)
     if (this.player.vm) this.player.vm.dispose();
     const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];
@@ -1405,6 +1408,7 @@ export class Game {
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
     if (this.simulating) this.cleanup(dt);
+    this.camfx.update(dt);   // (the camera is placed for the frame: nudge it, then the crowd culls against the view it will be drawn with)
     this.crowd.update(this, dt);
     if (this.warmQueue && this.warmQueue.length) {
       const t0 = performance.now();
