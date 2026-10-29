@@ -7,6 +7,7 @@
 // the same way the material did (tone map, then the output encoding), so the two paths agree.
 import * as THREE from 'three';
 import { Q } from './quality.js';
+import { installSkyLightChunks, bakeSkyLight } from './skylight.js';
 
 // the sun stands still: a warm afternoon, about 30 degrees above the horizon (everything that needs it reads this one vector)
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
@@ -172,6 +173,7 @@ const SHADOW_PARS = `
   #endif`;
 
 export let cascadesPatched = false;
+let skyTable = false;   // the programs read the baked sky table instead of the cube map
 let installed = false;
 export function installShaderChunks() {
   if (installed) return;
@@ -207,12 +209,9 @@ export function installShaderChunks() {
     cascadesPatched = true;
   } else console.warn('atmosphere: the shadow chunks changed; the sun uses a single plain shadow map');
 
-  // image-based light: its specular half is a second cube-map lookup (up to eight texture reads). On a rough surface that is the same blurred
-  // sky the diffuse half has just read, so there it is reused (smooth surfaces, steel and armour, keep their own reflection)
-  const radianceLine = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
-  if (C.lights_fragment_maps.includes(radianceLine)) {
-    C.lights_fragment_maps = C.lights_fragment_maps.replace(radianceLine, `if ( material.roughness > 0.85 ) radiance += iblIrradiance * RECIPROCAL_PI; else ${radianceLine}`);
-  } else console.warn('atmosphere: the environment-map chunk changed; rough surfaces read the sky twice');
+  // image-based light: the environment map is a baked table of the filtered sky (skylight.js), read with one or two fetches instead of a
+  // cube-map walk, and rough non-metals skip the second lookup and the multi-scattering terms
+  skyTable = installSkyLightChunks(C, SUN_DIR);
 }
 installShaderChunks();
 
@@ -396,7 +395,11 @@ export function createAtmosphere(scene, renderer = null) {
     envMat.defines.CLOUDS = 0;
     envScene.add(new THREE.Mesh(fullScreenTriangle(), envMat));
     const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.userData.environmentTarget = pmrem.fromScene(envScene, 0.02);
+    const filtered = pmrem.fromScene(envScene, 0.02);
+    if (skyTable) {   // the shaders read the baked table (skylight.js); the filtered cube map has done its job
+      scene.userData.environmentTarget = bakeSkyLight(renderer, filtered, SUN_DIR);
+      filtered.dispose();
+    } else scene.userData.environmentTarget = filtered;
     scene.environment = scene.userData.environmentTarget.texture;
     envMat.dispose();
     pmrem.dispose();
