@@ -18,7 +18,7 @@ function hook(material) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvDustUp = normal.y;');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uDust; uniform vec3 uDustColor;\nvarying float vDustUp;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = mix(diffuseColor.rgb, uDustColor, uDust * smoothstep(0.5, 0.86, vDustUp));');
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb = mix(diffuseColor.rgb, uDustColor, uDust * smoothstep(0.36, 0.8, vDustUp));');
   });
 }
 

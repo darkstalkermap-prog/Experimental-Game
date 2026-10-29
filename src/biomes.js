@@ -71,7 +71,7 @@ export const BIOMES = {
 
   marsh: {
     id: 'marsh', name: 'Marsh', short: 'Mist, mud and standing water.',
-    twist: { name: 'Fens', text: 'The mist cuts archers’ range by 20%, and mud slows soldiers wading through the ponds.' },
+    twist: { name: 'Fens', text: 'The mist cuts archers’ range by 20%, and soldiers wading through a pond march 22% slower.' },
     mods: { archerRange: 0.8, mudSpeed: 0.78 },
     ground: {
       grassA: 0x46562a, grassB: 0x5c6c30, grassDry: 0x6b6034, dirt: 0x3d3324, rock: 0x4f5649, rockWarm: 0x5a604c, trodden: 0x65593a,
@@ -95,8 +95,8 @@ export const BIOMES = {
 
   desert: {
     id: 'desert', name: 'Desert', short: 'Hot sun, dunes and red rock.',
-    twist: { name: 'Scorching sun', text: 'Heroes tire in the heat: sprinting drains stamina 35% faster and it comes back 30% slower.' },
-    mods: { staminaDrain: 1.35, staminaRegen: 0.7 },
+    twist: { name: 'Scorching sun', text: 'A hero’s sprint drains stamina 50% faster and it comes back 35% slower.' },
+    mods: { staminaDrain: 1.5, staminaRegen: 0.65 },
     ground: {
       grassA: 0xc19a58, grassB: 0xd6b574, grassDry: 0xa87a45, dirt: 0x8d6540, rock: 0x93583a, rockWarm: 0xa66d44, trodden: 0xb99660,
       sand: 0xd9b56f, forestDark: 0x6e4f2c, forestFloor: 0x9a7040, scrub: 0x9d7447, snow: 0xe2cfa6, patch: 0xe0c283,

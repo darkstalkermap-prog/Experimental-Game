@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const mul = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
 const norm3 = (x, y, z) => { const l = Math.hypot(x, y, z) || 1; return [x / l, y / l, z / l]; };
@@ -115,7 +116,7 @@ function skirt(m, y0, r, rise, sides, phase, seed, o) {
       const n = norm3(x, 0.55 + 0.1 * (yy - o.cy) / 5, z);
       const depth = clamp(0.35 + rr / o.r0, 0, 1);
       let col = mul(mix(o.dark, o.lite, tint), (0.7 + 0.3 * clamp((yy - 1) / 8, 0, 1)) * (0.75 + 0.25 * depth));
-      if (o.snow) col = mix(col, mul(SNOW, 0.8 + 0.2 * depth), o.snow * (1 - 0.62 * tint));
+      if (o.snow) col = mix(col, mul(SNOW, 0.8 + 0.2 * depth), o.snow * (0.88 - 0.78 * smoothstep(0.45, 1, tint)));
       out.push(m.v(x, jy, z, n, col, clamp(jy / 10, 0, 1), 0.5 + 0.5 * tint));
     }
     return out;
@@ -265,36 +266,39 @@ const birchBark = (t, k) => {
 };
 const trunkAt = (t, H, lean, birch) => [lean * t * t * 1.4, -0.4 + t * (H + 0.4), 0.15 * Math.sin(t * 5), birch ? 0.26 * (1 - 0.7 * t) + 0.03 : 0.66 * (1 - 0.82 * Math.pow(t, 0.8)) + 0.03];
 
-// A leafless tree: a trunk and a spray of forking branches (th: bark, barkLite colours, lean, height, count branches, birch: white bark, snow: clumps of
-// snow on the forks, spread: how far the branches reach)
+// A leafless tree: a tapering trunk and a spray of limbs that curve up and fork (th: bark, barkLite colours; lean; height; count of limbs; birch: white bark and
+// thin steep limbs; snow: a little snow lying on the forks; spread: how far the limbs reach; thick: how stout they are)
 export function buildBare(lod, th = {}) {
   const m = new Mesher();
-  const near = lod === 0, birch = !!th.birch, H = th.height || (birch ? 8.8 : 8.6), lean = th.lean || 0, spread = th.spread || 1;
+  const near = lod === 0, birch = !!th.birch, H = th.height || (birch ? 8.8 : 8.6), lean = th.lean || 0, spread = th.spread || 1, thick = th.thick || 1;
   const bark = th.bark || [0.13, 0.095, 0.07], lite = th.barkLite || [0.2, 0.15, 0.11];
   const rings = [];
   for (let i = 0; i <= 6; i++) rings.push(trunkAt(i / 6, H, lean, birch));
   const wood = (t, k) => mix(bark, lite, 0.3 + 0.35 * Math.abs(Math.sin(k * 18 + t * 4)));
   tube(m, rings, near ? 7 : 4, birch ? birchBark : wood, H + 2);
-  const count = near ? th.count || (birch ? 8 : 10) : Math.min(th.count || 6, 4);   // (the simple model for the middle distance has fewer branches: bare trees are mostly twigs)
-  const clump = { dark: mul(SNOW, 0.74), lite: SNOW, lump: 0.3, radial: 0.2, snow: 0, flutter: 0, h: H + 2 };
+  const count = near ? th.count || (birch ? 9 : 7) : Math.min(th.count || 5, 4);   // (the simple model for the middle distance has fewer limbs: bare trees are mostly twigs)
+  const limbCol = () => (birch ? [0.09, 0.075, 0.065] : bark);
+  const snow = { dark: mul(SNOW, 0.74), lite: SNOW, lump: 0.3, radial: 0.2, snow: 0, flutter: 0, h: H + 2 };
+  // a limb: its centre line leaves the trunk level and bends up (u 0..1 along it)
+  const along = (b0, dx, dz, len, up0, up1, u) => [b0[0] + dx * len * u, b0[1] + len * (up0 * u + up1 * u * u), b0[2] + dz * len * u];
   for (let b = 0; b < count; b++) {
-    const t0 = 0.3 + 0.62 * (b / count), a = b * 2.399963 + (th.phase || 0), ca = Math.cos(a), sa = Math.sin(a);
-    const [bx, by, bz] = trunkAt(t0, H, lean, birch);
-    const len = (birch ? 1.9 : 2.8) * (1.15 - 0.75 * t0) * spread, up = birch ? 0.85 : 0.5 + 0.35 * t0;
-    const r0 = (birch ? 0.07 : 0.17) * (1.25 - t0);
-    const mid = [bx + ca * len * 0.5, by + up * len * 0.5, bz + sa * len * 0.5], tip = [bx + ca * len, by + up * len, bz + sa * len];
-    const col = () => (birch ? [0.09, 0.075, 0.065] : bark);
-    tube(m, [[bx, by, bz, r0], [...mid, r0 * 0.6], [...tip, r0 * 0.22]], near ? 5 : 3, col, H + 2);
+    const t0 = (birch ? 0.42 : 0.34) + (birch ? 0.56 : 0.6) * (b / count), a = b * 2.399963 + (th.phase || 0), ca = Math.cos(a), sa = Math.sin(a);
+    const b0 = trunkAt(t0, H, lean, birch);
+    const len = (birch ? 3.2 : 3.9) * (1.12 - 0.62 * t0) * spread, up0 = birch ? 0.8 : 0.18, up1 = birch ? 0.1 : 0.55;
+    const r0 = (birch ? 0.07 : 0.2) * (1.3 - t0) * thick;
+    const pts = [0, 0.34, 0.68, 1].map((u, k) => [...along(b0, ca, sa, len, up0, up1, u), r0 * [1, 0.72, 0.46, 0.18][k]]);
+    tube(m, near ? pts : [pts[0], pts[2], pts[3]], near ? 5 : 3, limbCol, H + 2);
     if (near) {
-      // two twigs fork from the middle of the branch
+      // two forks leave the limb about halfway along: each bends up again
+      const f0 = pts[1];
       for (const s of [-1, 1]) {
-        const a2 = a + s * 0.7, c2 = Math.cos(a2), s2 = Math.sin(a2), l2 = len * 0.5;
-        tube(m, [[...mid, r0 * 0.4], [mid[0] + c2 * l2 * 0.5, mid[1] + up * l2 * 0.55, mid[2] + s2 * l2 * 0.5, r0 * 0.25], [mid[0] + c2 * l2, mid[1] + up * l2 * 1.0, mid[2] + s2 * l2, r0 * 0.1]], 4, col, H + 2);
+        const a2 = a + s * 0.7, c2 = Math.cos(a2), s2 = Math.sin(a2), l2 = len * 0.62;
+        tube(m, [0, 0.5, 1].map((u, k) => [...along(f0, c2, s2, l2, up0 * 0.6, up1 * 0.9, u), r0 * [0.55, 0.34, 0.12][k]]), 4, limbCol, H + 2);
       }
+      if (th.snow) blob(m, f0[0], f0[1] + r0 * 0.7, f0[2], 0.28 + len * 0.05, 0.13, 0.28 + len * 0.05, 0, 40 + b * 1.7, { ...snow, crown: [f0[0], f0[1], f0[2], 0.6] });
     }
-    if (th.snow && near) blob(m, mid[0], mid[1] + r0 * 0.9, mid[2], 0.5 + len * 0.1, 0.2, 0.5 + len * 0.1, 0, 40 + b * 1.7, { ...clump, crown: [mid[0], mid[1], mid[2], 0.8] });
   }
-  if (th.snow) blob(m, rings[6][0], rings[6][1] + 0.05, rings[6][2], 0.3, 0.2, 0.3, 0, 77, { ...clump, crown: [rings[6][0], rings[6][1], rings[6][2], 0.5] });
+  if (th.snow && near) blob(m, rings[6][0], rings[6][1] + 0.05, rings[6][2], 0.22, 0.12, 0.22, 0, 77, { ...snow, crown: [rings[6][0], rings[6][1], rings[6][2], 0.4] });
   return m.geometry();
 }
 
@@ -337,11 +341,11 @@ export function buildPalm(lod, th = {}) {
   tube(m, rings, near ? 8 : 5, (t, k) => mix([0.2, 0.15, 0.1], [0.36, 0.29, 0.2], 0.5 * (0.5 + 0.5 * Math.sin(t * 62)) + 0.3 * Math.abs(Math.sin(k * 9))), H + 2);
   const fronds = near ? 11 : 7, segs = near ? 6 : 3, dark = th.dark || [0.035, 0.12, 0.03], lite = th.lite || [0.18, 0.32, 0.06];
   for (let f = 0; f < fronds; f++) {
-    const a = f * 2.399963 + 0.4, ca = Math.cos(a), sa = Math.sin(a), len = 3.0 + 0.5 * Math.sin(f * 3.7), rise = 0.9 + 0.5 * Math.sin(f * 1.9);
+    const a = f * 2.399963 + 0.4, ca = Math.cos(a), sa = Math.sin(a), len = 3.8 + 0.5 * Math.sin(f * 3.7), rise = (1.2 + 0.5 * Math.sin(f * 1.9)) * (f % 4 === 3 ? 1.7 : 1);   // (every fourth is a young frond standing up)
     const px = -sa, pz = ca;   // across the frond
     const rows = [];
     for (let s = 0; s <= segs; s++) {
-      const u = s / segs, rr = len * u, y = H + rise * (2.2 * u - 3.6 * u * u), w = 0.6 * Math.sin(Math.min(1, u * 3.2) * 1.4) * (1 - 0.72 * u);
+      const u = s / segs, rr = len * u, y = H + rise * (3.4 * u - 4.2 * u * u), w = 0.72 * Math.sin(Math.min(1, u * 3.2) * 1.4) * (1 - 0.7 * u);
       const cx = bend + ca * rr, cz = 0.1 + sa * rr, col = mul(mix(dark, lite, Math.pow(u, 0.8)), 0.8 + 0.4 * ((f * 0.37) % 1));
       const nrm = norm3(-ca * 0.35 * (u - 0.3) , 1, -sa * 0.35 * (u - 0.3));
       const sway = clamp((y - 4) / (H + 2), 0, 1);

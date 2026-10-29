@@ -130,6 +130,7 @@ export class Game {
     this.disposed = true;
     this.crowd.dispose();
     this.camfx.dispose();
+    for (const c of this.castles) if (c.offQuality) c.offQuality();   // (a castle listens for quality changes: let go, or the old world stays alive; matters now that a new land rebuilds the world every battle)
     this.lights.rig.dispose();   // (the shadow rig and the first-person kit listen for quality changes: let go of them, or they keep this world alive)
     if (this.player.vm) this.player.vm.dispose();
     const shared = [...Object.values(materials()).flat(), ...sharedModelResources()];

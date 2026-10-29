@@ -22,6 +22,7 @@ const CSS = `
 .nb-row.nb-land .nb-text b { font-family: Cinzel, serif; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #5a1d12; display: block; }
 .nb-row.nb-land .nb-text .nb-name { font-family: Cinzel, serif; font-size: 18px; font-weight: 700; color: #2c1a0e; letter-spacing: 0; text-transform: none; display: inline; }
 .nb-row.nb-land .nb-text small { display: block; font-size: 14px; font-style: italic; opacity: 0.9; }
+.nb-row.nb-land .nb-text small.nb-was { margin-top: 3px; font-size: 13px; font-style: normal; opacity: 0.7; }
 .nb-row.nb-land button { padding: 7px 14px; font-size: 13px; white-space: nowrap; }
 @media (max-width: 560px) { .nb-row.nb-land { flex-direction: column; align-items: center; text-align: center; } }
 `;
@@ -229,6 +230,13 @@ registerEndSection('land', 51, (summary) => {
     const small = document.createElement('small');
     small.textContent = describe(land.biome);
     text.append(head, name, small);
+    const o = summary.options;
+    if (o && typeof o.biome === 'string') {   // (the seed of the battle just fought: worth keeping if the land was a good one)
+      const was = document.createElement('small');
+      was.className = 'nb-was';
+      was.textContent = 'This battle was fought on ' + landName(o.biome, o.seed) + '.';
+      text.append(was);
+    }
   };
   fill();
   el.append(pic, text);

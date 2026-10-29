@@ -48,7 +48,7 @@ export class Castle {
     this.group.updateMatrix();
     this.group.matrixAutoUpdate = false;
     // the geometry depends on Q.detail: build it again when the graphics setting changes
-    const off = onQuality((q) => {
+    const off = this.offQuality = onQuality((q) => {   // (kept so that Game.dispose can let go of it: a world rebuilt before the next quality change would stay alive otherwise)
       if (this.detail === undefined) return;
       if (!this.group.parent) { off(); return; }   // (the world was rebuilt: this castle is gone)
       if (q.detail !== this.detail || q.props !== this.props) this.buildVisuals();
