@@ -432,7 +432,7 @@ The end of a match is a short show, not a cut to a menu (`src/finale.js`). When 
   ducked under it and comes back. (A shorter call sounds when the last rival keep falls but the match goes on, with a moment
   of slow motion in your own view.)
 - **The keep falls** (`src/castlecollapse.js`). The keep and the four corner towers are drawn again from the same shapes cut
-  into blocks about 2.5 m across and roof patches; each block has a plan worked out once (the structure shakes and leans, the
+  into blocks about 3 m across and roof patches; each block has a plan worked out once (the structure shakes and leans, the
   stone lets go from the top downwards, tumbles, lands in a ring of rubble and hops once), and a frame only evaluates the plan
   at the time `t`, so it is identical on every screen, takes a millisecond or two a frame while it plays, nothing afterwards,
   and uses three meshes in place of the keep's own. Dust clouds, fire bursts, a shock ring, a rumble and the camera shake come

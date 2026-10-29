@@ -221,7 +221,7 @@ export function dustBank(fx, p, r, n, size) {
     const o = A.spawn(F.PUFF1 + ((Math.random() * 3) | 0), R.DUST, p.x + Math.cos(th) * d, p.y + Math.random() * 2.5, p.z + Math.sin(th) * d,
       Math.cos(th) * sp, 0.7 + Math.random() * 2.3, Math.sin(th) * sp, 3.2 + Math.random() * 2.6, s0, s1);
     const g = 0.72 + Math.random() * 0.2;
-    A.tint(o, g, g * 0.98, g * 0.95, 0.5 + Math.random() * 0.3);
+    A.tint(o, g, g * 0.98, g * 0.95, 0.62 + Math.random() * 0.3);
     A.motion(o, 0.9, -0.12, 0.7, -1.3);
     A.spin(o, Math.random() * TAU, (Math.random() - 0.5) * 0.35);
   }

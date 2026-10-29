@@ -142,6 +142,13 @@ SOUNDS.dirge = (a) => {
   drum(a, 5.2, hz(D2 + 7), 0.2, 0.9, 0.3);
 };
 
+// the horn that opens a battle and sounds every tenth wave: the same two calls it always was (a low note with its fifth, then the low note again), in brass
+Audio.prototype.hornCall = function hornCall(k = 1) {
+  note(this, hz(D3), 0, 1.6, 0.17 * k, { attack: 0.12, swellGain: 1.12, release: 0.5 });
+  note(this, hz(A3), 0, 1.6, 0.09 * k, { attack: 0.14, release: 0.5, spread: 12 });
+  note(this, hz(D3), 1.7, 1.25, 0.16 * k, { attack: 0.1, release: 0.6 });
+};
+
 // Lower the music under a sound and let it back up: to `level` (a fraction of its volume) in 0.2 s, held for `hold` seconds, then back over `release`.
 Audio.prototype.duck = function duck(level = 0.35, hold = 3, release = 1.6) {
   if (!this.ctx || !this.musicBus) return;

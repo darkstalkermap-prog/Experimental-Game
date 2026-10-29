@@ -16,7 +16,7 @@ import { mulberry32 } from './noise.js';
 
 const { keepW, keepH, towerH } = CASTLE;
 const KEEP_Z = G.KEEP_Z;
-const CELL = 2.6;         // the size of a block of stone
+const CELL = 3.0;         // the size of a block of stone
 const GRAV = 30;          // m/s2: heavier than the real thing, so that it reads as massive
 const CHAR = 0.32;        // the stone is charred
 const TAU = Math.PI * 2;

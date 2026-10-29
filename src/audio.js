@@ -149,7 +149,8 @@ export class Audio {
       case 'coin': this.tone(1320, 0.08, 0.12, 'square'); this.tone(1760, 0.12, 0.1, 'square', 1, 0.07); break;
       case 'buy': this.tone(660, 0.08, 0.15, 'triangle'); this.tone(990, 0.15, 0.15, 'triangle', 1, 0.08); break;
       case 'deny': this.tone(180, 0.2, 0.2, 'square'); break;
-      case 'horn':
+      case 'horn':   // the call that opens a battle and a wave (horn.js gives it a brass voice; the plain tones are the fallback)
+        if (this.hornCall) { this.hornCall(k); break; }
         this.tone(147, 1.6, 0.35, 'sawtooth', 1.0); this.tone(220, 1.6, 0.18, 'sawtooth', 1.0);
         this.tone(147, 1.2, 0.3, 'sawtooth', 1.02, 1.7); break;
       case 'order': this.tone(520, 0.12, 0.15, 'triangle'); this.tone(780, 0.12, 0.12, 'triangle', 1, 0.1); break;

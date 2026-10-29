@@ -33,13 +33,14 @@ const CSS = `
 #finale .bar.top { top: 0; transform: translateY(-100%); }
 #finale .bar.bottom { bottom: 0; transform: translateY(100%); }
 #finale.on .bar { transform: none; }
-#finale .card { position: absolute; left: 0; right: 0; top: 62%; text-align: center; opacity: 0; transform: translateY(14px) scale(1.04); transition: opacity 0.7s ease, transform 0.9s ease; padding: 0 16px; }
+#finale .card { position: absolute; left: 0; right: 0; top: 60%; text-align: center; opacity: 0; transform: translateY(14px) scale(1.04); transition: opacity 0.7s ease, transform 0.9s ease; padding: 16px 16px 22px;
+  background: radial-gradient(ellipse 55% 100% at 50% 50%, rgba(0,0,0,0.5), rgba(0,0,0,0)); }
 #finale.said .card { opacity: 1; transform: none; }
 #finale.leave .card { opacity: 0; transition: opacity 0.5s ease; }
 #finale .card h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; font-weight: 900; font-size: clamp(38px, 8vw, 92px); letter-spacing: 0.14em; color: #f0c860;
   text-shadow: 0 0 22px rgba(255,200,90,0.55), 0 4px 14px #000; }
 #finale.lost .card h2 { color: #cfc0a8; text-shadow: 0 0 22px rgba(150,30,20,0.6), 0 4px 14px #000; }
-#finale .card p { margin: 6px auto 0; max-width: 900px; font-style: italic; font-size: clamp(18px, 2.6vw, 30px); line-height: 1.25; color: #f4e6c4; text-shadow: 0 2px 8px #000, 0 0 3px #000; }
+#finale .card p { margin: 6px auto 0; max-width: 900px; font-style: italic; font-size: clamp(18px, 2.6vw, 30px); line-height: 1.25; color: #f8ecd0; text-shadow: 0 2px 8px #000, 0 0 3px #000, 0 0 14px rgba(0,0,0,0.9); }
 #finale .skip { position: absolute; right: 18px; bottom: calc(12vh + 10px); font-family: 'Cinzel', Georgia, serif; font-size: 12px; letter-spacing: 0.12em; color: #e9dcbc;
   opacity: 0; transition: opacity 0.6s ease; text-shadow: 0 1px 4px #000; }
 #finale.on .skip { opacity: 0.55; transition-delay: 0.8s; }

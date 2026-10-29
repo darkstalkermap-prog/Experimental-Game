@@ -21,7 +21,7 @@ const KEEP_Z = G.KEEP_Z;
 const MERLON_H = G.MERLON_H;   // merlons stand chest-high: they cover a soldier's body and leave the head showing
 const POST_LEAN = 0.95; // an archer at a slot leans out to the wall's outer face, so he can shoot at the foot of the wall
 
-const _cp = new THREE.Vector3(), _cq = new THREE.Vector3(), _gold = new THREE.Color(1, 0.8, 0.4);
+const _cp = new THREE.Vector3(), _cq = new THREE.Vector3(), _cv = new THREE.Vector3(), _gold = new THREE.Color(1, 0.8, 0.4);
 
 export class Castle {
   constructor(game, team, site) {
@@ -623,13 +623,14 @@ export class Castle {
       case 'blast':
         fx.flash(p, _gold, 16, 0.6, 1);
         fx.shock(_cq.copy(p).setY(this.center.y + 0.5), 2, 26, _gold, 0.7, 0.8);
-        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.3), 7, 30, 15);
+        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.3), 7, 42, 16);
+        for (let i = 0; i < 6; i++) fx.smoke(_cq.copy(p).add(_cv.set((Math.random() - 0.5) * 8, 4 + Math.random() * 3, (Math.random() - 0.5) * 8)));
         if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); g.audio.play('boom', p); }
         g.camfx.boom(p, 1);
         if (near) fin.jolt(0.7);
         break;
       case 'tower':
-        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.5), 4.5, 16, 10);
+        dustBank(fx, _cq.copy(p).setY(this.center.y + 0.5), 4.5, 22, 11);
         if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 1), 30, 5.5, 'stone'); g.audio.play('collapse', p); }
         g.camfx.boom(p, 0.7);
         if (near) fin.jolt(0.3);
@@ -666,8 +667,8 @@ export class Castle {
   // (`cause` names an ability or weapon the caller knows ('Fireball'); the attacker says the rest: see highlights.js)
   damageWall(seg, amt, attacker, cause) {
     if (!seg.alive || !seg.breakable || this.fallen) return;
+    highlights.hit(seg, Math.min(amt, seg.hp), attacker, cause);   // (what the blow really took, not the overkill)
     seg.hp -= amt;
-    highlights.hit(seg, amt, attacker, cause);
     this.game.fx.dust(seg.pos, 10, 2.5);
     if (seg.hp <= 0) {
       seg.hp = 0;
@@ -696,8 +697,8 @@ export class Castle {
   damageGate(amt, attacker, cause) {
     const gate = this.gate;
     if (!gate.alive || this.fallen) return;
+    highlights.hit(gate, Math.min(amt, gate.hp), attacker, cause);
     gate.hp -= amt;
-    highlights.hit(gate, amt, attacker, cause);
     this.game.fx.splinters(gate.pos, 6);
     if (gate.hp <= 0) {
       gate.hp = 0;
@@ -728,8 +729,8 @@ export class Castle {
   damageKeep(amt, attacker, cause) {
     const keep = this.keep;
     if (!keep.alive) return;
+    highlights.hit(keep, Math.min(amt, keep.hp), attacker, cause);
     keep.hp -= amt;
-    highlights.hit(keep, amt, attacker, cause);
     if (Math.random() < 0.3) this.game.fx.dust(this.keepDoor.clone().setY(this.keepDoor.y + 2), 4, 1.5);
     if (keep.hp <= 0) {
       keep.hp = 0;
