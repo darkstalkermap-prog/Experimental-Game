@@ -36,7 +36,7 @@ export const BESTS = [
   { key: 'armyKills', label: 'Army kills', unit: 'army kills', better: 1 },
   { key: 'gold', label: 'Gold earned', unit: 'gold', better: 1 },
   { key: 'breaches', label: 'Gates and walls broken', unit: 'breaches', better: 1 },
-  { key: 'time', label: 'Longest battle', unit: '', better: 1 },
+  { key: 'time', label: 'Longest battle', unit: '', better: 1, quiet: true },   // (kept and shown as the best, but never a "new best": any longer match is one)
   { key: 'fastWin', label: 'Fastest victory', unit: '', better: -1 },
 ];
 export const BEST_BY_KEY = Object.fromEntries(BESTS.map((b) => [b.key, b]));
@@ -183,6 +183,13 @@ export function applyMatch(old, m) {
   const before = { renown: a.renown, carry: a.carry, next: (nextItem(a) || {}).key || null, unlocked: a.unlocked.length };
   const pay = renownFor(m);
   const crossed = earn(a, pay.total);
+  // a new banner or cloak is put on at once if nothing is worn in its place, so that it is seen in the very next match (an unlock nobody wears is a prize
+  // nobody sees, and with Play Again there may be no visit to the menu); what you chose to wear already is never swapped
+  const worn = [];
+  for (const key of crossed) {
+    const it = ITEM_BY_KEY[key];
+    if (it && it.kind !== 'capstone' && !a.equipped[it.kind]) { a.equipped[it.kind] = it.id; worn.push(key); }
+  }
   // mastery
   const gain = masteryGain(m), shares = classShares(m.events, m.cls, m.time);
   const mastery = [];
@@ -206,13 +213,13 @@ export function applyMatch(old, m) {
     if (!v) continue;
     const beats = prev === 0 || (b.better > 0 ? v > prev : v < prev);
     if (!beats) continue;
-    (prev === 0 ? firsts : records).push({ key: b.key, label: b.label, unit: b.unit, value: v, prev });
+    if (!b.quiet) (prev === 0 ? firsts : records).push({ key: b.key, label: b.label, unit: b.unit, value: v, prev });
     a.best[b.key] = v;
   }
   a.tot.matches++; if (m.won) a.tot.wins++;
   a.tot.secs += Math.round(m.time || 0); a.tot.kills += m.kills | 0;
   const after = { renown: a.renown, carry: a.carry, next: (nextItem(a) || {}).key || null, unlocked: a.unlocked.length };
-  return { account: a, result: { gained: pay.total, parts: pay.parts, mult: pay.mult, before, after, crossed, mastery, records, firsts, made, best: { ...a.best } } };
+  return { account: a, result: { gained: pay.total, parts: pay.parts, mult: pay.mult, before, after, crossed, worn, mastery, records, firsts, made, best: { ...a.best } } };
 }
 
 // ---------------------------------------------------------------- reading the account

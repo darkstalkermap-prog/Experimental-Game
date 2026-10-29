@@ -9,24 +9,24 @@ import { loadAccount, saveAccount, applyMatch, BEST_BY_KEY } from './progress.js
 import { ITEM_BY_KEY, itemTitle } from './unlocks.js';
 import { CLASSES } from './classes.js';
 import { previewCanvas } from './cosmetics.js';
+import { refreshRenownButton, refreshBadges } from './wardrobe.js';
 
 const CSS = `
-.cwe { text-align: left; padding: 10px 14px 12px; border: 1px solid rgba(90,60,20,0.4); border-radius: 5px; background: rgba(255,248,226,0.38); }
-.cwe h4 { margin: 0 0 6px; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; display: flex; justify-content: space-between; align-items: baseline; }
+.cwe { text-align: left; padding: 8px 13px 10px; border: 1px solid rgba(90,60,20,0.4); border-radius: 5px; background: rgba(255,248,226,0.38); }
+.cwe h4 { margin: 0 0 5px; font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; display: flex; justify-content: space-between; align-items: baseline; }
 .cwe h4 small { font: italic 13px 'EB Garamond', Georgia, serif; letter-spacing: 0; text-transform: none; color: #4a3a22; }
-.cwe-new { font-family: Cinzel, serif; font-size: 23px; font-weight: 700; color: #7a1414; text-align: center; margin: 2px 0 8px; animation: cwe-shine 1.6s ease-in-out .6s 2 both, cwe-pop .6s .5s both; text-shadow: 0 1px 0 rgba(255,255,255,0.5); }
-.cwe-new small { display: block; font: italic 15px 'EB Garamond', Georgia, serif; font-weight: 400; color: #5a3a14; margin-top: 2px; animation: none; }
-.cwe-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 7px; }
-.cwe-tile { position: relative; text-align: center; padding: 7px 4px 6px; border: 1px solid rgba(90,60,20,0.3); border-radius: 4px; background: rgba(255,255,255,0.3); }
-.cwe-tile b { display: block; font-family: Cinzel, serif; font-size: 25px; line-height: 1.15; }
-.cwe-tile span { display: block; font-size: 13.5px; }
-.cwe-tile small { display: block; font-size: 12.5px; font-style: italic; opacity: 0.75; margin-top: 1px; }
+.cwe-new { font-family: Cinzel, serif; font-size: 22px; font-weight: 700; color: #7a1414; text-align: center; margin: 0 0 7px; animation: cwe-shine 1.6s ease-in-out .6s 2 both, cwe-pop .6s .5s both; text-shadow: 0 1px 0 rgba(255,255,255,0.5); }
+.cwe-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
+.cwe-tile { position: relative; text-align: center; padding: 4px 3px 4px; border: 1px solid rgba(90,60,20,0.3); border-radius: 4px; background: rgba(255,255,255,0.3); }
+.cwe-tile b { display: block; font-family: Cinzel, serif; font-size: 22px; line-height: 1.15; }
+.cwe-tile span { display: block; font-size: 13px; line-height: 1.15; }
+.cwe-tile small { display: block; font-size: 12px; font-style: italic; opacity: 0.75; line-height: 1.2; }
 .cwe-tile.rec { border: 2px solid #b8862a; background: linear-gradient(#fff6d2, #efd88f); box-shadow: 0 0 12px rgba(224,180,76,0.75); animation: cwe-pop .6s .35s both; }
 .cwe-tile.rec small { color: #7a1414; font-style: normal; font-weight: 600; opacity: 1; }
 .cwe-tile.rec::after { content: 'NEW BEST'; position: absolute; top: -8px; right: -5px; font: 700 9.5px/1 Cinzel, serif; letter-spacing: 0.08em; padding: 3px 5px 2px; background: #8c1f24; color: #f6e8c0; border-radius: 2px; transform: rotate(5deg); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-.cwe-mastery { margin-top: 9px; display: grid; gap: 6px; }
-.cwe-mrow { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
-.cwe-seal { position: relative; grid-row: 1 / span 2; width: 38px; height: 38px; border-radius: 50%; border: 3px solid var(--c, #8a6a3a); background: radial-gradient(#fff6d6, #e6cf94); display: grid; place-items: center; font: 700 15px Cinzel, serif; color: #3a2a12; }
+.cwe-mastery { margin-top: 8px; display: grid; gap: 5px; }
+.cwe-mrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; }
+.cwe-seal { position: relative; grid-row: 1 / span 2; width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--c, #8a6a3a); background: radial-gradient(#fff6d6, #e6cf94); display: grid; place-items: center; font: 700 14px Cinzel, serif; color: #3a2a12; }
 .cwe-seal i { grid-area: 1 / 1; font-style: normal; }
 .cwe-seal i.old { animation: cwe-fade 0.3s 1s forwards; }
 .cwe-seal i.now { animation: cwe-in 0.4s 1s both; }
@@ -34,21 +34,21 @@ const CSS = `
 .cwe-mname { font-size: 15px; line-height: 1.2; }
 .cwe-mname b { font-family: Cinzel, serif; font-weight: 600; }
 .cwe-mname small { margin-left: 8px; opacity: 0.7; font-size: 13px; }
-.cwe-mgain { font-family: Cinzel, serif; font-size: 13.5px; color: #4a3a22; }
-.cwe-bar { position: relative; height: 9px; background: rgba(60,40,15,0.28); border-radius: 5px; overflow: hidden; }
-.cwe-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--b, 0%); background: linear-gradient(#e8c25a, #b8862a); border-radius: 5px; animation: cwe-grow 1.1s .5s ease-out both; }
+.cwe-mname.up { font-family: Cinzel, serif; font-size: 14.5px; font-weight: 700; color: #7a1414; animation: cwe-pop .6s 1.05s both; }
+.cwe-mgain { font-family: Cinzel, serif; font-size: 13px; color: #4a3a22; }
+.cwe-bar { position: relative; height: 8px; background: rgba(60,40,15,0.28); border-radius: 4px; overflow: hidden; }
+.cwe-bar i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--b, 0%); background: linear-gradient(#e8c25a, #b8862a); border-radius: 4px; animation: cwe-grow 1.1s .5s ease-out both; }
 .cwe-bar.up i { animation-name: cwe-fill; animation-duration: 1.9s; }
 .cwe-bar.mast i { background: linear-gradient(#8f6bd8, #5a3aa8); }
-.cwe-rankup { grid-column: 2 / -1; font-family: Cinzel, serif; font-size: 14.5px; color: #7a1414; font-weight: 700; animation: cwe-pop .6s 1.05s both; }
-.cwe-renown .cwe-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
-.cwe-renown .cwe-gain { font-family: Cinzel, serif; font-size: 30px; font-weight: 700; color: #7a4a0a; }
+.cwe-renown .cwe-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
+.cwe-renown .cwe-gain { font-family: Cinzel, serif; font-size: 26px; font-weight: 700; color: #7a4a0a; }
 .cwe-renown .cwe-how { font-size: 13.5px; color: #4a3a22; }
 .cwe-renown .cwe-how b { font-weight: 600; }
-.cwe-unlock { display: flex; gap: 12px; align-items: center; margin: 8px 0 4px; padding: 8px 12px; border: 2px solid #b8862a; border-radius: 5px; background: linear-gradient(#fff6d2, #efd88f); box-shadow: 0 0 14px rgba(224,180,76,0.8); animation: cwe-pop .7s .95s both; }
-.cwe-unlock canvas { flex: none; width: 42px; height: 63px; border-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.45); }
-.cwe-unlock .cwe-ut { font-family: Cinzel, serif; font-size: 18px; font-weight: 700; color: #5a1d12; }
-.cwe-unlock .cwe-us { font-size: 14px; color: #4a3a22; }
-.cwe-next { margin-top: 7px; font-size: 16px; display: flex; justify-content: space-between; gap: 10px; }
+.cwe-unlock { display: flex; gap: 10px; align-items: center; margin: 6px 0 2px; padding: 6px 10px; border: 2px solid #b8862a; border-radius: 5px; background: linear-gradient(#fff6d2, #efd88f); box-shadow: 0 0 14px rgba(224,180,76,0.8); animation: cwe-pop .7s .95s both; }
+.cwe-unlock canvas { flex: none; width: 34px; height: 51px; border-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.45); }
+.cwe-unlock .cwe-ut { font-family: Cinzel, serif; font-size: 16.5px; font-weight: 700; color: #5a1d12; }
+.cwe-unlock .cwe-us { font-size: 13.5px; line-height: 1.25; color: #4a3a22; }
+.cwe-next { margin-top: 6px; font-size: 16px; display: flex; justify-content: space-between; gap: 10px; }
 .cwe-next b { font-family: Cinzel, serif; font-weight: 600; }
 .cwe-next small { font-size: 13px; opacity: 0.75; font-style: italic; }
 #goStats.cwe-gone { display: none; }
@@ -67,6 +67,10 @@ function injectCss() {
   st.textContent = CSS;
   document.head.appendChild(st);
 }
+
+// the page gives this a way to play a sound (main.js); a new best chimes and an unlock sounds the brass, once, as the news comes up
+export const endSound = { play: null };
+const cheer = (r, name, when) => { if (!r.cheered || !r.cheered[name]) { (r.cheered || (r.cheered = {}))[name] = true; try { if (endSound.play) endSound.play(name, when); } catch (e) { /* no sound */ } } };
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const num = (n) => Math.round(n).toLocaleString('en-US');
@@ -101,6 +105,7 @@ onMatchEnd((s) => {
   result.saved = saveAccount(account);
   result.total = account.renown;
   s.progress = result;
+  try { refreshRenownButton(); refreshBadges(); } catch (e) { /* the menu is not on this page */ }   // (the menu behind the end screen says the new numbers)
 });
 
 // ---------------------------------------------------------------- Your battle (30)
@@ -134,9 +139,8 @@ function battleSection(s) {
   // the records that fell, the biggest first
   const recs = [...r.records].sort((a, b) => PRIORITY.indexOf(a.key) - PRIORITY.indexOf(b.key));
   if (recs.length) {
-    const top = el('div', 'cwe-new', recordText(recs[0], hero));
-    if (recs.length > 1) top.append(el('small', '', recs.slice(1, 3).map((x) => recordText(x, hero).replace(/!$/, '')).join(' · ')));
-    box.append(top);
+    cheer(r, 'chime', 0.8);
+    box.append(el('div', 'cwe-new', recordText(recs[0], hero)));   // (the others are the tiles with a ribbon)
   }
   // the numbers, each with its best beside it
   const tiles = el('div', 'cwe-tiles');
@@ -168,12 +172,11 @@ function battleSection(s) {
   if (c.slain > 0) add('', 'Heroes slain', c.slain);
   if (c.engines > 0) add('', 'Engines destroyed', c.engines);
   if (c.keeps > 0) add('', 'Keeps brought down', c.keeps);
-  if (r.records.some((x) => x.key === 'fastWin') || (s.won && r.best.fastWin)) {
-    const fw = r.records.find((x) => x.key === 'fastWin');
-    const t = el('div', 'cwe-tile' + (fw ? ' rec' : ''));
+  const fw = r.records.find((x) => x.key === 'fastWin') || r.firsts.find((x) => x.key === 'fastWin');
+  if (fw) {
+    const t = el('div', 'cwe-tile' + (fw.prev ? ' rec' : ''));
     t.dataset.stat = 'fastWin';
-    t.append(el('b', '', clockText(r.best.fastWin)), el('span', '', 'Fastest victory'));
-    if (fw) t.append(el('small', '', `was ${clockText(fw.prev)}`));
+    t.append(el('b', '', clockText(fw.value)), el('span', '', 'Fastest victory'), el('small', '', fw.prev ? `was ${clockText(fw.prev)}` : 'First record'));
     tiles.append(t);
   }
   // the headline row of the screen (the old five numbers) is said here, with the bests: keep what it has beyond that (the hill)
@@ -199,9 +202,9 @@ function battleSection(s) {
       if (m.rankUp) seal.append(el('i', 'old', m.before.roman), el('i', 'now', m.after.roman));
       else seal.append(el('i', '', m.after.roman));
       seal.title = `${C.name} mastery, rank ${m.after.rank} of 10`;
-      const name = el('div', 'cwe-mname');
-      const b = el('b', '', `${C.name || m.cls}`);
-      name.append(b, ` · ${m.after.name}`, el('small', '', m.after.max ? 'the highest rank' : `${num(m.after.into)} / ${num(m.after.span)}`));
+      const name = el('div', 'cwe-mname' + (m.rankUp ? ' up' : ''));
+      if (m.rankUp) name.textContent = `${C.name || m.cls} rank ${m.before.roman} → ${m.after.roman}: ${m.after.name}!`;
+      else name.append(el('b', '', `${C.name || m.cls}`), ` · ${m.after.name}`, el('small', '', m.after.max ? 'the highest rank' : `${num(m.after.into)} / ${num(m.after.span)}`));
       const gain = el('div', 'cwe-mgain', `+${num(m.gained)} mastery`);
       const bar = el('div', 'cwe-bar mast' + (m.rankUp ? ' up' : ''));
       const fill = el('i');
@@ -211,7 +214,6 @@ function battleSection(s) {
       row.append(seal, name, gain);
       row.append(bar);
       bar.style.gridColumn = '2 / -1';
-      if (m.rankUp) row.append(el('div', 'cwe-rankup', `${C.name || m.cls} rank ${m.before.roman} → ${m.after.roman}: ${m.after.name}!`));
       wrap.append(row);
     }
     box.append(wrap);
@@ -235,18 +237,20 @@ function renownSection(s) {
   head.append(how);
   box.append(head);
   // the unlocks this match crossed
+  if (r.crossed.length) cheer(r, 'streak', 1.1);
   for (const key of r.crossed) {
     const it = ITEM_BY_KEY[key];
     if (!it) continue;
     const card = el('div', 'cwe-unlock');
     card.dataset.unlock = key;
-    card.append(previewCanvas(it, 84, 126, s.team || 0));
+    card.append(previewCanvas(it, 68, 102, s.team || 0));
     const names = Object.fromEntries(Object.entries(CLASSES).map(([id, c]) => [id, c.name]));
     const t = el('div');
     t.append(el('div', 'cwe-ut', `Unlocked: ${itemTitle(it, names)}`));
+    const on = r.worn.includes(key);
     t.append(el('div', 'cwe-us', it.kind === 'capstone'
       ? `${it.def.desc} Choose it in place of the old capstone in the talent panel (N, or B then Talents).`
-      : `${it.blurb} Wear it from the Renown button on the main menu.`));
+      : `${it.blurb} ${on ? (it.kind === 'banner' ? 'It flies over your castle from the next battle.' : 'You wear it from the next battle.') : 'Wear it from the Renown button on the main menu.'}`));
     card.append(t);
     box.append(card);
   }

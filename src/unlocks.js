@@ -67,3 +67,10 @@ export function itemTitle(it, classNames = null) {
 }
 
 export const KIND_LABEL = { banner: 'Banner', cloak: 'Cloak', capstone: 'Capstone talent' };
+
+// what a player wears, in words ("Wolf banner, Crimson Mantle"; '' for the plain look): the lobby says it beside their name
+export function lookText(cos) {
+  if (!cos) return '';
+  const b = BANNERS.find((x) => x.id === cos.banner), c = CLOAKS.find((x) => x.id === cos.cloak);
+  return [b && `${b.name} banner`, c && c.name].filter(Boolean).join(', ');
+}

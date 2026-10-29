@@ -14,7 +14,8 @@ export function previewCanvas(it, w = 64, h = 96, team = 0) {
   if (it.kind === 'banner') {
     const col = TEAM_COLORS[team] ?? TEAM_COLORS[0];
     const tex = it.id ? customBanner(col, team, it.id) : bannerTexture(col, team);   // (the house's own cloth is drawn afresh: it is not kept)
-    ctx.drawImage(tex.image, 0, 0, w, h);
+    const bw = Math.min(w, h / 2);   // (a banner is twice as tall as it is wide)
+    ctx.drawImage(tex.image, (w - bw) / 2, 0, bw, h);
   } else if (it.kind === 'cloak') {
     const cl = CLOAKS.find((x) => x.id === it.id);   // (no such cloak: the hero without one)
     paintCloakFigure(ctx, w, h, cl ? cl.ink[0] : null, cl ? cl.ink[1] : null, { fur: it.id === 'wolfpelt', none: !cl });

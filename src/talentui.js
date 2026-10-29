@@ -27,7 +27,7 @@ export function buildTalentTab(ui, grid) {
   root.className = 'tal-wrap';
   root.style.setProperty('--cls', cls.color);
   root.innerHTML = `<div class="tal-head"><h5>${esc(cls.icon)} ${esc(cls.name)} talents</h5><span class="tal-pts"></span><button class="respec">Respec</button></div>
-    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose. <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
+    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose. A capstone you have unlocked with Renown stands under the usual one, as a different choice. <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
     <div class="tal-tree"></div>`;
   const tree = root.querySelector('.tal-tree');
   const put = (el, row, col) => { el.style.gridRow = row; el.style.gridColumn = col; tree.appendChild(el); return el; };

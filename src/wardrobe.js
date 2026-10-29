@@ -1,7 +1,7 @@
 // The Renown panel of the main menu: how much Renown there is, what comes next and how far off it is, every banner, cloak and capstone talent (the ones
 // still locked say how much Renown they need), what is worn, the mastery of each hero class and the personal bests. Mouse only. The button that opens it
 // is added to the menu here (next to Options and Controls), so the menu's own markup is not touched.
-import { progress, trackInfo, renownTo, rankOf, BESTS, MASTERY_CLASSES, ROMAN } from './progress.js';
+import { progress, trackInfo, renownTo, rankOf, BESTS, MASTERY_CLASSES } from './progress.js';
 import { ITEMS, ITEM_BY_KEY, itemTitle } from './unlocks.js';
 import { previewCanvas } from './cosmetics.js';
 import { CLASSES } from './classes.js';
@@ -31,10 +31,10 @@ const CSS = `
 #wardrobe .cols { margin-top: 4px; }
 #wardrobe h3.section { margin: 14px 0 6px; font-size: 17px; }
 #wardrobe h3.section small { font: italic 14px 'EB Garamond', Georgia, serif; color: #4a3a22; margin-left: 6px; }
-.wd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
-.wd-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; text-align: center; background: rgba(255,255,255,0.3) !important; color: #2a1f14 !important; border: 1px solid rgba(90,60,20,0.35) !important; border-radius: 4px; letter-spacing: 0; position: relative; min-height: 142px; }
+.wd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 7px; }
+.wd-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; text-align: center; background: rgba(255,255,255,0.3) !important; color: #2a1f14 !important; border: 1px solid rgba(90,60,20,0.35) !important; border-radius: 4px; letter-spacing: 0; position: relative; min-height: 128px; }
 .wd-card:hover:not(:disabled) { background: rgba(255,246,210,0.7) !important; border-color: #b8862a !important; }
-.wd-card canvas { width: 46px; height: 69px; border-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.wd-card canvas { width: 42px; height: 63px; border-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
 .wd-card b { font: 600 13px/1.15 Cinzel, serif; }
 .wd-card small { font: 13px/1.15 'EB Garamond', Georgia, serif; opacity: 0.85; }
 .wd-card.worn { border: 2px solid #b8862a !important; background: linear-gradient(#fff6d2, #efd88f) !important; box-shadow: 0 0 10px rgba(224,180,76,0.7); }
@@ -127,7 +127,7 @@ function render() {
   p.textContent = '';
   const sc = el('div', 'scroll wide');
   sc.append(el('h1', '', 'Renown'));
-  sc.append(el('div', 'sub', 'Every match earns Renown, won or lost. It never runs out and nothing has to be kept up. What it unlocks is for show, or a different choice, never a stronger one.'));
+  sc.append(el('div', 'sub', 'Every match earns Renown, won or lost (about 80 to 250 of it). It never runs out and nothing has to be kept up. What it unlocks is for show, or a different choice, never a stronger one.'));
   // the top: total, the next unlock, what is worn
   const top = el('div', 'wd-top');
   const tot = el('div', 'wd-total'); tot.append(el('b', '', num(a.renown)), el('span', '', 'Renown in all'));
@@ -171,23 +171,6 @@ function render() {
   for (const it of ITEMS.filter((x) => x.kind === 'cloak')) cg.append(itemCard(a, it, a.equipped.cloak, wear('cloak')));
   left.append(cg);
   left.append(el('div', 'wd-note', 'In first person you cannot see your own back: a cloak shows on your hero to the other players of an online game. Your banner flies over your castle and shows on your shield.'));
-  // capstones
-  const th = el('h3', 'section', 'Capstone talents'); th.append(el('small', '', 'a different choice for level 5, never a stronger one'));
-  left.append(th);
-  const alts = el('div', 'wd-alts');
-  const names = NAMES();
-  for (const it of ITEMS.filter((x) => x.kind === 'capstone')) {
-    const have = a.unlocked.includes(it.key);
-    const row = el('div', 'wd-alt ' + (have ? 'have' : 'locked'));
-    row.dataset.item = it.key;
-    row.append(previewCanvas(it, 38, 38, 0));
-    row.append(el('b', '', `${it.name} · ${names[it.cls] || it.cls}`));
-    row.append(el('span', '', it.def.desc));
-    row.append(el('small', '', have ? 'Yours: choose it in the talent panel instead of the usual capstone' : `${num(renownTo(a, it.key))} Renown to go`));
-    alts.append(row);
-  }
-  left.append(alts);
-
   // mastery
   right.append(el('h3', 'section', 'Class mastery'));
   for (const id of MASTERY_CLASSES) {
@@ -203,6 +186,23 @@ function render() {
     right.append(row);
   }
   right.append(el('div', 'wd-note', 'Each match adds mastery to the class you played. Ranks only go up; they open nothing, they are yours.'));
+  // capstones
+  const th = el('h3', 'section', 'Capstone talents'); th.append(el('small', '', 'a different choice for level 5, never a stronger one'));
+  right.append(th);
+  const alts = el('div', 'wd-alts');
+  const names = NAMES();
+  for (const it of ITEMS.filter((x) => x.kind === 'capstone')) {
+    const have = a.unlocked.includes(it.key);
+    const row = el('div', 'wd-alt ' + (have ? 'have' : 'locked'));
+    row.dataset.item = it.key;
+    row.append(previewCanvas(it, 38, 38, 0));
+    row.append(el('b', '', `${it.name} · ${names[it.cls] || it.cls}`));
+    row.append(el('span', '', it.def.desc));
+    row.append(el('small', '', have ? 'Yours: choose it in the talent panel instead of the usual capstone' : `${num(renownTo(a, it.key))} Renown to go`));
+    alts.append(row);
+  }
+  right.append(alts);
+
   // records
   right.append(el('h3', 'section', 'Your records'));
   const tbl = el('table', 'wd-recs');
@@ -250,6 +250,22 @@ function refreshButton() {
   const fresh = a.unlocked.length - a.seen;
   if (fresh > 0) b.append(el('span', 'dot', String(fresh)));
   b.title = t.done ? 'Banners, cloaks, capstone talents, class mastery and your records' : `Next unlock: ${itemTitle(t.next, NAMES())}. Banners, cloaks, capstone talents, class mastery and your records`;
+}
+
+// the little rank numerals on the class buttons (menu and lobby): the account has changed, so say it again
+export function refreshBadges() {
+  const m = progress.get().mastery;
+  for (const b of document.querySelectorAll('.classes button[data-cls]')) {
+    const C = CLASSES[b.dataset.cls];
+    if (!C) continue;
+    const rk = rankOf(m[b.dataset.cls] || 0);
+    let i = b.querySelector('.mrk');
+    if (rk.rank > 1) {
+      if (!i) { i = el('i', 'mrk'); b.append(i); }
+      i.textContent = rk.roman;
+      i.title = `${C.name} mastery: ${rk.name} (rank ${rk.rank} of 10)`;
+    } else if (i) i.remove();
+  }
 }
 
 function install() {

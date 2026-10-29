@@ -13,6 +13,7 @@ import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
 import { progress, rankOf } from './progress.js';
+import { lookText } from './unlocks.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -680,7 +681,7 @@ export class UI {
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
       <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) + (lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {

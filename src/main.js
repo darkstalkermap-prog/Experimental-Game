@@ -16,7 +16,7 @@ import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
 import { progress, sanitizeLoadout } from './progress.js';
-import './endprogress.js';   // (the end screen's battle and Renown sections)
+import { endSound } from './endprogress.js';   // (the end screen's battle and Renown sections)
 import './wardrobe.js';       // (the Renown panel of the menu)
 
 const $ = (id) => document.getElementById(id);
@@ -49,6 +49,7 @@ function applySettings() {
   game.player.sensitivity = sensitivityOf(settings.sens);
   game.player.baseFov = settings.fov;
 }
+endSound.play = (name, when) => audio.play(name, null, when);
 audio.vol.master = settings.master / 100;
 audio.vol.music = settings.music / 100;
 audio.vol.sfx = settings.sfx / 100;

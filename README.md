@@ -513,6 +513,9 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   says what each does and compares it to the capstone). They are kept out of the lists that walk the tree (bots, the practice
   yard's "All talents"), and the practice yard lets anybody try them.
 
+A new banner or cloak is put on at once if you wear nothing in its place (so it is seen in the very next battle, even if you
+never visit the menu); what you chose to wear is never swapped.
+
 **The Renown button** on the main menu (next to Options) opens the panel: your Renown, the next unlock with its bar, every banner,
 cloak and capstone (the locked ones say how much Renown they still need), what you wear with a small preview (click an unlocked
 card to wear it, "House" and "None" take it off), the mastery rank of each class and your records. A dot on the button counts
