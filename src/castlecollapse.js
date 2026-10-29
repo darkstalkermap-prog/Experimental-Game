@@ -251,6 +251,8 @@ function baseFor(d) {
 // make the shared shapes now (the game does it while a match is being set up, so that no keep ever falls with a hitch)
 export function warmCollapse(d) {
   const B = baseFor(d);
+  if (B.warm) return;
+  B.warm = true;
   const o = Object.create(Collapse.prototype);   // (a plan worked out and thrown away, so that the first real one is not the first run of its code)
   o.n = B.n; o.table = B.table; o.extraFrom = B.extraFrom;
   o.plan(mulberry32(1));

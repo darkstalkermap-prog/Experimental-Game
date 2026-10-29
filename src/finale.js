@@ -72,6 +72,7 @@ export class Finale {
     this.K = new THREE.Vector3(); this.T = new THREE.Vector3();
     this.el = null;
     this.vmHidden = false;
+    this.cut = false; this.cutAt = 0;      // the cut from the hero's own view to the camera of the show
     this.dulled = false;        // the world's sounds are dulled for the slow motion
     this.skipAt = GRACE;
     this.onInput = (e) => {
@@ -160,14 +161,22 @@ export class Finale {
     this.focus = mode === 'grand' ? this.pickFocus(won) : null;
     if (this.focus) this.aim(this.focus);
     this.build(won);
-    // the first frame of the show: a flash, a jolt
-    const cf = g.camfx;
-    if (won) cf.flashFrom(1, 0.86, 0.5, 0.75, 3.4); else cf.flashFrom(0.5, 0.05, 0.02, 0.6, 3);
-    cf.trauma = Math.min(1, cf.trauma + 0.55);
-    if (mode === 'grand') this.vmHide();
+    // the first frame of the show: a jolt. A hero who stands within sight of the keep sees the first beat of it with their own eyes, in slow motion,
+    // and the camera cuts to the show a moment later (with the flash); anybody else gets the cut at once
+    g.camfx.trauma = Math.min(1, g.camfx.trauma + 0.55);
+    this.cut = false;
+    this.cutAt = this.focus && g.player.alive && Math.hypot(g.player.pos.x - this.K.x, g.player.pos.z - this.K.z) < 75 ? 0.35 : 0;
+    if (this.cutAt === 0 && mode === 'grand') { this.cut = true; this.flashCut(); }
     addEventListener('keydown', this.onInput, true);
     addEventListener('pointerdown', this.onInput, true);
     document.addEventListener('pointerlockchange', this.onInput);
+  }
+
+  // the cut to the show's own camera: a flash (gold for a victory, blood red for a defeat), and the weapon in the hero's hand goes
+  flashCut() {
+    const cf = this.g.camfx;
+    if (this.won) cf.flashFrom(1, 0.86, 0.5, 0.75, 3.4); else cf.flashFrom(0.5, 0.05, 0.02, 0.6, 3);
+    this.vmHide();
   }
 
   vmHide() {
@@ -270,12 +279,14 @@ export class Finale {
   place() {
     if (!this.focus && this.active) {          // (a guest: the snapshot that says which keep has fallen may still be on its way)
       const c = this.pickFocus(this.won);
-      if (c) { this.focus = c; this.aim(c); this.vmHide(); } else if (this.t > 1.2) this.mode = 'light';
+      if (c) { this.focus = c; this.aim(c); this.cutAt = this.t; } else if (this.t > 1.2) this.mode = 'light';
     }
     const c = this.focus;
     if (!c) return;
     const g = this.g, cam = g.camera, K = this.K;
-    const e = ss(this.t / this.dur);
+    if (this.t < this.cutAt) return;                 // (the first beat is the hero's own view, in slow motion)
+    if (!this.cut) { this.cut = true; this.flashCut(); }
+    const e = ss((this.t - this.cutAt) / (this.dur - this.cutAt));
     const drift = this.orbit ? (this.t - this.dur) * 0.035 : 0;
     const az = this.az0 + this.sweep * e + drift;
     const d = lerp(this.d0, this.d1, e), h = lerp(this.h0, this.h1, e);
@@ -351,6 +362,7 @@ export class Finale {
     this.highlight = null;
     this.scale = 1;
     this.t = 0;
+    this.cut = false; this.cutAt = 0;
     if (this.g.audio) this.g.audio.slowmo(0);
     if (this.g.camfx) { this.g.camfx.push = 1; this.g.camfx.grade = 0; }
     removeEventListener('keydown', this.onInput, true);

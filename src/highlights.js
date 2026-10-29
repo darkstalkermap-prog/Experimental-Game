@@ -13,7 +13,7 @@ import { registerEndSection, onMatchEnd } from './endscreen.js';
 import { allied } from './teams.js';
 
 // how much each kind of moment is worth before it is weighed for this player (see score)
-const BASE = { keep: 85, lord: 70, laststand: 80, gate: 50, multikill: 34, wall: 28, engine: 24, held: 36, firstblood: 10 };
+const BASE = { keep: 78, lord: 70, laststand: 80, gate: 50, multikill: 34, wall: 28, engine: 24, held: 36, firstblood: 10 };
 const KINDS = new Set(Object.keys(BASE));
 const ABILITY = /^[A-Z]/;   // abilities are named with a capital ('Fireball'); plain weapons are not ('sword', 'catapult')
 
