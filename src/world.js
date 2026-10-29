@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
+import { box } from './materials.js';
 import { SUN_DIR, createAtmosphere } from './atmosphere.js';
 import { ShadowRig } from './shadows.js';
 import { Terrain } from './terrain.js';
@@ -132,16 +133,18 @@ export function createForest(scene, physics) {
 
 // Standing stones in the middle of the battlefield.
 export function createCentrePiece(scene, physics, stoneMat) {
-  const g = new THREE.BoxGeometry(1.6, 5, 1);
+  const g = box(1.6, 5, 1, 4);   // (the texture keeps one size per metre: courses of blocks, not one huge block per face)
+  g.translate(0, 2.5, 0);        // (standing on its own origin: the weathering of the stone starts at the ground)
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2;
     const x = Math.cos(a) * 14, z = Math.sin(a) * 14;
     const y = physics.terrainHeight(x, z);
     const m = new THREE.Mesh(g, stoneMat);
-    m.position.set(x, y + 2.2, z);
+    m.position.set(x, y - 0.3, z);
     m.rotation.y = -a;
     m.rotation.z = (i % 3 - 1) * 0.06;
     m.castShadow = m.receiveShadow = true;
+    m.updateMatrix(); m.matrixAutoUpdate = false;
     scene.add(m);
     physics.add({ minX: x - 0.9, maxX: x + 0.9, minZ: z - 0.9, maxZ: z + 0.9, top: y + 4.6, kind: 'stone' });
   }

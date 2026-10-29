@@ -85,7 +85,7 @@ export class Game {
     this.lights = createLights(this.scene);
     createTerrain(this.scene, this.physics);
     createForest(this.scene, this.physics);
-    createCentrePiece(this.scene, this.physics, materials().stone);
+    createCentrePiece(this.scene, this.physics, materials().stoneDark);
     this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene, this);
     this.projectiles = new Projectiles(this);
