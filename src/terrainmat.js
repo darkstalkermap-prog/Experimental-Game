@@ -33,6 +33,7 @@ const FRAG_COLOR = `
   vec3 N = normalize(vWN);
   float dist = length(vViewPosition);
   float fine = 1.0 - smoothstep(25.0, 170.0, dist);           // small detail fades out with distance
+  float strokes = 1.0 - smoothstep(10.0, 60.0, dist);         // the blade strokes repeat every 2.3 m: gone before the repeat can show as a grid
   float steep = 1.0 - N.y;
   vec4 n1 = texture2D(uNoise, p * 0.0047 + vec2(0.13, 0.71));
   vec4 n2 = texture2D(uNoise, p * 0.021 + vec2(0.57, 0.29));
@@ -43,8 +44,9 @@ const FRAG_COLOR = `
 
   // grass: the colour baked into the vertices, broken up by blade strokes at two scales
   float gv = d1.r * (0.55 + d2.r * 0.9) * 1.7;
-  vec3 col = vBase * mix(1.0, 0.42 + 0.7 * gv, fine);
-  float bump = (d1.r - 0.5) * 0.045 * fine;
+  float macro = 0.72 + 0.56 * (n2.g * 0.55 + n3.g * 0.45);    // (the same average as the strokes, but it never repeats)
+  vec3 col = vBase * mix(macro, 0.42 + 0.7 * gv, strokes);
+  float bump = (d1.r - 0.5) * 0.045 * strokes;
 
   // the foot of the mountains: a canopy of round crowns, lit like real tree tops through the bump
   float canopy = vMask.w;
