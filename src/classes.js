@@ -111,7 +111,7 @@ export class Buffs {
 
 export const BUFF_NAMES = {
   guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Blood Rage', ghost: 'Evading',
-  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', twin: 'Roll again', focus: 'Focus',
+  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', twin: 'Roll again', focus: 'Focus', snap: 'Cold Snap',
 };
 
 const ZERO = new THREE.Vector3();
@@ -165,7 +165,7 @@ export class Abilities {
       }
       if (!p.alive || e.t > e.dur) { this.active.splice(i, 1); continue; }
       if (e.kind === 'whirl') {
-        while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n); e.n++; }
+        while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n, e.n === e.hits - 1); e.n++; }
       } else if (e.kind === 'pulse') {
         if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
       } else this.chargeSweep(p, e);
@@ -259,6 +259,7 @@ export class Abilities {
     p.buffs.add('steady', t);
     const reflect = talentFx(p, 'reflect', 0);
     if (reflect) p.buffs.add('reflect', t, reflect);   // Avenging Wall (Knight talent): see Player.takeDamage
+    if (talentFx(p, 'bulwarkBash', 0)) p.abilCd.q = 0;   // Bastion Strike (alternative to Avenging Wall): the shield is ready to bash again
     this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => { if (o !== p) this.guard(o, t, 0.6 - talentFx(p, 'bulwarkAlly', 0)); });
     this.emit('bulwark', p.pos, ZERO, null, reach / 8);
   }
@@ -269,7 +270,7 @@ export class Abilities {
     this.active.push({ kind: 'whirl', p, t: 0, n: 0, dur: 1.3, hits: 3 + talentFx(p, 'whirlHits', 0) });
   }
 
-  whirlTick(p, n) {
+  whirlTick(p, n, last = false) {
     const g = this.g;
     const dmg = p.meleeDmg * 0.85, reach = talentFx(p, 'whirlRadius', 1);
     let foes = 0;
@@ -280,6 +281,8 @@ export class Abilities {
     }, p.pos.y, 2.8);
     const reaper = talentFx(p, 'reaper', null);   // Reaper (Berserker talent): the blade drinks
     if (reaper && foes) p.heal(p.maxHp * reaper.heal * Math.min(foes, reaper.foes));
+    const tithe = talentFx(p, 'tithe', 0);   // Blood Tithe (alternative to Reaper): the last strike pays a flat share back
+    if (tithe && last && foes) p.heal(p.maxHp * tithe);
     p.swingT = 0.25;
     p.attackDir = n % 2 ? 'left' : 'right';
     this.emit('whirl', p.pos, ZERO, null, reach);
@@ -311,7 +314,7 @@ export class Abilities {
     const flight = (arrows, t) => {
       const shots = [];
       for (let i = 0; i < arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / arrows);
-      this.active.push({ kind: 'rain', p, t, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg, radius: V.radius * k, slow });
+      this.active.push({ kind: 'rain', p, t, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg, radius: V.radius * k, slow, aimed: talentFx(p, 'volleyAimed', V.aimed) });
     };
     flight(V.arrows + talentFx(p, 'volleyArrows', 0), 0);
     if (wave) flight(wave.arrows, -wave.gap);   // Second Wave (Ranger talent): another flight, a moment later
@@ -327,7 +330,7 @@ export class Abilities {
       const from = new THREE.Vector3(0, 0, 0);
       const T = Math.hypot(V.fallBack, V.fallH) / ARROW_SPEED;   // every arrow takes about the same time to come down
       let L = null;
-      if (Math.random() < V.aimed) {
+      if (Math.random() < e.aimed) {
         // the foe the volley has picked least so far, so the arrows spread over everyone in the circle
         let o = null, least = Infinity;
         this.eachFoe(e.p.team, e.c.x, e.c.z, e.radius, (f) => {
@@ -394,7 +397,10 @@ export class Abilities {
     from.y -= 0.15;
     // aim from the hand at the point under the crosshair so the ball lands where you look
     const d = cam.clone().addScaledVector(dir, 40).sub(from).normalize();
-    const dmg = s.dmg * p.mods.spell, radius = s.radius * talentFx(p, 'fireRadius', 1);
+    let dmg = s.dmg * p.mods.spell;
+    const radius = s.radius * talentFx(p, 'fireRadius', 1);
+    const snap = p.buffs.get('snap');   // Cold Snap (alternative to Shatter): the ward broke a moment ago, and this ball hits harder
+    if (snap) { dmg *= snap; p.buffs.del('snap'); }
     this.g.magic.fireball(p, from, d, dmg, radius);
     const fork = talentFx(p, 'fireFork', 0);   // Forked Flame (Mage talent): a second, weaker ball a little to the side
     if (fork) this.g.magic.fireball(p, from, d.clone().applyAxisAngle(UP, 0.12), dmg * fork, radius);
@@ -438,6 +444,8 @@ export class Abilities {
 
   // Mage talent: a ward that is broken bursts, hurting, staggering and chilling the foes around the Mage
   shatter(p) {
+    const snap = talentFx(p, 'snap', null);   // Cold Snap (alternative to Shatter): no burst, but the next Fireball is stronger
+    if (snap) p.buffs.add('snap', snap.time, snap.dmg);
     const s = talentFx(p, 'shatter', null);
     if (!s) return;
     const g = this.g, dmg = s.dmg * p.mods.spell;
@@ -496,13 +504,15 @@ export class Abilities {
   healBurst(p, scale) {
     const mul = talentFx(p, 'healMul', 1) * scale, reach = 14 + talentFx(p, 'healRadius', 0);
     const aegis = talentFx(p, 'aegis', null);   // Divine Aegis (Cleric talent): the healed take less damage for a while
-    p.heal(p.maxHp * 0.45 * mul);
+    const mercy = talentFx(p, 'mercy', null);   // Mercy (alternative to Second Dawn): the ones in most need are healed more
+    const lift = (o) => (mercy && o.hp < o.maxHp * mercy.below ? 1 + mercy.more : 1);
+    p.heal(p.maxHp * 0.45 * mul * lift(p));
     if (aegis) p.buffs.add('guard', aegis.time, 1 - aegis.cut);
     const healed = [];
     let mended = 0;   // what the light really restored in others: it earns the Cleric experience
     this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => {
       if (o === p) return;
-      const n = o.maxHp * 0.4 * mul;
+      const n = o.maxHp * 0.4 * mul * lift(o);
       mended += Math.min(n, o.maxHp - o.hp);
       if (o.isPlayer) o.heal(n); else o.hp = Math.min(o.maxHp, o.hp + n);
       if (aegis) this.guard(o, aegis.time, 1 - aegis.cut);
@@ -520,6 +530,11 @@ export class Abilities {
     this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set() });
     const rush = talentFx(p, 'chargeRush', null);   // Vanguard! (Cavalier talent): the army rides with the charge
     if (rush) this.eachFriend(p.team, p.pos.x, p.pos.z, rush.radius, (o) => { if (o !== p) this.haste(o, rush.time, rush.speed); });
+    const wall = talentFx(p, 'chargeGuard', null);   // Shieldwall Charge (alternative to Vanguard!): the army is shielded instead of sped up
+    if (wall) {
+      this.eachFriend(p.team, p.pos.x, p.pos.z, wall.radius, (o) => { if (o !== p) this.guard(o, wall.time, 1 - wall.cut); });
+      p.buffs.add('guard', wall.time, 1 - wall.cut);
+    }
     this.emit('charge', p.pos, f);
   }
 
