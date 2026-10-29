@@ -10,6 +10,7 @@ import { Q, onQuality } from './quality.js';
 import { Parts, place } from './parts.js';
 import { Cloth, clothMaterial, updateWind, FireSet } from './castlefx.js';
 import * as G from './castlegeo.js';
+import { populate } from './props.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
 const TC = H + towerOff; // corner tower centres
@@ -290,6 +291,8 @@ export class Castle {
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
     G.keep(K, A, R, d, fires);
     this.dress(cloth, A, d);
+    // barrels, stalls, a forge, a well...: decoration only (see props.js); the ground under them follows the terrain outside the walls
+    populate(A, fixed, fires, { team: this.team, detail: d, ground: (x, z) => { const w = this.toWorld(x, z); return Math.max(-2, Math.min(6, this.game.physics.terrainHeight(w.x, w.z) - this.center.y)); } });
     this.fire.set('static', fires);
     const mesh = (parts, key, geo = null, cast = false) => {
       geo = geo || parts.geometry(key);
@@ -361,13 +364,7 @@ export class Castle {
       else flag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
     }
     if (d >= 1) flag(0, keepH + 3.0, KEEP_Z, 2.2, 1); else flag(-keepW / 2 + 1, keepH + 1.2, KEEP_Z + keepW / 2 - 1, 2.2, 1);
-    // the courtyard props that were always here (more of them come with props.js)
-    if (d >= 1) {
-      for (const [x, z] of [[-10, -12], [-11.3, -12.2], [-10.6, -10.8], [10.5, -12.5], [9.5, -9]]) {
-        A.obox('timber', place(x, 0.55, z, x * 0.37), 0.55, 0.55, 0.55, A.jitter(G.C.old, 0.1));
-      }
-      for (const [x, z] of [[11.6, -10.6], [12.3, -9.8], [-12.2, -8.5]]) A.cyl('timber', 0.42, 0.42, 1.1, 10, place(x, 0, z), A.jitter(G.C.old, 0.1));
-    }
+    // (the courtyard's crates and barrels, and the rest of the life in the castle, are props.js)
   }
 
   // Show the house's upgrades on the castle. Called every frame: it only does anything when a level has changed.
