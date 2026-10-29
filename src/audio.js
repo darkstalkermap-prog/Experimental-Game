@@ -28,7 +28,10 @@ export class Audio {
       this.out.connect(limiter);
       limiter.connect(this.ctx.destination);
       this.master = this.ctx.createGain();      // sound effects
-      this.master.connect(this.out);
+      this.fxLp = this.ctx.createBiquadFilter();   // (wide open; it closes a little in slow motion: see slowmo())
+      this.fxLp.type = 'lowpass'; this.fxLp.frequency.value = this.ctx.sampleRate / 2; this.fxLp.Q.value = 0.5;
+      this.master.connect(this.fxLp);
+      this.fxLp.connect(this.out);
       this.musicBus = this.ctx.createGain();
       this.musicBus.connect(this.out);
       this.applyVolumes();
@@ -62,6 +65,12 @@ export class Audio {
     this.out.gain.setTargetAtTime(this.vol.master, t, 0.03);
     this.master.gain.setTargetAtTime(this.vol.sfx * 0.7, t, 0.03);
     this.musicBus.gain.setTargetAtTime(this.vol.music * 1.2, t, 0.03);
+  }
+
+  // Slow motion dulls the sounds of the world (k: 1 fully, 0 not at all), as a sound heard through slowed time would be.
+  slowmo(k) {
+    if (!this.fxLp) return;
+    try { this.fxLp.frequency.setTargetAtTime(this.ctx.sampleRate / 2 * Math.pow(0.16, k), this.ctx.currentTime, 0.12); } catch (e) { /* not fatal */ }
   }
 
   startMusic() { if (this.music) this.music.start(); }

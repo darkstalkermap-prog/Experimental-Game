@@ -70,11 +70,16 @@ export class Finale {
     this.K = new THREE.Vector3(); this.T = new THREE.Vector3();
     this.el = null;
     this.vmHidden = false;
+    this.dulled = false;        // the world's sounds are dulled for the slow motion
     this.skipAt = GRACE;
     this.onInput = (e) => {
-      if (!this.active || this.t < this.skipAt) return;
-      if (e.type === 'keydown' && e.repeat) return;
-      if (e.type === 'pointerlockchange' && document.pointerLockElement) return;   // (it was locked, not freed)
+      if (!this.active) return;
+      if (e.type === 'pointerlockchange') {
+        if (document.pointerLockElement || this.t < this.skipAt) return;   // (it was locked, not freed)
+      } else {
+        e.stopImmediatePropagation();   // (nothing else answers to a key or a click while the show plays: the end screen's own shortcuts wait for it)
+        if (this.t < this.skipAt || (e.type === 'keydown' && e.repeat)) return;
+      }
       this.skip();
     };
   }
@@ -84,7 +89,8 @@ export class Finale {
   plan(won, reason, opts) {
     const g = this.g;
     if (opts.quick || QUICK.test(reason || '') || settings.finale === 0 || g.practice) return 'none';
-    if (g.hero) return 'none';
+    // Hero Game Mode: a keep that fell decided it and gets the show; a win on kills or on the clock gets the horn and the highlight line only
+    if (g.hero) return this.pickFocus(won) ? 'grand' : 'none';
     if (g.objective === 'koth') return 'light';
     // (a guest may be told that the match is over before its snapshots say that the keep has fallen: it looks for the castle as the show goes on)
     return this.pickFocus(won) || g.mode === 'client' ? 'grand' : 'light';
@@ -119,14 +125,14 @@ export class Finale {
     this.hostEvents = opts.hl || null;
     const mode = this.plan(won, reason, opts);
     this.moment = null;
+    const go = document.getElementById('gameover');
     if (mode !== 'none') {
       injectStyle();
-      const go = document.getElementById('gameover');
       if (go) go.classList.add('finale-wait');
     }
     if (ui.shopOpen) ui.toggleShop(false);
     // the end screen is built at once, behind the show
-    ui.gameOver(won, winner, reason);
+    try { ui.gameOver(won, winner, reason); } catch (e) { if (go) go.classList.remove('finale-wait'); throw e; }
     this.highlight = ui.lastSummary ? ui.lastSummary.highlight || null : pickHighlight(g, null);
     const a = g.audio;
     if (mode === 'none') {
@@ -136,6 +142,8 @@ export class Finale {
     }
     a.play(won ? 'fanfare' : 'dirge');
     a.duck(0.3, mode === 'grand' ? 3 : 2, 1.6);
+    if (g.mode === 'single') a.slowmo(1);
+    this.dulled = g.mode === 'single';
     this.mode = mode;
     this.active = true;
     this.t = 0;
@@ -176,6 +184,8 @@ export class Finale {
 
   // ---------------------------------------------------------------- the overlay
   build(won) {
+    const old = document.getElementById('finale');
+    if (old) old.remove();
     const el = document.createElement('div');
     el.id = 'finale';
     if (!won) el.classList.add('lost');
@@ -209,8 +219,12 @@ export class Finale {
       if (t >= this.dur - 0.35) this.el.classList.add('leave');
     }
     if (t >= this.dur) { this.reveal(); return 1; }
+    const cf = this.g.camfx, e = ss(t / this.dur);
+    if (this.mode === 'light') cf.push = 1 + 0.1 * e;
+    cf.grade = this.won ? 0 : 0.5 * e;
     if (this.g.mode !== 'single') return 1;   // (the shared world is not ours to slow down)
     const S = this.slow, out = this.dur - 1.0;
+    if (this.dulled && t >= out) { this.dulled = false; this.g.audio.slowmo(0); }   // (the sounds open up again as the world speeds up)
     let k;
     if (t < 0.16) k = lerp(1, S, ss(t / 0.16));
     else if (t < out) k = lerp(S, S * 1.3, ss((t - 0.16) / (out - 0.16)));
@@ -221,9 +235,10 @@ export class Finale {
 
   momentScale(dt) {
     const m = this.moment, g = this.g;
+    if (m.t === 0) g.audio.slowmo(0.8);
     m.t += dt;
     if (!m.called && m.t >= 0.6) { m.called = true; g.audio.play('call'); g.audio.duck(0.5, 1.0, 1.0); }
-    if (m.t > 2.6) { this.moment = null; return 1; }
+    if (m.t > 2.6) { this.moment = null; g.audio.slowmo(0); return 1; }
     const S = g.camfx.mute ? 0.6 : 0.4;
     return m.t < 0.15 ? lerp(1, S, ss(m.t / 0.15)) : m.t < 1.5 ? S : lerp(S, 1, ss((m.t - 1.5) / 1.1));
   }
@@ -265,6 +280,7 @@ export class Finale {
     const g = this.g;
     this.active = false;
     this.scale = 1;
+    this.g.audio.slowmo(0);
     removeEventListener('keydown', this.onInput, true);
     removeEventListener('pointerdown', this.onInput, true);
     document.removeEventListener('pointerlockchange', this.onInput);
@@ -284,6 +300,8 @@ export class Finale {
     // behind the end screen the camera goes on drifting round the ruin; with no keep to look at the hero's own view comes back
     if (this.mode === 'grand' && this.focus) { this.orbit = true; this.t = this.dur; } else this.restoreView();
     g.camfx.flash = Math.min(g.camfx.flash, 0.2);
+    g.camfx.push = 1;
+    g.camfx.grade = this.won || !this.focus ? 0 : 0.5;   // (a lost match stays grey behind the end screen)
   }
 
   restoreView() {
@@ -296,6 +314,9 @@ export class Finale {
   dispose() {
     this.active = false;
     this.orbit = false;
+    this.moment = null;
+    if (this.g.audio) this.g.audio.slowmo(0);
+    if (this.g.camfx) { this.g.camfx.push = 1; this.g.camfx.grade = 0; }
     removeEventListener('keydown', this.onInput, true);
     removeEventListener('pointerdown', this.onInput, true);
     document.removeEventListener('pointerlockchange', this.onInput);

@@ -8,7 +8,7 @@
 import { SOUNDS, Audio } from './audio.js';
 
 const hz = (m) => 440 * Math.pow(2, (m - 69) / 12);
-const D3 = 50, A3 = 57, D4 = 62, Fs4 = 66, A4 = 69, D5 = 74, A2 = 45, D2 = 38, D3_ = 50;
+const D3 = 50, A3 = 57, D4 = 62, Fs4 = 66, A4 = 69, D5 = 74, A2 = 45, D2 = 38;
 
 // a shared hall: a convolver fed with a decaying noise (built once per context)
 function hall(a) {
@@ -115,7 +115,7 @@ SOUNDS.fanfare = (a) => {
   note(a, hz(D4), T, L, g * 0.85, { attack: 0.12, swellGain: 1.15, release: 1.0 });
   note(a, hz(Fs4), T + 0.04, L - 0.2, g * 0.55, { attack: 0.14, release: 0.9 });
   note(a, hz(A3), T, L, g * 0.7, { attack: 0.16, swellGain: 1.1, release: 1.0, spread: 14 });
-  note(a, hz(D3_), T, L + 0.2, g * 0.85, { attack: 0.18, swellGain: 1.1, release: 1.1, spread: 14 });
+  note(a, hz(D3), T, L + 0.2, g * 0.85, { attack: 0.18, swellGain: 1.1, release: 1.1, spread: 14 });
   a.noise(1.3, 3200, 0.5, 0.12, 'highpass', T);      // (a crash of cymbals)
 };
 

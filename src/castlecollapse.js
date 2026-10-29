@@ -186,8 +186,10 @@ export class Collapse {
     this.done = false;
     this.meshes = [];
     this.ev = 0;
+    const t0 = performance.now();
     this.build();
     this.writeAll(0);
+    this.buildMs = performance.now() - t0;   // (for the tests: the one-off cost of the fall)
     if (instant) this.settle();
   }
 
@@ -221,7 +223,7 @@ export class Collapse {
       for (const a of accs) {
         const m = a.pos.length / 3;
         pos.set(a.pos, o * 3); nor.set(a.nor, o * 3); uv.set(a.uv, o * 2);
-        for (let i = 0; i < a.col.length; i++) col[o * 3 + i] = a.col[i] * CHAR;
+        col.set(a.col, o * 3);
         for (let i = 0; i < a.idx.length; i++) idx.push(a.idx[i] + o);
         // which vertices belong to which piece (every piece's vertices are one run)
         let last = -1;
@@ -236,18 +238,18 @@ export class Collapse {
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setIndex(new THREE.BufferAttribute(nv > 65535 ? new Uint32Array(idx) : new Uint16Array(idx), 1));
       geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 8, 0), 70);   // (pieces fly: never culled while the castle is on screen)
       geo.boundingBox = new THREE.Box3(new THREE.Vector3(-70, -2, -70), new THREE.Vector3(70, 40, 70));
       const mesh = new THREE.Mesh(geo, c.partsMaterial(gr.mat));
       mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
-      gr.pos = pos; gr.nor = nor;
+      gr.pos = pos; gr.nor = nor; gr.col = col;
       this.meshes.push(mesh);
       c.group.add(mesh);
       c.vis.push(mesh);
     });
-    this.groups = groups.map((gr) => ({ pos: gr.pos, nor: gr.nor, base: gr.pos ? gr.pos.slice() : null, baseN: gr.nor ? gr.nor.slice() : null }));
+    this.groups = groups.map((gr) => ({ pos: gr.pos, nor: gr.nor, col: gr.col, base: gr.pos ? gr.pos.slice() : null, baseN: gr.nor ? gr.nor.slice() : null, baseC: gr.col ? gr.col.slice() : null }));
     this.table = table;
     this.plan(rng);
   }
@@ -265,6 +267,7 @@ export class Collapse {
     this.events = [];
     let last = 0;
     this.ghost = new Uint8Array(n);
+    this.tChar = f(1); this.kNow = new Float32Array(n).fill(1);
     for (let p = 0; p < n; p++) {
       const cx = T.c[p * 3], cy = T.c[p * 3 + 1], cz = T.c[p * 3 + 2], hx = T.h[p * 3], hy = T.h[p * 3 + 1], hz = T.h[p * 3 + 2];
       if (p >= this.extraFrom) {                    // rubble and scorch marks: there from the moment the dust hides them
@@ -273,6 +276,7 @@ export class Collapse {
         this.Pr[p * 3] = cx; this.Pr[p * 3 + 1] = cy; this.Pr[p * 3 + 2] = cz;
         this.rest[p * 3] = cx; this.rest[p * 3 + 1] = cy; this.rest[p * 3 + 2] = cz;
         this.Qr.set([0, 0, 0, 1], p * 4); this.Qt.set([0, 0, 0, 1], p * 4);
+        this.tChar[p] = -1;
         continue;
       }
       const si = structOf(cx, cz), s = S[si];
@@ -280,10 +284,12 @@ export class Collapse {
       const cut = stumpAt(s, cx, cz);
       const falls = cy - hy * 0.4 > cut + (rng() - 0.35) * 0.9;
       this.falls[p] = falls ? 1 : 0;
+      this.tChar[p] = 0.1 + rng() * 0.7;          // the stone scorches in a wave, and anything that comes loose is already scorched
       if (!falls) continue;
       const u = clamp01((cy - s.cut) / (s.top - s.cut));                         // 1 at the very top
       const tRel = s.t0 + (1 - u) * s.win * 0.9 + rng() * 0.12;
       this.tRel[p] = tRel;
+      this.tChar[p] = Math.min(this.tChar[p], tRel * 0.6);
       // the pose at the moment of release (the top of the structure has been leaning)
       this.leanAt(s, tRel, cx, cy, cz, q, this.Pr, p);
       this.Qr.set(q, p * 4);
@@ -351,10 +357,9 @@ export class Collapse {
     const vx = cx - hx, vy = cy - hy, vz = cz - hz;
     const ux = s.ldz, uz = -s.ldx, cs = Math.cos(th), sn = Math.sin(th);
     const dot = ux * vx + uz * vz;
-    const cxv = [-uz * vy, uz * vx - ux * vz, ux * vy];   // u x v
-    P[p * 3] = hx + vx * cs + cxv[0] * sn + ux * dot * (1 - cs);
-    P[p * 3 + 1] = hy + vy * cs + cxv[1] * sn - sag;
-    P[p * 3 + 2] = hz + vz * cs + cxv[2] * sn + uz * dot * (1 - cs);
+    P[p * 3] = hx + vx * cs + (-uz * vy) * sn + ux * dot * (1 - cs);               // (u x v = (-uz vy, uz vx - ux vz, ux vy))
+    P[p * 3 + 1] = hy + vy * cs + (uz * vx - ux * vz) * sn - sag;
+    P[p * 3 + 2] = hz + vz * cs + (ux * vy) * sn + uz * dot * (1 - cs);
   }
 
   // rubble, scorch marks and a few burnt beams: parts of the same meshes that appear under the dust
@@ -438,6 +443,7 @@ export class Collapse {
     const pos = g.pos, nor = g.nor, bp = g.base, bn = g.baseN;
     const ox = T.c[p * 3], oy = T.c[p * 3 + 1], oz = T.c[p * 3 + 2];
     const v0 = this.v0[p], v1 = v0 + this.vn[p];
+    this.char(p, t, g, v0, v1);
     for (let v = v0; v < v1; v++) {
       const i = v * 3, dx = bp[i] - ox, dy = bp[i + 1] - oy, dz = bp[i + 2] - oz, nx = bn[i], ny = bn[i + 1], nz = bn[i + 2];
       pos[i] = c[0] + m[0] * dx + m[1] * dy + m[2] * dz;
@@ -449,8 +455,21 @@ export class Collapse {
     }
   }
 
+  // the colour of piece p at time t: scorched from tChar on, over half a second (colours are only written when they change)
+  char(p, t, g, v0, v1) {
+    const k = this.tChar[p] < 0 ? CHAR : 1 - (1 - CHAR) * ss((t - this.tChar[p]) / 0.5);
+    if (k === this.kNow[p]) return;
+    this.kNow[p] = k;
+    const col = g.col, bc = g.baseC;
+    for (let i = v0 * 3, e = v1 * 3; i < e; i++) col[i] = bc[i] * k;
+    this.colors = true;
+  }
+
   writeAll(t) {
-    for (let p = 0; p < this.n; p++) if (this.falls[p]) this.write(p, t);
+    for (let p = 0; p < this.n; p++) {
+      if (this.falls[p]) this.write(p, t);
+      else { const g = this.groups[this.mesh[p]]; if (g && g.col) this.char(p, t, g, this.v0[p], this.v0[p] + this.vn[p]); }
+    }
     this.touch();
   }
 
@@ -460,7 +479,9 @@ export class Collapse {
       if (!m) continue;
       m.geometry.attributes.position.needsUpdate = true;
       m.geometry.attributes.normal.needsUpdate = true;
+      if (this.colors) m.geometry.attributes.color.needsUpdate = true;
     }
+    this.colors = false;
   }
 
   // the end state at once
@@ -473,6 +494,13 @@ export class Collapse {
   finish() {
     this.done = true;
     this.groups = null;     // (the base shapes are not needed any more)
+    // everything lies still: the meshes are culled like any other from now on
+    for (const m of this.meshes) {
+      if (!m) continue;
+      m.geometry.computeBoundingSphere();
+      m.geometry.computeBoundingBox();
+      m.frustumCulled = true;
+    }
   }
 
   // advance by dt (already scaled by the world's time scale); `fx`, `audio` for the dust and the rumble. Returns nothing; allocation-free.
@@ -486,6 +514,7 @@ export class Collapse {
       this.write(p, t);
       if (t > this.tLand[p] + 0.4) this.state[p] = 2; else moving = true;
     }
+    if (t < 1.4) for (let p = 0; p < this.n; p++) if (!this.falls[p]) { const g = this.groups[this.mesh[p]]; if (g && g.col) this.char(p, t, g, this.v0[p], this.v0[p] + this.vn[p]); }
     this.touch();
     const evs = this.events;
     while (this.ev < evs.length && evs[this.ev].t <= t) castle.collapseEvent(evs[this.ev++], this);

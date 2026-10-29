@@ -148,11 +148,11 @@ export function compass(x, z) { return Math.abs(x) > Math.abs(z) ? (x > 0 ? 'eas
 
 const pickWord = (words, e) => words[Math.floor(Math.abs(Math.sin((e.t || 0) * 12.9898 + (e.house || 0) * 78.233)) * 1e4) % words.length];
 const VERBS = {
-  gate: { sword: ['hacked down'], 'battering ram': ['smashed in', 'battered down'], catapult: ['smashed', 'blasted open'], army: ['broke', 'stormed', 'burst open'], giant: ['smashed in'], 'tower archers': ['broke'], spell: ['broke', 'burst open', 'blew open'] },
-  wall: { sword: ['hacked through'], 'battering ram': ['battered through'], catapult: ['breached', 'brought down'], army: ['breached', 'broke through'], giant: ['smashed through'], 'tower archers': ['breached'], spell: ['breached', 'brought down'] },
-  keep: { sword: ['hacked down'], 'battering ram': ['battered down'], catapult: ['brought down', 'crushed'], army: ['brought down', 'felled', 'razed'], giant: ['brought down'], 'tower archers': ['brought down'], spell: ['brought down', 'felled', 'toppled'] },
+  gate: { sword: ['hacked down'], 'battering ram': ['smashed in', 'broke down', 'burst open'], catapult: ['smashed', 'blasted open'], army: ['broke', 'stormed', 'burst open'], giant: ['smashed in'], 'tower archers': ['broke'], spell: ['broke', 'burst open', 'blew open'] },
+  wall: { sword: ['hacked through'], 'battering ram': ['broke through', 'smashed through'], catapult: ['breached', 'brought down'], army: ['breached', 'broke through'], giant: ['smashed through'], 'tower archers': ['breached'], spell: ['breached', 'brought down'] },
+  keep: { sword: ['hacked down'], 'battering ram': ['brought down', 'broke down'], catapult: ['brought down', 'crushed'], army: ['brought down', 'felled', 'razed'], giant: ['brought down'], 'tower archers': ['brought down'], spell: ['brought down', 'felled', 'toppled'] },
 };
-const SWEEPS = { Whirlwind: 'cut down {n} foes in one spin', Fireball: 'burned down {n} soldiers with one fireball', 'Arrow Volley': 'dropped {n} foes with one volley', 'Shield Bash': 'bowled over {n} foes with one bash', Smite: 'blasted {n} foes with one bolt', 'Lance Charge': 'rode down {n} foes in one charge' };
+const SWEEPS = { Whirlwind: 'cut down {n} foes in one spin', Fireball: 'caught {n} soldiers in one blast', 'Arrow Volley': 'dropped {n} foes at once', 'Shield Bash': 'bowled over {n} foes in one bash', Smite: 'blasted {n} foes with one bolt', 'Lance Charge': 'rode down {n} foes in one charge', 'Frost Ward': 'shattered {n} foes in one burst' };
 
 // the words for a moment, as the player of house `me` is told it
 export function tell(game, e, me) {

@@ -623,7 +623,7 @@ export class Castle {
       case 'blast':
         fx.flash(p, _gold, 16, 0.6, 1);
         fx.shock(_cq.copy(p).setY(this.center.y + 0.5), 2, 26, _gold, 0.7, 0.8);
-        if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); }
+        if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); g.audio.play('boom', p); }
         g.camfx.boom(p, 1);
         if (near) fin.jolt(0.7);
         break;
@@ -636,7 +636,7 @@ export class Castle {
         if (host) fx.dust(p, ev.n, ev.s, 'stone');
         break;
       case 'dust':
-        if (host) { fx.dust(_cq.copy(p).setY(p.y + 0.3), ev.n, ev.s, 'stone'); if (ev.s > 2.4) g.audio.play('thud', p); }
+        if (host) { fx.dust(_cq.copy(p).setY(p.y + 0.3), ev.n, ev.s, 'stone'); if (ev.s > 3.3) g.audio.play('thud', p); }
         if (near && ev.s > 2.4) fin.jolt(0.12);
         break;
       case 'burst':

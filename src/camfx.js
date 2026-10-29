@@ -28,6 +28,8 @@ export class CamFx {
     this.last = { hurt: 0, alive: true, level: 1, charging: false, hp: 1 };
     this.pulse = 0;
     this.zoom = 1;
+    this.push = 1;                         // a slow push-in of the view (the ending sets it: see finale.js)
+    this.grade = 0;                        // colour taken out of the picture (the ending of a lost match)
     this.mute = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
@@ -101,7 +103,7 @@ export class CamFx {
     cam.rotation.z += this.roll.x * DEG + s * 0.03 * n(23, 2.2);
     // the field of view: a zoom factor on the projection (the hero's own easing of cam.fov is not disturbed)
     const f0 = cam.fov, wide = clamp(this.punch.x, -10, 14);
-    const zoom = Math.abs(wide) < 0.02 ? 1 : TAN(f0 * Math.PI / 360) / TAN((f0 + wide) * Math.PI / 360);
+    const zoom = (Math.abs(wide) < 0.02 ? 1 : TAN(f0 * Math.PI / 360) / TAN((f0 + wide) * Math.PI / 360)) * this.push;
     if (Math.abs(zoom - this.zoom) > 1e-4 || (zoom === 1 && cam.zoom !== 1)) { this.zoom = zoom; cam.zoom = zoom; cam.updateProjectionMatrix(); }
 
     // ---- colour: drained when health is low (to the beat of a heart), black on death, a flash that fades
@@ -109,7 +111,7 @@ export class CamFx {
     if (cc) {
       const low = p.alive ? clamp((0.34 - p.hp / p.maxHp) / 0.34, 0, 1) : 0;
       this.pulse = low > 0 ? 0.5 + 0.5 * Math.sin(t * (5.2 + 3 * low)) : 0;
-      let des = low * (0.26 + 0.16 * this.pulse);
+      let des = Math.max(low * (0.26 + 0.16 * this.pulse), this.grade);
       if (!p.alive) des = Math.max(des, clamp(this.deadT * 0.8, 0, 0.8));
       cc.desaturate = des;
       let fl = this.flash, col = this.flashColor;
@@ -129,7 +131,7 @@ export class CamFx {
   }
 
   reset() {
-    this.trauma = 0; this.flash = 0; this.deadT = 0;
+    this.trauma = 0; this.flash = 0; this.deadT = 0; this.push = 1; this.grade = 0;
     for (const s of [this.pitch, this.yaw, this.roll, this.punch]) { s.x = 0; s.v = 0; }
     const cam = this.g.camera;
     if (cam.zoom !== 1) { cam.zoom = 1; this.zoom = 1; cam.updateProjectionMatrix(); }
