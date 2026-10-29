@@ -421,7 +421,7 @@ function bakeRig(m, level, resolve, keepPose) {
   for (const p of m.parts) {
     if (!p.on) continue;
     // (far away the small things do not show: hands, tier kit, plumes, the quiver)
-    if (level === 3 && /^(fore|kit|plume|quiver)/.test(p.shape.name)) continue;
+    if (level >= 3 && /^(fore|kit|plume|quiver)/.test(p.shape.name)) continue;
     _rel.multiplyMatrices(_inv, p.node.matrixWorld);
     list.push(bakePart(shapeGeo(p.shape, level), _rel.clone(), bits, resolve ? m.inst : null));
   }
@@ -436,7 +436,7 @@ export function farShapeOf(m) {
   if (!f) {
     // (baked from a rig of its own: the one asked about may be mid-stride, or lying dead)
     const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : null);
-    f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, bakeRig(t, 3, false)] };
+    f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, null, bakeRig(t, 4, false)] };
     farCache.set(m.farKey, f);
   }
   return f;
@@ -463,10 +463,10 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
   if (!warmed.has(key) && UNIT_TYPES[type]) {
     warmed.add(key);
     const m = buildSoldier(type, team, variant, tier);
-    const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
+    const levels = [...new Set([geoLevel(0), geoLevel(1), 3, 4])];   // (3: soldiers a good way off, see crowd.js; 4: the far-away baked model)
     for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume')) for (const l of levels) warmTasks.push([p.shape, l]);
-    warmTasks.push([m, 3]);
-    if (m.mounted) { const h = buildHorse(team, variant, team !== RAIDER_TEAM); for (const p of h.parts) for (const l of levels) warmTasks.push([p.shape, l]); warmTasks.push([h, 3]); }
+    warmTasks.push([m, 4]);
+    if (m.mounted) { const h = buildHorse(team, variant, team !== RAIDER_TEAM); for (const p of h.parts) for (const l of levels) warmTasks.push([p.shape, l]); warmTasks.push([h, 4]); }
     return;
   }
   warmStep();
@@ -482,7 +482,7 @@ export function warmStep() {
 export function sharedModelResources() {
   const out = [...unitMaterials(), ...unitTextures()];
   for (const s of SHAPES.values()) for (const g of s.geo) if (g) out.push(g);
-  for (const f of farCache.values()) out.push(f.geo[3]);
+  for (const f of farCache.values()) out.push(f.geo[4]);
   for (const g of bakeCache.values()) out.push(g);
   return out;
 }

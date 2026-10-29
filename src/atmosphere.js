@@ -25,20 +25,22 @@ ${SUN_CONST}
 const vec3 ATM_SUN_TINT = vec3(1.0, 0.80, 0.55);
 vec3 atmSrgb(vec3 c) { return pow(c, vec3(2.2)); }
 float atmHg(float mu, float g) { float g2 = g * g; return (1.0 - g2) / (12.5663706 * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5)); }
+// (the gradient colours are constant expressions, so the compiler folds the pow: this runs for every pixel of the fog)
+const vec3 ATM_ZENITH = pow(vec3(0.27, 0.46, 0.79), vec3(2.2));
+const vec3 ATM_MID = pow(vec3(0.44, 0.64, 0.91), vec3(2.2));
+const vec3 ATM_LOW = pow(vec3(0.68, 0.82, 0.96), vec3(2.2));
+const vec3 ATM_HOR = pow(vec3(0.84, 0.90, 0.95), vec3(2.2));
+const vec3 ATM_GOLD = pow(vec3(0.95, 0.74, 0.50), vec3(2.2));
 vec3 atmHaze(vec3 d) {
   float y = clamp(d.y, 0.0, 1.0);
   float mu = clamp(dot(d, ATM_SUN), -1.0, 1.0);
-  vec3 zenith = atmSrgb(vec3(0.27, 0.46, 0.79));
-  vec3 mid = atmSrgb(vec3(0.44, 0.64, 0.91));
-  vec3 low = atmSrgb(vec3(0.68, 0.82, 0.96));
-  vec3 hor = atmSrgb(vec3(0.84, 0.90, 0.95));
-  vec3 sky = mix(hor, low, smoothstep(0.0, 0.10, y));
-  sky = mix(sky, mid, smoothstep(0.06, 0.42, y));
-  sky = mix(sky, zenith, smoothstep(0.30, 1.0, y));
+  vec3 sky = mix(ATM_HOR, ATM_LOW, smoothstep(0.0, 0.10, y));
+  sky = mix(sky, ATM_MID, smoothstep(0.06, 0.42, y));
+  sky = mix(sky, ATM_ZENITH, smoothstep(0.30, 1.0, y));
   sky *= 0.86 + 0.28 * mu * mu;                                          // Rayleigh phase: dimmest about 90 degrees from the sun
   float glow = atmHg(mu, 0.70) * 0.50 + pow(max(mu, 0.0), 3.0) * 0.14;   // forward scattering by the haze
   sky += ATM_SUN_TINT * glow * (1.0 - 0.45 * sqrt(y));
-  sky += atmSrgb(vec3(0.95, 0.74, 0.50)) * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y));   // golden horizon on the sun side
+  sky += ATM_GOLD * pow(max(mu, 0.0), 1.5) * 0.20 * (1.0 - smoothstep(0.0, 0.30, y));   // golden horizon on the sun side
   return sky;
 }
 `;

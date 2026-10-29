@@ -1,15 +1,15 @@
-// The catalogue of character parts. A shape is built once per detail level (0 richest .. 2 plainest, 3 the baked far-away model) into a
-// geometry shared by every soldier that wears it; colours that differ between soldiers (house cloth, skin, hair, a horse's coat) are
-// colour SLOTS filled per instance by the shader, so a shape does not depend on the team. Every shape is modelled in the frame of the
-// joint it hangs from (see models.js): +y up, +z forward, the weapon arm at -x, the shield arm at +x. `open` shapes carry thin cloth or
-// hollow shells and are drawn double-sided. Gates (see modelkit.js) used here: 1 steel pauldrons (tier 1-3), 2 cloak (tier 2+),
-// 3 gold gorget and band (tier 3+), 4 gold pauldrons and helm wings (tier 4+), 5 long cloak and gilded plate (tier 5), 6 beard,
-// 7 8 9 hair cuts, 12 gilded shield rim (tier 3+).
+// The catalogue of character parts. A shape is built once per detail level (0 richest .. 2 plainest, 3 plainer for soldiers a good way off,
+// 4 the baked far-away model) into a geometry shared by every soldier that wears it; colours that differ between soldiers (house cloth,
+// skin, hair, a horse's coat) are colour SLOTS filled per instance by the shader, so a shape does not depend on the team. Every shape is
+// modelled in the frame of the joint it hangs from (see models.js): +y up, +z forward, the weapon arm at -x, the shield arm at +x. `open`
+// shapes carry thin cloth or hollow shells and are drawn double-sided. Gates (see modelkit.js) used here: 1 steel pauldrons (tier 1-3),
+// 2 cloak (tier 2+), 3 gold gorget and band (tier 3+), 4 gold pauldrons and helm wings (tier 4+), 5 long cloak and gilded plate (tier 5),
+// 6 beard, 7 8 9 hair cuts, 12 gilded shield rim (tier 3+).
 import * as THREE from 'three';
 import { Builder, PAT } from './modelkit.js';
 
 export const SHAPES = new Map();
-function def(name, make, open = false) { SHAPES.set(name, { name, make, open, geo: [null, null, null, null] }); }
+function def(name, make, open = false) { SHAPES.set(name, { name, make, open, geo: [null, null, null, null, null] }); }
 export function getShape(name) {
   const s = SHAPES.get(name);
   if (!s) throw new Error('no character shape ' + name);

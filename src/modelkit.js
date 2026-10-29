@@ -31,8 +31,11 @@ export class Builder {
     this.count = 0;
   }
 
-  // level 3 is the baked far-away model: plain like level 2 with fewer segments still
-  pick(a, b, c) { return this.level === 0 ? a : this.level === 1 ? b : this.level === 2 ? c : Math.max(3, Math.round(c * 0.6)); }
+  // level 3 is the plainest animated model (soldiers a good way off), level 4 the baked far-away one: plain like level 2 with fewer segments still
+  pick(a, b, c) { return this.level === 0 ? a : this.level === 1 ? b : this.level === 2 ? c : Math.max(3, Math.round(c * (this.level === 3 ? 0.6 : 0.4))); }
+
+  // a segment count a shape chose by itself (so `pick` never scaled it): it shrinks on the far levels only, the near ones are as drawn
+  far(n) { return this.level >= 4 ? Math.max(3, Math.round(n * 0.5)) : this.level === 3 ? Math.max(3, Math.round(n * 0.75)) : n; }
 
   // Place a three.js geometry through matrix M. Options:
   //   m material (MAT key)  c fixed colour (hex)  s slot (SLOT key)  a [shade at the bottom, at the top] of the primitive's y extent
@@ -103,14 +106,20 @@ export class Builder {
 
   // how finely a sphere of this radius is cut at this level of detail: [around, down]
   ellSeg(rm, seg) {
-    if (seg) return typeof seg === 'number' ? [seg, Math.max(3, Math.round(seg * 0.7))] : seg;
+    if (seg) {
+      const s = typeof seg === 'number' ? [seg, Math.max(3, Math.round(seg * 0.7))] : seg;
+      return this.level >= 3 ? [this.far(s[0]), this.far(s[1])] : s;
+    }
     const t = rm >= 0.2 ? [[14, 10], [9, 6], [7, 5], [5, 4]] : rm >= 0.1 ? [[10, 7], [7, 5], [6, 4], [4, 3]] : rm >= 0.05 ? [[8, 6], [6, 4], [5, 3], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]];
-    return t[Math.min(3, this.level)];
+    const r = t[Math.min(3, this.level)];
+    return this.level >= 4 ? [this.far(r[0]), this.far(r[1])] : r;
   }
 
   // ellipsoid: centre c, radii r (a number or [rx, ry, rz])
   ell(c, r, o = {}) {
-    const sg = this.ellSeg(typeof r === 'number' ? r : Math.max(r[0], r[1], r[2]), o.seg);
+    const rm = typeof r === 'number' ? r : Math.max(r[0], r[1], r[2]);
+    if (this.level >= 4 && rm < 0.075) return this;   // (the far model has no joints and no small knobs: they are specks)
+    const sg = this.ellSeg(rm, o.seg);
     return this.place(new THREE.SphereGeometry(1, sg[0], sg[1]), c, o.rot || [0, 0, 0], r, o);
   }
 
@@ -121,7 +130,7 @@ export class Builder {
   }
 
   torus(c, R, r, o = {}) {
-    return this.place(new THREE.TorusGeometry(R, r, o.sides || this.pick(5, 4, 3), o.seg || this.pick(20, 14, 9)), c, o.rot || [0, 0, 0], o.sc || 1, o);
+    return this.place(new THREE.TorusGeometry(R, r, o.sides ? this.far(o.sides) : this.pick(5, 4, 3), o.seg ? this.far(o.seg) : this.pick(20, 14, 9)), c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 
   // tapered rod from a to b, radius ra at a and rb at b
@@ -129,7 +138,7 @@ export class Builder {
     _v.fromArray(b).sub(_p2.fromArray(a));
     const len = _v.length();
     if (len < 1e-6) return this;
-    const g = new THREE.CylinderGeometry(rb, ra, len, o.seg || this.pick(10, 8, 6), 1, !!o.open);
+    const g = new THREE.CylinderGeometry(rb, ra, len, o.seg ? this.far(o.seg) : this.pick(10, 8, 6), 1, !!o.open || this.level >= 4);   // (the far model has no end caps)
     _q.setFromUnitVectors(UP, _v.divideScalar(len));
     _p.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
     _m.compose(_p, _q, _one);
@@ -145,13 +154,14 @@ export class Builder {
   rbox(c, s, o = {}) {
     const e = o.e || 0.3;
     if (o.sharp) return this.place(new THREE.BoxGeometry(1, 1, 1), c, o.rot || [0, 0, 0], s, o);
-    const sg = o.seg || (Math.max(s[0], s[1], s[2]) >= 0.2 ? [[10, 8], [8, 6], [6, 4], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]])[Math.min(3, this.level)];
+    let sg = o.seg || (Math.max(s[0], s[1], s[2]) >= 0.2 ? [[10, 8], [8, 6], [6, 4], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]])[Math.min(3, this.level)];
+    if (this.level >= 4 || (o.seg && this.level === 3)) sg = [this.far(sg[0]), this.far(sg[1])];
     return this.place(superGeo(e, o.e2 || e, sg[0], sg[1]), c, o.rot || [0, 0, 0], s, o);
   }
 
   // surface of revolution about y: pts [[radius, y], ...]; sc scales the result (elliptical sections); arc [start, length] radians (0 = +z)
   lathe(pts, c, o = {}) {
-    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg || this.pick(18, 12, 8), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
+    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg ? this.far(o.seg) : this.pick(18, 12, 8), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
     return this.place(g, c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 
@@ -169,7 +179,7 @@ export class Builder {
   // a tube along a smooth path with its radius changing from r0 to r1
   sweep(pts, r0, r1, o = {}) {
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
-    const segs = o.segs || this.pick(12, 8, 5), rs = o.seg || this.pick(8, 6, 4);
+    const segs = o.segs ? this.far(o.segs) : this.pick(12, 8, 5), rs = o.seg ? this.far(o.seg) : this.pick(8, 6, 4);
     const g = new THREE.TubeGeometry(curve, segs, 1, rs, false);
     const pa = g.attributes.position;
     for (let i = 0; i < pa.count; i++) {

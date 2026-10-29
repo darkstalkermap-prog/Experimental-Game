@@ -1,7 +1,8 @@
 // The land: the play area as a grid of culled chunks that follow the physics heights exactly, and behind it a far landscape made of
 // square rings of coarser and coarser cells (visual only: nobody can stand there) that carries on to the horizon.
 //   chunk geometry   position, normal, uv, color (the whole baked ground colour, used by Q.terrain 0 and 1)
-//                    aBase (the grass colour alone) and aMask (castle dirt, trodden hill, sand, forest) for the splat shader
+//                    aBase (the grass colour alone) and aMask (castle dirt, trodden hill, sand, forest) for the splat shader,
+//                    aRoad (metres to the nearest road: the shader only works the roads out near one)
 //   far mesh         four meshes (one per side, so a quarter of the horizon is culled at a time); each ring has twice the cell size of the
 //                    one inside it, and the odd vertices on the seam are pulled onto the coarse edge so there are no cracks
 import * as THREE from 'three';
@@ -97,7 +98,7 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   return o;
 }
 
-const makeSample = (far = false, bake = false) => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0], alt: [0, 0], far, bake });
+const makeSample = (far = false, bake = false) => ({ base: new THREE.Color(), all: new THREE.Color(), mask: [0, 0, 0, 0], alt: [0, 0], road: 1e4, far, bake });
 
 // A chunk's geometry is built from arrays that the caller fills; `quads` is the shared index list for an nx x nz grid of cells.
 const indexCache = new Map();
@@ -122,7 +123,7 @@ function makeGeometry(nv, withIndexFor) {
   const g = new THREE.BufferGeometry();
   const arrays = {
     position: new Float32Array(nv * 3), normal: new Float32Array(nv * 3), color: new Float32Array(nv * 3), uv: new Float32Array(nv * 2),
-    aBase: new Float32Array(nv * 3), aMask: new Float32Array(nv * 4), aAlt: new Float32Array(nv * 2),
+    aBase: new Float32Array(nv * 3), aMask: new Float32Array(nv * 4), aAlt: new Float32Array(nv * 2), aRoad: new Float32Array(nv),
   };
   g.setAttribute('position', new THREE.BufferAttribute(arrays.position, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(arrays.normal, 3));
@@ -131,6 +132,7 @@ function makeGeometry(nv, withIndexFor) {
   g.setAttribute('aBase', new THREE.BufferAttribute(arrays.aBase, 3));
   g.setAttribute('aMask', new THREE.BufferAttribute(arrays.aMask, 4));
   g.setAttribute('aAlt', new THREE.BufferAttribute(arrays.aAlt, 2));
+  g.setAttribute('aRoad', new THREE.BufferAttribute(arrays.aRoad, 1));
   g.setIndex(gridIndex(withIndexFor[0], withIndexFor[1]));
   return { g, arrays };
 }
@@ -145,6 +147,7 @@ function put(a, v, x, y, z, nx, ny, nz, s) {   // (the baked colour is only writ
   a.aBase[v * 3] = s.base.r; a.aBase[v * 3 + 1] = s.base.g; a.aBase[v * 3 + 2] = s.base.b;
   a.aMask[v * 4] = s.mask[0]; a.aMask[v * 4 + 1] = s.mask[1]; a.aMask[v * 4 + 2] = s.mask[2]; a.aMask[v * 4 + 3] = s.mask[3];
   a.aAlt[v * 2] = s.alt[0]; a.aAlt[v * 2 + 1] = s.alt[1];
+  a.aRoad[v] = s.road;
 }
 
 export class Terrain {
@@ -186,6 +189,7 @@ export class Terrain {
           const h = H[iz * n + ix];
           const dx = (hAt(ix + 1, iz) - hAt(ix - 1, iz)) / (2 * res), dz = (H[Math.min(n - 1, iz + 1) * n + ix] - H[Math.max(0, iz - 1) * n + ix]) / (2 * res);
           groundSample(nz, this.roadDist, ph, x, z, h, Math.hypot(dx, dz), s);
+          s.road = this.roadDist(x, z);
           put(arrays, v, x, h, z, -dx, 1, -dz, s);
         }
         g.computeBoundingSphere();
@@ -240,7 +244,7 @@ export class Terrain {
       const g = new THREE.BufferGeometry();
       const arrays = {
         position: new Float32Array(nvTotal * 3), normal: new Float32Array(nvTotal * 3), color: new Float32Array(nvTotal * 3), uv: new Float32Array(nvTotal * 2),
-        aBase: new Float32Array(nvTotal * 3), aMask: new Float32Array(nvTotal * 4), aAlt: new Float32Array(nvTotal * 2),
+        aBase: new Float32Array(nvTotal * 3), aMask: new Float32Array(nvTotal * 4), aAlt: new Float32Array(nvTotal * 2), aRoad: new Float32Array(nvTotal),
       };
       const ntri = strips.reduce((t, [k, x0, z0, x1, z1]) => { const c = this.rings[k].c; return t + ((x1 - x0) / c) * ((z1 - z0) / c) * 6; }, 0);
       const index = new Uint32Array(ntri);
@@ -278,6 +282,7 @@ export class Terrain {
       g.setAttribute('aBase', new THREE.BufferAttribute(arrays.aBase, 3));
       g.setAttribute('aMask', new THREE.BufferAttribute(arrays.aMask, 4));
       g.setAttribute('aAlt', new THREE.BufferAttribute(arrays.aAlt, 2));
+      g.setAttribute('aRoad', new THREE.BufferAttribute(arrays.aRoad, 1));
       g.setIndex(new THREE.BufferAttribute(index, 1));
       g.computeBoundingSphere();
       const mesh = new THREE.Mesh(g, null);

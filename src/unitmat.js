@@ -80,7 +80,9 @@ float pat = vSurf.z;
 if (pat > 0.5) {
   vec3 q = vObj;
   float aa = clamp(1.0 - length(fwidth(q)) * 55.0, 0.0, 1.0);   // fine patterns fade out where they would shimmer
-  if (pat < 1.5) {
+  if (pat < 5.5 && aa <= 0.0) {
+    // (past a few metres every fine pattern is faded out: nothing to draw, and nothing is worked out)
+  } else if (pat < 1.5) {
     float w = sin(q.x * 300.0) * sin((q.y + q.z) * 300.0);
     diffuseColor.rgb *= 1.0 + 0.08 * w * aa;
     pRough += 0.04 * w * aa;

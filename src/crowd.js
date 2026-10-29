@@ -3,8 +3,8 @@
 // joint Groups of the rig, see models.js) and their per-instance look (colours and flags) into the batch's buffers, so the draw cost
 // scales with the number of different shapes in view and not with the number of soldiers.
 //   near  (lod 0)  the rich shapes
-//   mid   (lod 1)  plain shapes, animated
-//   far   (lod 2)  one static model per kind of rig, no animation
+//   mid   (lod 1)  plain shapes, animated; beyond half the distance of this level the plainest animated ones (shape level 3)
+//   far   (lod 2)  one static model per kind of rig, no animation (built from shape level 4)
 // Soldiers closer than Q.crowdShadowDist cast shadows (near or mid), so the shadow pass scales with the shapes close by. They cast into
 // the near shadow map only (see shadows.js), and a rich shape is drawn into it as its plainest version (a proxy that shares the batch's
 // instance buffers): a silhouette needs no face.
@@ -125,7 +125,7 @@ export class Crowd {
   addFar(rig) {
     rig.body.updateWorldMatrix(true, false);
     const f = farShapeOf(rig);
-    this.batchFor(f.geo[3], true, false).push(rig.body.matrixWorld.elements, rig.inst);
+    this.batchFor(f.geo[4], true, false).push(rig.body.matrixWorld.elements, rig.inst);
   }
 
   // Draw what can be seen. `lod` of a unit was chosen by the game (0 near, 1 mid, 2 far, 3 hidden).
@@ -139,6 +139,7 @@ export class Crowd {
     crowdUniforms.uWind.value = Q.wind ? 1 : 0;
     const cast = !!(Q.shadows && Q.crowdShadowDist > 0 && game.lights && game.lights.sun.castShadow);
     const sd2 = Q.crowdShadowDist * Q.crowdShadowDist, cp = cam.position;
+    const lim = lodLimits(), plain2 = (lim.mid * 0.5) ** 2;   // (a soldier this far off is 30 pixels tall or less: the plainest shapes do)
     for (const b of this.list) b.n = 0;
     const units = game.units;
     for (let i = 0; i < units.length; i++) {
@@ -154,12 +155,12 @@ export class Crowd {
         if (u.horse) this.addFar(u.horse);
       } else {
         mesh.updateMatrixWorld(true);
-        const level = geoLevel(u.lod), c = cast && (u.pos.x - cp.x) ** 2 + (u.pos.z - cp.z) ** 2 < sd2;
+        const d2 = (u.pos.x - cp.x) ** 2 + (u.pos.z - cp.z) ** 2;
+        const level = u.lod === 1 && d2 > (u.isGiant ? plain2 * 9 : plain2) ? 3 : geoLevel(u.lod), c = cast && d2 < sd2;
         this.addRig(m, level, c);
         if (u.horse) this.addRig(u.horse, level, c);
       }
     }
-    const lim = lodLimits();
     for (const h of game.humans) {
       if (h.body && h.alive !== undefined) this.addHero(h, h.body, h.mounted ? 2.4 : 1.9, lim, cast, game);
       if (h.horse) this.addHero(h, h.horse, 2.6, lim, cast, game);
@@ -187,7 +188,7 @@ export class Crowd {
     if (lod === 3) return;
     if (lod === 2) { this.addFar(rig); return; }
     root.updateMatrixWorld(true);
-    this.addRig(rig, geoLevel(lod), cast && d2 < Q.crowdShadowDist * Q.crowdShadowDist);
+    this.addRig(rig, lod === 1 && d2 > lim.mid * lim.mid * 0.25 ? 3 : geoLevel(lod), cast && d2 < Q.crowdShadowDist * Q.crowdShadowDist);
   }
 
   dispose() {
