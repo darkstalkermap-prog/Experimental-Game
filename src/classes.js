@@ -2,7 +2,8 @@
 // Q is an attack, R is a defence. The abilities are simulated where the world is (single player or host);
 // their look and sound is replayed on every screen.
 import * as THREE from 'three';
-import { SPELLS, VOLLEY } from './config.js';
+import { SPELLS, VOLLEY, TEAM_COLORS } from './config.js';
+import { GroundFX } from './groundfx.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
 import { talentFx } from './talents.js';
@@ -132,8 +133,12 @@ export class Abilities {
   constructor(game) {
     this.g = game;
     this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a volley coming down
-    this.rising = [];   // the arrows of a volley on their way up (looks only: on every screen)
+    this.rising = [];   // a record of each climbing arrow of a volley while it is in the air (the arrows are drawn by Projectiles.showArrow)
     this.burning = [];  // foes a fireball set alight (Mage talent)
+    this.trails = [];   // looks that follow a hero for a moment (the dust of a charge)
+    this.gfx = new GroundFX(game);   // the glyphs, shells and columns of light the abilities draw (see groundfx.js)
+    this.col = new THREE.Color();
+    this.tmpv = new THREE.Vector3();
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
@@ -168,15 +173,23 @@ export class Abilities {
     this.burn(dt);
   }
 
-  // Looks that run on every screen: the arrows of a volley climbing out of sight.
+  // Looks that run on every screen: the glyphs on the ground, shells and columns of light, the dust behind a charging hero.
   updateFx(dt) {
-    for (let i = this.rising.length - 1; i >= 0; i--) {
-      const r = this.rising[i];
-      r.t += dt;
-      if (r.t > 0.9) { this.g.scene.remove(r.mesh); this.rising.splice(i, 1); continue; }
-      r.vel.y -= 9.8 * dt;
-      r.mesh.position.addScaledVector(r.vel, dt);
-      r.mesh.lookAt(r.mesh.position.clone().add(r.vel));
+    this.gfx.update(dt);
+    for (let i = this.rising.length - 1; i >= 0; i--) { this.rising[i].t += dt; if (this.rising[i].t > 0.9) this.rising.splice(i, 1); }
+    for (let i = this.trails.length - 1; i >= 0; i--) {
+      const e = this.trails[i];
+      e.t += dt;
+      const w = e.who;
+      if (e.t > e.dur || !w || w.alive === false) { this.trails.splice(i, 1); continue; }
+      e.acc += dt;
+      while (e.acc > 0.04) {   // (a puff of dust and a glint every 40 ms, wherever the hero is now)
+        e.acc -= 0.04;
+        const fx = this.g.fx, x = w.pos.x, y = w.pos.y, z = w.pos.z;
+        this.tmpv.set(x - e.f.x * 0.8, y + 0.3, z - e.f.z * 0.8);
+        fx._dust(this.tmpv, 3, 0.55, '');
+        if (Math.random() < 0.6) fx._sparks(this.tmpv.set(x + e.f.x * 0.5 + (Math.random() - 0.5) * 1.6, y + 0.9 + Math.random() * 0.8, z + e.f.z * 0.5 + (Math.random() - 0.5) * 1.6), 2);
+      }
     }
   }
 
@@ -551,84 +564,158 @@ export class Abilities {
     }
   }
 
-  // silent: the sound already arrived as its own event
+  // the hero who cast it, found by where it happened (the other screens only get the place), and their house colour
+  casterNear(pos, within = 3.8) {
+    let best = null, bd = within * within;
+    for (const h of this.g.humans) {
+      if (!h.alive) continue;
+      const dx = h.pos.x - pos.x, dz = h.pos.z - pos.z, d = dx * dx + dz * dz;
+      if (d < bd) { bd = d; best = h; }
+    }
+    return best;
+  }
+  houseColor(who) {
+    if (!who || TEAM_COLORS[who.team] === undefined) return null;
+    this.house = this.house || {};
+    return this.house[who.team] || (this.house[who.team] = new THREE.Color(TEAM_COLORS[who.team]));
+  }
+
+  // silent: the sound already arrived as its own event. (The dust, sparks and blood here are the local versions of those
+  // effects: the host's copies of fx.dust and the like are sent to the guests, who draw this ability themselves.)
   show(id, pos, dir, silent = false, targets = null, sz = 1) {
-    const g = this.g, fx = g.fx;
+    const g = this.g, fx = g.fx, gf = this.gfx;
     const snd = (n) => { if (!silent) g.audio.play(n, pos); };
     const at = pos.clone();
     const chest = at.clone().setY(at.y + 1.2);
+    const who = this.casterNear(pos);
+    const house = this.houseColor(who);
+    const heading = Math.atan2(dir.z, dir.x);
     switch (id) {
-      case 'bash':
-        fx.dust(at.clone().setY(at.y + 0.2), 10, 2.2);
-        fx.sparks(chest, 20);
-        fx.ring(at, 2.8 * sz, C.guard, 22, { speed: 3 });
+      case 'bash': {
+        // the cone the shield sweeps (from the hero), and the slam where it lands
+        const f = flat(dir), from = at.clone().addScaledVector(f, -2.8);
+        gf.glyph('cone', from.x, from.y, from.z, 6.6 * sz, 0xbfd6ff, 0.55, { dir: heading, arc: 0.95, team: house, strength: 1.7 });
+        gf.glyph('shock', at.x, at.y, at.z, 3.5 * sz, 0xdfeaff, 0.5, { team: house });
+        fx._dust(at.clone().setY(at.y + 0.2), 14, 2.4, '');
+        fx._sparks(chest.clone().addScaledVector(f, 0.4), 20);
+        fx.flash(chest, this.col.set(0xbfd6ff), 3.2, 0.2, 0.7);
         snd('clang'); snd('thud');
         break;
-      case 'bulwark':
-        fx.ring(at, 1.1, C.guard, 20, { up: 1.5 });
-        fx.ring(at, 2.4 * sz, C.guard, 28, { up: 1.0 });
-        fx.sparks(chest, 14);
+      }
+      case 'bulwark': {
+        const r = 8 * sz;
+        gf.dome(0x7db4ff, 5, 2.0, who, { strength: 1.5, x: at.x, y: at.y, z: at.z });
+        gf.glyph('rune', at.x, at.y, at.z, r, 0x7db4ff, 2.6, { arms: 6, team: house, strength: 1.5 });
+        gf.glyph('shock', at.x, at.y, at.z, r, 0xcfe2ff, 0.9, { team: house });
+        fx.ring(at, 1.3, this.col.set(0x9cc4ff), 22, { up: 1.8, size: 0.3 });
+        fx._sparks(chest, 14);
         snd('block');
         break;
-      case 'whirl':
-        fx.ring(at, 3.6 * sz, C.spark, 26, { speed: 3, up: 0.6 });
-        fx.sparks(chest, 14);
+      }
+      case 'whirl': {
+        const r = 4.3 * sz;
+        gf.glyph('slash', at.x, at.y, at.z, r, 0xffb070, 0.42, { team: house, strength: 1.8 });
+        gf.glyph('shock', at.x, at.y, at.z, r, 0xffd8b0, 0.45, { team: house });
+        fx._sparks(chest, 12);
+        fx._dust(at.clone().setY(at.y + 0.2), 6, 1.8, '');
         snd('swing');
         break;
-      case 'rage':
-        fx.blood(chest, 18);
-        fx.ring(at, 1.6, C.rage, 24, { up: 1.8 });
+      }
+      case 'rage': {
+        gf.glyph('pulse', at.x, at.y, at.z, 3.4, 0xff3a22, 1.2, { strength: 1.8 });
+        gf.glyph('rune', at.x, at.y, at.z, 2.4, 0xff4a2a, 1.6, { arms: 4, team: house, strength: 1.5 });
+        gf.glyph('shock', at.x, at.y, at.z, 5.5, 0xff6a40, 0.7, { team: house });
+        for (let i = 0; i < 6; i++) fx.fireTrail(this.tmpv.set(at.x + (Math.random() - 0.5) * 1.2, at.y + 0.3 + Math.random() * 1.4, at.z + (Math.random() - 0.5) * 1.2));
+        fx._blood(chest, 10, 0, 0);
+        fx.ring(at, 1.5, this.col.set(0xff3a22), 24, { up: 2.2, size: 0.3 });
         snd('roar');
         break;
-      case 'evade':
-        fx.dust(at.clone().setY(at.y + 0.2), 8, 1.2);
+      }
+      case 'evade': {
+        gf.glyph('shock', at.x, at.y, at.z, 2.6, 0xb8f0a8, 0.4, { team: house });
+        fx._dust(at.clone().setY(at.y + 0.2), 10, 1.3, '');
+        fx.ring(at, 0.8, this.col.set(0x9ae88a), 12, { up: 1.2, size: 0.22 });
         snd('swing');
         break;
+      }
       case 'volley': {
-        // a flight of arrows leaves the bow; the circle stays marked on the ground until they land
+        // a flight of arrows leaves the bow and climbs out of sight; the circle stays marked on the ground until they land
         snd('bow');
         const c = targets && targets[0];
-        if (c) g.aimRing.flash(c, VOLLEY.radius * sz, 1.9);
+        if (c) {
+          g.aimRing.flash(c, VOLLEY.radius * sz, 1.9);
+          gf.glyph('rune', c.x, c.y, c.z, VOLLEY.radius * sz * 1.02, 0x9af08a, 1.9, { arms: 5, team: house, strength: 1.3 });
+        }
+        fx.flash(at.clone().addScaledVector(dir, 0.6), this.col.set(0xcfe8b0), 1.1, 0.15, 0.5);
         for (let i = 0; i < 9; i++) {
-          const mesh = g.projectiles.makeArrowMesh();
-          mesh.position.copy(at).addScaledVector(dir, 0.6);
+          const from = at.clone().addScaledVector(dir, 0.6);
           const vel = new THREE.Vector3(dir.x * 9 + (Math.random() - 0.5) * 5, 44 + Math.random() * 8, dir.z * 9 + (Math.random() - 0.5) * 5);
-          this.rising.push({ mesh, vel, t: 0 });
+          g.projectiles.showArrow(from, vel, 0.9, who ? who.team : -1);
+          this.rising.push({ t: 0 });   // (a record of each climbing arrow for as long as it is in the air)
         }
         break;
       }
-      case 'ward':
+      case 'ward': {
+        gf.dome(0x8fe0ff, 8, 1.95, who, { strength: 1.5, x: at.x, y: at.y, z: at.z });
+        gf.glyph('rune', at.x, at.y, at.z, 2.9, 0x8fe0ff, 2.4, { arms: 6, team: house, strength: 1.5 });
+        gf.glyph('shock', at.x, at.y, at.z, 6.5 * sz, 0xb8ecff, 0.9, { team: house });
         fx.frost(chest, 26);
-        fx.ring(at, 5.5 * sz, C.frost, 38, { speed: 4, up: 0.8 });
-        fx.ring(at, 1.2, C.frost, 20, { up: 1.8 });
+        fx.ring(at, 1.2, this.col.set(0x8fe0ff), 20, { up: 1.8, size: 0.28 });
         snd('ice');
         break;
-      case 'shatter':
-        fx.frost(chest, 30);
-        fx.ring(at, 6 * sz, C.frost, 44, { speed: 5, up: 0.9 });
+      }
+      case 'shatter': {
+        gf.glyph('shock', at.x, at.y, at.z, 6 * sz, 0x9fe6ff, 0.8, { team: house, strength: 1.8 });
+        gf.glyph('pulse', at.x, at.y, at.z, 6 * sz, 0x8fe0ff, 0.7);
+        fx.frost(chest, 40);
+        fx.flash(chest, this.col.set(0xbfeaff), 4.5, 0.25, 0.8);
+        if (g.camfx) g.camfx.boom(at, 0.5);
         snd('ice');
         break;
-      case 'smite':
+      }
+      case 'smite': {
+        const r = SPELLS.smite.radius * sz;
+        gf.pillar(at.x, at.y, at.z, 0xffe9a0, 0.55, 1.5 * sz, 46, 1.8);
+        gf.glyph('rune', at.x, at.y, at.z, r, 0xffe08a, 1.2, { arms: 8, strength: 1.5 });
+        gf.glyph('shock', at.x, at.y, at.z, r * 1.15, 0xfff0c0, 0.55);
+        gf.glyph('pulse', at.x, at.y, at.z, r, 0xffd870, 0.5, { strength: 1.8 });
         fx.zap(at, 16);
-        fx.ring(at, 3.2 * sz, C.holy, 30, { speed: 4, up: 0.9 });
+        fx._dust(at.clone().setY(at.y + 0.2), 10, 2.2, '');
         g.magic.flash(at, 0xffe9a0, 8);
+        if (g.camfx) g.camfx.boom(at, 0.5);
         break;
-      case 'heal':
-        fx.ring(at, 2, C.heal, 28, { up: 1.8 });
-        fx.ring(at, 6 * sz, C.holy, 36, { speed: 2.5, up: 1.2 });
-        for (const t of targets || []) fx.gold(t);
+      }
+      case 'heal': {
+        const r = 14 * sz;
+        gf.glyph('rune', at.x, at.y, at.z, 3.2, 0x9affb0, 1.7, { arms: 6, team: house, strength: 1.4 });
+        gf.glyph('shock', at.x, at.y, at.z, r, 0xffe9a0, 1.1, { team: house, strength: 1.3 });
+        gf.glyph('pulse', at.x, at.y, at.z, 4, 0x9affb0, 0.8);
+        gf.pillar(at.x, at.y, at.z, 0xaaffc0, 1.2, 1.0, 8, 1.2);
+        fx.ring(at, 2, this.col.set(0x9affb0), 28, { up: 1.8, size: 0.3 });
+        for (const t of targets || []) { fx.gold(t); fx.flash(t, this.col.set(0x9affb0), 1.6, 0.3, 0.6); }
         snd('buy');
         break;
-      case 'charge':
-        fx.dust(at.clone().setY(at.y + 0.2), 12, 2);
+      }
+      case 'charge': {
+        const f = flat(dir);
+        gf.glyph('cone', at.x, at.y, at.z, 7.5, 0xffd870, 0.6, { dir: Math.atan2(f.z, f.x), arc: 0.6, team: house, strength: 1.5 });
+        gf.glyph('shock', at.x, at.y, at.z, 3.2, 0xffe7a8, 0.5, { team: house });
+        fx._dust(at.clone().setY(at.y + 0.2), 16, 2.4, '');
+        if (who) this.trails.push({ who, f, t: 0, dur: 1.2, acc: 0 });
         snd('swing');
         break;
-      case 'rally':
-        fx.ring(at, 3, C.rally, 30, { speed: 7, up: 1.2 });
-        fx.ring(at, 9 * sz, C.rally, 44, { speed: 5, up: 0.8 });
+      }
+      case 'rally': {
+        const r = 28 * sz;
+        gf.glyph('shock', at.x, at.y, at.z, r, 0xffcc4a, 1.2, { team: house, strength: 1.4 });
+        gf.glyph('rune', at.x, at.y, at.z, 5, 0xffd060, 2.4, { arms: 4, team: house, strength: 1.5 });
+        gf.pillar(at.x, at.y, at.z, 0xffd878, 1.0, 0.9, 12, 1.3);
+        fx.ring(at, 3, this.col.set(0xffcc4a), 30, { speed: 7, up: 1.4, size: 0.34 });
         fx.gold(chest);
+        fx.flash(chest, this.col.set(0xffd878), 4, 0.3, 0.7);
         snd('horn');
         break;
+      }
       default: break;
     }
   }

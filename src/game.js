@@ -87,7 +87,7 @@ export class Game {
     createForest(this.scene, this.physics);
     createCentrePiece(this.scene, this.physics, materials().stone);
     this.grass = new Grass(this.scene, this.physics);
-    this.fx = new FX(this.scene);
+    this.fx = new FX(this.scene, this);
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
     this.abilities = new Abilities(this);
@@ -697,7 +697,14 @@ export class Game {
     }
     dmg = Math.max(1, dmg - (target.armor || 0) * (info.splash ? 0.5 : 1));
     const p = target.chest(new THREE.Vector3());
-    if (target.isDummy) this.fx.dust(p, 3, 0.35); else this.fx.blood(p, info.ranged ? 5 : 9);
+    if (target.isDummy) this.fx.dust(p, 3, 0.35);
+    else {
+      // the spray follows the way the blow went (the direction travels with the call to the guests)
+      const dir = info.dir || (attacker && attacker.pos ? { x: target.pos.x - attacker.pos.x, z: target.pos.z - attacker.pos.z } : null);
+      const dl = dir ? Math.hypot(dir.x, dir.z) : 0;
+      if (dl > 0.01) this.fx.blood(p, info.ranged ? 5 : 9, Math.round((dir.x / dl) * 100) / 100, Math.round((dir.z / dl) * 100) / 100);
+      else this.fx.blood(p, info.ranged ? 5 : 9);
+    }
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
     target.takeDamage(dmg, attacker, info);
