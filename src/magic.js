@@ -80,7 +80,7 @@ export class Magic {
     geo.setDrawRange(0, 0);
     this.geo = geo;
     this.mat = new THREE.ShaderMaterial({
-      name: 'lightning', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true,
+      name: 'lightning', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: true, side: THREE.DoubleSide,
       uniforms: { uTime: { value: 0 }, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
       vertexShader: VERT, fragmentShader: FRAG,
     });

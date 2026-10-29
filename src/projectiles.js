@@ -158,7 +158,7 @@ export class Projectiles {
   fireArrow(from, vel, team, dmg, owner, big = false) {
     const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0 };
     const fx = this.game.fx;
-    fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.34 : 0.26, big ? 0.1 : 0.055, big ? 0.1 : 0.085);
+    fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075);
     e.tr = fx._to; e.trb = fx._tb;
     this.list.push(e);
   }
