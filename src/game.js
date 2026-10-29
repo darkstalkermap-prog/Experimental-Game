@@ -631,7 +631,7 @@ export class Game {
       case 'xp': this.ui.xpPopup(ev.n); break;
       case 'lvl': this.ui.levelUp(ev.n); break;
       case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
-      case 'fb': this.ui.feedback(ev.text, !!ev.good); break;
+      case 'fb': this.ui.feedback(ev.text, !!ev.good); if (this.player.vm) this.player.vm.feedback(ev.text); break;
       case 'stagger': this.player.stagger(ev.t); break;
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
