@@ -9,7 +9,7 @@
 //   shadows        the sun casts shadows at all
 //   shadowMap      shadow map size in pixels (per cascade: the far one; shadowNearMap is the near one)
 //   shadowDist     metres around the camera that get shadows (the far cascade; the near cascade covers the closest third)
-//   shadowTaps     samples of the soft shadow filter (4 to 16)
+//   shadowTaps     samples of the soft shadow filter (5 to 16): a pixel well inside light or shadow reads only five of them
 //   crowdShadowDist  soldiers closer than this many metres cast shadows (0 = none do); about the reach of the near shadow map
 //   crowdNear      soldiers closer than this many metres wear the rich shapes (see crowdRich); farther ones are plainer but still animated
 //   crowdRich      the most soldiers that wear the rich shapes at once (the nearest: the distance above shrinks when more would)

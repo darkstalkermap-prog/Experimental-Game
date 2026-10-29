@@ -908,6 +908,7 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   shop purchases show instantly while the host confirms them.
 - Mouse look uses raw input where the browser supports it.
 - Edges are smoothed by 4x multisampling of the scene target at High and Ultra and by FXAA at Medium; the canvas itself has samples only at Low, where the scene is drawn straight into it.
+- Sun shadows read five samples of the soft filter where a pixel is clearly in light or shadow, and all of them only near a shadow edge; the wide shadow map is redrawn a few times a second (at once when it re-centres).
 
 ## Current limits
 

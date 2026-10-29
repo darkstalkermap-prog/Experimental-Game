@@ -8,6 +8,7 @@ import { SUN_DIR, SUN_LIGHT_COLOR, SUN_INTENSITY, cascadesPatched } from './atmo
 
 const _fwd = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _ahead = new THREE.Vector3();
 
 // ---- who casts into which map ----
 // Most casters (castles, trees) belong in both maps. Moving crowds and engines do not belong in the wide one: it is redrawn only about
@@ -102,10 +103,10 @@ export class ShadowRig {
       sh.normalBias = Math.min(0.12, 1.6 * c.texel);
     }
     // the filter settings travel in the per-light shadow uniforms (see atmosphere.js): taps and radius in texels
-    const taps = Math.max(1, Math.min(16, Q.shadowTaps | 0 || 8));
+    const taps = Math.max(5, Math.min(16, Q.shadowTaps | 0 || 8));
     sun.shadow.radius = taps * 16 + Math.min(6, Math.max(1.1, 0.07 / this.near.texel));
     far.shadow.radius = Math.min(6, Math.max(1.1, 0.12 / this.farC.texel));
-    this.farInterval = Q.level >= 3 ? 1 / 20 : 1 / 15;
+    this.farInterval = Q.level >= 3 ? 1 / 6 : 1 / 4;   // (what it holds is static: castles and trees; it is redrawn at once when it re-centres)
     this.farAge = 1e9;
   }
 
@@ -149,7 +150,7 @@ export class ShadowRig {
     if (!this.sun.castShadow) return;
     camera.getWorldDirection(_fwd);
     const flat = Math.hypot(_fwd.x, _fwd.z);
-    const ahead = flat > 0.2 ? new THREE.Vector3(_fwd.x / flat, 0, _fwd.z / flat) : null;
+    const ahead = flat > 0.2 ? _ahead.set(_fwd.x / flat, 0, _fwd.z / flat) : null;
     this.focusTmp = this.focusTmp || new THREE.Vector3();
     this.focusTmp.copy(camera.position);
     this.focusTmp.y -= 1.5;

@@ -1,6 +1,7 @@
-// Post-processing: the scene is drawn into a multisampled half-float target (linear HDR radiance), then
+// Post-processing: the scene is drawn into a half-float target (linear HDR radiance; multisampled where `Q.msaa` asks for it), then
 //   bloom (a down/up-sampled chain: soft, wide, cheap)  ->  composite (exposure, tone curve, grade, vignette, dither)  ->  FXAA
-// and the result goes to the canvas. Everything is behind `Q.post`; when no pass is on gfx.js draws straight to the canvas instead.
+// and the result goes to the canvas. FXAA is what smooths the edges wherever the target has no samples. Everything is behind `Q.post`;
+// when no pass is on gfx.js draws straight to the canvas instead.
 // The passes are single full-screen triangles with their own tiny ShaderMaterials; targets are created lazily and resized with the canvas.
 import * as THREE from 'three';
 import { NEUTRAL_GLSL } from './atmosphere.js';
@@ -9,7 +10,8 @@ import { Q } from './quality.js';
 const VERT = `varying vec2 vUv;
 void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
 
-// 13-tap downsample (the one used for the bloom chain); with KARIS the first level weighs bright taps down so single hot pixels do not flicker
+// 5-tap downsample (the one used for the bloom chain: the centre, which a bilinear tap makes a 2x2 average, and the four diagonal
+// neighbours); with FIRST the first level weighs bright taps down so single hot pixels do not flicker
 const BLOOM_DOWN = `
 varying vec2 vUv;
 uniform sampler2D tInput;
@@ -29,20 +31,16 @@ vec3 prefilter(vec3 c) {
 }
 vec3 tap(vec2 o) { return prefilter(min(texture2D(tInput, vUv + o * uTexel).rgb, vec3(64.0))); }
 void main() {
-  vec3 a = tap(vec2(-2.0, -2.0)), b = tap(vec2(0.0, -2.0)), c = tap(vec2(2.0, -2.0));
-  vec3 d = tap(vec2(-2.0, 0.0)), e = tap(vec2(0.0, 0.0)), f = tap(vec2(2.0, 0.0));
-  vec3 g = tap(vec2(-2.0, 2.0)), h = tap(vec2(0.0, 2.0)), i = tap(vec2(2.0, 2.0));
-  vec3 j = tap(vec2(-1.0, -1.0)), k = tap(vec2(1.0, -1.0)), l = tap(vec2(-1.0, 1.0)), m = tap(vec2(1.0, 1.0));
-  vec3 g0 = (a + b + d + e) * 0.25, g1 = (b + c + e + f) * 0.25, g2 = (d + e + g + h) * 0.25, g3 = (e + f + h + i) * 0.25, g4 = (j + k + l + m) * 0.25;
+  vec3 e = tap(vec2(0.0)), a = tap(vec2(-1.0, -1.0)), b = tap(vec2(1.0, -1.0)), c = tap(vec2(-1.0, 1.0)), d = tap(vec2(1.0, 1.0));
   #ifdef FIRST
-    float w0 = 0.125 / (1.0 + lum(g0)), w1 = 0.125 / (1.0 + lum(g1)), w2 = 0.125 / (1.0 + lum(g2)), w3 = 0.125 / (1.0 + lum(g3)), w4 = 0.5 / (1.0 + lum(g4));
-    gl_FragColor = vec4((g0 * w0 + g1 * w1 + g2 * w2 + g3 * w3 + g4 * w4) / (w0 + w1 + w2 + w3 + w4), 1.0);
+    float we = 4.0 / (1.0 + lum(e)), wa = 1.0 / (1.0 + lum(a)), wb = 1.0 / (1.0 + lum(b)), wc = 1.0 / (1.0 + lum(c)), wd = 1.0 / (1.0 + lum(d));
+    gl_FragColor = vec4((e * we + a * wa + b * wb + c * wc + d * wd) / (we + wa + wb + wc + wd), 1.0);
   #else
-    gl_FragColor = vec4(g4 * 0.5 + (g0 + g1 + g2 + g3) * 0.125, 1.0);
+    gl_FragColor = vec4((e * 4.0 + a + b + c + d) * 0.125, 1.0);
   #endif
 }`;
 
-// 3x3 tent upsample, added onto the next larger level
+// 3x3 tent upsample (the weights 1 2 1 / 2 4 2 / 1 2 1 are four bilinear taps half a texel off the centre), added onto the next larger level
 const BLOOM_UP = `
 varying vec2 vUv;
 uniform sampler2D tInput;
@@ -50,11 +48,10 @@ uniform vec2 uTexel;
 uniform float uRadius;
 uniform float uWeight;
 void main() {
-  vec2 d = uTexel * uRadius;
-  vec3 s = texture2D(tInput, vUv + d * vec2(-1.0, -1.0)).rgb + texture2D(tInput, vUv + d * vec2(0.0, -1.0)).rgb * 2.0 + texture2D(tInput, vUv + d * vec2(1.0, -1.0)).rgb
-         + texture2D(tInput, vUv + d * vec2(-1.0, 0.0)).rgb * 2.0 + texture2D(tInput, vUv).rgb * 4.0 + texture2D(tInput, vUv + d * vec2(1.0, 0.0)).rgb * 2.0
-         + texture2D(tInput, vUv + d * vec2(-1.0, 1.0)).rgb + texture2D(tInput, vUv + d * vec2(0.0, 1.0)).rgb * 2.0 + texture2D(tInput, vUv + d * vec2(1.0, 1.0)).rgb;
-  gl_FragColor = vec4(s * (uWeight / 16.0), 1.0);
+  vec2 d = uTexel * (0.5 * uRadius);
+  vec3 s = texture2D(tInput, vUv + d * vec2(-1.0, -1.0)).rgb + texture2D(tInput, vUv + d * vec2(1.0, -1.0)).rgb
+         + texture2D(tInput, vUv + d * vec2(-1.0, 1.0)).rgb + texture2D(tInput, vUv + d * vec2(1.0, 1.0)).rgb;
+  gl_FragColor = vec4(s * (uWeight * 0.25), 1.0);
 }`;
 
 // exposure, bloom, tone curve, grade, vignette, dither: scene-referred in, display-encoded out
@@ -120,7 +117,7 @@ void main() {
   float rangeMin = min(lM, min(min(lN, lS), min(lW, lE)));
   float rangeMax = max(lM, max(max(lN, lS), max(lW, lE)));
   float range = rangeMax - rangeMin;
-  if (range < max(0.0312, rangeMax * 0.125)) { gl_FragColor = vec4(rgbM, 1.0); return; }
+  if (range < max(0.0625, rangeMax * 0.166)) { gl_FragColor = vec4(rgbM, 1.0); return; }   // (low-contrast texture is left alone: it is not an edge)
   float lNW = fxLuma(fxFetch(uv + vec2(-uTexel.x, -uTexel.y))), lNE = fxLuma(fxFetch(uv + vec2(uTexel.x, -uTexel.y)));
   float lSW = fxLuma(fxFetch(uv + vec2(-uTexel.x, uTexel.y))), lSE = fxLuma(fxFetch(uv + vec2(uTexel.x, uTexel.y)));
   float lNS = lN + lS, lWE = lW + lE, lNWNE = lNW + lNE, lSWSE = lSW + lSE, lNWSW = lNW + lSW, lNESE = lNE + lSE;
@@ -167,7 +164,7 @@ void main() {
   float lumaAvg = (1.0 / 12.0) * (2.0 * (lNS + lWE) + lNWSW + lNESE);
   float sp1 = clamp(abs(lumaAvg - lM) / range, 0.0, 1.0);
   float sp2 = (-2.0 * sp1 + 3.0) * sp1 * sp1;
-  finalOffset = max(finalOffset, sp2 * sp2 * 0.75);
+  finalOffset = max(finalOffset, sp2 * sp2 * 0.5);
   vec2 finalUv = uv;
   if (horz) finalUv.y += finalOffset * step1; else finalUv.x += finalOffset * step1;
   gl_FragColor = vec4(fxFetch(finalUv), 1.0);

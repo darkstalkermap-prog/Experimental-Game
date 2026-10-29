@@ -148,27 +148,43 @@ const FOG_FRAGMENT = `#ifdef USE_FOG
 // second the far one) looked up together, with a soft filter, a blend between the maps and a fade at the edge of the far map. The
 // per-light shadow uniforms three.js already ships to every material carry the settings, so a quality change needs no recompile:
 //   light 0 shadowRadius = taps * 16 + filter radius in texels      light 1 shadowRadius = filter radius in texels
+// The filter: `taps` samples on a golden-angle spiral over a disc, the whole spiral turned by a different random angle at every pixel (so
+// the soft edge is a fine grain, not bands). The spiral is walked from the rim inwards, one fixed turn per tap (no sin or cos per tap), and
+// the first five samples (the four outermost and the one at the middle) decide whether the pixel is anywhere near a shadow edge: when
+// they agree the other taps could only differ for a feature thinner than the filter, so they are not read. Most pixels lie well inside
+// light or shadow, so they cost five reads instead of up to sixteen.
 const SHADOW_PARS = `
   #if NUM_DIR_LIGHT_SHADOWS > 1
   float atmIgn(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
+  float atmTap(sampler2D map, vec3 uvz, vec2 o) { return step(uvz.z, unpackRGBAToDepth(texture2D(map, uvz.xy + o))); }
+  vec2 atmTurn(vec2 c) { return vec2(c.x * -0.7373688 + c.y * 0.6754903, c.x * -0.6754903 - c.y * 0.7373688); }   // back by the golden angle
   float atmTaps(sampler2D map, vec3 uvz, vec2 mapSize, float taps, float radius, vec2 rs) {
-    float sum = 0.0;
     vec2 texel = vec2(radius) / mapSize;
-    for (int i = 0; i < 16; i++) {
-      if (float(i) >= taps) break;
-      float r = sqrt((float(i) + 0.5) / taps);
-      float a = float(i) * 2.399963;
-      vec2 o = vec2(cos(a), sin(a)) * r;
-      o = vec2(o.x * rs.x - o.y * rs.y, o.x * rs.y + o.y * rs.x);
-      sum += step(uvz.z, unpackRGBAToDepth(texture2D(map, uvz.xy + o * texel)));
+    float inv = 1.0 / taps;
+    float a = (taps - 1.0) * 2.399963;
+    vec2 c = vec2(cos(a), sin(a));
+    c = vec2(c.x * rs.x - c.y * rs.y, c.x * rs.y + c.y * rs.x);
+    vec2 c1 = atmTurn(c), c2 = atmTurn(c1), c3 = atmTurn(c2);
+    float sum = atmTap(map, uvz, rs * (sqrt(0.5 * inv) * texel))
+      + atmTap(map, uvz, c * (sqrt((taps - 0.5) * inv) * texel))
+      + atmTap(map, uvz, c1 * (sqrt((taps - 1.5) * inv) * texel))
+      + atmTap(map, uvz, c2 * (sqrt((taps - 2.5) * inv) * texel))
+      + atmTap(map, uvz, c3 * (sqrt((taps - 3.5) * inv) * texel));
+    if (sum < 0.5 || sum > 4.5) return sum * 0.2;
+    c = atmTurn(c3);
+    for (int j = 4; j < 16; j++) {
+      if (float(j) >= taps - 1.0) break;
+      sum += atmTap(map, uvz, c * (sqrt((taps - float(j) - 0.5) * inv) * texel));
+      c = atmTurn(c);
     }
-    return sum / taps;
+    return sum * inv;
   }
   float atmSunShadow() {
     vec3 n0 = vDirectionalShadowCoord[0].xyz / vDirectionalShadowCoord[0].w;
     vec3 n1 = vDirectionalShadowCoord[1].xyz / vDirectionalShadowCoord[1].w;
     float p0 = directionalLightShadows[0].shadowRadius;
-    float taps = clamp(floor(p0 / 16.0), 1.0, 16.0);
+    float taps = clamp(floor(p0 / 16.0), 5.0, 16.0);
+    float taps1 = max(5.0, floor(taps * 0.5));
     float rad0 = p0 - taps * 16.0;
     float rad1 = directionalLightShadows[1].shadowRadius;
     float rot = 6.2831853 * atmIgn(gl_FragCoord.xy);
@@ -184,7 +200,7 @@ const SHADOW_PARS = `
     float sf = 1.0;
     if (w1 > 0.0) {
       n1.z += directionalLightShadows[1].shadowBias;
-      sf = mix(1.0, atmTaps(directionalShadowMap[1], n1, directionalLightShadows[1].shadowMapSize, taps, rad1, rs), w1);
+      sf = mix(1.0, atmTaps(directionalShadowMap[1], n1, directionalLightShadows[1].shadowMapSize, taps1, rad1, rs), w1);
     }
     if (w0 <= 0.0) return sf;
     n0.z += directionalLightShadows[0].shadowBias;
@@ -218,7 +234,7 @@ export function installShaderChunks() {
   if (end > 0 && light.includes(getLine) && directLine.test(light)) {
     C.shadowmap_pars_fragment = pars.slice(0, end) + SHADOW_PARS + '\n' + pars.slice(end);
     let patched = light.replace(getLine, `#if ( UNROLLED_LOOP_INDEX == 0 ) && ( NUM_DIR_LIGHT_SHADOWS > 1 )
-\t\tdirectLight.color *= ( directLight.visible && receiveShadow ) ? atmSunShadow() : 1.0;
+\t\tdirectLight.color *= ( directLight.visible && receiveShadow && dot( geometryNormal, directLight.direction ) > 0.0 ) ? atmSunShadow() : 1.0;
 \t\t#else
 \t\t${getLine}
 \t\t#endif`);
