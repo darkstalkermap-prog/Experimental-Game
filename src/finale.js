@@ -2,8 +2,8 @@
 //   grand  the keep that decided it is framed from where the player was and falls in slow motion (the collapse is castle.js / castlecollapse.js), a war
 //          horn (horn.js) over it, a letterbox, and at the end the banner with the best moment of the match (highlights.js); about 3.5 seconds
 //   light  no keep to look at (King of the Hill, a keep that fell long ago): the same slow motion, horn and banner from the hero's own eyes; about 2.5 seconds
-//   none   a concede, a lost connection, Hero Game Mode, the practice yard, or the option switched off: the end screen at once (Hero Game Mode still gets
-//          the horn and the highlight line)
+//   none   a concede, a lost connection, the practice yard, the option switched off, or a Hero Game Mode win that no keep decided: the end screen at once
+//          (Hero Game Mode still gets the horn and the highlight line; a hero match decided by a keep gets the grand show)
 // Any key or click skips to the end screen. The end screen itself is built the moment the match is decided (so everything that reads it finds it
 // there) but kept see-through and out of the way of the mouse until the show is over.
 // Slow motion is a real time scale on the world's step in single player (Game.update asks `timeScale`); in an online game nobody may slow the shared
@@ -127,7 +127,8 @@ export class Finale {
     const g = this.g, ui = g.ui;
     this.won = won;
     this.hostEvents = opts.hl || null;
-    const mode = this.plan(won, reason, opts);
+    let mode = 'none';
+    try { mode = this.plan(won, reason, opts); } catch (e) { console.error('ending', e); }   // (whatever goes wrong, the end screen still comes)
     this.moment = null;
     const go = document.getElementById('gameover');
     if (mode !== 'none') {
