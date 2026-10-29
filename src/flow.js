@@ -79,14 +79,22 @@ export function pressReady(g, ui) {
 // gold in the purse); see DECIDED below for the thresholds and the matches they were tuned on. Online a guest who is out may leave for the next battle while
 // the war goes on for the others; the host never ends a battle for friends who are still in it.
 export const DECIDED = {
-  // behind: my keep is down to this share or less, theirs is up above that other share, and they have this many soldiers to each of mine
+  // behind: my keep is down to this share or less, theirs is up above that other share, and they have this many soldiers to each of mine ...
   behind: { myKeep: 0.45, theirKeep: 0.7, army: 1.6 },
+  // ... or my gate is broken and my keep is under this share and they have this many soldiers to each of mine
+  behindGate: { myKeep: 0.6, army: 2.5 },
+  // ahead: the mirror of both
   ahead: { theirKeep: 0.4, myKeep: 0.75, army: 1.6 },
+  aheadGate: { myKeep: 0.75, army: 2.5 },
 };
+// Where the numbers come from: bot-vs-bot wars (tools: feat/F1/node/calib_node.mjs). The last castle of a war falls in its final minute: its gate goes first, its
+// soldiers dwindle to a handful while the winner's army stays at 60 to 70, and once the keep starts to go it is gone within half a minute. In those wars a house
+// with a broken gate against two and a half times its soldiers (and in the other rule, a keep at 40% or less against an army of 1.6 times) was beaten every time,
+// so these are the points where the rest is only a matter of time. An engine counts as four soldiers.
 
 function houseNumbers(g, f) {
   const c = f.castle;
-  return { keep: c.fallen ? 0 : Math.max(0, c.keep.hp / c.keep.maxHp), army: g.troopCount(f.team) + 4 * g.siegeCount(f.team), gold: f.gold };
+  return { keep: c.fallen ? 0 : Math.max(0, c.keep.hp / c.keep.maxHp), gate: !!c.gate.alive, army: g.troopCount(f.team) + 4 * g.siegeCount(f.team), gold: f.gold };
 }
 
 export function offerFor(g) {
@@ -98,16 +106,20 @@ export function offerFor(g) {
     return null;
   }
   if (g.mode === 'host' && g.humans.some((h) => h !== g.player && !h.isBot)) return null;   // (friends are still fighting: the host does not end it for them)
-  if (me.castle.fallen) return { kind: 'concede', text: 'Your keep has fallen.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
+  if (me.castle.fallen) return { kind: 'concede', text: 'You cannot rise again.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
   if (g.coop) return null;
   const standing = g.factions.filter((f) => !f.castle.fallen);
   if (standing.length !== 2 || !standing.includes(me)) return null;
   const foe = standing.find((f) => f !== me);
   const a = houseNumbers(g, me), b = houseNumbers(g, foe);
   const D = DECIDED;
-  if (a.keep <= D.behind.myKeep && b.keep >= D.behind.theirKeep && b.army >= D.behind.army * Math.max(1, a.army))
+  const behind = (a.keep <= D.behind.myKeep && b.keep >= D.behind.theirKeep && b.army >= D.behind.army * Math.max(1, a.army))
+    || (!a.gate && a.keep <= D.behindGate.myKeep && b.army >= D.behindGate.army * Math.max(1, a.army));
+  const ahead = (b.keep <= D.ahead.theirKeep && a.keep >= D.ahead.myKeep && a.army >= D.ahead.army * Math.max(1, b.army))
+    || (!b.gate && a.keep >= D.aheadGate.myKeep && a.army >= D.aheadGate.army * Math.max(1, b.army));
+  if (behind)
     return { kind: 'concede', text: `${foe.name} is winning the war.`, label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede', foe };
-  if (b.keep <= D.ahead.theirKeep && a.keep >= D.ahead.myKeep && a.army >= D.ahead.army * Math.max(1, b.army))
+  if (ahead)
     return { kind: 'finish', text: `${foe.name} cannot hold out any longer.`, label: 'Finish the war', ask: `Finish the war now? ${foe.name} yields and the realm is yours.`, yes: 'Finish', foe };
   return null;
 }
@@ -149,7 +161,7 @@ export function resetHud() {
   last.told.clear();
   armedUntil = 0;
   for (const id of ['readyRow', 'offerRow']) $(id).classList.add('hidden');
-  $('hud').classList.remove('prep');
+  $('hud').classList.remove('prep', 'offer');
   $('shopReady').classList.add('hidden');
 }
 export function updateHud(g, ui) {
@@ -176,9 +188,10 @@ export function updateHud(g, ui) {
   if (okey !== last.offer) {
     last.offer = okey;
     or.classList.toggle('hidden', !o);
+    $('hud').classList.toggle('offer', !!o);
     if (o && !last.told.has(o.kind)) {   // (the first time: a toast, so that the key is not a secret)
       last.told.add(o.kind);
-      ui.toast(`${o.text} Press K twice to ${o.kind === 'finish' ? 'finish the war' : o.kind === 'leave' ? 'leave for the next battle' : 'concede and start the next battle'}, or keep fighting.`, -1, true);
+      ui.toast(`Press K twice to ${o.kind === 'finish' ? 'finish the war' : o.kind === 'leave' ? 'leave for the next battle' : 'concede and start the next battle'}.`, -1, true);
     }
     if (o) {
       setText($('offerText'), o.text);
@@ -325,7 +338,7 @@ style.textContent = `
 #offerRow { flex-wrap: wrap; }
 #offerBtn.armed { border-color: #ff9d8a; color: #fff; background: linear-gradient(#8a2a1c, #5a1710); }
 #hud.hero #heroTop > .flowrow { grid-column: 1 / -1; }
-#hud.prep #hill { top: 134px; }
+#hud.prep #hill, #hud.offer #hill { top: 134px; }   /* (the top panel has one more row: the hill panel of King of the Hill steps down) */
 #shopReady { background: linear-gradient(#6a8a34, #3f5a1c); border-color: #9ec25a; color: #f4ffe0; }
 #shopReady:hover:not(:disabled) { background: linear-gradient(#7fa23f, #4b6b22); }
 #pauseOffer { border-color: #e0b44c; }
