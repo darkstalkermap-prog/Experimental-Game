@@ -776,11 +776,12 @@
       <label>Field of view <input id="optFov" type="range" min="60" max="110"><output></output></label>
       <label>Alerts and sounds <input id="optAlerts" type="checkbox"><output></output></label>
       <label>Tips <input id="optTips" type="checkbox"><output></output></label>
+      <label>Adaptive resolution <input id="optDynres" type="checkbox"><output></output></label>
     </div>
     <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
-      <button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button>
+      <button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button><button data-q="ultra">Ultra</button>
     </div>
-    <div class="note">Low turns off shadows and grass for the smoothest play.</div>
+    <div class="note">Auto picks a level for your machine and lowers the resolution a little whenever the frame rate drops. Low turns off shadows and grass for the smoothest play; Ultra adds the sharpest shadows and ambient occlusion.</div>
     <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then.</div>
     <div class="row"><button id="optionsBack">Back</button></div>
   </div>

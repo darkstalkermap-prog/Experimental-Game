@@ -605,6 +605,11 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.
 - On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players.
-- Graphics quality (Low / Medium / High) is in Options, on the main menu and the game menu. Low turns off
-  shadows and grass for slower computers.
+- Graphics quality (Auto / Low / Medium / High / Ultra) is in Options, on the main menu and the game menu. Auto
+  picks a level for the machine (and steps down if even the lowest resolution cannot keep the frame rate); Low turns
+  off shadows, grass and the post passes for slower computers. Whatever the level, the render resolution drops by
+  itself when frames get slow and creeps back up when they are calm (switch off under Options: Adaptive resolution);
+  the frame counter shows it next to the fps. The sky, fog, sun shadows (two cascades, snapped to the shadow map's
+  texels), the HDR post passes (bloom, tone curve and grade, vignette, FXAA) and the quality tunables are in
+  `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js` and `src/quality.js`. No three.js add-ons are vendored.
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.

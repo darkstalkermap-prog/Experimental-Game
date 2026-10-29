@@ -12,16 +12,14 @@ import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES } from './co
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
+import { gfx } from './gfx.js';
+import { LEVELS } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+gfx.init(renderer);   // (tone curve, shadow filter and the rest of the renderer set-up: see gfx.js)
 $('app').appendChild(renderer.domElement);
 
 const ui = new UI();
@@ -52,6 +50,8 @@ function buildGame(size, practice = false) {
   game.mapBuiltFor = size + (practice ? '+practice' : '');
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
+  window.__gfx = gfx;
+  gfx.setGame(game);
   applySettings();
 }
 try {
@@ -64,27 +64,23 @@ try {
 $('loading').classList.add('hidden');
 $('menu').classList.remove('hidden');
 // the profiler overlay (` or ?perf) and the benchmark (window.__bench): nothing is hooked until the overlay is switched on
-initPerf({ renderer, getGame: () => game, render: () => renderer.render(game.scene, game.camera) });
+initPerf({ renderer, getGame: () => game, render: () => gfx.renderFrame(1 / 60), host: gfx });
 
-function resize() {
-  renderer.setSize(innerWidth, innerHeight);
-  game.camera.aspect = innerWidth / innerHeight;
-  game.camera.updateProjectionMatrix();
-  game.fx.setScale(innerHeight * renderer.getPixelRatio());
-}
+function resize() { gfx.resize(); }
 addEventListener('resize', resize);
 resize();
 
 // graphics quality (remembered per browser)
-let quality = 'medium';
-try { quality = localStorage.getItem('cw-quality') || 'medium'; } catch (e) { /* storage unavailable */ }
+let quality = 'auto';   // 'auto' (a level picked for this machine) or a level of quality.js
+try { quality = localStorage.getItem('cw-quality') || 'auto'; } catch (e) { /* storage unavailable */ }
+if (quality !== 'auto' && !LEVELS.includes(quality)) quality = 'auto';
 function setQuality(q) {
   quality = q;
   game.setQuality(q);
   document.querySelectorAll('.quality button').forEach((b) => b.classList.toggle('active', b.dataset.q === q));
   try { localStorage.setItem('cw-quality', q); } catch (e) { /* ignore */ }
 }
-document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
+document.querySelectorAll('.quality button').forEach((b) => b.addEventListener('click', () => { if (b.dataset.q === 'auto') gfx.resetAuto(); setQuality(b.dataset.q); }));
 setQuality(quality);
 
 let difficulty = 'normal';
@@ -382,7 +378,7 @@ for (const [id, key, apply, unit] of SLIDERS) {
 }
 
 // switches in the options panel (alerts.js looks at the settings as it goes)
-for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips']]) {
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres']]) {
   const el = $(id), out = el.nextElementSibling;
   const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
   show();
@@ -453,9 +449,10 @@ addEventListener('keydown', wakeAudio);
 
 const clock = new THREE.Clock();
 let frameErrors = 0;
-let fpsT = 0, frames = 0;
+let fpsT0 = performance.now(), frames = 0;
 function frame() {
   requestAnimationFrame(frame);
+  const t0 = performance.now();
   const dt = Math.min(0.05, clock.getDelta());
   // one bad frame must never freeze the game: report it once and keep going
   try {
@@ -465,9 +462,8 @@ function frame() {
     if (!frameErrors++) console.error('Frame error (the game keeps running):', e);
   }
   input.endFrame();
-  renderer.render(game.scene, game.camera);
+  gfx.renderFrame(dt, t0);
   frames++;
-  fpsT += dt;
-  if (fpsT > 1) { $('fps').textContent = `${frames} fps`; frames = 0; fpsT = 0; }
+  if (t0 - fpsT0 > 1000) { $('fps').textContent = `${Math.round(frames * 1000 / (t0 - fpsT0))} fps${gfx.scaleLabel()}`; frames = 0; fpsT0 = t0; }
 }
 frame();

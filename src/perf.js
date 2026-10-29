@@ -32,7 +32,7 @@ const NAMES = ['sim', 'ai', 'phys', 'fx', 'net', 'hud', 'draw'];
 const LABELS = { sim: 'simulation', ai: 'AI', phys: 'physics', fx: 'effects', net: 'network', hud: 'HUD/DOM', draw: 'render submit' };
 const COLORS = ['#4f8cff', '#b06cff', '#ff9f43', '#2ed1c4', '#ff6b9a', '#f1d34a', '#5ee06b', '#9aa0a6', '#c0ff6b', '#ff6b6b'];
 
-export function initPerf({ renderer, getGame, render = null }) {
+export function initPerf({ renderer, getGame, render = null, host = null }) {   // host: an object whose renderFrame() is the page's whole draw step (gfx)
   const names = NAMES.slice();    // bucket names; modules may add more through probe.begin(name)
   const acc = new Float64Array(MAXB);      // exclusive milliseconds of this frame, per bucket
   const stack = new Int8Array(64);
@@ -140,6 +140,7 @@ export function initPerf({ renderer, getGame, render = null }) {
     const orig = renderer.render;
     const fn = function (scene, camera) { enter(6); try { return orig.call(this, scene, camera); } finally { leave(); readInfo(); } };
     fn.__perfWrapped = true; renderer.render = fn; wrapped.push({ obj: renderer, key: 'render', orig, fn, own: Object.prototype.hasOwnProperty.call(renderer, 'render') });
+    if (host) wrap(host, 'renderFrame', 6);   // the whole step (sky, shadow rig, passes), not only the renderer calls inside it
     if (showPanel) buildPanel();
     return P;
   }

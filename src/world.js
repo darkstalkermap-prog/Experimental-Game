@@ -4,8 +4,10 @@ import { WORLD, CASTLE, HILL, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { mulberry32, smoothstep } from './noise.js';
 import { grassDetailTexture } from './textures.js';
+import { SUN_DIR, createAtmosphere } from './atmosphere.js';
+import { ShadowRig } from './shadows.js';
 
-export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
+export { SUN_DIR };   // (the sun and the sky live in atmosphere.js)
 
 // Roads run from each castle gate to the centre of the map.
 export const ROADS = [];
@@ -32,82 +34,22 @@ export function roadDist(x, z) {
   return d;
 }
 
+// The sky dome, the fog and the environment map (see atmosphere.js).
 export function createSky(scene, renderer = null) {
-  const geo = new THREE.SphereGeometry(1500, 32, 16);
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    depthWrite: false,
-    fog: false,
-    uniforms: {
-      top: { value: new THREE.Color(0x4472b0) },
-      horizon: { value: new THREE.Color(0xe2d8c4) },
-      sunDir: { value: SUN_DIR },
-    },
-    vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }`,
-    fragmentShader: `uniform vec3 top; uniform vec3 horizon; uniform vec3 sunDir; varying vec3 vDir;
-      float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
-      float noise(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.0-2.0*f);
-        return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x), f.y); }
-      void main(){
-        float h = clamp(vDir.y, -0.2, 1.0);
-        vec3 col = mix(horizon, top, pow(max(h,0.0), 0.55));
-        float s = max(dot(vDir, sunDir), 0.0);
-        col += vec3(1.0,0.85,0.6) * pow(s, 9.0) * 0.35 + vec3(1.0,0.95,0.85) * pow(s, 900.0) * 4.0;
-        // soft clouds
-        if (vDir.y > 0.02) {
-          vec2 uv = vDir.xz / (vDir.y + 0.15) * 2.0;
-          float c = noise(uv*1.3) * 0.6 + noise(uv*3.1) * 0.3 + noise(uv*7.0) * 0.1;
-          c = smoothstep(0.55, 0.85, c) * smoothstep(0.02, 0.25, vDir.y);
-          col = mix(col, vec3(1.0,0.98,0.96), c * 0.75);
-        }
-        if (h < 0.0) col = mix(horizon, vec3(0.35,0.38,0.33), clamp(-h*6.0,0.0,1.0));
-        gl_FragColor = vec4(col, 1.0);
-      }`,
-  });
-  const sky = new THREE.Mesh(geo, mat);
-  sky.frustumCulled = false;
-  sky.renderOrder = -1;
-  scene.add(sky);
-  // image-based lighting so metal (swords, armour) reflects the sky instead of rendering black
-  if (renderer) {
-    const envScene = new THREE.Scene();
-    envScene.add(new THREE.Mesh(geo, mat));
-    const ground = new THREE.Mesh(new THREE.CircleGeometry(900, 16), new THREE.MeshBasicMaterial({ color: 0x4f5a36 }));
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -40;
-    envScene.add(ground);
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.userData.environmentTarget = pmrem.fromScene(envScene, 0.02);
-    scene.environment = scene.userData.environmentTarget.texture;
-    ground.geometry.dispose();
-    ground.material.dispose();
-    pmrem.dispose();
-  }
-  scene.fog = new THREE.FogExp2(0xd6d2c4, 0.0032);
-  scene.background = new THREE.Color(0xd6d2c4);
-  return sky;
+  return createAtmosphere(scene, renderer);
 }
 
+// The sun (warm key light with cascaded shadows: shadows.js), and a cool sky / warm ground hemisphere as the fill.
 export function createLights(scene) {
-  const hemi = new THREE.HemisphereLight(0xc8d8f0, 0x5a5230, 0.6);
+  const hemi = new THREE.HemisphereLight(0xb4ccee, 0x6a6030, 0.62);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffdcae, 2.9);
-  sun.position.copy(SUN_DIR).multiplyScalar(120);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  const s = 70;
-  Object.assign(sun.shadow.camera, { left: -s, right: s, top: s, bottom: -s, near: 1, far: 320 });
-  sun.shadow.bias = -0.0004;
-  sun.shadow.normalBias = 0.04;
-  scene.add(sun);
-  scene.add(sun.target);
-  return { hemi, sun };
+  const rig = new ShadowRig(scene);
+  return { hemi, sun: rig.sun, far: rig.far, rig };
 }
 
-// Keep the shadow frustum centred on the camera.
+// Keep the shadow maps centred on the camera (snapped to whole texels, so the edges do not shimmer).
 export function followShadow(sun, focus) {
-  sun.target.position.set(focus.x, focus.y, focus.z);
-  sun.position.set(focus.x + SUN_DIR.x * 150, focus.y + SUN_DIR.y * 150, focus.z + SUN_DIR.z * 150);
+  if (sun.userData.rig) sun.userData.rig.follow(focus);
 }
 
 export function createTerrain(scene, physics) {
