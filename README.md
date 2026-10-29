@@ -420,6 +420,45 @@ away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, a
 that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
 `alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
 
+## Big finishes
+
+The end of a match is a short show, not a cut to a menu (`src/finale.js`). When the match is decided:
+
+- **Slow motion.** In single player the world's step is really scaled: it eases down to about 0.3 in a sixth of a second, holds,
+  and eases back to 1 over the last second, so soldiers, arrows and dust all slow together. Online nobody can slow the host's
+  shared world, so only what you see and hear changes (the camera, the effects, the sound and the short wait).
+- **The war horn** (`src/horn.js`, built from WebAudio nodes like everything else): a rising call and a long full chord over
+  timpani for a victory, one low dark horn that sags at its end over a slowing heartbeat of drums for a defeat. The music is
+  ducked under it and comes back. (A shorter call sounds when the last rival keep falls but the match goes on, with a moment
+  of slow motion in your own view.)
+- **The keep falls** (`src/castlecollapse.js`). The keep and the four corner towers are drawn again from the same shapes cut
+  into blocks about 2.5 m across and roof patches; each block has a plan worked out once (the structure shakes and leans, the
+  stone lets go from the top downwards, tumbles, lands in a ring of rubble and hops once), and a frame only evaluates the plan
+  at the time `t`, so it is identical on every screen, takes a millisecond or two a frame while it plays, nothing afterwards,
+  and uses three meshes in place of the keep's own. Dust clouds, fire bursts, a shock ring, a rumble and the camera shake come
+  with it. A stump (with one tooth of wall left standing) and its rubble burn for the rest of the match, the same state a
+  castle is redrawn in after a change of graphics quality.
+- **The camera** frames the keep that decided it (the last rival keep for a victory, your own for a defeat) from the side you
+  were on, high and wide, easing in and sweeping round it, under a letterbox; after the show it goes on drifting round the ruin
+  behind the end screen. With no keep to look at (King of the Hill, a keep that fell long ago) the same slow motion, horn and
+  banner play in your own view, shorter.
+- **The banner** closes the show: Victory or Defeat and the best moment of the match, and the same line is the end screen's
+  first section ("Moment of the battle").
+- **Skip**: any key or click (after half a second, so that the blow that ended it does not skip it), or Esc, goes straight to
+  the end screen. The end screen is built the moment the match is decided and waits see-through behind the show, so nothing
+  that reads it is late. A concede, a lost connection, the practice yard and Hero Game Mode (which gets the horn and the
+  highlight line, and the end screen at once) have no show. **Options → Big finishes** switches it all off.
+
+The highlight line (`src/highlights.js`) is worked out from the match log (`src/matchlog.js`): gates, wall segments and keeps
+remember who hurt them (a Fireball, a sword, a Smite, a catapult, a ram, the army), and the hero who did a fifth of the damage
+or more is named before the army that did the rest. Lords slain, several foes to one sweep of an ability, the first blood and an
+engine burned are recorded too, and a gate that held through the whole match is told when nothing better is. Each moment is
+scored (a keep falling > a lord slain > a gate > a sweep ...; more when you did it, most when a named ability did) and the best
+is put in words from your side: "Your Fireball broke the north gate at 8:42", "House Varr's army brought down your keep at
+14:48". In an online game the host sends the notable moments with the end of the match, and every screen tells them for its own
+player. Code that wants a moment in the line records a `matchlog` event of one of the types in the header of
+`src/highlights.js`; code that hurts a gate, wall or keep passes the ability's name as the third argument of `takeDamage`.
+
 ## Hero Game Mode
 
 Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
@@ -584,7 +623,9 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/alerts.js` | Callouts, kill streaks, tips, the idle nudge, the away log and the background ticker for hidden tabs; `raise(key, {...})` is the way in |
 | `src/alertsounds.js` | The sounds of the alerts (bells, brass, ticks, heartbeat), added to the registry in `audio.js` |
 | `src/audio.js` | Sound effects and the volume buses |
+| `src/horn.js` | The war horn of the ending (victory fanfare, defeat dirge, the call of the last keep) and the ducking of the music under it |
 | `src/music.js` | The procedural medieval music: lute, recorder, drone, drums and horn |
+| `src/finale.js`, `src/castlecollapse.js`, `src/highlights.js` | The ending of a match: the show (slow motion, camera, letterbox, banner, skip), the falling keep and towers (blocks with a plan each), and the highlight line |
 | `src/physics.js`, `src/projectiles.js` | Terrain and colliders (including the merlons), arrows and boulders |
 | `src/net.js`, `src/peernet.js`, `src/roomnet.js`, `src/netsync.js` | Online play: connection (own server, browser-to-browser, or claude.ai live room), snapshots from the host, and pose/actions from clients |
 | `server/server.js` | Node server: serves the game and relays messages between players in a room |

@@ -51,8 +51,8 @@ export class HostSync {
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
-    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false) => {
-      fire(from, vel, team, dmg, owner, big);
+    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false, ability = '') => {
+      fire(from, vel, team, dmg, owner, big, ability);
       const ev = { k: 'arrow', p: v3(from), v: v3(vel), t: team };
       if (big) ev.b = 1;
       this.shared.push(ev);
@@ -213,8 +213,8 @@ export class HostSync {
     this.priv.clear();
   }
 
-  sendEnd(winner, reason = '') {
-    this.g.net.toAll({ k: 'end', winner, reason });
+  sendEnd(winner, reason = '', hl = null) {
+    this.g.net.toAll({ k: 'end', winner, reason, hl });   // (hl: the notable moments of the match, for the guests' highlight line: see highlights.js)
   }
 }
 
@@ -231,7 +231,7 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '');
+    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null });
   }
 
   apply(d) {

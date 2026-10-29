@@ -11,6 +11,8 @@ import { Parts, place } from './parts.js';
 import { Cloth, clothMaterial, updateWind, FireSet } from './castlefx.js';
 import * as G from './castlegeo.js';
 import { populate } from './props.js';
+import { highlights } from './highlights.js';
+import { Collapse } from './castlecollapse.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
 const TC = H + towerOff; // corner tower centres
@@ -18,6 +20,8 @@ const GW = gateW / 2;
 const KEEP_Z = G.KEEP_Z;
 const MERLON_H = G.MERLON_H;   // merlons stand chest-high: they cover a soldier's body and leave the head showing
 const POST_LEAN = 0.95; // an archer at a slot leans out to the wall's outer face, so he can shoot at the foot of the wall
+
+const _cp = new THREE.Vector3(), _cq = new THREE.Vector3(), _gold = new THREE.Color(1, 0.8, 0.4);
 
 export class Castle {
   constructor(game, team, site) {
@@ -154,7 +158,7 @@ export class Castle {
       const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
       seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
       seg.merlons = this.addMerlons(cx, cz, len, alongX, outer, seg, atCorner);
-      seg.takeDamage = (amt, attacker) => this.damageWall(seg, amt, attacker);
+      seg.takeDamage = (amt, attacker, cause) => this.damageWall(seg, amt, attacker, cause);
       this.walls.push(seg);
       // archer posts along the wall walk, each one standing behind a gap between two merlons
       const nMerlons = Math.floor(len / 2);
@@ -276,7 +280,8 @@ export class Castle {
     for (const m of this.vis) { this.group.remove(m); m.geometry.dispose(); }
     this.vis.length = 0;
     this.wallMesh = this.keepMesh = this.tilesMesh = null;
-    this.ruinBuilt = false;
+    this.aMesh = this.aRanges = null;
+    this.collapse = null;     // (a fallen keep is drawn again from its end state: see applyBurn)
   }
 
   buildVisuals() {
@@ -289,9 +294,15 @@ export class Castle {
     G.stairs(fixed, d);
     G.deck(A, d);
     G.courtyard(A, d, seed);
+    // where the pieces of the keep and the towers lie in the shared timber, metal and glass meshes (the collapse folds them away: see hideKeep)
+    const ranges = { timber: [], metal: [], plain: [] };
+    const at = () => ({ timber: A.a('timber').pos.length / 3, metal: A.a('metal').pos.length / 3, plain: A.a('plain').pos.length / 3 });
+    const span = (from) => { const to = at(); for (const k in ranges) if (to[k] > from[k]) ranges[k].push([from[k], to[k]]); };
+    const m0 = at();
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
     G.keep(K, A, R, d, fires);
-    this.dress(cloth, A, d);
+    span(m0);
+    this.dress(cloth, A, d, (from) => span(from), at);
     // barrels, stalls, a forge, a well...: decoration only (see props.js); the ground under them follows the terrain outside the walls
     populate(A, fixed, fires, { team: this.team, detail: Math.min(d, Q.props), ground: (x, z) => { const w = this.toWorld(x, z); return Math.max(-2, Math.min(6, this.game.physics.terrainHeight(w.x, w.z) - this.center.y)); } });
     this.fire.set('static', fires);
@@ -311,10 +322,12 @@ export class Castle {
     this.wallMesh = mesh(null, 'masonry', this.mergeWalls(), true);
     this.wallsDirty = false;
     this.keepMesh = mesh(K, 'masonry', null, true);
-    mesh(A, 'timber', null, true);
+    this.aMesh = { timber: mesh(A, 'timber', null, true), metal: null, plain: null };
     this.tilesMesh = mesh(R, 'roof', null, true);
-    mesh(A, 'metal');
-    mesh(A, 'plain');
+    this.aMesh.metal = mesh(A, 'metal');
+    this.aMesh.plain = mesh(A, 'plain');
+    this.aRanges = ranges;
+    this.staticFires = fires;
     mesh(A, 'ground');
     if (!cloth.empty()) {
       const m = new THREE.Mesh(cloth.geometry(), this.clothMat);
@@ -342,7 +355,7 @@ export class Castle {
   }
 
   // banners, flags, rods and the few loose things that are not architecture
-  dress(cloth, A, d) {
+  dress(cloth, A, d, span = () => {}, at = () => null) {
     const wood = G.C.woodDark;
     for (const s of [-1, 1]) {            // hanging banners on the front wall, on a rod and brackets in front of the corbels
       const x = s * 8.5, top = wallH - 1.0, zb = H + 0.5;
@@ -350,11 +363,12 @@ export class Castle {
       A.box('timber', x - 1.45, x + 1.45, top, top + 0.15, zb - 0.08, zb + 0.08, wood);
       for (const k of [-1.2, 1.2]) A.box('timber', x + k - 0.06, x + k + 0.06, top - 0.05, top + 0.1, H, zb, wood);
     }
+    const keepFrom = at();
     const kz = KEEP_Z + keepW / 2 + 0.22;   // the keep's big banner
     cloth.rect([-1.5, 6, kz], [3, 0, 0], [0, 6, 0], 'top', { segU: 6, segV: 10, amp: 0.14, tag: 1 });
     A.box('timber', -1.65, 1.65, 12, 12.15, kz - 0.08, kz + 0.08, wood);
     for (const k of [-1.3, 1.3]) A.box('timber', k - 0.06, k + 0.06, 11.95, 12.1, kz - 0.2, kz, wood);
-    const flag = (x, y, z, size, tag = 0) => {   // a pole with a flag streaming from its top
+    const flag = (x, y, z, size, tag = 1) => {   // a pole with a flag streaming from its top (tag 1: it burns away when the keep falls)
       A.cyl('metal', 0.06, 0.06, size * 2.6, 6, place(x, y, z), G.C.iron);
       if (d >= 1) A.add('metal', new THREE.SphereGeometry(0.13, 8, 6), place(x, y + size * 2.6, z), G.C.gold);
       cloth.flag([x, y + size * 1.6, z], size, tag);
@@ -365,6 +379,7 @@ export class Castle {
       else flag(sx * (F1 - 0.75), towerH + 0.1, sz * (F1 - 0.75), 1.3);
     }
     if (d >= 1) flag(0, keepH + 3.0, KEEP_Z, 2.2, 1); else flag(-keepW / 2 + 1, keepH + 1.2, KEEP_Z + keepW / 2 - 1, 2.2, 1);
+    span(keepFrom);
     // (the courtyard's crates and barrels, and the rest of the life in the castle, are props.js)
   }
 
@@ -481,7 +496,7 @@ export class Castle {
       hp: CASTLE.gateHp, maxHp: CASTLE.gateHp, alive: true, openAmt: 0,
       pos: this.toWorld(0, H - T / 2, gateH / 2), radius: 3.2,
     };
-    gate.takeDamage = (amt, attacker) => this.damageGate(amt, attacker);
+    gate.takeDamage = (amt, attacker, cause) => this.damageGate(amt, attacker, cause);
     const leafGeo = new THREE.BoxGeometry(GW, gateH, 0.45);   // (the gate picture covers each leaf once)
     leafGeo.translate(GW / 2, gateH / 2, 0);
     gate.leaves = [];
@@ -505,7 +520,7 @@ export class Castle {
       hp: CASTLE.keepHp, maxHp: CASTLE.keepHp, alive: true,
       pos: this.toWorld(0, KEEP_Z, 2), radius: hw + 0.6,
     };
-    this.keep.takeDamage = (amt, attacker) => this.damageKeep(amt, attacker);
+    this.keep.takeDamage = (amt, attacker, cause) => this.damageKeep(amt, attacker, cause);
     this.keep.collider = this.addCollider(-hw - 0.4, hw + 0.4, KEEP_Z - hw - 0.4, KEEP_Z + hw + 0.4, keepH, { kind: 'keep', ref: this.keep });
     // spot in front of the keep door that attackers bash at
     this.keepDoor = this.toWorld(0, KEEP_Z + hw + 2.2);
@@ -551,38 +566,106 @@ export class Castle {
   applyFallenVisual() {
     if (this.burning) return;
     this.burning = true;
-    this.applyBurn();
+    this.fellAt = this.game.time;   // (the ending frames the keep that fell last: see finale.js)
+    this.applyBurn(false);
   }
-  // a fallen keep: the keep and towers are charred, the roofs are gone, the cloth burnt
-  applyBurn() {
-    if (this.keepMesh && !this.keepMesh.userData.charred) {
-      const c = this.keepMesh.geometry.attributes.color;
-      for (let i = 0; i < c.array.length; i++) c.array[i] *= 0.3;
-      c.needsUpdate = true;
-      this.keepMesh.userData.charred = true;
-    }
-    if (this.tilesMesh) this.tilesMesh.visible = false;
+  // A fallen keep: the keep and the towers crumble into a burning ruin (castlegeo.js draws them again as pieces, castlecollapse.js moves the pieces),
+  // the roofs are gone, the cloth burnt. `instant`: show the end state at once (a castle that is built again after a graphics change).
+  applyBurn(instant = true) {
     this.clothMat.userData.cwFall.value = 1;
-    if (!this.ruinBuilt) {                       // rubble, the burnt roof beams, scorch marks, fires and smoke
-      this.ruinBuilt = true;
-      const r = G.ruin(this.team * 53 + 11, this.detail);
-      for (const key of ['masonry', 'timber', 'plain']) {
-        const geo = r.P.geometry(key);
-        if (!geo) continue;
-        const m = new THREE.Mesh(geo, partsMaterial(key));
-        m.receiveShadow = true;
-        m.matrixAutoUpdate = false;
-        this.group.add(m);
-        this.vis.push(m);
+    try {
+      this.hideKeep();
+      this.collapse = new Collapse(this, instant);
+      if (instant) this.collapseEnded(this.collapse);
+    } catch (e) {
+      // (never let a fault in the show stop the match: the keep just stands there, charred, as it used to)
+      console.error('keep collapse', e);
+      this.collapse = null;
+      if (this.keepMesh) {
+        this.keepMesh.visible = true;
+        if (!this.keepMesh.userData.charred) {
+          const c = this.keepMesh.geometry.attributes.color;
+          for (let i = 0; i < c.array.length; i++) c.array[i] *= 0.3;
+          c.needsUpdate = true;
+          this.keepMesh.userData.charred = true;
+        }
       }
-      this.fire.set('ruin', r.fires);
     }
   }
 
+  partsMaterial(key) { return partsMaterial(key); }   // (for castlecollapse.js)
+
+  // The standing keep and towers go: their stone and roofs are hidden, what they share with the courtyard (timber, metal, glass) is folded to a point
+  hideKeep() {
+    if (this.keepMesh) this.keepMesh.visible = false;
+    if (this.tilesMesh) this.tilesMesh.visible = false;
+    if (this.aMesh && this.aRanges) {
+      for (const key in this.aRanges) {
+        const m = this.aMesh[key];
+        if (!m || !this.aRanges[key].length) continue;
+        const attr = m.geometry.attributes.position;
+        for (const [a, b] of this.aRanges[key]) attr.array.fill(0, a * 3, b * 3);
+        attr.needsUpdate = true;
+      }
+    }
+    for (const m of this.upg.towerMeshes) m.visible = false;   // (the shields, archers and ballistas of the tower upgrades)
+    this.fire.set('tower', []);
+    if (this.staticFires) this.fire.set('static', this.staticFires.filter((f) => !(f[0] === 2 && f[2] > 12 && Math.abs(f[1]) < 8)));   // (the chimneys)
+  }
+
+  // what the collapse asks for as it goes (castlecollapse.js); `col` is the Collapse. Effects that the host replicates to guests (dust, sounds with a
+  // place) are made by the host only; the rest each screen makes for itself.
+  collapseEvent(ev, col) {
+    const g = this.game, fx = g.fx, host = g.mode !== 'client', fin = g.finale;
+    const p = _cp.copy(this.toWorld(ev.x || 0, ev.z || 0, ev.y || 0));
+    const near = fin.active && fin.focus === this;
+    switch (ev.k) {
+      case 'blast':
+        fx.flash(p, _gold, 16, 0.6, 1);
+        fx.shock(_cq.copy(p).setY(this.center.y + 0.5), 2, 26, _gold, 0.7, 0.8);
+        if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); }
+        g.camfx.boom(p, 1);
+        if (near) fin.jolt(0.7);
+        break;
+      case 'tower':
+        if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 1), 30, 5.5, 'stone'); g.audio.play('collapse', p); }
+        g.camfx.boom(p, 0.7);
+        if (near) fin.jolt(0.3);
+        break;
+      case 'column':
+        if (host) fx.dust(p, ev.n, ev.s, 'stone');
+        break;
+      case 'dust':
+        if (host) { fx.dust(_cq.copy(p).setY(p.y + 0.3), ev.n, ev.s, 'stone'); if (ev.s > 2.4) g.audio.play('thud', p); }
+        if (near && ev.s > 2.4) fin.jolt(0.12);
+        break;
+      case 'burst':
+        fx.explosion(p, ev.s);
+        break;
+      case 'ignite':
+        this.igniteRuin(col);
+        break;
+      default: break;
+    }
+  }
+
+  // the stumps burn: flames and smoke columns on their tops, and the spots the smoke comes from afterwards
+  igniteRuin(col) {
+    if (this.smokeSpots) return;
+    const list = col.fires();
+    this.fire.set('ruin', list.fires);
+    this.smokeSpots = list.spots.map(([x, y, z]) => this.toWorld(x, z, y));
+  }
+  collapseEnded(col) {
+    this.igniteRuin(col);
+  }
+
   // --- damage (simulation only) ---
-  damageWall(seg, amt, attacker) {
+  // (`cause` names an ability or weapon the caller knows ('Fireball'); the attacker says the rest: see highlights.js)
+  damageWall(seg, amt, attacker, cause) {
     if (!seg.alive || !seg.breakable || this.fallen) return;
     seg.hp -= amt;
+    highlights.hit(seg, amt, attacker, cause);
     this.game.fx.dust(seg.pos, 10, 2.5);
     if (seg.hp <= 0) {
       seg.hp = 0;
@@ -591,6 +674,7 @@ export class Castle {
       this.game.audio.play('collapse', seg.pos);
       for (const p of seg.posts) if (p.occupant) p.occupant.fallFromWall();
       this.applyWallVisual(seg);
+      highlights.down(this.game, seg, attacker, cause);
       this.game.onStructureDestroyed(seg, attacker);
     } else this.applyWallVisual(seg);
   }
@@ -601,15 +685,17 @@ export class Castle {
       seg.maxHp = CASTLE.wallHp * (1 + 0.35 * this.wallLevel);
       seg.hp = seg.maxHp;
       seg.alive = true;
+      seg.hl = null;
       this.applyWallVisual(seg);
     }
     this.game.pushOutOfWalls(this);
   }
 
-  damageGate(amt, attacker) {
+  damageGate(amt, attacker, cause) {
     const gate = this.gate;
     if (!gate.alive || this.fallen) return;
     gate.hp -= amt;
+    highlights.hit(gate, amt, attacker, cause);
     this.game.fx.splinters(gate.pos, 6);
     if (gate.hp <= 0) {
       gate.hp = 0;
@@ -619,6 +705,7 @@ export class Castle {
       this.game.fx.splinters(gate.pos, 40);
       this.game.fx.dust(gate.pos, 25, 4);
       this.game.audio.play('collapse', gate.pos);
+      highlights.down(this.game, gate, attacker, cause);
       this.game.onStructureDestroyed(gate, attacker);
     }
   }
@@ -627,6 +714,7 @@ export class Castle {
     const gate = this.gate;
     gate.maxHp = CASTLE.gateHp * (1 + 0.4 * this.gateLevel);
     gate.hp = gate.maxHp;
+    gate.hl = null;
     if (!gate.alive) {
       gate.alive = true;
       this.applyGateVisual();
@@ -635,20 +723,23 @@ export class Castle {
     this.setGateLocked(this.gateLocked);
   }
 
-  damageKeep(amt, attacker) {
+  damageKeep(amt, attacker, cause) {
     const keep = this.keep;
     if (!keep.alive) return;
     keep.hp -= amt;
+    highlights.hit(keep, amt, attacker, cause);
     if (Math.random() < 0.3) this.game.fx.dust(this.keepDoor.clone().setY(this.keepDoor.y + 2), 4, 1.5);
     if (keep.hp <= 0) {
       keep.hp = 0;
       keep.alive = false;
+      highlights.down(this.game, keep, attacker, cause);
       this.fall(attacker);
     }
   }
 
   repairKeep() {
     this.keep.hp = this.keep.maxHp;
+    this.keep.hl = null;
   }
 
   fall(attacker) {
@@ -713,9 +804,7 @@ export class Castle {
       gate.openAmt += (want - gate.openAmt) * Math.min(1, dt * 3);
       for (const l of gate.leaves) l.pivot.rotation.y = -l.s * 1.35 * gate.openAmt;
     }
-    if (this.burning && Math.random() < dt * 8) {
-      const p = this.toWorld((Math.random() - 0.5) * keepW, KEEP_Z + (Math.random() - 0.5) * keepW, keepH + 1);
-      this.game.fx.smoke(p);
-    }
+    if (this.collapse && !this.collapse.done) this.collapse.update(dt, this);
+    if (this.smokeSpots && Math.random() < dt * 8) this.game.fx.smoke(this.smokeSpots[(Math.random() * this.smokeSpots.length) | 0]);
   }
 }

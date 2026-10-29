@@ -388,7 +388,7 @@ for (const [id, key, apply, unit] of SLIDERS) {
 }
 
 // switches in the options panel (alerts.js looks at the settings as it goes)
-for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres']]) {
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres'], ['optFinale', 'finale']]) {
   const el = $(id), out = el.nextElementSibling;
   const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
   show();

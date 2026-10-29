@@ -38,6 +38,8 @@ import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
+import { highlights } from './highlights.js';
+import { Finale } from './finale.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
 
@@ -92,6 +94,7 @@ export class Game {
     createCentrePiece(this.scene, this.physics, materials().stoneDark);
     this.grass = new Grass(this.scene, this.physics);
     this.fx = new FX(this.scene, this);
+    this.finale = new Finale(this);   // the ending of a match: slow motion, the horn, the falling keep (see finale.js)
     this.camfx = new CamFx(this);   // shake, kicks, field-of-view punch and the colour hooks of the post pass (see camfx.js)
     this.projectiles = new Projectiles(this);
     this.magic = new Magic(this);
@@ -124,6 +127,7 @@ export class Game {
     if (this.disposed) return;
     this.disposed = true;
     this.crowd.dispose();
+    this.finale.dispose();
     this.camfx.dispose();
     this.lights.rig.dispose();   // (the shadow rig and the first-person kit listen for quality changes: let go of them, or they keep this world alive)
     if (this.player.vm) this.player.vm.dispose();
@@ -156,6 +160,7 @@ export class Game {
     this.mode = setup.mode;
     this.options = sanitizeOptions(setup.options);
     matchlog.reset();
+    highlights.reset(this);
     mods.reset();
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
@@ -647,7 +652,7 @@ export class Game {
       case 'stagger': this.player.stagger(ev.t); break;
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
-      case 'end': this.finish(ev.winner, ev.reason || ''); break;
+      case 'end': this.finish(ev.winner, ev.reason || '', { hl: Array.isArray(ev.hl) ? ev.hl : null }); break;
       case 'ping': this.pings.receive(ev); break;
       default: this.alerts.event(ev); break;
     }
@@ -660,14 +665,16 @@ export class Game {
     let dmg = amount;
     if (target.isStructure) {
       if (attacker && allied(target.team, attacker.team)) return;
-      target.takeDamage(dmg, attacker);
+      target.takeDamage(dmg, attacker, info.ability);
       if (info.melee) this.audio.play('thud', target.pos);
       return;
     }
     // no friendly fire between houses on the same side (own troops and co-op allies)
     if (attacker && attacker !== target && attacker.team !== undefined && allied(target.team, attacker.team)) return;
     if (target.isSiege) {
+      this.lastHit = info;   // (what the blow was, for the match log: see onSiegeDestroyed)
       target.takeDamage(dmg, attacker);
+      this.lastHit = null;
       return;
     }
     // soldiers may block with shield or weapon
@@ -719,7 +726,9 @@ export class Game {
     }
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
+    this.lastHit = info;   // (what the blow was, for the match log: see onUnitKilled)
     target.takeDamage(dmg, attacker, info);
+    this.lastHit = null;
     if (attacker && attacker.gainXp && !attacker.isPlayer) attacker.gainXp(Math.min(dmg, 60) * 0.05);
     if (attacker && attacker.isPlayer && !info.ranged) {
       const steal = attacker.buffs.get('lifesteal');
@@ -748,6 +757,7 @@ export class Game {
     if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
     if (by >= 0 && !allied(by, u.team)) this.heroXp(attacker, killXp(u), u.pos);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
+    highlights.kill(this, u, attacker, this.lastHit);
     if (u.isHero && u.type === 'lord') {
       const f = this.factions[u.team];
       f.heroDeaths++;
@@ -775,6 +785,7 @@ export class Game {
     const by = attacker ? attacker.team : -1;
     if (by !== s.team) this.credit(by, BOUNTY[s.type] || 100, s.chest(new THREE.Vector3()));
     if (by >= 0 && !allied(by, s.team)) this.heroXp(attacker, killXp(s), s.pos);
+    highlights.engine(this, s, attacker, this.lastHit);
     const f = this.factions[s.team];
     if (f && f.isPlayer) f.player.notify(`Your ${s.name.toLowerCase()} was destroyed`, true);
   }
@@ -796,6 +807,7 @@ export class Game {
     if (attacker && !allied(attacker.team, castle.team)) { this.credit(attacker.team, BOUNTY.keep); this.heroXp(attacker, XP.keep, castle.keep.pos); }
     this.audio.play('collapse', castle.keep.pos);
     this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
+    this.finale.keepFell(castle);   // (the last rival keep: a moment of slow motion if the match goes on)
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
     for (const p of castle.posts) if (p.occupant) p.occupant.leavePost();
     // the armies that were besieging it roll on by themselves: waves, engines and anyone on assault orders pick the
@@ -1298,17 +1310,16 @@ export class Game {
   }
 
   endGame(winner, reason = '') {
-    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason);
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates());
     this.finish(winner, reason);
   }
 
-  finish(winner, reason = '') {
+  // opts: { quick } skips the show (a concede or a lost connection) · { hl } the notable moments the host sent (a guest's highlight line)
+  finish(winner, reason = '', opts = {}) {
     if (this.state === 'over') return;
     this.state = 'over';
     const won = winner >= 0 && allied(winner, this.localTeam);
-    this.audio.play(won ? 'victory' : 'defeat');
-    this.input.unlock();
-    this.ui.gameOver(won, winner, reason);
+    this.finale.start(won, winner, reason, opts);   // (builds the end screen, then shows it when the ending is over: finale.js)
   }
 
   // A remote player left an online game: their house is taken over by an AI lord.
@@ -1359,8 +1370,10 @@ export class Game {
     // single player pauses the world; online games keep running underneath menus
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
+    const slow = this.finale.timeScale(dt);   // (the ending's slow motion; single player only)
     // brief hit-stop when a blow lands (single player only)
     if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.12; }
+    dt *= slow;
     this.time += dt;
     if (this.state === 'playing') matchlog.tick(dt);
     const controlling = this.state === 'playing' && !this.paused;
@@ -1375,6 +1388,7 @@ export class Game {
     const p = this.player;
     if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen ? this.input : this.input.idle);
     else this.deathCamera(dt);
+    this.finale.camera();   // (the ending frames the falling keep: after the hero has placed the camera, before anything looks through it)
     for (const h of this.humans) {
       if (h.remote) h.remoteUpdate(dt);
       h.updateHorse(dt);
