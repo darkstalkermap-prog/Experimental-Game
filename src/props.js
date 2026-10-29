@@ -18,8 +18,8 @@ const qd = (P, key, m, a, b, c, d, col) => P.quad(key, pt(m, ...a), pt(m, ...b),
 // ---------------------------------------------------------------- the pieces (each stands on y = 0 at the origin of matrix m)
 function barrel(P, m) {
   const prof = [[0.001, 0], [0.3, 0], [0.37, 0.15], [0.43, 0.42], [0.43, 0.5], [0.37, 0.78], [0.3, 0.92], [0.001, 0.92]].map(([r, y]) => new THREE.Vector2(r, y));
-  P.add('timber', new THREE.LatheGeometry(prof, 14), m, P.jitter(C.wood, 0.1), { uv: 'keep', uvMul: [1.6, 0.9] });
-  for (const [y, r] of [[0.14, 0.375], [0.44, 0.44], [0.76, 0.385]]) P.cyl('metal', r, r, 0.05, 14, at(m, 0, y, 0), C.iron);
+  P.add('timber', new THREE.LatheGeometry(prof, 10), m, P.jitter(C.wood, 0.1), { uv: 'keep', uvMul: [1.6, 0.9] });
+  for (const [y, r] of [[0.14, 0.375], [0.44, 0.44], [0.76, 0.385]]) P.cyl('metal', r, r, 0.05, 10, at(m, 0, y, 0), C.iron, { open: true });
 }
 function crate(P, m, s = 1) {
   P.obox('timber', at(m, 0, 0.45 * s, 0), 0.45 * s, 0.45 * s, 0.45 * s, P.jitter(C.wood, 0.1));
@@ -35,8 +35,8 @@ function bale(P, m) {
   for (const x of [-0.25, 0.25]) P.obox('plain', at(m, x, 0.25, 0), 0.03, 0.26, 0.31, mul(STRAW, 0.45));
 }
 function haystack(P, m) {
-  P.cyl('plain', 1.5, 1.5, 0.9, 10, at(m, 0, 0, 0), P.jitter(STRAW, 0.08));
-  P.cyl('plain', 0, 1.5, 1.6, 10, at(m, 0, 0.9, 0), P.jitter(mul(STRAW, 0.95), 0.08));
+  P.cyl('plain', 1.5, 1.5, 0.9, 8, at(m, 0, 0, 0), P.jitter(STRAW, 0.08));
+  P.cyl('plain', 0, 1.5, 1.6, 8, at(m, 0, 0.9, 0), P.jitter(mul(STRAW, 0.95), 0.08));
 }
 function rack(P, m, col) {   // spears and shields on a timber frame, standing against a wall (its back is toward -z)
   for (const x of [-1.1, 1.1]) P.obox('timber', at(m, x, 0.95, 0), 0.05, 0.95, 0.05, C.woodDark);
@@ -49,8 +49,8 @@ function rack(P, m, col) {   // spears and shields on a timber frame, standing a
   for (const x of [-0.55, 0.55]) P.cyl('plain', 0.42, 0.42, 0.07, 14, at(m, x, 1.0, 0.12, 0, Math.PI / 2), col);
 }
 function well(P, m) {
-  P.cyl('masonry', 1.0, 1.05, 0.95, 14, at(m, 0, 0, 0), C.stone);
-  P.cyl('masonry', 1.12, 1.12, 0.14, 14, at(m, 0, 0.95, 0), C.pale);
+  P.cyl('masonry', 1.0, 1.05, 0.95, 12, at(m, 0, 0, 0), C.stone);
+  P.cyl('masonry', 1.12, 1.12, 0.14, 12, at(m, 0, 0.95, 0), C.pale);
   P.cyl('plain', 0.72, 0.72, 0.02, 14, at(m, 0, 1.08, 0), WATER);
   for (const x of [-1.0, 1.0]) P.obox('timber', at(m, x, 1.2, 0), 0.09, 1.2, 0.09, C.woodDark);
   P.cyl('timber', 0.1, 0.1, 2.0, 8, at(m, -1.0, 1.75, 0, 0, 0, -Math.PI / 2), C.wood);
@@ -106,7 +106,7 @@ function stall(P, m, col) {   // a market stall, open toward +z
   sack(P, at(m, -1.9, 0, 0.3));
 }
 function wheel(P, m) {         // a cartwheel in the x = 0 plane
-  P.add('timber', new THREE.TorusGeometry(0.5, 0.05, 5, 16), at(m, 0, 0, 0, Math.PI / 2), C.woodDark);
+  P.add('timber', new THREE.TorusGeometry(0.5, 0.05, 4, 12), at(m, 0, 0, 0, Math.PI / 2), C.woodDark);
   for (let i = 0; i < 4; i++) P.obox('timber', at(m, 0, 0, 0, 0, i * Math.PI / 4, 0), 0.03, 0.5, 0.025, C.wood);
   P.cyl('metal', 0.09, 0.09, 0.16, 8, at(m, 0.08, 0, 0, 0, 0, Math.PI / 2), C.iron);
 }
