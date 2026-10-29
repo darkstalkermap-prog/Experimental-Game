@@ -25,7 +25,7 @@ export function disposeWorld(scene, shared = [], extra = []) {
   });
   const environmentTarget = scene.userData.environmentTarget;
   if (environmentTarget) environmentTarget.dispose();
-  else owned.push(scene.environment);
+  else if (!(scene.environment && scene.environment.userData.shared)) owned.push(scene.environment);   // (the sky's map is shared by every world)
   owned.push(scene.background);
   for (const resource of collect(owned)) if (!preserved.has(resource)) resource.dispose();
   scene.environment = null;

@@ -7,6 +7,7 @@
 // the same way the material did (tone map, then the output encoding), so the two paths agree.
 import * as THREE from 'three';
 import { Q } from './quality.js';
+import { skyLightGLSL } from './skylight.js';
 
 // the sun stands still: a warm afternoon, about 30 degrees above the horizon (everything that needs it reads this one vector)
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
@@ -207,7 +208,7 @@ export function installShaderChunks() {
     cascadesPatched = true;
   } else console.warn('atmosphere: the shadow chunks changed; the sun uses a single plain shadow map');
 
-  // image-based light: its specular half is a second cube-map lookup (up to eight texture reads). On a rough surface that is the same blurred
+  // its specular half is a second cube-map lookup (up to eight texture reads). On a rough surface that is the same blurred
   // sky the diffuse half has just read, so there it is reused (smooth surfaces, steel and armour, keep their own reflection)
   const radianceLine = 'radiance += getIBLRadiance( geometryViewDir, geometryNormal, material.roughness );';
   if (C.lights_fragment_maps.includes(radianceLine)) {
@@ -380,6 +381,31 @@ function skyMaterial(env) {
   return mat;
 }
 
+// The environment map is the same for every world (the sky never changes), so it is built once for the page and shared; it is never
+// disposed with a world (see resources.js). The first build also fits the sky's diffuse light (skylight.js) and writes it into the light
+// chunks, which must happen before any lit material compiles: createAtmosphere runs when a world is made, before its first frame.
+let sharedEnv = null;
+function sharedEnvironment(renderer) {
+  if (sharedEnv) return sharedEnv;
+  const envScene = new THREE.Scene();
+  const envMat = skyMaterial(true);
+  envMat.defines.CLOUDS = 0;
+  envScene.add(new THREE.Mesh(fullScreenTriangle(), envMat));
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  sharedEnv = pmrem.fromScene(envScene, 0.02);
+  sharedEnv.texture.userData.shared = true;
+  envMat.dispose();
+  pmrem.dispose();
+  const glsl = skyLightGLSL(renderer, sharedEnv.texture);
+  const C = THREE.ShaderChunk;
+  const lookupLine = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
+  if (glsl && C.lights_fragment_maps.includes(lookupLine) && C.envmap_physical_pars_fragment.includes('getIBLIrradiance')) {
+    C.envmap_physical_pars_fragment += glsl;
+    C.lights_fragment_maps = C.lights_fragment_maps.replace(lookupLine, 'iblIrradiance += atmSkyE( inverseTransformDirection( geometryNormal, viewMatrix ) ) * envMapIntensity;');
+  } else console.warn('atmosphere: the sky light stays a cube-map lookup per pixel (' + (glsl ? 'the light chunks changed' : 'no float render targets') + ')');
+  return sharedEnv;
+}
+
 // Build the sky dome, the fog and the environment map for a scene. Returns the dome mesh (its `userData.atmosphere` has the per-frame update).
 export function createAtmosphere(scene, renderer = null) {
   const mat = skyMaterial(false);
@@ -390,17 +416,7 @@ export function createAtmosphere(scene, renderer = null) {
   scene.add(sky);
 
   // image-based lighting from the same sky, so steel and armour reflect it and shadows take the colour of the sky
-  if (renderer) {
-    const envScene = new THREE.Scene();
-    const envMat = skyMaterial(true);
-    envMat.defines.CLOUDS = 0;
-    envScene.add(new THREE.Mesh(fullScreenTriangle(), envMat));
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    scene.userData.environmentTarget = pmrem.fromScene(envScene, 0.02);
-    scene.environment = scene.userData.environmentTarget.texture;
-    envMat.dispose();
-    pmrem.dispose();
-  }
+  if (renderer) scene.environment = sharedEnvironment(renderer).texture;
   scene.fog = new THREE.FogExp2(0xffffff, 1 / 400);
   scene.background = null;
 
