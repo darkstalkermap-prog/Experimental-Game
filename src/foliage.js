@@ -12,6 +12,7 @@ import { Q } from './quality.js';
 import { patchMaterial } from './shaderhook.js';
 import { shadowProxy } from './shadows.js';
 import { buildSpruce, buildPine, buildOak, buildBirch, buildRock } from './foliagegeo.js';
+import { paintTreeCards, CARD_FOOT } from './treecards.js';
 
 // shared by everything that moves in the wind (trees here, grass in grass.js)
 export const WIND = { time: { value: 0 }, amp: { value: 1 } };
@@ -28,7 +29,7 @@ const windUniforms = (shader) => { shader.uniforms.uWindTime = WIND.time; shader
 const SPECIES = ['spruce', 'pine', 'oak', 'birch'];
 const BUILD = [buildSpruce, buildPine, buildOak, buildBirch];
 const HEIGHT = [10.2, 9.8, 8.6, 8.8];       // metres of the 1.0-scale model (for the cards and the bounding spheres)
-const CROWN_W = [5.6, 4.6, 6.2, 3.4];
+const CROWN_W = [5.6, 5.6, 7.2, 3.4];       // metres of crown across, as wide as the middle-distance model (the far card of a pine is a cone too)
 const hash01 = (x, z, k) => { const s = Math.sin(x * 12.9898 + z * 78.233 + k * 37.719) * 43758.5453; return s - Math.floor(s); };
 
 // ---- the cards of the far forest: trees painted on a canvas, four across ----
@@ -38,35 +39,7 @@ function treeAtlas() {
   const W = 128, H = 256, c = document.createElement('canvas');
   c.width = W * 4; c.height = H;
   const g = c.getContext('2d');
-  const blob = (cx, cy, rx, ry, a, b) => {
-    const grd = g.createRadialGradient(cx - rx * 0.35, cy - ry * 0.4, 2, cx, cy, Math.max(rx, ry));
-    grd.addColorStop(0, a); grd.addColorStop(1, b);
-    g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
-  };
-  // 0 spruce: stacked ragged tiers
-  let ox = 0;
-  g.fillStyle = '#3a2a1c'; g.fillRect(ox + 60, 205, 8, 51);
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6, y = 214 - i * 28, w = 52 - 44 * Math.pow(t, 0.85);
-    const grd = g.createLinearGradient(ox + 64 - w, 0, ox + 64 + w, 0);
-    grd.addColorStop(0, '#46803f'); grd.addColorStop(0.45, '#2c5e38'); grd.addColorStop(1, '#173d2a');
-    g.fillStyle = grd; g.beginPath(); g.moveTo(ox + 64, y - 46);
-    for (let k = 0; k <= 6; k++) g.lineTo(ox + 64 + w - (k / 6) * 2 * w, y + (k % 2 ? 0 : 7));
-    g.closePath(); g.fill();
-  }
-  // 1 pine: bare trunk, a few cloud-like clumps on top
-  ox = W;
-  g.fillStyle = '#6b4a30'; g.fillRect(ox + 60, 96, 7, 160);
-  [[64, 58, 38, 22], [92, 96, 30, 18], [38, 108, 30, 17], [66, 132, 26, 14]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#4f8a4a', '#1f4a30'));
-  // 2 oak: a short trunk under a lumpy round crown
-  ox = W * 2;
-  g.fillStyle = '#4a3322'; g.fillRect(ox + 59, 150, 10, 106);
-  [[64, 96, 52, 46], [32, 124, 30, 26], [98, 124, 30, 26], [64, 60, 34, 28], [86, 78, 26, 24]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#7aa63c', '#2d5a22'));
-  // 3 birch: white trunk, a narrow light crown
-  ox = W * 3;
-  g.fillStyle = '#d8d4c6'; g.fillRect(ox + 61, 70, 5, 186);
-  g.fillStyle = '#35332c'; for (let y = 90; y < 250; y += 17) g.fillRect(ox + 61, y, 5, 3);
-  [[64, 70, 30, 40], [50, 118, 22, 26], [80, 110, 22, 28], [64, 36, 20, 24]].forEach(([x, y, rx, ry]) => blob(ox + x, y, rx, ry, '#9cc650', '#3f7a2a'));
+  paintTreeCards(g, W, H);   // (spruce, pine, oak, birch: see treecards.js for why every one of them reaches the ground)
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
@@ -121,12 +94,13 @@ function materials() {
   return { treeMat, rockMat, cardMat };
 }
 
-// a unit card standing on the ground, 1 m wide and 1 m tall; its size comes from the instance matrix
+// a unit card standing on the ground, 1 m wide and 1 m tall; its size comes from the instance matrix. The quad goes CARD_FOOT below the
+// ground line (v < 0 reads the strip's bottom row: the trunk goes on into the slope)
 function cardGeometry(cap) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -CARD_FOOT, 0, 0.5, -CARD_FOOT, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0.8, 0.6, 0, 0.8, 0.6, 0, 0.8, 0.6, 0, 0.8, 0.6], 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, -CARD_FOOT, 1, -CARD_FOOT, 1, 1, 0, 1], 2));
   g.setIndex([0, 1, 2, 0, 2, 3]);
   g.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
