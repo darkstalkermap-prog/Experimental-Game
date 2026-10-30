@@ -664,7 +664,9 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   beside it that opens the class picker right there (the choice is remembered and the next match uses it) and a quiet
   **Main menu** link. The page does not reload: a world is built for one match only (castles, soldiers, engines and upgrades
   are all spent by the end), so the next one is built while the end screen is up, a couple of seconds after the match ends,
-  and Play Again only has to start it. Menu to match and end screen to match are both a single click.
+  and Play Again only has to start it. Menu to match and end screen to match are both a single click. After a finishing
+  show the world waits for the show, and the keys of the end screen for the moment it comes into view (the key that skips the
+  show is never also Play Again). The row of buttons sticks to the bottom of the end card, however many sections it has.
   `src/flow.js` and `ensureMap` / `freshWorldSoon` in `src/main.js`.
 - **Online**, the host's end screen has **Rematch**: everybody who is still in the room goes back to its lobby (same room,
   same lords; the room stays locked, so nobody new can join), picks classes again and the host starts the next battle.
@@ -675,12 +677,12 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   skipped the same way; the practice courtyard has no preparation.
 - **Concede / Next battle** (K, twice to confirm, or the button in the game menu) is offered, never forced, when a battle is
   decided: your keep has fallen; or you are one of the last two castles and the other is clearly winning (the rule and the
-  numbers are `DECIDED` in `src/flow.js`); or, the other way round, you are clearly winning, and the button says **Finish
+  numbers are `DECIDED` in `src/flow.js`; not while your Last Stand can still be called, that comes first); or, the other way round, you are clearly winning, and the button says **Finish
   the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
   Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
   for friends who are still in it. None of this applies to the Hero Game Mode, whose match ends when a keep falls.
 - **Match length** (Standard / Short, a row under the difficulty and in the host's lobby, `options.length`). Short is a
-  **timed war**. Its tempo is faster, by a `mods` source named `length`: a shorter preparation (36 s), a wave every 21 s
+  **timed war**. Its tempo is faster, by a `mods` source named `length:short`: a shorter preparation (36 s), a wave every 21 s
   instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
   wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
   a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word

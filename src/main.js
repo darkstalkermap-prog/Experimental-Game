@@ -453,7 +453,10 @@ $('leaveLobby').addEventListener('click', () => location.reload());
 // ---------------- a rematch in the same room ----------------
 // When a match ends the room goes back to lobby duty: the host's end screen has "Rematch", which takes everybody who is still here back to the room's lobby,
 // where classes are picked again and the host starts the next battle. (The room stays locked: nobody new can join a game that has started.)
-function endScreenUp() { return !$('gameover').classList.contains('hidden'); }
+function endScreenUp() {   // (in view: built, and no longer kept see-through behind the show of an ending, which needs the finished world: finale.js)
+  const c = $('gameover').classList;
+  return !c.contains('hidden') && !c.contains('finale-wait');
+}
 function inRoom() { return !!net && !flow.left && (net.role === 'host' || net.role === 'client'); }   // (functions, not consts: flow.bind above takes them at load)
 
 // the match is over: put the room's handlers back (the match's sync replaced them) and see who is still here

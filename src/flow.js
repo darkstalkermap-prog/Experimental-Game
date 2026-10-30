@@ -7,6 +7,7 @@
 // The rules about what counts as decided are here too, with the numbers they were tuned on. main.js hands over the things only it can do (starting a match,
 // going to the menu) with flow.bind(); this file imports nothing from the UI, so ui.js can import it without a cycle.
 import { registerEndSection } from './endscreen.js';
+import { standBlock } from './comeback.js';
 import { DIFFICULTY, OBJECTIVES, MAP_SIZES, LENGTHS } from './config.js';
 import { CLASSES } from './classes.js';
 import { HERO } from './herogame.js';
@@ -119,7 +120,8 @@ export function offerFor(g) {
     || (!a.gate && a.keep <= D.behindGate.myKeep && b.army >= D.behindGate.army * Math.max(1, a.army));
   const ahead = (b.keep <= D.ahead.theirKeep && a.keep >= D.ahead.myKeep && a.army >= D.ahead.army * Math.max(1, b.army))
     || (!b.gate && a.keep >= D.aheadGate.myKeep && a.army >= D.aheadGate.army * Math.max(1, b.army));
-  if (behind)
+  // (while the Last Stand can still be called the battle is not lost: the comeback comes first, with its own button and its own toast; see comeback.js)
+  if (behind && standBlock(g, me))
     return { kind: 'concede', text: `${foe.name} is winning the war.`, label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede', foe };
   if (ahead)
     return { kind: 'finish', text: `${foe.name} cannot hold out any longer.`, label: 'Finish the war', ask: `Finish the war now? ${foe.name} yields and the realm is yours.`, yes: 'Finish', foe };
