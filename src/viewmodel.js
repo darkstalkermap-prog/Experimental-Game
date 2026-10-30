@@ -31,7 +31,8 @@ class Spring {
 // scratch objects (nothing is allocated per frame); each helper has its own so they can be nested
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3(), V4 = new THREE.Vector3();
 const IK_A = new THREE.Vector3(), IK_B = new THREE.Vector3(), LIMB = new THREE.Vector3(), STR_A = new THREE.Vector3(), STR_B = new THREE.Vector3();
-const ZAXIS = new THREE.Vector3(0, 0, 1), MINV = new THREE.Matrix4();
+const ZAXIS = new THREE.Vector3(0, 0, 1), YAXIS = new THREE.Vector3(0, 1, 0), MINV = new THREE.Matrix4();
+const QH = new THREE.Quaternion(), FA = new THREE.Vector3();
 
 // ---------------------------------------------------------------- arm styles per class
 function armStyle(cls, team) {
@@ -70,7 +71,19 @@ const HAND_SCALE = 1.1;   // hands read better a little large when seen this clo
 const ORDER_KIT = 1000;   // drawn after the world
 const SHIELD_REST = { x: -0.37, y: -0.3, z: -0.58, rx: -0.18, ry: 0.62, rz: 0.12 };
 const GUARD = { x: -0.2, y: -0.24, z: -0.52, rx: -0.05, ry: 0.3, rz: 0.06 };   // the shield brought across the front
-const BOW_REST = { x: -0.17, y: -0.09, z: -0.62, rx: 0.0, ry: 0.0, rz: 0.12 };
+// The bow. At rest it is held low across the front, an arrow on the string. Drawing, the bow arm comes up straight at the mark and the
+// string hand pulls the nock back along the arrow's line to the anchor under the jaw (BOW_ANCHOR, the nock's place at full draw; the eye
+// looks down the arrow from just above it, so the arrow points where the cross does); the draw elbow goes up and back behind, in line.
+// The arrow lies on the shelf on the left of the riser, over the bow hand; the bow is canted a little, its top to the right.
+const BOW_REST = { x: -0.13, y: -0.29, z: -0.5, rx: -0.3, ry: 0.35, rz: 0.55 };
+const BOW_AIM = { rx: 0, ry: 0, rz: -0.17 };
+const BOW_ANCHOR = new THREE.Vector3(0.012, -0.095, -0.025);
+const NOCK_Y = 0.068, ARROW_REST = new THREE.Vector3(-0.025, NOCK_Y, -0.016), DRAW_Z = 0.685;   // (bow frame: the nocking point's height, where the arrow lies on the shelf, the nock's z at full draw)
+const SH_BOW_L = new THREE.Vector3(-0.07, -0.21, 0.0), SH_BOW_R = new THREE.Vector3(0.17, -0.2, 0.26);   // the shoulders, side-on to the mark
+const POLE_BOW_L = new THREE.Vector3(-1, -0.3, 0).normalize(), POLE_BOW_R = new THREE.Vector3(0.5, 0.6, 0.4).normalize();
+const VOLLEY_PIVOT = new THREE.Vector3(0.02, -0.45, 0.12);   // (where the lean back for a high shot turns: low in the chest)
+const AXIS_X = new THREE.Vector3(1, 0, 0), ARROW_FWD = new THREE.Vector3(0, 0, -1);
+const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new THREE.Quaternion(), BOW_P = new THREE.Vector3(), SH_A = new THREE.Vector3(), SH_B = new THREE.Vector3(), POLE_A = new THREE.Vector3(), POLE_B = new THREE.Vector3();
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
 const CAST_MACE = { x: 0.12, y: -0.05, z: -0.5, rx: -0.35, ry: 0.1, rz: -0.1 };
@@ -80,6 +93,12 @@ const CLIMB_R = { x: 0.2, y: 0.1, z: -0.44, rx: 1.45, ry: -0.5, rz: 0.0 }, CLIMB
 const SH_R = new THREE.Vector3(0.2, -0.3, 0.14), SH_L = new THREE.Vector3(-0.2, -0.3, 0.14);
 const POLE_R = new THREE.Vector3(0.7, -1, 0.3).normalize(), POLE_L = new THREE.Vector3(-0.7, -1, 0.3).normalize();
 const L1 = 0.32, L2 = 0.3;
+// How far a wrist bends (radians): toward the thumb (radial) and the little finger (ulnar), the palm (flexion) and the back (extension).
+// A hand that grips something works in the middle of these; the forearm turns (pronation and supination happen in the forearm, not the wrist).
+const WRIST = { radial: 0.35, ulnar: 0.6, flex: 0.6, ext: 0.55 };
+// A fist closes on a hilt diagonally: from the root of the index finger across to the heel of the palm, so with the wrist straight the blade
+// leans forward of square to the forearm by this much (the hand mesh is turned about its palm's normal by it).
+const GRIP_TILT = 0.38;
 
 // two-bone arm: the elbow, given the shoulder s, the wrist w and the side the elbow prefers (the shoulder follows when the wrist is out of reach)
 function solveArm(s, w, pole, elbow, shoulder) {
@@ -96,6 +115,9 @@ function solveArm(s, w, pole, elbow, shoulder) {
   IK_B.normalize();
   elbow.copy(shoulder).addScaledVector(IK_A, a).addScaledVector(IK_B, h);
 }
+
+// the string's z at the nocking point when the bow is braced (on the line between the tips)
+const info0 = (info) => info.tipTop.z;
 
 // ---------------------------------------------------------------- the weapon trail: a pooled ribbon between two points of the blade
 const TRAIL_N = 20, TRAIL_LIFE = 0.17;
@@ -165,7 +187,7 @@ export class ViewModel {
     this.spring = {};
     for (const n of ['kx', 'ky', 'kz', 'krx', 'kry', 'krz', 'sx', 'sy', 'sz', 'srx', 'sry', 'wx', 'wy', 'wz', 'wrx', 'wrz']) this.spring[n] = new Spring(n[0] === 's' ? 300 : 240, n[0] === 's' ? 22 : 19);
     this.lookX = new Spring(90, 13); this.lookY = new Spring(90, 13);
-    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0;
+    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.raiseAmt = 0; this.looseZ = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0;
     this.shieldPose = { ...SHIELD_REST };
     this.swap = 0; this.shown = 'sword';
     this.prev = { yaw: 0, pitch: 0, hp: 1, arrows: 0, potions: 0, onGround: true, vy: 0, draw: 0, mounted: false, init: false };
@@ -223,8 +245,14 @@ export class ViewModel {
     R.grp = new THREE.Group();
     R.hand = this.mk(hr.geo, this.handMat, false);
     R.hand.scale.setScalar(HAND_SCALE);
-    R.wrist = hr.wrist.clone().multiplyScalar(HAND_SCALE);
+    R.hand.rotation.x = GRIP_TILT;
+    R.hand.updateMatrix();
+    R.wrist = hr.wrist.clone().applyMatrix4(R.hand.matrix);
     const wpn = this.wpn = weaponGeometry(cls, { len: p.sword.len, ls: p.lv.sword, team, detail });
+    // (the weapons are built with their edges along x; a fist holds a blade with its edges in line with the knuckles, the true edge (and
+    // an axe's bit) toward where the fingers point, -z in the grip frame: turned a quarter about the grip to sit that way)
+    wpn.geo.rotateY(-Math.PI / 2);
+    for (const k of ['tip', 'base', 'focus']) if (wpn[k]) wpn[k].applyAxisAngle(YAXIS, -Math.PI / 2);
     R.weapon = this.mk(wpn.geo, this.kitMat);
     R.grp.add(R.hand, R.weapon);
     if (cls === 'cavalier') {   // a lance for riding
@@ -255,6 +283,7 @@ export class ViewModel {
     L.shield.updateMatrix();
     L.hand = this.mk(hl.geo, this.handMat, false);
     L.hand.scale.setScalar(HAND_SCALE);
+    L.hand.morphTargetInfluences[0] = 1;   // (a fist round the grip)
     L.hand.rotation.z = -Math.PI / 2;
     L.hand.position.set(0, p.lv.shield ? sh.shape.h * 0.14 : 0, 0.052);
     L.hand.updateMatrix();
@@ -272,7 +301,8 @@ export class ViewModel {
     L.bow = this.mk(bow.geo, this.kitMat);
     L.bowHand = this.mk(hl.geo, this.handMat, false);
     L.bowHand.scale.setScalar(HAND_SCALE);
-    L.bowHand.rotation.set(0, 0.25, 0);
+    L.bowHand.morphTargetInfluences[0] = 0.85;   // (a bow is held, not strangled)
+    L.bowHand.rotation.set(0, -0.12, 0);   // (the riser in the fork of thumb and finger, the wrist straight behind it)
     L.bowHand.position.set(0, 0, -0.012);
     L.bowHand.updateMatrix();
     L.bowWrist = hl.wrist.clone().applyMatrix4(L.bowHand.matrix);
@@ -285,7 +315,7 @@ export class ViewModel {
     L.bowGrp.add(R.arrowGrp);
     R.strHand = this.mk(hr.geo, this.handMat, false);
     R.strHand.scale.setScalar(HAND_SCALE);
-    R.strHand.rotation.set(0, -0.35, 0);
+    R.strHand.rotation.set(0, 0.2, 0);   // (three fingers hook the string, the back of the hand out to the right)
     R.strHand.updateMatrix();
     R.strWrist = hr.wrist.clone().multiplyScalar(HAND_SCALE).applyMatrix4(R.strHand.matrix);
     R.strGrp.add(R.strHand);
@@ -328,8 +358,18 @@ export class ViewModel {
     mesh.updateMatrix();
   }
 
-  arm(side, wrist, shoulderAnchor, pole) {
+  // One arm: the reach places the elbow (solveArm), then the forearm is turned, if it must be, until the hand sits on it within what a
+  // wrist allows (WRIST), and the upper arm runs from that elbow toward the shoulder. hand is the hand mesh inside grp (its +z is the
+  // forearm's line with the wrist straight, +y the thumb's side); palm is the side its palm faces along x (-1 right hand, +1 left hand).
+  arm(side, wrist, shoulderAnchor, pole, grp, hand, palm) {
     solveArm(shoulderAnchor, wrist, pole, this.elbow, this.shoulder);
+    QH.copy(grp.quaternion).multiply(hand.quaternion).invert();
+    FA.subVectors(this.elbow, wrist).normalize().applyQuaternion(QH);
+    const dev = clamp(Math.atan2(FA.y, FA.z), -WRIST.ulnar, WRIST.radial), flex = clamp(Math.atan2(palm * FA.x, FA.z), -WRIST.ext, WRIST.flex);
+    FA.set(palm * Math.tan(flex), Math.tan(dev), 1).normalize().applyQuaternion(QH.invert());
+    this.elbow.copy(wrist).addScaledVector(FA, L2);
+    IK_A.subVectors(this.shoulder, this.elbow);
+    this.shoulder.copy(this.elbow).addScaledVector(IK_A, L1 / Math.max(IK_A.length(), 1e-4));
     this.limb(side.fore, wrist, this.elbow);
     this.limb(side.upper, this.elbow, this.shoulder);
   }
@@ -379,7 +419,7 @@ export class ViewModel {
     }
     pv.hp = p.hp; pv.onGround = p.onGround; pv.vy = p.vy; pv.potions = p.potions; pv.mounted = p.mounted;
     const drawNow = p.drawT > 0 ? Math.min(1, p.drawT / p.drawTime) : 0;
-    if (pv.draw > 0.3 && p.drawT === 0 && p.arrows < pv.arrows) this.recoil = clamp(pv.draw, 0.4, 1);   // the string was let go
+    if (pv.draw > 0.3 && p.drawT === 0 && p.arrows < pv.arrows) this.recoil = 1;   // the string was let go
     pv.draw = drawNow; pv.arrows = p.arrows;
     if (p.weapon !== this.shown && this.swap <= 0) this.swap = 1;
     if (this.swap > 0) {
@@ -498,35 +538,71 @@ export class ViewModel {
     } else {
       // the bow: left hand at the grip, right hand on the string
       const draw = p.aiming ? Math.min(1, p.aiming.t / 0.4) : drawNow;
-      this.drawAmt = smooth(this.drawAmt, draw, 30, dt);
-      const dr = this.drawAmt, zoom = this.zoomAmt;
-      let extraRx = 0, bx = 0.04 * dr, by = 0.03 * dr;
-      if (p.aiming) { extraRx = -0.3 * dr; by += 0.05 * dr; }
-      bx += (-0.03 - BOW_REST.x) * zoom * 0.7; by += 0.05 * zoom;
-      if (dr >= 1) bx += Math.sin(t * 70) * 0.0012;
-      const rec = this.recoil = Math.max(0, this.recoil - dt * 6);
-      this.place(L.bowGrp, BOW_REST, ox + bx, oy + by - swapDip, oz + rec * 0.05, extraRx - rec * 0.06 + rx, ry, rz + rec * 0.02);
+      // after a loose (recoil runs 1 -> 0 over half a second): the string snaps home at once; the hand flies on back along the jaw and
+      // opens (ft), the bow hand lets the top of the bow fall forward; then the hand comes forward to the string with the next arrow (rt)
+      const rec = this.recoil = Math.max(0, this.recoil - dt * 2), u = 1 - rec;
+      if (rec > 0.95) { this.looseZ = lerp(info0(this.bowInfo), DRAW_Z, easeInOut(this.drawAmt)); this.drawAmt = 0; }
+      const ft = rec > 0 ? easeInOut(clamp(u / 0.25, 0, 1)) : 0, rt = rec > 0 ? easeInOut(clamp((u - 0.55) / 0.45, 0, 1)) : 1, fol = ft * (1 - rt);
+      this.drawAmt = smooth(this.drawAmt, draw, draw > this.drawAmt ? 14 : 30, dt);
+      const up = draw > 0 || p.zoomed || p.aiming || rec > 0.3 ? 1 : 0;
+      this.raiseAmt = smooth(this.raiseAmt, up, up ? 11 : 4, dt);
+      const dr = easeInOut(this.drawAmt), ra = easeInOut(clamp(this.raiseAmt, 0, 1)), zoom = this.zoomAmt;
+      // the bow's turn: rest -> aim (steadier and more upright zoomed in); after a loose the bow hand lets the top of the bow fall forward
+      BOW_E.set(lerp(BOW_REST.rx, BOW_AIM.rx, ra) - 0.22 * fol * ra + rx, lerp(BOW_REST.ry, BOW_AIM.ry, ra) + ry, lerp(BOW_REST.rz, BOW_AIM.rz + 0.07 * zoom, ra) + rz, 'XYZ');
+      BOW_Q.setFromEuler(BOW_E);
+      // where the grip is: at aim, so that the nock sits at the anchor when fully drawn
+      const nockZ = lerp(info0(this.bowInfo), DRAW_Z, dr);
+      BOW_P.set(0, NOCK_Y, DRAW_Z).applyQuaternion(BOW_Q);
+      V4.copy(BOW_ANCHOR).sub(BOW_P);
+      V4.z -= 0.012 * fol;   // (the bow arm keeps pushing at the mark through the loose)
+      BOW_P.set(BOW_REST.x, BOW_REST.y, BOW_REST.z).lerp(V4, ra);
+      if (p.aiming) {   // the volley: the whole draw is lifted to loose high, the archer leaning back from the waist (so the nock drops from the eye)
+        BOW_Q2.setFromAxisAngle(AXIS_X, 0.42 * ra);
+        BOW_P.sub(VOLLEY_PIVOT).applyQuaternion(BOW_Q2).add(VOLLEY_PIVOT);
+        BOW_Q.premultiply(BOW_Q2);
+      }
+      const still = 1 - 0.7 * zoom;
+      BOW_P.x += ox * still; BOW_P.y += oy * still - swapDip; BOW_P.z += oz;
+      if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * 0.0008;   // (a long hold at full draw trembles)
+      L.bowGrp.position.copy(BOW_P);
+      L.bowGrp.quaternion.copy(BOW_Q);
+      L.bowGrp.updateMatrix();
       // the string: top tip -> nock -> bottom tip; the nock (and the arrow) go back with the draw
-      const info = this.bowInfo, pull = 0.2 * dr - rec * 0.05;
+      const info = this.bowInfo;
       V1.copy(info.tipTop).lerp(info.tipTopDrawn, dr);
       V2.copy(info.tipBottom).lerp(info.tipBottomDrawn, dr);
-      V3.set(0, 0, info.tipTop.z + pull);
+      V3.set(0, NOCK_Y, nockZ);
       L.bow.morphTargetInfluences[0] = dr;
+      // the arrow: from the nock to the shelf; gone after a loose until the hand has come back with the next one
       R.arrowGrp.position.copy(V3);
-      R.arrowGrp.visible = p.arrows > 0 || drawNow > 0;
+      R.arrowGrp.quaternion.setFromUnitVectors(ARROW_FWD, V4.subVectors(ARROW_REST, V3).normalize());
+      R.arrowGrp.visible = (p.arrows > 0 || drawNow > 0) && rec < 0.25;
       R.arrowGrp.updateMatrix();
       this.strand(L.strTop, V1, V3, L.bowGrp.matrix);
       this.strand(L.strBot, V3, V2, L.bowGrp.matrix);
-      // the drawing hand follows the nock
-      R.strGrp.position.copy(V3).applyMatrix4(L.bowGrp.matrix);
+      const thin = 1 - 0.6 * dr * ra;   // (drawn to the face the string passes a hand's breadth from the eye: seen thin, as the eye sees it, out of focus)
+      L.strTop.scale.x = L.strTop.scale.y = L.strBot.scale.x = L.strBot.scale.y = thin;
+      L.strTop.updateMatrix(); L.strBot.updateMatrix();
+      // the drawing hand: on the nock; loosed, it goes on back along the jaw, then comes forward to the string again
+      V4.set(0, NOCK_Y, lerp(this.looseZ + 0.09 * ft, nockZ, rt));
+      R.strGrp.position.copy(V4).applyMatrix4(L.bowGrp.matrix);
+      R.strGrp.position.x += 0.05 * fol;
       R.strGrp.quaternion.copy(L.bowGrp.quaternion);
       R.strGrp.updateMatrix();
-      R.strHand.morphTargetInfluences[0] = 0; R.strHand.morphTargetInfluences[1] = 1;
+      R.strHand.morphTargetInfluences[0] = 0; R.strHand.morphTargetInfluences[1] = 1 - 0.8 * fol;
       this.wristR.copy(R.strWrist).applyMatrix4(R.strGrp.matrix);
       this.wristL.copy(L.bowWrist).applyMatrix4(L.bowGrp.matrix);
     }
-    this.arm(R, this.wristR, SH_R, POLE_R);
-    this.arm(L, this.wristL, SH_L, POLE_L);
+    if (swordMode) {
+      this.arm(R, this.wristR, SH_R, POLE_R, R.grp, R.hand, -1);
+      if (climbW > 0.5) this.arm(L, this.wristL, SH_L, POLE_L, L.climbGrp, L.climb, 1); else this.arm(L, this.wristL, SH_L, POLE_L, L.grp, L.hand, 1);
+    } else {
+      const ra = clamp(this.raiseAmt, 0, 1);   // (the shoulders turn side-on to the mark as the bow comes up)
+      SH_A.copy(SH_R).lerp(SH_BOW_R, ra); POLE_A.copy(POLE_R).lerp(POLE_BOW_R, ra).normalize();
+      SH_B.copy(SH_L).lerp(SH_BOW_L, ra); POLE_B.copy(POLE_L).lerp(POLE_BOW_L, ra).normalize();
+      this.arm(R, this.wristR, SH_A, POLE_A, R.strGrp, R.strHand, -1);
+      this.arm(L, this.wristL, SH_B, POLE_B, L.bowGrp, L.bowHand, 1);
+    }
 
     // ---- reins while riding (the cavalier's left hand holds them; they run to the horse's bit)
     const reins = lanceMode && p.hasHorse && swordMode && L.grp.visible;
