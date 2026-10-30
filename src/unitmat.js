@@ -107,7 +107,7 @@ if (pat > 0.5) {
     vec4 f = texture2D(uFace, vec2((fuv.x + vSurf.w) * 0.125, fuv.y));
     vec3 c = diffuseColor.rgb * f.r;
     c = mix(c, vHair * 0.85, f.g);
-    c = mix(c, vec3(0.8, 0.78, 0.74), f.b);
+    c = mix(c, vec3(0.7, 0.66, 0.6), f.b);
     c = mix(c, vec3(0.04, 0.03, 0.025), f.a);
     diffuseColor.rgb = c;
   } else if (pat < 8.5) {
@@ -116,7 +116,18 @@ if (pat > 0.5) {
     vec3 ink = mix(vec3(0.84, 0.78, 0.6), vec3(0.12, 0.09, 0.06), step(2.5, vSurf.w) * step(vSurf.w, 3.5));
     diffuseColor.rgb = mix(diffuseColor.rgb, ink, e.r);
     diffuseColor.rgb *= 1.0 - 0.45 * e.g;
+  } else if (pat > 10.5) {
+    // skin: blotches of colour (a little ruddier here, paler there) and a fine grain in the sheen
+    float n = cNoise(q.xy * 34.0 + q.z * 27.0);
+    diffuseColor.rgb *= mix(vec3(0.96, 0.98, 1.0), vec3(1.05, 0.98, 0.95), n);
+    pRough += 0.1 * (cNoise(q.xy * 420.0 + q.z * 300.0) - 0.5) * aa;
   }
+} else if (vSurf.y > 0.5) {
+  // bare metal: hammer marks and wear make the shine uneven
+  vec3 q = vObj;
+  float n = cNoise(q.xy * 70.0 + q.z * 55.0), m = cNoise(q.yz * 23.0 + q.x * 17.0);
+  pRough += 0.16 * (n - 0.5) + 0.1 * (m - 0.5);
+  diffuseColor.rgb *= 0.9 + 0.14 * m;
 }
 `;
 
@@ -124,9 +135,11 @@ const FRAG_RIM = `
 {
   float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
   float rim = pow(1.0 - nv, 3.0);
-  totalEmissiveRadiance += diffuseColor.rgb * rim * 0.28 * vec3(0.85, 0.92, 1.0);
+  // (skin lets light through at its edges, warm, where cloth and steel catch a cool sky rim)
+  float flesh = step(6.5, vSurf.z) * step(vSurf.z, 7.5) + step(10.5, vSurf.z);
+  totalEmissiveRadiance += diffuseColor.rgb * rim * mix(vec3(0.17, 0.19, 0.21), vec3(0.42, 0.17, 0.1), flesh);
   totalEmissiveRadiance += vec3(1.0, 0.8, 0.55) * vFx.z * 0.9;
-  if (vSurf.z > 9.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
+  if (vSurf.z > 9.5 && vSurf.z < 10.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
 }
 `;
 

@@ -65,10 +65,12 @@ export function faceAtlas() {
         // eyes
         for (const s of [-1, 1]) {
           const ex = 0.5 + s * 0.18, ey = 0.555;
-          const eye = sdEll(u, v, ex, ey, 0.082 * f.eye, 0.036 * f.eye);
-          b = Math.max(b, cov(eye));
-          a = Math.max(a, cov(sdCircle(u, v, ex, ey, 0.03 * f.eye)) * cov(eye, 0.02));
-          a = Math.max(a, 0.6 * cov(Math.abs(sdEll(u, v, ex, ey + 0.012, 0.09 * f.eye, 0.04 * f.eye)) - 0.006) * (v > ey ? 1 : 0));   // lid line
+          // (an almond, mostly iris, under a heavy upper lid: small staring whites read as a cartoon)
+          const eye = Math.max(sdEll(u, v, ex, ey, 0.074 * f.eye, 0.03 * f.eye), sdEll(u, v, ex, ey - 0.05 * f.eye, 0.11 * f.eye, 0.068 * f.eye));
+          b = Math.max(b, 0.75 * cov(eye));
+          a = Math.max(a, 0.92 * cov(sdCircle(u, v, ex, ey - 0.004, 0.027 * f.eye)) * cov(eye, 0.02));
+          a = Math.max(a, 0.7 * cov(Math.abs(sdEll(u, v, ex, ey + 0.008, 0.082 * f.eye, 0.036 * f.eye)) - 0.008) * (v > ey ? 1 : 0));   // the upper lid
+          r -= 0.12 * cov(sdEll(u, v, ex, ey + 0.05, 0.1, 0.03), 0.04);   // the crease above it
           g = Math.max(g, 0.92 * cov(sdSeg(u, v, 0.5 + s * 0.07, f.by - 0.02 + f.tilt * 0.4, 0.5 + s * 0.27, f.by + f.tilt, f.brow * 0.5)));   // brows
         }
         // nostrils and mouth

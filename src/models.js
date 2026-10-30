@@ -21,7 +21,7 @@ const RAIDER_CLOTH = [0x4d3a28, 0x3e3a30, 0x5a2e22];
 export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, staff: -2.6, club: -0.9, mace: -1.0, bow: 0 };
 // Drill Sergeants: every level of training puts a soldier in better kit (see shapes.js for the gates). The man stands a little taller.
 export const TIER_SCALE = (tier) => 1 + 0.012 * tier;
-export const SADDLE_Y = 1.0;   // how far a rider's root is raised to sit in the saddle
+export const SADDLE_Y = 1.03;   // how far a rider's root is raised to sit in the saddle
 
 export function lookFor(seed) {
   const r = (n) => Math.floor(((Math.sin(seed * 12.9898 + n * 78.233) * 43758.5453) % 1 + 1) % 1 * 1000);
@@ -52,7 +52,7 @@ const HERO_DESC = {
   cleric: { ...BODY_PARTS.mail, head: 'head.nasal', shield: 'round', weapon: 'mace', scale: 1 },
   cavalier: { ...BODY_PARTS.plate, head: 'head.great', shield: 'kite', weapon: 'sword', scale: 1.05, plate: true, cape: 'cape.long' },
 };
-const PLUME_Y = { 'head.kettle': 0.3, 'head.nasal': 0.38, 'head.great': 0.34, 'head.crown': 0.28, 'head.horned': 0.3, 'head.hood': 0.3, 'head.none': 0.28 };
+const PLUME_Y = { 'head.kettle': 0.31, 'head.nasal': 0.33, 'head.great': 0.33, 'head.crown': 0.3, 'head.horned': 0.31, 'head.hood': 0.31, 'head.none': 0.3 };
 
 // ---------------------------------------------------------------- rigs
 const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
@@ -63,6 +63,11 @@ function tierBits(t) {
 const _col = new THREE.Color();
 function setColor(arr, i, hex) { _col.set(hex); arr[i] = _col.r; arr[i + 1] = _col.g; arr[i + 2] = _col.b; }
 
+// (a giant is not a man scaled up: he is broader and deeper for his height, or he looks a beanpole)
+function bodyScale(body, desc, tier) {
+  const s = desc.scale * (desc.giant ? 1 : TIER_SCALE(tier)), w = desc.giant ? 1.22 : 1;
+  body.scale.set(s * w, s, s * w);
+}
 // Build a posable soldier (the rig only: the crowd draws it). opts.hero: a hero class instead of a unit type's look.
 export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
   let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
@@ -71,14 +76,15 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const arm = raider && !desc.plate ? 'skin' : desc.arm;
   const root = new THREE.Group();
   const body = joint(root, 0, 0, 0);
-  body.scale.setScalar(desc.scale * (desc.giant ? 1 : TIER_SCALE(tier)));
-  const pelvis = joint(body, 0, 0.95, 0);
-  const hipL = joint(pelvis, 0.1, -0.03, 0), hipR = joint(pelvis, -0.1, -0.03, 0);
-  const kneeL = joint(hipL, 0, -0.46, 0), kneeR = joint(hipR, 0, -0.46, 0);
-  const torso = joint(pelvis, 0, 0.07, 0);
-  const head = joint(torso, 0, 0.48, 0);
-  const shL = joint(torso, 0.25, 0.41, 0), shR = joint(torso, -0.25, 0.41, 0);
-  const elL = joint(shL, 0, -0.3, 0), elR = joint(shR, 0, -0.3, 0);
+  bodyScale(body, desc, tier);
+  // (a man of 1.8 m: hip joints at 0.95, knees at 0.51, the waist at 1.07, shoulder joints at 1.43, elbows at 1.12, the neck at 1.5)
+  const pelvis = joint(body, 0, 0.97, 0);
+  const hipL = joint(pelvis, 0.09, -0.02, 0), hipR = joint(pelvis, -0.09, -0.02, 0);
+  const kneeL = joint(hipL, 0, -0.44, 0), kneeR = joint(hipR, 0, -0.44, 0);
+  const torso = joint(pelvis, 0, 0.1, 0);
+  const head = joint(torso, 0, 0.435, -0.012);
+  const shL = joint(torso, 0.195, 0.36, -0.01), shR = joint(torso, -0.195, 0.36, -0.01);
+  const elL = joint(shL, 0, -0.31, 0), elR = joint(shR, 0, -0.31, 0);
   const parts = [];
   const add = (node, name, on = true) => { const p = { node, shape: getShape(name), on }; parts.push(p); return p; };
   add(pelvis, desc.pelvis); add(torso, desc.chest); add(head, desc.head);
@@ -89,12 +95,12 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   let weapon = null, weaponPart = null, bowPart = null;
   const wk = desc.weapon && desc.weapon !== 'none' && desc.weapon !== 'bow' ? desc.weapon : null;
   if (wk) {
-    weapon = joint(elR, 0, -0.3, 0.02);
+    weapon = joint(elR, 0, -0.31, 0.004);   // (in the fist)
     weapon.rotation.x = WEAPON_TILT[wk] ?? -1;
     weaponPart = add(weapon, 'weapon.' + wk);
   }
   if (desc.bow) bowPart = add(elL, desc.bow, desc.weapon === 'bow');
-  if (desc.cape) add(joint(torso, 0, 0.43, -0.19), desc.cape);
+  if (desc.cape) add(joint(torso, 0, 0.42, -0.125), desc.cape);
   if (desc.quiver) add(torso, 'quiver');
   const kit = add(torso, 'kit.torso', false);
   const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
@@ -131,7 +137,7 @@ export function rigSetTier(m, tier) {
   m.kit.on = tier > 0;
   for (const p of m.kitArms) p.on = tier > 0;
   if (m.kitShield) m.kitShield.on = tier >= 3;
-  m.body.scale.setScalar(m.desc.scale * (m.desc.giant ? 1 : TIER_SCALE(tier)));
+  bodyScale(m.body, m.desc, tier);
 }
 // veterans wear a plume: team colour from rank 3, gold at rank 5
 export function rigSetRank(m, rank) {
@@ -220,7 +226,7 @@ const END = {
   thrust: [-1.55, 0, 0, 0.15, -0.45],
 };
 // How deep a crouch goes (hips back, thighs forward, knees folded, body lowered and leaning in), at full crouch.
-const CROUCH = { hip: -1.45, knee: 2.0, drop: 0.5, back: 0.3, lean: 0.4, hipFwd: 0.25 };
+const CROUCH = { hip: -1.45, knee: 2.0, drop: 0.47, back: 0.3, lean: 0.5, hipFwd: 0.25 };
 
 // Pose a soldier for this frame.
 // st: { phase, speed, moving, swingT, attackDir, stagger, hurt, mounted, blocking, crouch (0..1), climb, time, idle, look (head turn, rad) }
@@ -235,9 +241,9 @@ export function poseSoldier(m, st) {
   const P = m.pelvis, T = m.torso, H = m.head;
   let bodyY, tx, ty, tz;
   if (mounted) {
-    // seated: thighs forward and splayed, shins hanging, swaying with the horse
-    m.hipL.rotation.set(-1.25, 0, 0.35); m.hipR.rotation.set(-1.25, 0, -0.35);
-    m.kneeL.rotation.set(1.35, 0, 0); m.kneeR.rotation.set(1.35, 0, 0);
+    // astride: the thighs angle down along the horse's flanks, the knees bend so the feet hang by the stirrups
+    m.hipL.rotation.set(-0.32, 0, 0.66); m.hipR.rotation.set(-0.32, 0, -0.66);
+    m.kneeL.rotation.set(0.75, 0, 0); m.kneeR.rotation.set(0.75, 0, 0);
     bodyY = st.moving ? Math.abs(Math.sin(ph)) * 0.06 : 0;
     P.rotation.set(0.04, 0, 0); P.position.x = 0;
     tx = st.moving ? 0.1 + Math.min(0.15, sp * 0.012) : 0.04 + 0.01 * breath; ty = 0; tz = 0;
@@ -268,11 +274,17 @@ export function poseSoldier(m, st) {
   const swing = walking ? s1 * Math.min(0.55, sp * 0.1 + 0.05) : 0;
   // shield arm: the shield up in front (the bow arm relaxed)
   let lx, ly = 0, lz, le;
-  if (m.ranged) { lx = -0.25 - swing * 0.4; lz = -0.1; le = -0.35; }
-  else if (st.blocking) { lx = -1.25; ly = -0.3; lz = -0.2; le = -0.6; }
-  else { lx = -0.45 - swing * 0.3; lz = -0.12; le = -0.75 - 0.4 * run; }
+  // (an arm hangs a little away from the trunk, so the elbow clears the ribs: +z turns the shield arm out, -z the weapon arm.)
+  // A shield is strapped to the outside of the forearm: carried, the forearm slants across the belly with the face of the shield
+  // forward and a little out; in a guard the forearm is level across the body at the lower chest, the shield upright in front of it.
+  if (m.ranged) { lx = -0.25 - swing * 0.4; lz = 0.1; le = -0.35; }
+  else if (m.desc.shield) {
+    if (st.blocking) { lx = -1.0; ly = -1.19; lz = -0.71; le = -1.42; }
+    else { lx = -0.59 - swing * 0.25; ly = -1.04; lz = -0.22; le = -0.63 - 0.25 * run; }
+  } else if (st.blocking) { lx = -1.25; ly = -0.3; lz = -0.2; le = -0.6; }
+  else { lx = -0.45 - swing * 0.3; lz = 0.08; le = -0.75 - 0.4 * run; }
   // weapon arm: ready
-  let sh = m.ranged ? -0.15 + swing * 0.5 : -0.3 + swing * 0.4, el = (m.ranged ? -0.3 : -0.55) - 0.45 * run, rz = 0;
+  let sh = m.ranged ? -0.15 + swing * 0.5 : -0.3 + swing * 0.4, el = (m.ranged ? -0.3 : -0.55) - 0.45 * run, rz = -0.1;
   let twist = 0, tiltOff = 0, att = 0;
   if (m.lance && mounted) { sh = -0.5; el = -0.8; }
   const t = st.swingT;
@@ -287,7 +299,7 @@ export function poseSoldier(m, st) {
     } else {
       // directional swing: idle -> wind-up -> strike -> back to idle
       const W = WIND[st.attackDir] || WIND.over, E = END[st.attackDir] || END.over;
-      const idleK = [sh, el, 0, 0, 0];
+      const idleK = [sh, el, rz, 0, 0];
       let from, to, k;
       if (t < 0.25) { from = idleK; to = W; k = ease(t / 0.25); }
       else if (t < 0.4) { from = W; to = E; k = ease((t - 0.25) / 0.15); }
@@ -336,6 +348,7 @@ export function poseSoldier(m, st) {
 }
 
 // A death: `t` seconds in. kind 0 falls backwards, 1 drops to the knees and pitches forward, 2 crumples to one side (side is +-1).
+// (the body turns about the feet, so it is lifted by about half its depth to lie on the ground, not in it)
 export function poseDeath(m, t, kind, side = 1) {
   const e1 = ease(clamp01(t / 0.3)), e2 = ease(clamp01((t - 0.18) / 0.6)), rest = ease(clamp01((t - 0.7) / 0.6));
   const J = (j, x, y, z) => j.rotation.set(x, y, z);
@@ -345,21 +358,21 @@ export function poseDeath(m, t, kind, side = 1) {
   m.body.rotation.set(0, 0, 0);
   m.body.position.set(0, 0, 0);
   if (kind === 0) {
-    m.body.rotation.x = -A * e2; m.body.position.set(0, 0.05 * e2, 0.55 * e2);
+    m.body.rotation.x = -A * e2; m.body.position.set(0, 0.1 * e2, 0.55 * e2);
     J(m.hipL, -0.5 * e1 + 0.5 * e2, 0, 0.15 * e2); J(m.hipR, -0.3 * e1 + 0.15 * e2, 0, -0.2 * e2);
     J(m.kneeL, 1.1 * e1 - 0.7 * e2, 0, 0); J(m.kneeR, 0.8 * e1 - 0.4 * e2, 0, 0);
     J(m.torso, -0.4 * e1 + 0.2 * e2, 0, 0.1 * e2); J(m.head, -0.5 * e1 + 0.65 * e2, 0.2 * e2, 0);
     J(m.shL, -1.5 * e1 + 1.2 * e2, 0, -0.6 * e2); J(m.elL, -0.3 * e1, 0, 0);
     J(m.shR, -1.2 * e1 + 1.0 * e2, 0, 0.8 * e2); J(m.elR, -0.5 * e1 + 0.2 * rest, 0, 0);
   } else if (kind === 1) {
-    m.body.rotation.x = A * e2; m.body.position.set(0, -0.42 * e1 * (1 - e2) + 0.02 * e2, -0.45 * e2);
+    m.body.rotation.x = A * e2; m.body.position.set(0, -0.4 * e1 * (1 - e2) + 0.13 * e2, -0.45 * e2);
     J(m.hipL, -1.3 * e1 * (1 - e2) - 0.25 * e2, 0, 0.1 * e2); J(m.hipR, -1.2 * e1 * (1 - e2) - 0.1 * e2, 0, -0.12 * e2);
     J(m.kneeL, 2.1 * e1 * (1 - e2) + 0.35 * e2, 0, 0); J(m.kneeR, 2.0 * e1 * (1 - e2) + 0.2 * e2, 0, 0);
     J(m.torso, 0.5 * e1 - 0.3 * e2, 0, 0); J(m.head, -0.2 * e1 + 0.5 * e2, 0.4 * e2, 0);
     J(m.shL, -0.3 * e1 - 1.4 * e2, 0, -0.5 * e2); J(m.elL, -0.4 * e1, 0, 0);
     J(m.shR, -0.2 * e1 - 1.6 * e2, 0, 0.5 * e2); J(m.elR, -0.4 * e1, 0, 0);
   } else {
-    m.body.rotation.z = side * A * e2; m.body.position.set(0.55 * side * e2, 0.04 * e2, 0);
+    m.body.rotation.z = side * A * e2; m.body.position.set(0.55 * side * e2, 0.15 * e2, 0);
     J(m.hipL, -0.8 * e1 + 0.3 * e2, 0, 0.1); J(m.hipR, -0.4 * e1 - 0.3 * e2, 0, -0.1);
     J(m.kneeL, 1.3 * e1 - 0.4 * e2, 0, 0); J(m.kneeR, 0.9 * e1 + 0.3 * e2, 0, 0);
     J(m.torso, 0.3 * e1, 0, -0.3 * side * e2); J(m.head, 0.3 * e1, 0.3 * side * e2, 0.2 * side * e2);
@@ -421,8 +434,8 @@ function bakeRig(m, level, resolve, keepPose) {
   const list = [];
   for (const p of m.parts) {
     if (!p.on) continue;
-    // (far away the small things do not show: hands, tier kit, plumes, the quiver)
-    if (level === 3 && /^(fore|kit|plume|quiver)/.test(p.shape.name)) continue;
+    // (far away the small things do not show: tier kit, plumes, the quiver; the forearms stay, in their plainest form, to hold the weapon)
+    if (level === 3 && /^(kit|plume|quiver)/.test(p.shape.name)) continue;
     _rel.multiplyMatrices(_inv, p.node.matrixWorld);
     list.push(bakePart(shapeGeo(p.shape, level), _rel.clone(), bits, resolve ? m.inst : null));
   }

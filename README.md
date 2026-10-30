@@ -905,8 +905,8 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
-| `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs), their poses, and the catalogue of parts they wear (helmets, armour, weapons, shields, heraldry) built from primitives with baked shading |
-| `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share and its face and emblem atlases |
+| `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, three deaths), and the catalogue of parts they wear (a body of lofted rings that swells at the muscles and tapers at the joints, a skull with a face, helmets fitted to it, armour, weapons, shields, heraldry) built from primitives with baked shading |
+| `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn steel) and its face and emblem atlases |
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs |
