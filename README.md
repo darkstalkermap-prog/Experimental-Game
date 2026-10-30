@@ -526,7 +526,8 @@ All three rules are decided by the host and apply to the AI lords exactly as to 
   Online a guest's L is sent to the host. There is none in Hero Game Mode (no gold, and a fallen keep ends the mode).
 
 The log (`matchlog`, see its header) records `decrees` and `comeback` events (`underdog`, `gate`, `last_stand`, `stand_held`),
-and the end screen adds a "Comeback" ribbon when they did something for your house.
+and the end screen adds a "Comeback" ribbon when they did something for your house. Online, the host tells each guest its house's
+part with the end message (`packComeback` / `absorbComeback`), so a guest's ribbon matches what happened to it.
 
 ## Rival lords
 
@@ -566,7 +567,8 @@ his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees
 
 ## Castles, seats and colours
 
-**Castles (the lobby).** The room's list has a line per castle (1 to 4). A free castle is **open**: anybody may press **Take**
+**Castles (the lobby).** The room's list (right under the invite link, with *Your colour* at the top of the other column, so both
+stay on screen on a short window) has a line per castle (1 to 4). A free castle is **open**: anybody may press **Take**
 to move there, and when nobody does an AI lord holds it. Each line tags a free castle *open seat* or *closed*. The host can close a free castle with the **Seat:** button on its line, which
 cycles **Open → AI → Empty**: *AI* keeps people out and gives it to an AI lord, *Empty* leaves the castle standing with nobody
 in it (no lord, no soldiers, no waves; nobody marches on it; it counts as out of the war from the start). A war needs two
@@ -734,7 +736,8 @@ whose colour and near distance carry the haze tint and the murk (see `atmosphere
 `archerRange`, `staminaDrain`, `staminaRegen`, each its own source `biome:<id>`, see `src/mods.js` and `src/biometwist.js`), so they multiply with the decrees' keys
 wherever both apply: Swift March (+20%) in the snow is +20% along the roads and +5.6% across open ground. `src/landui.js` has the menu row and the end-screen
 section; `src/weather.js` the flakes, the
-mist banks and the dust (written into the smoke layer of the effects: no extra draw call); `src/biomedust.js` the snow on the castles.
+mist banks and the dust (written into the smoke layer of the effects: no extra draw call; 1024 slots at the top of that layer are kept
+for the weather, so a big fight cannot wipe the snow out of the air); `src/biomedust.js` the snow on the castles.
 
 ## Renown, unlocks and records
 
