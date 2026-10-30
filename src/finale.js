@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { allied } from './teams.js';
 import { settings } from './settings.js';
+import { WORLD } from './config.js';
 import { pickHighlight, highlights } from './highlights.js';
 import './horn.js';
 
@@ -29,22 +30,22 @@ const CSS = `
 #gameover.finale-wait { opacity: 0; pointer-events: none; }
 #gameover.finale-fade { transition: opacity 0.7s ease; }
 #finale { position: fixed; inset: 0; z-index: 19; pointer-events: none; overflow: hidden; font-family: 'EB Garamond', Georgia, serif; }
-#finale .bar { position: absolute; left: 0; right: 0; height: 12vh; background: #000; transition: transform 0.7s cubic-bezier(.2,.7,.2,1); }
-#finale .bar.top { top: 0; transform: translateY(-100%); }
-#finale .bar.bottom { bottom: 0; transform: translateY(100%); }
-#finale.on .bar { transform: none; }
-#finale .card { position: absolute; left: 0; right: 0; top: 60%; text-align: center; opacity: 0; transform: translateY(14px) scale(1.04); transition: opacity 0.7s ease, transform 0.9s ease; padding: 16px 16px 22px;
+#finale .fin-bar { position: absolute; left: 0; right: 0; height: 12vh; background: #000; transition: transform 0.7s cubic-bezier(.2,.7,.2,1); }
+#finale .fin-bar.fin-top { top: 0; transform: translateY(-100%); }
+#finale .fin-bar.fin-bottom { bottom: 0; transform: translateY(100%); }
+#finale.on .fin-bar { transform: none; }
+#finale .fin-card { position: absolute; left: 0; right: 0; top: 60%; text-align: center; opacity: 0; transform: translateY(14px) scale(1.04); transition: opacity 0.7s ease, transform 0.9s ease; padding: 16px 16px 22px;
   background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0,0,0,0.55), rgba(0,0,0,0)); }
-#finale.said .card { opacity: 1; transform: none; }
-#finale.leave .card { opacity: 0; transition: opacity 0.5s ease; }
-#finale .card h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; font-weight: 900; font-size: clamp(38px, 8vw, 92px); letter-spacing: 0.14em; color: #f0c860;
+#finale.said .fin-card { opacity: 1; transform: none; }
+#finale.leave .fin-card { opacity: 0; transition: opacity 0.5s ease; }
+#finale .fin-card h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; font-weight: 900; font-size: clamp(38px, 8vw, 92px); letter-spacing: 0.14em; color: #f0c860;
   text-shadow: 0 0 22px rgba(255,200,90,0.55), 0 4px 14px #000; }
-#finale.lost .card h2 { color: #cfc0a8; text-shadow: 0 0 22px rgba(150,30,20,0.6), 0 4px 14px #000; }
-#finale .card p { margin: 6px auto 0; max-width: 900px; font-style: italic; font-size: clamp(18px, 2.6vw, 30px); line-height: 1.25; color: #f8ecd0; text-shadow: 0 2px 8px #000, 0 0 3px #000, 0 0 14px rgba(0,0,0,0.9); }
-#finale .skip { position: absolute; right: 18px; bottom: calc(12vh + 10px); font-family: 'Cinzel', Georgia, serif; font-size: 12px; letter-spacing: 0.12em; color: #e9dcbc;
+#finale.lost .fin-card h2 { color: #cfc0a8; text-shadow: 0 0 22px rgba(150,30,20,0.6), 0 4px 14px #000; }
+#finale .fin-card p { margin: 6px auto 0; max-width: 900px; font-style: italic; font-size: clamp(18px, 2.6vw, 30px); line-height: 1.25; color: #f8ecd0; text-shadow: 0 2px 8px #000, 0 0 3px #000, 0 0 14px rgba(0,0,0,0.9); }
+#finale .fin-skip { position: absolute; right: 18px; bottom: calc(12vh + 10px); font-family: 'Cinzel', Georgia, serif; font-size: 12px; letter-spacing: 0.12em; color: #e9dcbc;
   opacity: 0; transition: opacity 0.6s ease; text-shadow: 0 1px 4px #000; }
-#finale.on .skip { opacity: 0.55; transition-delay: 0.8s; }
-@media (prefers-reduced-motion: reduce) { #finale .bar, #finale .card { transition: none; } }`;
+#finale.on .fin-skip { opacity: 0.55; transition-delay: 0.8s; }
+@media (prefers-reduced-motion: reduce) { #finale .fin-bar, #finale .fin-card { transition: none; } }`;
 
 function injectStyle() {
   if (typeof document === 'undefined' || document.getElementById('finale-style')) return;
@@ -188,22 +189,33 @@ export class Finale {
 
   // where the camera starts and how it moves: from the side the player was on (or the gate side when the player was in the castle)
   aim(c) {
-    const g = this.g, p = g.player;
-    this.K.copy(c.toWorld(0, KEEP_Z, 0));
-    let dx = p.pos.x - this.K.x, dz = p.pos.z - this.K.z;
-    if (Math.hypot(dx, dz) < 38) { dx = Math.sin(c.rot); dz = Math.cos(c.rot); }
-    this.sweep = (Math.sin(c.team * 2.3 + this.K.x * 0.013) > 0 ? 1 : -1) * 0.25;
-    // not in line with a corner tower, where the shot would end up beside the tower that is coming down: turn it to the nearest side that is clear
-    const az = Math.atan2(dx, dz), clear = (a) => TOWER_AZ.every((t) => Math.abs(Math.atan2(Math.sin(a - t - c.rot), Math.cos(a - t - c.rot))) > 0.42);   // (a castle's own angles turned by how it stands)
-    this.az0 = az;
-    for (const off of [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42, 0.56, -0.56]) {
-      if (clear(az + off) && clear(az + off + this.sweep)) { this.az0 = az + off; break; }
-    }
+    const g = this.g, p = g.player, K = this.K;
+    K.copy(c.toWorld(0, KEEP_Z, 0));
     // The shot starts far and high (the whole castle) and pushes in over the wall to a spot 47 m from the keep, clear of the towers whichever side it is
     // on (their outer corners are 43 m from it), just above the front wall: the keep is the subject, the towers frame it.
     const falling = !!(c.collapse && !c.collapse.done);   // (a keep that is coming down is framed from a little further: there is more to see)
     this.d0 = falling ? 78 : 66; this.d1 = 47;
     this.h0 = falling ? 42 : 34; this.h1 = falling ? 18 : 17;
+    this.sweep = (Math.sin(c.team * 2.3 + K.x * 0.013) > 0 ? 1 : -1) * 0.25;
+    // The way in is from the side the player was on. Not in line with a corner tower (the shot would end up beside the tower that is coming down),
+    // and never from a spot off the land (a castle by the edge of a small map has the edge behind it): else the nearest side that is fine, then the
+    // castle's own front, then the middle of the map.
+    const lim = WORLD.half - 22;
+    const clear = (a) => TOWER_AZ.every((t) => Math.abs(Math.atan2(Math.sin(a - t - c.rot), Math.cos(a - t - c.rot))) > 0.42);   // (a castle's own angles turned by how it stands)
+    const over = (a) => [0, 0.5, 1].every((e) => {
+      const d = lerp(this.d0, this.d1, e), az = a + this.sweep * e;
+      return Math.abs(K.x + Math.sin(az) * d) <= lim && Math.abs(K.z + Math.cos(az) * d) <= lim;
+    });
+    let dx = p.pos.x - K.x, dz = p.pos.z - K.z;
+    if (Math.hypot(dx, dz) < 38) { dx = Math.sin(c.rot); dz = Math.cos(c.rot); }
+    const sides = [Math.atan2(dx, dz), c.rot, Math.atan2(-K.x, -K.z)];
+    this.az0 = sides[2];
+    find: for (const side of sides) {
+      for (const off of [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42, 0.56, -0.56]) {
+        const a = side + off;
+        if (clear(a) && clear(a + this.sweep) && over(a)) { this.az0 = a; break find; }
+      }
+    }
   }
 
   // ---------------------------------------------------------------- the overlay
@@ -213,15 +225,15 @@ export class Finale {
     const el = document.createElement('div');
     el.id = 'finale';
     if (!won) el.classList.add('lost');
-    const bt = document.createElement('div'); bt.className = 'bar top';
-    const bb = document.createElement('div'); bb.className = 'bar bottom';
-    const card = document.createElement('div'); card.className = 'card';
+    const bt = document.createElement('div'); bt.className = 'fin-bar fin-top';
+    const bb = document.createElement('div'); bb.className = 'fin-bar fin-bottom';
+    const card = document.createElement('div'); card.className = 'fin-card';
     const h = document.createElement('h2');
     h.textContent = won ? 'Victory' : 'Defeat';
     const p = document.createElement('p');
     p.textContent = this.highlight && this.highlight.text ? this.highlight.text : '';
     card.append(h, p);
-    const skip = document.createElement('div'); skip.className = 'skip'; skip.textContent = 'Press any key to skip';
+    const skip = document.createElement('div'); skip.className = 'fin-skip'; skip.textContent = 'Press any key to skip';
     el.append(bt, bb, card, skip);
     document.body.append(el);
     this.el = el;
@@ -289,7 +301,7 @@ export class Finale {
     if (this.t < this.cutAt) return;                 // (the first beat is the hero's own view, in slow motion)
     if (!this.cut) { this.cut = true; this.flashCut(); }
     const e = ss((this.t - this.cutAt) / (this.dur - this.cutAt));
-    const drift = this.orbit ? (this.t - this.dur) * 0.035 : 0;
+    const drift = this.orbit ? Math.sign(this.sweep) * clamp((this.t - this.dur) * 0.035, 0, 0.14) : 0;   // (the sweep goes on a little behind the end screen, then holds: the way in was checked for the towers and the edge only this far)
     const az = this.az0 + this.sweep * e + drift;
     const d = lerp(this.d0, this.d1, e), h = lerp(this.h0, this.h1, e);
     cam.position.set(K.x + Math.sin(az) * d, K.y + h, K.z + Math.cos(az) * d);
