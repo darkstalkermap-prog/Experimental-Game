@@ -67,14 +67,9 @@ const END = {
   thrust: { x: -0.11, y: 0.05, z: -0.3, rx: -0.5, ry: 0.1, rz: 0.3 },
 };
 const HAND_SCALE = 1.1;   // hands read better a little large when seen this close
-const ORDER_BEHIND = 998, ORDER_SHIELD = 999, ORDER_KIT = 1000;   // drawn after the world: the arm behind the shield, the shield, the rest
+const ORDER_KIT = 1000;   // drawn after the world
 const SHIELD_REST = { x: -0.37, y: -0.3, z: -0.58, rx: -0.18, ry: 0.62, rz: 0.12 };
-const GUARD = {
-  left: { x: -0.24, y: -0.12, z: -0.5, rx: -0.1, ry: 0.55, rz: 0.2 },
-  right: { x: 0.0, y: -0.14, z: -0.5, rx: -0.1, ry: 0.0, rz: -0.1 },
-  over: { x: -0.12, y: 0.0, z: -0.52, rx: -0.55, ry: 0.15, rz: 0.05 },
-  thrust: { x: -0.1, y: -0.24, z: -0.5, rx: 0.05, ry: 0.15, rz: 0.05 },
-};
+const GUARD = { x: -0.2, y: -0.24, z: -0.52, rx: -0.05, ry: 0.3, rz: 0.06 };   // the shield brought across the front
 const BOW_REST = { x: -0.17, y: -0.09, z: -0.62, rx: 0.0, ry: 0.0, rz: 0.12 };
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
@@ -213,16 +208,13 @@ export class ViewModel {
     const detail = Q.detail, cls = p.classId, team = p.team;
     const st = armStyle(cls, team);
     const R = this.R = {}, L = this.L = {};
-    // The shield is held with its painted face toward the viewer, so the arm behind it must not show in front of the face: the left arm
-    // (and the hand on the strap) is drawn first and writes no depth, then the shield is drawn over it.
-    const armLMat = kitMaterial({ depthWrite: false }), handLMat = kitMaterial({ depthWrite: false });
-    this.disposables.push(armLMat, handLMat);
+    // The shield is held the way a real one is: its painted face and boss out toward the enemy, its wooden back, the straps and the
+    // fist on the grip toward the holder. The left arm runs in front of that back, so it is drawn like the other arm.
     const arm = armGeometry(st, detail);
     this.disposables.push(arm.fore, arm.upper);
     for (const side of [R, L]) {
-      side.fore = this.mk(arm.fore, side === L ? armLMat : this.kitMat, false);
-      side.upper = this.mk(arm.upper, side === L ? armLMat : this.kitMat, false);
-      side.fore.renderOrder = side.upper.renderOrder = side === L ? ORDER_BEHIND : ORDER_KIT;
+      side.fore = this.mk(arm.fore, this.kitMat, false);
+      side.upper = this.mk(arm.upper, this.kitMat, false);
       this.root.add(side.fore, side.upper);
     }
     // the weapon hand and the weapon: the grip frame
@@ -259,12 +251,12 @@ export class ViewModel {
     this.disposables.push(shMat);
     L.grp = new THREE.Group();
     L.shield = this.mk(sh.geo, shMat);
-    L.shield.renderOrder = ORDER_SHIELD;
-    L.hand = this.mk(hl.geo, handLMat, false);
-    L.hand.renderOrder = ORDER_BEHIND;
+    L.shield.rotation.y = Math.PI;   // (built face +z: turned so the face looks away from the holder and the strap is on his side)
+    L.shield.updateMatrix();
+    L.hand = this.mk(hl.geo, this.handMat, false);
     L.hand.scale.setScalar(HAND_SCALE);
     L.hand.rotation.z = -Math.PI / 2;
-    L.hand.position.set(0, p.lv.shield ? sh.shape.h * 0.14 : 0, -0.052);
+    L.hand.position.set(0, p.lv.shield ? sh.shape.h * 0.14 : 0, 0.052);
     L.hand.updateMatrix();
     L.wrist = hl.wrist.clone().applyMatrix4(L.hand.matrix);
     L.grp.add(L.shield, L.hand);
@@ -446,7 +438,6 @@ export class ViewModel {
         else { from = E; to = ZERO; k = easeInOut(Math.min(1, atk.t / 0.2)); }
         ax = from.x + (to.x - from.x) * k; ay = from.y + (to.y - from.y) * k; az = from.z + (to.z - from.z) * k;
         arx = from.rx + (to.rx - from.rx) * k; ary = from.ry + (to.ry - from.ry) * k; arz = from.rz + (to.rz - from.rz) * k;
-        if (atk.phase === 'wind' && atk.t > 0.3) ax += Math.sin(t * 90) * 0.0025;   // straining a full wind-up
         trailing = atk.phase === 'strike' || (atk.phase === 'recover' && atk.t < 0.12);
         if (this.lanceAmt > 0.5) {   // a lance is driven, not swung: a short jab whichever way the blow goes
           const jab = atk.phase === 'wind' ? 0.1 * k : atk.phase === 'strike' ? 0.1 - 0.34 * k : -0.24 * (1 - k);
@@ -488,8 +479,8 @@ export class ViewModel {
       if (R.flask.visible) { R.liquid.scale.y = lerp(1, 0.25, clamp((this.drinkT - 0.3) / 0.35, 0, 1)); R.liquid.position.y = -0.0; }
       R.hand.morphTargetInfluences[0] = climbW > 0.3 ? 0.45 : 1;
       R.hand.morphTargetInfluences[1] = 0;
-      // the shield: rest pose, or the guard in the direction held, with a little spring
-      const sp = this.shieldPose, target = p.blocking ? GUARD[p.blockDir] : SHIELD_REST, kk = Math.min(1, dt * 15);
+      // the shield: rest pose, or raised across the front on guard, with a little spring
+      const sp = this.shieldPose, target = p.blocking ? GUARD : SHIELD_REST, kk = Math.min(1, dt * 15);
       sp.x += (target.x - sp.x) * kk; sp.y += (target.y - sp.y) * kk; sp.z += (target.z - sp.z) * kk;
       sp.rx += (target.rx - sp.rx) * kk; sp.ry += (target.ry - sp.ry) * kk; sp.rz += (target.rz - sp.rz) * kk;
       let bashZ = 0;

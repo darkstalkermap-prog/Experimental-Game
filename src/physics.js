@@ -24,6 +24,33 @@ export function layoutCastles() {
 }
 layoutCastles();
 
+// Over the battlements: the middle of the gap between two standing merlons nearest `t` along a wall face (merlons are
+// 1.1 m wide with 0.9 m gaps, room for a hero), or `t` itself where the face has no merlons (the inner face, or a wall
+// that has lost them). null: merlons stand along it but none of the gaps is wide enough.
+const SPANS = [];   // (scratch: the merlons along one face, as [start, end] pairs along it)
+function crenel(list, alongX, face, t, radius) {
+  let n = 0;
+  for (const m of list) {
+    if (!m.active) continue;
+    const across = alongX ? (m.minZ + m.maxZ) / 2 : (m.minX + m.maxX) / 2;
+    if (Math.abs(across - face) > 1) continue;   // (the merlons stand on the other side of the wall top)
+    SPANS[n++] = alongX ? m.minX : m.minZ;
+    SPANS[n++] = alongX ? m.maxX : m.maxZ;
+  }
+  if (!n) return t;
+  let best = null, bd = Infinity;
+  for (let i = 0; i < n; i += 2) {
+    // the gap after merlon i: up to the nearest merlon that starts beyond its end
+    let next = Infinity;
+    for (let j = 0; j < n; j += 2) if (SPANS[j] > SPANS[i + 1] - 1e-6 && SPANS[j] < next) next = SPANS[j];
+    const gap = next - SPANS[i + 1];
+    if (gap < radius * 2 + 0.04 || gap > 3) continue;
+    const mid = (SPANS[i + 1] + next) / 2;
+    if (Math.abs(mid - t) < bd) { bd = Math.abs(mid - t); best = mid; }
+  }
+  return best;
+}
+
 // Every collider is one of these, whoever made it: the scanning loops (resolve, groundHeight, pointHit, lineClear) then see a single
 // object shape. With the literals the modules pass in (a dozen different key sets) those loops were megamorphic, and every read of a
 // number field allocated. Modules keep using the object that add() returns (walls flip `active`, upgrades move the bounds).
@@ -208,10 +235,12 @@ export class Physics {
     return STEER;   // (shared: every caller reads x and z straight away)
   }
 
-  // Does this collider let someone of `team` through? A gate lets its own side (and their allies) pass, but only
-  // while it stands open: shut, it is solid for everybody.
+  // Does this collider let someone of `team` through? A gate that stands open is an open gateway for anyone, friend or
+  // foe (it swings open for its own side; an enemy who reaches it before it shuts walks in); shut or barred, it is solid
+  // for everybody.
   lets(c, team) {
-    return c.passTeam >= 0 && allied(c.passTeam, team) && (c.kind !== 'gate' || c.ref.openAmt >= GATE_OPEN);
+    if (c.kind === 'gate') return c.passTeam >= 0 && c.ref.openAmt >= GATE_OPEN;
+    return c.passTeam >= 0 && allied(c.passTeam, team);
   }
 
   // Push a circle out of blocking colliders. Returns true if anything was hit.
@@ -280,9 +309,10 @@ export class Physics {
   // A wall (or the edge of the wall walk) right in front of someone standing at (x,z) that they can scramble up, with
   // the spot to hang on at the foot of it and the spot to climb out onto the top. Walls are far higher than a jump,
   // so this is how a hero gets up without the stairs: from outside, up the face of a curtain wall, or from the
-  // courtyard, up onto the edge of the wall walk. Only the climber's own castle can be climbed (team; pass null to see
-  // any castle's, to tell someone why not). Returns null when there is nothing to climb: nothing within reach, not
-  // facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
+  // courtyard, up onto the edge of the wall walk. `team` limits it to one castle's walls (null: any castle; the caller
+  // decides what an enemy's wall costs, see Player.tryClimb). From outside the hero goes over the battlements through a
+  // crenel (the gap between two merlons), never through the stone. Returns null when there is nothing to climb: nothing
+  // within reach, not facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
   ledge(x, z, footY, radius, fx, fz, height = 1.8, team = -99) {
     if (this.covered(x, z, footY, height)) return null;
     let best = null, bd = Infinity;
@@ -309,7 +339,11 @@ export class Physics {
     const alongX = nz !== 0;
     const face = nx > 0 ? c.maxX : nx < 0 ? c.minX : nz > 0 ? c.maxZ : c.minZ;
     const lo = alongX ? c.minX : c.minZ, hi = alongX ? c.maxX : c.maxZ;
-    const t = clamp(alongX ? x : z, lo + Math.min(0.7, (hi - lo) / 2), hi - Math.min(0.7, (hi - lo) / 2));
+    let t = clamp(alongX ? x : z, lo + Math.min(0.7, (hi - lo) / 2), hi - Math.min(0.7, (hi - lo) / 2));
+    if (c.ref && c.ref.merlons) {
+      t = crenel(c.ref.merlons, alongX, face, t, radius);
+      if (t === null) return null;
+    }
     const at = (off) => (alongX ? { x: t, z: face + nz * off } : { x: face + nx * off, z: t });
     // somewhere to stand on top: a little way in from the face, clear of the battlement rail and anything else
     const probe = { x: 0, z: 0 };

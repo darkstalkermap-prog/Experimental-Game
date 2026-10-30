@@ -25,13 +25,13 @@ export function setBiomeLook(def) {
 }
 
 // the four roads from the castle gates to the middle (the ring road round the middle is built into the shader)
-export function setRoads(roads) {
+export function setRoads(roads, none = false) {   // (none: War Mode's bowl has no roads, not even the ring)
   let ext = 34;
   for (let i = 0; i < 4; i++) {
     const r = roads[i];
     if (r) { U.uRoads.value[i].set(r.ax, r.az, r.bx, r.bz); ext = Math.max(ext, Math.abs(r.ax), Math.abs(r.az), Math.abs(r.bx), Math.abs(r.bz)); } else U.uRoads.value[i].set(0, 0, 0, 1);
   }
-  U.uRoadExt.value = ext + 9;   // (a road's edge, its wobble and the wet verge reach about 8 m from the line)
+  U.uRoadExt.value = none ? -1 : ext + 9;   // (a road's edge, its wobble and the wet verge reach about 8 m from the line)
 }
 
 const VERT_DECL = `attribute vec3 aBase; attribute vec4 aMask; attribute vec2 aAlt;

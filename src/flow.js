@@ -24,7 +24,7 @@ export const flow = {
 
 // ---------------------------------------------------------------- what the last match was set up with
 const LAST_KEY = 'cw-last';
-const MODES = ['conquest', 'koth', 'hero'];
+const MODES = ['conquest', 'koth', 'hero', 'war'];
 export function loadLast() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(LAST_KEY)); } catch (e) { /* storage unavailable or garbage */ }
@@ -39,9 +39,9 @@ export function saveLast(diff, mode) {
 export function setupLine({ cls, mode, heroWin, map, diff, length }) {
   const hero = mode === 'hero';
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const parts = [CLASSES[cls] ? CLASSES[cls].name : 'Knight', hero ? `Hero Mode: ${HERO.modes[heroWin] ? HERO.modes[heroWin].name : 'Hero kills'}` : (OBJECTIVES[mode] || OBJECTIVES.conquest).name,
+  const parts = [CLASSES[cls] ? CLASSES[cls].name : 'Knight', hero ? `Hero Mode: ${HERO.modes[heroWin] ? HERO.modes[heroWin].name : 'Hero kills'}` : mode === 'war' ? 'War Mode' : (OBJECTIVES[mode] || OBJECTIVES.conquest).name,
     (MAP_SIZES[map] || MAP_SIZES.medium).name, cap(diff)];
-  if (!hero && length === 'short') parts.push('Short');
+  if (!hero && mode !== 'war' && length === 'short') parts.push('Short');
   return parts.join(' · ');
 }
 
@@ -104,6 +104,12 @@ export function offerFor(g) {
   if (g.state !== 'playing' || g.practice || g.hero || !g.factions.length) return null;
   const me = g.localFaction;
   if (!me) return null;
+  if (g.war) {   // War Mode: a lord whose army is gone may leave the battle to the others (warmode.js)
+    if (!me.eliminated) return null;
+    if (g.mode === 'client') return { kind: 'leave', text: 'Your army has fallen.', label: 'Leave · Next battle', ask: 'Leave this battle? It goes on without you and you can start the next one.', yes: 'Leave' };
+    if (g.mode === 'host' && g.humans.some((h) => h !== g.player && !h.isBot)) return null;
+    return { kind: 'concede', text: 'Your army has fallen.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
+  }
   if (g.mode === 'client') {
     if (me.eliminated || (me.castle.fallen && !g.player.alive)) return { kind: 'leave', text: 'You are out of the battle.', label: 'Leave · Next battle', ask: 'Leave this battle? The war goes on without you and you can start the next one.', yes: 'Leave' };
     return null;
@@ -344,10 +350,10 @@ style.textContent = `
 .scroll #quickPlay:focus-visible { outline: 3px solid #5a1d12; outline-offset: 3px; }
 .quickinfo { margin-top: 6px; font-size: 16px; font-style: italic; }
 /* the menu and the lobby grow with every row the features add: their buttons stay in view at the bottom of the card, whatever the window's height */
-#menu .scroll, #lobby .scroll { padding-bottom: 0; scroll-padding-bottom: 150px; }
-.menu-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -44px; padding: 6px 44px 14px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }
+#lobby .scroll { padding-bottom: 0; scroll-padding-bottom: 150px; }
+#lobby .menu-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -40px; padding: 6px 40px 14px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }
 @media (max-height: 700px) {
-  .menu-actions { margin: 0 -30px; padding: 2px 30px 8px; }
+  #lobby .menu-actions { margin: 0 -30px; padding: 2px 30px 8px; }
   .quick { margin: 0 0 6px; }
   .scroll #quickPlay { font-size: 22px; padding: 7px 56px; }
   .quickinfo { margin-top: 3px; font-size: 14px; }
@@ -372,7 +378,7 @@ style.textContent = `
 #offerConfirm { margin-top: 10px; }
 
 #gameover .scroll { padding-bottom: 0; }
-.go-actions { position: sticky; bottom: 0; z-index: 2; margin: 6px -44px 0; padding: 14px 44px 18px; text-align: center;
+.go-actions { position: sticky; bottom: 0; z-index: 2; margin: 6px -40px 0; padding: 14px 40px 18px; text-align: center;
   background: linear-gradient(rgba(217,199,156,0), #d9c79c 16px); }
 @media (max-height: 700px) { .go-actions { margin-left: -30px; margin-right: -30px; padding: 10px 30px 12px; } .scroll .go-primary { font-size: 24px; padding: 10px 56px; } }
 .go-main { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }

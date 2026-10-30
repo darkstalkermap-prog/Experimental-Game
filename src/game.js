@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, HOUSE_NAMES, HOUSE_LORDS, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
-  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON, WAR_WORLD,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -18,7 +18,7 @@ import { FX } from './fx.js';
 import { LordAI } from './ai.js';
 import { buy, SHOP_BY_ID } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
-import { incomingSide, PARRY_WINDOW } from './combat.js';
+import { PARRY_WINDOW, BLOCK_STAMINA } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
@@ -52,6 +52,8 @@ import { setBiomeDust } from './biomedust.js';
 import { applyBiomeRules, twistLine } from './biometwist.js';
 import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
+import { WarMode } from './warmode.js';
+import { WarPhysics, BOWL } from './warmap.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -96,7 +98,7 @@ export class Game {
     this.paused = false;
     this.diff = DIFFICULTY.normal;
 
-    this.physics = new Physics(11);
+    this.physics = WAR_WORLD.on ? new WarPhysics(11) : new Physics(11);   // (War Mode's world is a bowl: warmap.js)
     createSky(this.scene, renderer);
     this.lights = createLights(this.scene);
     createTerrain(this.scene, this.physics);
@@ -118,6 +120,8 @@ export class Game {
     this.hero = null;              // the Hero Game Mode's rules while one is on (see herogame.js)
     this.grid = new Grid(4);
     this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
+    if (this.physics.war) for (const c of this.castles) c.group.visible = false;   // (War Mode: the houses' castles stand far off the map, unseen)
+    this.war = null;               // War Mode's rules while it is on (see warmode.js)
     this.player = new Player(this, this.camera);
     this.humans = [this.player];
     this.units = [];
@@ -179,12 +183,13 @@ export class Game {
     applyBiomeRules(this);   // (the land's small rule twist: biometwist.js)
     // the match length is a source of rule modifiers (the war modes only: the Hero Game Mode and the practice courtyard keep their own pace)
     const length = LENGTHS[this.options.length];
-    if (length && length.mods && !setup.hero && !setup.practice) mods.set(`length:${this.options.length}`, length.mods);   // ('length:short')
-    this.timeLimit = length && length.limit && !setup.hero && !setup.practice ? length.limit : 0;   // seconds of play after which a Short war is decided on points
+    if (length && length.mods && !setup.hero && !setup.practice && !setup.war) mods.set(`length:${this.options.length}`, length.mods);   // ('length:short')
+    this.timeLimit = length && length.limit && !setup.hero && !setup.practice && !setup.war ? length.limit : 0;   // seconds of play after which a Short war is decided on points
     this.timeWarned = 0;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero ? new HeroMode(this, { ...setup.hero, mirror: setup.mode === 'client' }) : null;   // (a guest's only mirrors the host's: herogame.js)
-    this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
+    this.war = setup.war && this.physics.war && !setup.hero && !setup.practice ? new WarMode(this, setup.war) : null;   // (War Mode: warmode.js)
+    this.decrees = this.hero || this.war || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
     this.hill.reset();
     this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
@@ -225,7 +230,7 @@ export class Game {
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
       const empty = !human && !setup.hero && Array.isArray(setup.empty) && setup.empty.includes(i);   // (a castle closed in the lobby: nobody holds it, seats.js)
-      const rival = human || empty || this.practice || setup.hero ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
+      const rival = human || empty || this.practice || setup.hero || this.war ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
       return {
         team: i, name: i === lp.team ? TEAM_NAMES[0] : HOUSE_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : HOUSE_LORDS[i], rival, isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
@@ -244,10 +249,11 @@ export class Game {
       h.spawn(c.spawnPoint, c.rot);
     }
     if (this.hero) this.hero.setup(setup);   // (the six heroes, the two sides, houses 2 and 3 switched off)
+    if (this.war) this.war.setup(setup);     // (the sides, the places in the bowl, the gold; the AI generals buy their armies)
     for (const f of this.factions) f.gold += Math.round(mods.sum('startGold'));   // (a rule modifier: War Chest)
     startComeback(this);   // (the underdog's wage, the Last Stand: see comeback.js)
 
-    if (this.simulating && !this.practice && !this.hero) {
+    if (this.simulating && !this.practice && !this.hero && !this.war) {
       for (const f of this.factions) {
         if (f.isPlayer || f.empty) continue;
         this.spawnLord(f);
@@ -284,6 +290,7 @@ export class Game {
       return;
     }
     this.audio.play('horn');
+    if (this.war) { this.war.begin(); return; }
     if (this.hero) {   // (the Hero Game Mode HUD opens the match with its own banner; the land's twist gets a notice beside it)
       const twist = twistLine(this).trim();
       if (twist) this.ui.toast(twist, -1, true);
@@ -461,6 +468,7 @@ export class Game {
   }
   siegeTarget(f) {
     if (this.hero) return this.hero.target(f);   // (Hero Game Mode: always the other keep)
+    if (this.war) return null;                   // (War Mode: no castles to march on)
     if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
     f.siegeTarget = null;
     const open = (c) => c && !c.fallen && !allied(c.team, f.team) && !this.factions[c.team].eliminated;   // (nobody marches on a castle that stands empty)
@@ -598,8 +606,8 @@ export class Game {
   // assault) and have reached it: a command to march out is obeyed, besieged or not.
   gateShouldOpen(castle) {
     if (this.state !== 'playing') return false;
-    let friend = false, foe = false, hold = false;
-    const p = castle.gatePos;
+    let friend = false, foe = false, hold = false, wedged = false;
+    const p = castle.gatePos, gate = castle.gate;
     this.grid.query(p.x, p.z, 9, (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
@@ -608,13 +616,16 @@ export class Game {
         if (d < 8) friend = true;
         if (u.isHero && d < 6) hold = true;
         else if (!u.isPlayer && d < 4.5 && (u.order === 'assault' || u.order === 'charge')) hold = true;   // ordered out: the gate yields
-        else if (d < 3) {
-          const l = castle.toLocal(u.pos.x, u.pos.z);   // standing in the gateway itself
-          if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) hold = true;
-        }
       } else if (d < 5.5) foe = true;
+      const mine = allied(u.team, castle.team);
+      if (d < 3 && (mine || gate.openAmt > 0.05) && u.pos.y - castle.center.y < 3) {
+        // nobody has the gate shut on them while standing in the gateway: a friend there holds it (or opens it), and an
+        // enemy who got in while it stood open keeps it open until he is through (or dead); a shut gate stays shut to him
+        const l = castle.toLocal(u.pos.x, u.pos.z);
+        if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) wedged = true;
+      }
     });
-    return friend && (hold || !foe);
+    return wedged || (friend && (hold || !foe));
   }
 
   pushOutOfWalls(castle) {
@@ -704,6 +715,7 @@ export class Game {
   // ---------------- combat ----------------
   damage(target, amount, attacker, info = {}) {
     if (!this.simulating) return; // clients only show effects; the host decides damage
+    if (this.war && !this.war.fighting) return;   // (nobody is hurt while War Mode's armies are mustered)
     if (!target || !target.alive) return;
     let dmg = amount;
     if (target.isStructure) {
@@ -728,16 +740,16 @@ export class Game {
       if (attacker.isPlayer) this.deliver(attacker, { k: 'fb', text: 'Blocked' });
       return;
     }
-    // heroes guard with their shield; guarding the side the blow comes from stops it completely,
-    // and doing so just as it lands parries, leaving the attacker reeling
+    // heroes guard with their shield: a blow from in front is stopped (raising the guard just as it lands parries, and the
+    // attacker reels), while it costs stamina; with too little left, or against arrows and spells, the shield only softens it
     if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.35) {
         const at = target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6);
-        if (info.melee && info.attackDir && target.blockDir === incomingSide(info.attackDir)) {
-          target.stamina = Math.max(0, target.stamina - 4);
+        if (info.melee && target.stamina >= BLOCK_STAMINA) {
+          target.stamina = Math.max(0, target.stamina - BLOCK_STAMINA);
           if (this.time - target.blockStart < PARRY_WINDOW && attacker.stagger) {
             attacker.stagger(0.9, target);
             this.fx.sparks(at, 22);
@@ -782,7 +794,7 @@ export class Game {
   }
 
   credit(team, gold, at) {
-    if (this.hero || team < 0 || team > 3) return;   // (no gold in the Hero Game Mode)
+    if (this.hero || this.war || team < 0 || team > 3) return;   // (no gold in the Hero Game Mode, nor once War Mode's armies are bought)
     const f = this.factions[team];
     if (!f || f.eliminated) return;
     const g = Math.round(gold * (f.isPlayer ? 1 : this.diff.aiGold));
@@ -1012,7 +1024,7 @@ export class Game {
 
   setFormation(team, formation) {
     const f = this.factions[team];
-    if (!FORMATIONS[formation]) return;
+    if (!FORMATIONS[formation] || this.war) return;   // (War Mode's soldiers keep the places of their own formation)
     f.formation = formation;
     this.reslot(team);
     if (f.player) {
@@ -1226,6 +1238,7 @@ export class Game {
     const i = this.input;
     if (this.practice && i.hit('KeyP')) { this.ui.togglePractice(); return; }
     if (this.ui.practiceOpen) return;   // (the panel has the keys while it is up)
+    if (this.war) { this.war.handleInput(i); return; }   // (War Mode: the army panel, the map and the orders of the fight)
     if (this.hero) {   // Hero Game Mode: the hero's talents (B or N) and the map are all there is; no shop, orders, army or class switching
       if (i.hit('KeyB') || i.hit('KeyN')) { this.ui.openTalents(); return; }
       if (!this.ui.shopOpen && i.hit('KeyM')) this.ui.toggleMap();
@@ -1255,6 +1268,7 @@ export class Game {
   // Buy for a faction; reports the result to that faction's player.
   buyFor(team, id) {
     const f = this.factions[team];
+    if (this.war) { f.player.notify('The War Mode army is bought in its own panel (B)'); return 'War Mode'; }
     const r = buy(this, f, id);
     if (r === true) { if (!f.player.remote) f.player.sound('buy'); } // remote buyers already heard it
     else { f.player.sound('deny'); f.player.notify(r); }
@@ -1324,7 +1338,7 @@ export class Game {
   // Conquest any ally still in the battle can pay SUMMON.cost to call them back: they rise in the courtyard of their own keep, ruin
   // though it is, and fight on. There is no keep left to raise them again, so if they fall again they are out again until somebody
   // pays again. Only players can be called back: a house that an AI lord took over when its player left is not.
-  get summonLive() { return this.coop && this.objective === 'conquest' && !this.hero && this.state === 'playing'; }
+  get summonLive() { return this.coop && this.objective === 'conquest' && !this.hero && !this.war && this.state === 'playing'; }
 
   // the allied houses of `team` that are out for good and could be called back
   fallenAllies(team) {
@@ -1512,7 +1526,8 @@ export class Game {
     f.rival = this.practice || this.hero ? null : rivalInfo(this.options.rivals[f.team]);
     f.lord = f.rival ? f.rival.name : HOUSE_LORDS[f.team];
     f.hero = null;
-    if (!f.eliminated && !f.castle.fallen) {
+    if (this.war) this.war.dropHuman(f);   // (an AI general leads the army on)
+    else if (!f.eliminated && !f.castle.fallen) {
       this.spawnLord(f);
       f.ai = new LordAI(this, f);
     }
@@ -1549,7 +1564,7 @@ export class Game {
       this.time += dt;
       return;
     }
-    this.alerts.update(dt);
+    if (!this.war) this.alerts.update(dt);   // (the tips and alerts are about castles: War Mode has its own bar)
     // single player pauses the world; online games keep running underneath menus
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
@@ -1569,9 +1584,10 @@ export class Game {
     for (const h of this.humans) if (h.alive && !h.drive) this.grid.insert(h);
 
     const p = this.player;
-    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen ? this.input : this.input.idle);
+    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen && !(this.war && this.war.panelOpen) ? this.input : this.input.idle);
     else this.deathCamera(dt);
     this.finale.camera();   // (the ending frames the falling keep: after the hero has placed the camera, before anything looks through it)
+    if (this.war) this.war.camera(dt);   // (War Mode: the view over your army while its panel is open, over the battle once your hero has fallen)
     for (const h of this.humans) {
       if (h.remote) h.remoteUpdate(dt);
       h.updateHorse(dt);
@@ -1602,6 +1618,7 @@ export class Game {
     for (const c of this.castles) if (this.factions[c.team]) c.syncUpgrades(this.factions[c.team]);
 
     if (this.practice && this.state === 'playing') this.court.update(dt);
+    else if (this.war) { if (this.simulating && this.state === 'playing') this.war.update(dt); }   // (War Mode: the build, the fight, the win; no waves or income)
     else if (this.simulating && this.state === 'playing') {
       this.updateWaves(dt);
       this.processSpawns(dt);
@@ -1618,6 +1635,7 @@ export class Game {
       }
     }
     if (this.mode === 'host' && this.sync) this.sync.update(dt);
+    if (this.war) this.war.frame(dt);   // (War Mode's panel and bar, on every screen)
     if (this.simulating) this.cleanup(dt);
     this.camfx.update(dt);   // (the camera is placed for the frame: nudge it, then the crowd culls against the view it will be drawn with)
     this.crowd.update(this, dt);
@@ -1693,6 +1711,12 @@ export class Game {
   menuCamera(dt) {
     this.menuCamT += dt * 0.05;
     const t = this.menuCamT;
+    if (this.physics.war) {   // (War Mode's bowl: round its rim)
+      this.camera.position.set(Math.sin(t) * BOWL.rim * 0.9, BOWL.height + 16, Math.cos(t) * BOWL.rim * 0.9);
+      this.camera.lookAt(0, 0, 0);
+      followShadow(this.lights.sun, (this.menuFocus || (this.menuFocus = new THREE.Vector3())).copy(this.camera.position).multiplyScalar(0.3));
+      return;
+    }
     const c = this.castles[PLAYER_TEAM];
     this.camera.position.set(c.center.x + Math.sin(t) * 70, 34, c.center.z - 40 + Math.cos(t) * 30);
     this.camera.lookAt(c.center.x, 6, c.center.z);

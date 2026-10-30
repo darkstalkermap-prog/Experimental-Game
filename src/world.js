@@ -85,6 +85,7 @@ export function createForest(scene, physics) {
 
 // Standing stones in the middle of the battlefield.
 export function createCentrePiece(scene, physics, stoneMat) {
+  if (physics.war) return;   // (War Mode's bowl: an open floor)
   const g = box(1.6, 5, 1, 4);   // (the texture keeps one size per metre: courses of blocks, not one huge block per face)
   g.translate(0, 2.5, 0);        // (standing on its own origin: the weathering of the stone starts at the ground)
   for (let i = 0; i < 9; i++) {

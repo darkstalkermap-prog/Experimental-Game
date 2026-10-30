@@ -7,6 +7,7 @@ import { PALETTE, COLOR_IDS, assignColors } from './teams.js';
 import { HERO_SIZES, sideOfSeat, placeOfSeat, colorWants } from './seats.js';
 import { lookText } from './unlocks.js';
 import { lobbyRivalName } from './rivalsui.js';
+import { WAR_DESC } from './warui.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -89,8 +90,15 @@ export function drawLobby(v, on) {
       b.onclick = v.host && on.mode ? () => on.mode(b.dataset.o) : null;
     }
   }
+  const war = !hero && v.obj === 'war';   // (War Mode: warmode.js; the room's castles are its armies, the Armies row is warui.js's)
   if (hero) $('lobbyObjDesc').textContent = `Hero Mode: ${hero.size} heroes against ${hero.size}, out of castles 1 and 2. You play only your hero; the armies march by themselves. A seat nobody takes is a hero bot.`;
-  for (const id of ['lobbyModes', 'lobbyMode', 'lobbyLength']) { const el = $(id); if (el) el.classList.toggle('hidden', !!hero); }
+  else if (war) $('lobbyObjDesc').textContent = `War Mode: ${WAR_DESC}`;
+  for (const id of ['lobbyModes', 'lobbyMode']) { const el = $(id); if (el) el.classList.toggle('hidden', !!hero); }
+  if ($('lobbyLength')) $('lobbyLength').classList.toggle('hidden', !!hero || war);   // (both have their own clock)
+  if ($('lobbyWarFormat')) {
+    $('lobbyWarFormat').classList.toggle('hidden', !war);
+    for (const b of $('lobbyWarFormat').querySelectorAll('button')) b.disabled = !v.host;
+  }
   // the Hero Game Mode's rows: how to win and how many a side
   const parent = objRow ? objRow.parentNode : $('lobbyList').parentNode;
   const after = $('lobbyObjDesc') ? $('lobbyObjDesc').nextSibling : null;
@@ -112,14 +120,14 @@ export function drawLobby(v, on) {
     return a.length ? `<span class="act">${a.join('')}</span>` : '';
   };
   if (!hero) {
-    const twoTeams = v.coop && players.length >= 4;
+    const twoTeams = v.coop && players.length >= 4, warTeams = war && !v.coop && v.war && v.war.format === 'teams';   // (co-op of four: 1 + 2 against 3 + 4; War Mode's two against two: 1 + 3 against 2 + 4)
     for (let t = 0; t < 4; t++) {
       const p = players.find((q) => q.team === t) || null, state = v.slots[t];
       const c = css(house[t]);
       const who = p ? holder(p)
-        : state === 'empty' ? '<i>Empty castle · closed</i>'
-          : `<i>AI lord${v.coop ? ' (enemy)' : ''}${lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}${state === 'open' ? ' · open' : ' · closed'}</i>`;
-      lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">Castle ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b><span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
+        : state === 'empty' ? (war ? '<i>No army · closed</i>' : '<i>Empty castle · closed</i>')
+          : `<i>AI lord${v.coop ? ' (enemy)' : ''}${!war && lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}${state === 'open' ? ' · open' : ' · closed'}</i>`;
+      lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">${war ? 'Army' : 'Castle'} ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams || warTeams ? ` <small>· team ${twoTeams ? (t < 2 ? 1 : 2) : (t % 2) + 1}</small>` : ''}</b><span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
     }
   } else {
     for (const side of [0, 1]) {

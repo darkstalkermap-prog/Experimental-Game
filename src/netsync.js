@@ -13,6 +13,7 @@ import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
 import { standFor } from './comeback.js';
 import { placeOfSeat } from './seats.js';
+import { packUnits, unpackUnits, thinEvents } from './warnet.js';
 export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
@@ -128,6 +129,7 @@ export class HostSync {
       case 'ready': g.setReady(p.team, p); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
+      case 'war': if (g.war) g.war.fromClient(p, d); break;   // War Mode's army panel (warmode.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
         if (d.target >= 0 && g.castles[d.target]) f.siegeTarget = g.castles[d.target];
@@ -144,7 +146,8 @@ export class HostSync {
     const g = this.g;
     const shared = {
       tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(), rd: g.readyLive ? g.readyState() : 0,
-      u: g.units.map((u) => {
+      w: g.war ? g.war.netState() : 0,   // (War Mode: the phase and each army's formation and plan)
+      u: g.war ? packUnits(g.units) : g.units.map((u) => {   // (War Mode's hundreds of soldiers go packed: warnet.js)
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
           DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
@@ -212,7 +215,7 @@ export class HostSync {
         bot: g.hero ? (h.isBot ? 1 : 0) : undefined,
         respawnT: g.hero && !h.alive ? r1(Math.max(0, h.respawnT || 0)) : undefined,
       })),
-      ev: this.shared,
+      ev: g.war ? thinEvents(this.shared) : this.shared,   // (a War Mode battle keeps only a few blood and sound effects a snapshot)
     };
     this.shared = [];
     for (const h of g.humans) {
@@ -271,7 +274,9 @@ export class ClientSync {
 
     // units
     const seen = new Set();
-    for (const a of s.u) {
+    if (g.war && s.w) g.war.applyNet(s.w);
+    const list = g.war && s.u && !Array.isArray(s.u) ? unpackUnits(s.u, this.units, (x, z) => g.physics.terrainHeight(x, z)) : s.u;
+    for (const a of list) {
       const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name] = a;
       const rank = flags & 7;
       seen.add(id);
@@ -461,7 +466,8 @@ export class ClientSync {
       }
       if (me.alive && (me.seq !== p.spawnSeq || !p.alive)) {
         const c = g.castles[p.team];
-        p.spawn(g.hero ? g.hero.slotPos(p) : c.spawnPoint, c.rot);   // (a hero rises at their own place in the courtyard: herogame.js)
+        if (g.war) g.war.respawn(p);
+        else p.spawn(g.hero ? g.hero.slotPos(p) : c.spawnPoint, c.rot);   // (a hero rises at their own place in the courtyard: herogame.js)
         p.hp = me.hp;
         p.spawnSeq = me.seq;
       }

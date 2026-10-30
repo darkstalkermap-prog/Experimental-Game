@@ -8,7 +8,7 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS, DIFFICULTY } from './config.js';
+import { setMapSize, setPracticeWorld, setWarWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS, DIFFICULTY } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
@@ -25,8 +25,10 @@ import { pendingDecrees, hearDecrees } from './decrees.js';
 import { withRivals, lobbyRivals } from './rivalsui.js';
 import { setPalette, sanitizeColors, assignColors, paletteKey, isColorId, COLOR_IDS } from './teams.js';
 import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, nextState, canTakeSlot, canTakeSeat, firstFreeSlot, firstFreeSeat,
-  warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse, isSlotState } from './seats.js';
+  warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
+import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
+import { sanitizeWar } from './warmode.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,19 +83,20 @@ let heroOnSolo = () => false;   // (the Mode row below says)
 // (begin); the menu shows the single player's.
 let palette = soloPalette();
 
-// the key of a world: its map size, the practice yard and the land it is dressed as (a different land is another world, built again; so are other colours,
-// kept beside it in game.paletteBuilt)
-const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed));
+// the key of a world: its map size, the practice yard, War Mode's bowl and the land it is dressed as (a different land is another world, built again; so are
+// other colours, kept beside it in game.paletteBuilt)
+const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war ? '+war' : '') + (practice ? '' : landKey(o.biome, o.seed));
 
-function buildGame(size, practice = false, landOpts = null) {
+function buildGame(size, practice = false, landOpts = null, war = false) {
   const o = sanitizeOptions(landOpts);
   setMapSize(size);
   setPalette(palette);   // (before anything of the world is made: castles, banners, soldiers and heroes take their colours as they are built)
   setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
+  setWarWorld(war && !practice);   // War Mode's world is a bowl without castles (warmap.js)
   setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
-  game.mapBuiltFor = worldKey(size, practice, o);
+  game.mapBuiltFor = worldKey(size, practice, o, war && !practice);
   game.paletteBuilt = paletteKey(palette);
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
@@ -166,9 +169,9 @@ const refreshOptions = () => { options = { ...loadOptions(), length: options.len
 function showLength() {
   for (const id of ['length', 'lobbyLength']) document.querySelectorAll(`#${id} button`).forEach((b) => b.classList.toggle('active', b.dataset.l === options.length));
   document.querySelectorAll('#length button').forEach((b) => { b.querySelector('small').textContent = LENGTHS[b.dataset.l].time; b.title = LENGTHS[b.dataset.l].desc; });
-  $('lengthDesc').textContent = heroOn ? 'Hero Game Mode has its own length: choose how to win above.' : LENGTHS[options.length].desc;
-  $('length').classList.toggle('off', heroOn);
-  document.querySelectorAll('#length button').forEach((b) => { b.disabled = heroOn; });
+  $('lengthDesc').textContent = heroOn ? 'Hero Game Mode has its own length: choose how to win above.' : warOn ? 'War Mode has its own clock: two minutes to build an army, then one battle.' : LENGTHS[options.length].desc;
+  $('length').classList.toggle('off', heroOn || warOn);
+  document.querySelectorAll('#length button').forEach((b) => { b.disabled = heroOn || warOn; });
   refreshQuick();
 }
 function selectLength(l) {
@@ -183,6 +186,7 @@ let objective = 'conquest';
 // Hero Mode is the third choice of the Mode row. It is not an objective of the war (OBJECTIVES, the lobby): it has its own
 // setup (`hero: { win }`) and its own row of three ways to win, the last one remembered per browser.
 let heroOn = false;
+let warOn = false;   // War Mode (warmode.js): a mode of its own, like Hero Mode, but online too
 let heroWin = 'kills';
 try { heroWin = localStorage.getItem('cw-herowin') || 'kills'; } catch (e) { /* storage unavailable */ }
 if (!HERO.modes[heroWin]) heroWin = 'kills';
@@ -207,31 +211,35 @@ for (const [id, m] of Object.entries(HERO.modes)) {
 }
 showHeroWin(heroWin);
 function selectObjective(o) {
-  const hero = o === 'hero';
-  if (!hero && !OBJECTIVES[o]) return;
+  const hero = o === 'hero', war = o === 'war';
+  if (!hero && !war && !OBJECTIVES[o]) return;
+  const rebuild = war !== warOn && game.state === 'menu';
   heroOn = hero;
-  if (!hero) objective = o;
+  warOn = war;
+  if (!hero && !war) objective = o;
   document.querySelectorAll('#objective button').forEach((b) => b.classList.toggle('active', b.dataset.o === o));
-  document.querySelectorAll('#lobbyObjective button').forEach((b) => b.classList.toggle('active', b.dataset.o === objective));
-  $('objDesc').textContent = hero ? heroDesc() : OBJECTIVES[o].desc;
-  $('lobbyObjDesc').textContent = OBJECTIVES[objective].desc;
+  $('objDesc').textContent = hero ? heroDesc() : war ? WAR_DESC : OBJECTIVES[o].desc;
+  $('lobbyObjDesc').textContent = war ? WAR_DESC : OBJECTIVES[objective].desc;   // (the lobby's Mode row itself is drawn by lobbyui.js)
+  showWarRow(war);
+  if (rebuild) { clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') { palette = soloPalette(); ensureMap(mapSize, false, land, warOn); } }, 350); }   // (the menu shows the bowl behind it)
   $('heroWin').classList.toggle('hidden', !hero);
   $('menu').classList.toggle('hero', hero);
   showLength();   // (the length row is for the war modes: in Hero Mode it says so)
   showSolo();
 }
+initWarMenu(() => { if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast(); refreshQuick(); });   // (adds War Mode to the Mode rows before they are wired)
 document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => { selectObjective(b.dataset.o); rememberLast(); }));
-const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : objective);
+const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : warOn ? 'war' : objective);
 
 
 // Rebuild the world if the chosen map size or land differs from the one on screen, or if a match has been played in it: a world is for ONE match (castles, units,
 // engines and upgrades are all dirty afterwards), so the next one is built as soon as a match ends (freshWorldSoon) and starting it is then instant.
-function ensureMap(size, practice = false, landOpts = null) {
+function ensureMap(size, practice = false, landOpts = null, war = false) {
   const o = sanitizeOptions(landOpts);
-  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o) && game.paletteBuilt === paletteKey(palette)) return;
+  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o, war && !practice) && game.paletteBuilt === paletteKey(palette)) return;
   const net0 = game.net;
   game.dispose();
-  buildGame(size, practice, o);
+  buildGame(size, practice, o, war);
   game.net = net0;
   game.setQuality(quality);
   resize();
@@ -243,14 +251,14 @@ initLandMenu({
   onChange: () => {
     if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();   // (the guests hear of it while they wait in the lobby)
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land); }, 350);
+    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, warOn); }, 350);
   },
 });
 
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
-  ensureMap(map, !!(setup && setup.practice), setup && setup.options);
+  ensureMap(map, !!(setup && setup.practice), setup && setup.options, !!(setup && setup.war));
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
@@ -277,7 +285,7 @@ function freshWorldSoon() {
     seen = endScreenUp() ? seen + 250 : 0;   // (the screen may be built before a finishing show has ended: wait until it is in view)
     if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
     const size = WORLD.size, practice = !!game.practice;   // (the world's key also carries the land now: do not parse it)
-    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed });   // (the next battle's land: the end screen's row may have rolled it)
+    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, !!game.war);   // (the next battle's land: the end screen's row may have rolled it)
     // (a disposed world takes the shader programs of its own materials with it: compile the effect shaders of the new one now, a moment after the build as a task of
     // its own, while the end screen is still, instead of in the click that starts the match)
     const fresh = game;
@@ -318,11 +326,11 @@ function afterSolo() {
   showSolo();
   refreshQuick();
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land); } }, 350);
+  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land, warOn); } }, 350);
 }
 
 // the line under Quick Play (and under Play Again): what a click will start
-const currentSetupLine = () => setupLine({ cls: heroClass, mode: heroOn ? 'hero' : objective, heroWin, map: mapSize, diff: difficulty, length: options.length });
+const currentSetupLine = () => setupLine({ cls: heroClass, mode: heroOn ? 'hero' : warOn ? 'war' : objective, heroWin, map: mapSize, diff: difficulty, length: options.length });
 function refreshQuick() {
   if (quickReady) $('quickInfo').textContent = currentSetupLine();
 }
@@ -343,7 +351,7 @@ function toMenu() {
   clearTimeout(freshTimer);
   refreshOptions();
   palette = soloPalette();
-  ensureMap(mapSize, false, land);   // (the menu shows the picked land behind it, in the single player's colours)
+  ensureMap(mapSize, false, land, warOn);   // (the menu shows the picked land behind it, as a bowl for War Mode, in the single player's colours)
   ui.reset();
   ui.hideHud();
   showLength();
@@ -377,7 +385,8 @@ function startSolo() {
     return;
   }
   const me = { team: soloSlot, name: 'You', cls: heroClass, col: myColor, me: true }, empty = emptyTeams(soloSlots, [me]);
-  begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], objective, empty, colors: assignColors(colorWants([me], false)), options: matchOptions([me.team, ...empty]) });
+  // (War Mode: the castles are armies, and an empty one stays off the field)
+  begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], objective, war: warOn ? warSetup() : undefined, empty, colors: assignColors(colorWants([me], false)), options: matchOptions([me.team, ...empty]) });
 }
 $('play').addEventListener('click', startSolo);
 $('quickPlay').addEventListener('click', startSolo);
@@ -480,7 +489,7 @@ const heroRoom = () => (heroOn ? { win: heroWin, size: room.size, seats: room.se
 // why the host cannot start the battle yet (null: it can)
 const startProblem = () => (heroOn ? heroProblem(room.seats, room.size, lobby) : warProblem(room.slots, lobby, coop));
 // what everybody's lobby shows (the host sends it as it is; a guest draws what it is sent)
-const roomView = () => ({ players: lobby, coop, obj: objective, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
+const roomView = () => ({ players: lobby, coop, obj: warOn ? 'war' : objective, war: warOn ? warSetup() : null, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
 // the first colour nobody in the room flies (`wish` when it is free)
 const freeColor = (wish, who = null) => {
   const taken = new Set(lobby.filter((p) => p !== who).map((p) => p.col));
@@ -591,14 +600,15 @@ $('hostBtn').addEventListener('click', async () => {
 $('startOnline').addEventListener('click', () => {
   if (startProblem()) return;
   const hero = heroOn ? { win: heroWin, size: room.size, seats: room.seats.slice() } : null;
+  const war = warOn ? warSetup() : null;   // (War Mode: warmode.js; its armies are the castles of the room's list)
   reseat(lobby, room.slots, room.seats, room.size);   // (nobody without a place)
   const players = lobby.map((p) => ({ ...p, team: hero ? sideOfSeat(p.hs) : p.team }));   // (in a hero match a player's house is their side's)
   const colors = assignColors(colorWants(players, !!hero));
   const empty = hero ? [] : emptyTeams(room.slots, players);
   const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
-  net.toAll({ k: 'start', diff: difficulty, players, map: mapSize, coop, obj: objective, opts, hero, empty, colors });
+  net.toAll({ k: 'start', diff: difficulty, players, map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
   const me = players.find((p) => p.netId === null);
-  begin(difficulty, { mode: 'host', localTeam: me.team, players: players.map((p) => ({ ...p, me: p === me })), coop: !hero && coop, objective, hero, empty, colors, options: opts });
+  begin(difficulty, { mode: 'host', localTeam: me.team, players: players.map((p) => ({ ...p, me: p === me })), coop: !hero && coop, objective, hero, war, empty, colors, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -619,7 +629,8 @@ $('joinBtn').addEventListener('click', async () => {
       return;
     }
     if (d.k === 'lobby' && Array.isArray(d.players)) {
-      guestView = { players: d.players, coop: !!d.coop, obj: OBJECTIVES[d.obj] ? d.obj : 'conquest', len: d.len, rv: d.rv, slots: cleanSlots(d.slots),
+      hearWar(d.war);   // (War Mode's Armies row)
+      guestView = { players: d.players, coop: !!d.coop, obj: OBJECTIVES[d.obj] || d.obj === 'war' ? d.obj : 'conquest', len: d.len, rv: d.rv, slots: cleanSlots(d.slots),
         hero: d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null };
       showRoom(guestView, false);
       const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)
@@ -631,7 +642,7 @@ $('joinBtn').addEventListener('click', async () => {
       const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
       const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
       const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
-      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);
@@ -667,7 +678,7 @@ function backToLobby(isHost) {
   if (game.state === 'playing') return;
   clearTimeout(freshTimer);
   const practice = !!game.practice;   // (the world's key also carries the land: it is not parsed; this asks for what freshWorldSoon builds)
-  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed });   // (a fresh world for the next match, on the land the end screen rolled)
+  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed }, !!game.war);   // (a fresh world for the next match, on the land the end screen rolled)
   ui.reset();
   ui.hideHud();
   if (!isHost && net) net.toHost({ k: 'cos', cos: progress.loadout() });   // (the host is back in its lobby now: what this match earned is for the next battle)
@@ -765,7 +776,7 @@ input.onLockChange = (locked) => {
   }
   lastUnlockAt = performance.now();
   game.player.cancelAim();   // a volley being placed is dropped when the menu comes up
-  if (!ui.shopOpen && !ui.mapOpen && !ui.practiceOpen) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
+  if (!ui.shopOpen && !ui.mapOpen && !ui.practiceOpen && !(game.war && game.war.panelOpen)) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up (War Mode's army panel frees it itself)
 };
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
@@ -779,7 +790,7 @@ $('offerYes').addEventListener('click', () => confirmOffer(game, ui));
 
 // Clicking the game view while playing re-captures the mouse.
 renderer.domElement.addEventListener('click', () => {
-  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !ui.mapOpen && !ui.practiceOpen && !shown('pause')) input.lock();
+  if (game.state === 'playing' && !input.locked && !ui.shopOpen && !ui.mapOpen && !ui.practiceOpen && !shown('pause') && !(game.war && game.war.panelOpen)) input.lock();
 });
 
 // Escape: close whatever is open on top, else open or close the game menu.
@@ -791,6 +802,7 @@ addEventListener('keydown', (e) => {
     if (ui.shopOpen) { input.pressed.delete(e.code); ui.toggleShop(false); return; }
     if (ui.mapOpen) { ui.toggleMap(false); return; }
     if (ui.practiceOpen) { ui.togglePractice(false); return; }
+    if (game.war && game.war.panelOpen) { game.war.ui.setPanel(false); return; }   // (War Mode's army panel)
     if (game.state !== 'playing') return;
     if (performance.now() - lastUnlockAt < 350) return;   // the release of the mouse has just opened the menu
     if (shown('pause')) closePause(); else openPause();

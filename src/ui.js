@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, clock } from './config.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
-import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
@@ -22,6 +21,7 @@ import { rivalTagHtml, houseRival } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
+const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };   // (no DOM write when nothing changed)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // The three jobs a soldier can have (see Game.assignRole)
@@ -182,7 +182,7 @@ export class UI {
         if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
         else if (e) text = e.abandoned ? `Take over the abandoned ${e.name.toLowerCase()}` : `Take the controls of your ${e.name.toLowerCase()}`;
         else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
-        else if (p.climbHint) { text = 'Climb the wall'; promptKey = 'Space'; }
+        else if (p.climbHint) { text = p.climbHint === 'foe' ? 'Climb the enemy wall' : 'Climb onto the wall walk'; promptKey = 'Space'; }
       }
     }
     if (text !== this.lastPrompt || promptKey !== this.lastPromptKey) {
@@ -217,35 +217,6 @@ export class UI {
     this.tab = 'talents';
     if (this.shopOpen) this.renderShop();
     else this.toggleShop(true);
-  }
-
-  // Direction chevrons: where you're aiming / winding up / guarding, and blows coming at you.
-  updateDirs() {
-    const g = this.game;
-    const p = g.player;
-    const els = this.dirEls || (this.dirEls = Object.fromEntries([...document.querySelectorAll('#dirs i')].map((e) => [e.dataset.d, e])));
-    const show = p.alive && p.weapon === 'sword';
-    $('dirs').style.display = show ? '' : 'none';
-    if (!show) return;
-    const state = { left: '', right: '', over: '', thrust: '' };
-    if (p.blocking) state[p.blockDir] = 'guard';
-    else if (p.atk) state[p.atk.dir] = p.atk.phase === 'wind' ? 'wind' : 'aim';
-    else state[dirFromAim(p.aim.x, p.aim.y, p.atkDir)] = 'aim';
-    // enemies close by, facing you and winding up
-    const check = (u) => {
-      if (!u.alive || allied(u.team, p.team) || u.ranged || u.weapon === 'bow' || u.swingT < 0 || u.swingT > 0.33) return;
-      const dx = p.pos.x - u.pos.x, dz = p.pos.z - u.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 4.2) return;
-      const face = u.mounted ? u.heading ?? u.yaw : u.yaw;
-      if ((dx * Math.sin(face) + dz * Math.cos(face)) / (d || 1) < 0.55) return;
-      state[incomingSide(u.attackDir || 'over')] = 'threat';
-    };
-    g.grid.query(p.pos.x, p.pos.z, 5, check);
-    for (const h of g.humans) if (h !== p) check(h);
-    for (const d of ['left', 'right', 'over', 'thrust']) {
-      if (els[d].className !== state[d]) els[d].className = state[d];
-    }
   }
 
   hitMarker() {
@@ -749,6 +720,7 @@ export class UI {
     $('buffs').innerHTML = '';   // (the list is only written when it changes: a label of the last match would stay through the next preparation)
     this.heroSeen = undefined;   // (the next frame asks the new world again whether this is the Hero Game Mode, and sets or clears the HUD's hero classes)
     this.goldShown = null;
+    this.noArmy = this.inBattle = undefined;
     this.hudT = 0;
     resetFlowHud();
   }
@@ -777,7 +749,6 @@ export class UI {
     this.updateAbilities(dt);
     updateTalentHud(this, p);
     $('crosshair').classList.toggle('block', p.blocking);
-    this.updateDirs();
     this.updatePrompt();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
     $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.drawTime) * 100}%` : '0%';
@@ -794,16 +765,18 @@ export class UI {
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
       if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: the practice panel'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
-      $('weapon').textContent = p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
+      setText($('weapon'), p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
-        : `${p.bow.name} · ${p.arrows} arrows`;
-      $('potions').textContent = `Potions ${p.potions} (H)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
-      const grp = { all: 'Whole army', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
-      const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
+        : `${p.bow.name} · ${p.arrows} arrows`);
+      setText($('potions'), `Potions ${p.potions} (H)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : ''));
+      // where your soldiers are (the group, formation and order are on the orders bar, which shows while the army has soldiers)
       const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
-      const form = FORMATIONS[f.formation || 'line'].name;
       const rc = g.roleCounts(g.localTeam);
-      $('army').textContent = `Garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
+      setText($('army'), `🏰 Garrison ${rc.garrison} · ⚔ Army ${rc.army} · ➤ Lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''}`);
+      // the HUD's quieter states: no orders bar without an army, no key reminders once the fighting has begun
+      const hud = $('hud'), noArmy = rc.army === 0, inBattle = !!g.practice || g.phase !== 'prep';
+      if (noArmy !== this.noArmy) { this.noArmy = noArmy; hud.classList.toggle('noarmy', noArmy); }
+      if (inBattle !== this.inBattle) { this.inBattle = inBattle; hud.classList.toggle('inbattle', inBattle); }
       $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
       $('clsName').style.color = p.cls.color;
       $('lvl').textContent = ` · Lv ${p.level}`;
@@ -1010,7 +983,7 @@ export class UI {
     return rows.map((r) => {
       const c = CLASSES[r.cls] || { icon: '', name: String(r.cls || '') };
       const side = sideName(this.game.hero, r.team);
-      return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${esc(r.name)}${r.mine ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
+      return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${esc(r.name)}${r.mine && r.name !== 'You' ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
     }).join('');
   }
 
