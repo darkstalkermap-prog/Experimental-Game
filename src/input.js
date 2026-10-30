@@ -7,6 +7,7 @@ export class Input {
     this.up = new Set();        // keys let go since last frame
     this.mouse = { dx: 0, dy: 0, left: false, right: false, middle: false, leftPressed: false, leftReleased: false, rightPressed: false, middlePressed: false, middleReleased: false, wheel: 0 };
     this.locked = false;
+    this.wantLock = false;   // the last call was lock(), not unlock(): a grant that arrives after unlock() is let go at once
     this.grab = null;   // { x, y }: while set, mouse movement is collected here instead of turning the view (the marker wheel)
     this.enabled = true;
     this.onLockChange = null;
@@ -50,6 +51,7 @@ export class Input {
     window.addEventListener('wheel', (e) => { if (this.locked) this.mouse.wheel += Math.sign(e.deltaY); }, { passive: true });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === canvas;
+      if (this.locked && !this.wantLock) { this.locked = false; document.exitPointerLock(); return; }   // (a request still pending when a panel opened)
       if (!this.locked) { this.mouse.left = this.mouse.right = this.mouse.middle = false; }
       if (this.onLockChange) this.onLockChange(this.locked);
     });
@@ -58,6 +60,7 @@ export class Input {
   // Capture the mouse. Asks for raw (unaccelerated) movement where supported for 1:1 aiming.
   // Browsers sometimes refuse (e.g. right after Esc); onLockFail lets the game ask for another click.
   lock() {
+    this.wantLock = true;
     if (this.locked) return;
     const attempt = (opts) => {
       try {
@@ -69,9 +72,9 @@ export class Input {
     };
     attempt({ unadjustedMovement: true })
       .catch((e) => (e && e.name === 'NotSupportedError' ? attempt() : Promise.reject(e)))
-      .catch(() => { if (!this.locked && this.onLockFail) this.onLockFail(); });
+      .catch(() => { if (!this.locked && this.wantLock && this.onLockFail) this.onLockFail(); });
   }
-  unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
+  unlock() { this.wantLock = false; if (document.pointerLockElement) document.exitPointerLock(); }
 
   down(code) { return this.keys.has(code); }
   hit(code) { return this.pressed.has(code); }

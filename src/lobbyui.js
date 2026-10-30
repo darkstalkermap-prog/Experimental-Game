@@ -19,12 +19,15 @@ function style() {
   styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#lobbyList li.seat { align-items: center; }
-#lobbyList li.seat .who { flex: 1; text-align: right; }
+#lobbyList li.seat { align-items: center; flex-wrap: wrap; row-gap: 4px; }
+#lobbyList li.seat .who { flex: 1 1 200px; text-align: right; }
 #lobbyList li.seat.me { background: rgba(255,255,255,0.6); }
 #lobbyList li.seat.closed .who { opacity: 0.7; }
 #lobbyList li.seat.side2 { margin-top: 8px; }
-#lobbyList li.seat .act { display: flex; gap: 4px; }
+#lobbyList li.seat .act { display: flex; gap: 4px; margin-left: auto; }   /* (on a narrow row the buttons take a line of their own, at the right) */
+#lobbyList li.seat .who i { display: block; line-height: 1.2; }
+#lobbyList li.seat .st { display: inline-block; margin-top: 3px; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 3px; background: rgba(0,0,0,0.12); white-space: nowrap; }
+#lobbyList li.seat .st.open { background: rgba(60,140,60,0.22); }
 #lobbyList li.seat .act button { font-size: 12px; padding: 2px 8px; }
 .swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: center; }
 .swatches button.sw { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(0,0,0,0.45); background: var(--c) !important; box-shadow: none; }
@@ -113,12 +116,13 @@ export function drawLobby(v, on) {
   // the list: one line per castle, or per hero seat
   const lines = [];
   const holder = (p) => `${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
+  const tag = (state) => (state === 'open' ? '<em class="st open" title="A player who joins can sit here; an AI lord holds it if nobody does">open seat</em>' : '<em class="st">closed</em>');
   const acts = (n, p, state, free) => {
     const a = [];
     if (!p && free && state === 'open' && mine) a.push(`<button data-take="${n}" title="Sit here">Take</button>`);
-    if (!p && v.host) a.push(`<button data-state="${n}" title="Who sits here when nobody does: open for a player, an AI, or nobody">${state === 'open' ? 'Open' : state === 'ai' ? (hero ? 'Bot' : 'AI') : 'Empty'}</button>`);
+    if (!p && v.host) a.push(`<button data-state="${n}" title="Who sits here when nobody does: open for a player, an AI, or nobody (click to change)">Seat: ${state === 'open' ? 'Open' : state === 'ai' ? (hero ? 'Bot' : 'AI') : 'Empty'}</button>`);
     if (p && v.host && hero && p.netId !== null) a.push(`<button data-move="${esc(p.netId)}" title="Move to the other side">Switch side</button>`);
-    return a.length ? `<span class="act">${a.join('')}</span>` : '';
+    return a.length ? ` <span class="act">${a.join(' ')}</span>` : '';   // (spaces between the parts: the row reads as words, also to a screen reader or a copy)
   };
   if (!hero) {
     const twoTeams = v.coop && players.length >= 4, warTeams = war && !v.coop && v.war && v.war.format === 'teams';   // (co-op of four: 1 + 2 against 3 + 4; War Mode's two against two: 1 + 3 against 2 + 4)
@@ -126,17 +130,17 @@ export function drawLobby(v, on) {
       const p = players.find((q) => q.team === t) || null, state = v.slots[t];
       const c = css(house[t]);
       const who = p ? holder(p)
-        : state === 'empty' ? (war ? '<i>No army · closed</i>' : '<i>Empty castle · closed</i>')
-          : `<i>AI lord${v.coop ? ' (enemy)' : ''}${!war && lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}${state === 'open' ? ' · open' : ' · closed'}</i>`;
-      lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">${war ? 'Army' : 'Castle'} ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams || warTeams ? ` <small>· team ${twoTeams ? (t < 2 ? 1 : 2) : (t % 2) + 1}</small>` : ''}</b><span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
+        : state === 'empty' ? `<i>${war ? 'No army' : 'Empty castle'}</i> ${tag('closed')}`
+          : `<i>AI lord${v.coop ? ' (enemy)' : ''}${!war && lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}</i> ${tag(state)}`;
+      lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">${war ? 'Army' : 'Castle'} ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams || warTeams ? ` <small>· team ${twoTeams ? (t < 2 ? 1 : 2) : (t % 2) + 1}</small>` : ''}</b> <span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
     }
   } else {
     for (const side of [0, 1]) {
       const c = css(house[side]);
       for (let i = 0; i < hero.size; i++) {
         const s = side * 4 + i, p = players.find((q) => q.hs === s) || null, state = hero.seats[s];
-        const who = p ? holder(p) : state === 'empty' ? '<i>Nobody · closed</i>' : `<i>Hero bot · ${state === 'open' ? 'open' : 'closed'}</i>`;
-        lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}${side && !i ? ' side2' : ''}" style="border-left-color:${c}"><b style="color:${c}">${esc(PALETTE[house[side]].name)} · ${placeOfSeat(s) + 1}</b><span class="who">${who}</span>${acts(s, p, state, true)}</li>`);
+        const who = p ? holder(p) : state === 'empty' ? `<i>Nobody</i> ${tag('closed')}` : `<i>Hero bot</i> ${tag(state)}`;
+        lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}${side && !i ? ' side2' : ''}" style="border-left-color:${c}"><b style="color:${c}">${esc(PALETTE[house[side]].name)} · ${placeOfSeat(s) + 1}</b> <span class="who">${who}</span>${acts(s, p, state, true)}</li>`);
       }
     }
   }
