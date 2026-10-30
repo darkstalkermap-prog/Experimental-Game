@@ -349,7 +349,7 @@ export class WarMode {
     }
     this.ui.fightBegan();
     g.audio.play('horn', g.camera.position);
-    g.bannerAll('To battle!', 'The armies march. The last army standing wins: your hero fights too, and does not rise again. F1 follow · F2 hold here · F3 charge · G: group.');
+    g.bannerAll('To battle!', 'The armies march. The last army standing wins: your hero fights too, and does not rise again. F1 follow · F2 hold here · F3 charge · G: group.', 'The armies march. The last army standing wins.');
   }
 
   applyPlan(f, u, order) {

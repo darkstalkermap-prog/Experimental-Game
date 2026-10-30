@@ -668,10 +668,11 @@ export class Game {
     }
   }
 
-  bannerAll(title, sub) {
+  // (watchSub: what those who only watch read instead, when `sub` speaks to a lord)
+  bannerAll(title, sub, watchSub = sub) {
     for (const h of this.viewers) {
       if (h.remote && this.mode !== 'host') continue;
-      this.deliver(h, { k: 'banner', title, sub });
+      this.deliver(h, { k: 'banner', title, sub: this.viewTeam(h) === -1 ? watchSub : sub });
     }
   }
 
