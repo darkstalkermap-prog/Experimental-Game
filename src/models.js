@@ -406,7 +406,7 @@ export function poseDeath(m, t, kind, side = 1) {
     J(m.shR, -0.6 * e1 - 0.2 * e2, 0, 0.5 * e2); J(m.elR, -0.9 * e1, 0, 0);
   }
   if (m.weapon) m.weapon.rotation.x = m.weaponTilt - 0.4 * e1;
-  if (m.giant) poseGiantDead(m, t);
+  if (m.giant) poseGiantDead(m, t, kind);
   m.inst[13] = kind === 1 ? -e2 : 0;   // (no wind of his running left in the cape; face down, it sags over his legs: unitmat.js)
   settleCloth(m);
 }

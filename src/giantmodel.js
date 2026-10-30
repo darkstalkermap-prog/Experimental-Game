@@ -288,29 +288,31 @@ export function poseGiant(m, st) {
   const strike = swinging && t > 0.22 ? clamp01(1 - Math.abs(t - 0.4) / 0.2) : 0;   // (the moment the head comes down)
   const over = st.attackDir !== 'right';
   const hunch = 0.34 + 0.04 * Math.sin(idle * 1.1) * (1 - stride);
-  const lean = hunch + (over ? 0.3 : 0.12) * strike - 0.12 * att * (1 - strike);
+  const lean = hunch + (over ? 0.15 : 0.1) * strike - 0.12 * att * (1 - strike);
   m.torso.rotation.x += lean;
   m.pelvis.rotation.x += 0.08;
   m.head.rotation.x -= lean * 0.85 + 0.06;
   // the knees stay soft under the weight; a step plants the foot flat (the hips swing a little less, the knee bends more)
   m.hipL.rotation.x -= 0.14; m.hipR.rotation.x -= 0.14;
   m.kneeL.rotation.x += 0.2; m.kneeR.rotation.x += 0.2;
-  m.body.position.y -= 0.022 * GIANT_SCALE;
+  m.body.position.y += 0.05 * GIANT_SCALE;   // (the soft knees and the tilt of the hips would sink the feet: the soles stay on the ground)
   // the roll of the walk: the weight goes over each foot in turn
   m.body.position.x += 0.035 * GIANT_SCALE * stride * s1;
   m.pelvis.rotation.z += 0.05 * stride * s1;
   m.torso.rotation.z -= 0.07 * stride * s1;
-  m.body.position.y -= 0.02 * GIANT_SCALE * stride * Math.abs(Math.cos(ph));
   // arms: wide of the lats, forward of the stoop
   m.shL.rotation.z += 0.2; m.shR.rotation.z -= 0.2;
   m.shL.rotation.x -= lean * 0.6; m.elL.rotation.x -= 0.15;
-  if (!swinging) { m.shR.rotation.x -= lean * 0.5; m.elR.rotation.x -= 0.25; m.weapon.rotation.x -= 0.15; }
-  else {
-    // the free arm out for balance as the hammer comes over
+  // the hammer arm: the haft hangs by his feet at rest (and the swing starts and ends there, so nothing jumps)
+  const rest = 1 - att;
+  m.shR.rotation.x -= lean * 0.5 * rest; m.elR.rotation.x -= 0.25 * rest; m.weapon.rotation.x -= 0.25 * rest;
+  if (swinging) {
+    // the free arm out for balance as the hammer comes over; the hammer held square to the blow, its head stopped at the ground
     m.shL.rotation.x += (-0.5 - m.shL.rotation.x) * att * 0.6;
     m.shL.rotation.z += 0.55 * att;
     m.elL.rotation.x -= 0.4 * att;
-    m.weapon.rotation.x += (over ? -0.75 : -0.55) * att + (over ? 0.3 : 0) * strike;   // (the hammer held square to the blow, the head following through)
+    const post = t > 0.4 ? 1 - clamp01((t - 0.5) / 0.12) : strike;
+    m.weapon.rotation.x += (over ? -0.75 : -0.55) * att + (over ? -0.35 - 0.3 * clamp01((t - 0.38) / 0.08) * att : 0) * post;
   }
   // the hurt flinch is bigger: the heads thrown back
   if (st.hurt > 0) m.head.rotation.x -= 0.2 * st.hurt;
@@ -319,9 +321,16 @@ export function poseGiant(m, st) {
 // A dead giant: the soldier's fall, scaled up (the body's offsets lift him onto the ground, not into it). The hammer slips out of his
 // grip and settles flat, whichever way he fell (turned in the fist until the haft lies level).
 const _w = new THREE.Matrix4(), _inv = new THREE.Matrix4();
-export function poseGiantDead(m, t) {
+export function poseGiantDead(m, t, kind) {
   m.body.position.multiplyScalar(GIANT_SCALE);
   m.shL.rotation.z += 0.2; m.shR.rotation.z -= 0.2;
+  if (kind === 1) {
+    // face down: the arms fall along his sides (a man's reach forward would put a giant's fists deep in the ground), the chest and
+    // beards lift him a little
+    const e1 = clamp01(t / 0.3), e2 = clamp01((t - 0.18) / 0.6), k = e2 * e2 * (3 - 2 * e2);
+    m.shL.rotation.x += 1.3 * k; m.shR.rotation.x += 1.45 * k;
+    m.body.position.y += 0.05 * GIANT_SCALE * k * e1;
+  }
   const k = clamp01((t - 0.25) / 0.9), w = m.weapon;
   if (k <= 0) return;
   // (in the rig's own frame: the root only turns about y, so its up is the world's)
