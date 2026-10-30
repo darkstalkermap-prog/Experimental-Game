@@ -606,9 +606,10 @@ export class Game {
         if (u.isHero && d < 6) hold = true;
         else if (!u.isPlayer && d < 4.5 && (u.order === 'assault' || u.order === 'charge')) hold = true;   // ordered out: the gate yields
       } else if (d < 5.5) foe = true;
-      if (d < 3 && gate.openAmt > 0.05 && u.pos.y - castle.center.y < 3) {
-        // nobody, friend or foe, has an open gate shut on them while standing in the gateway: an enemy who got in
-        // while it stood open keeps it open until he is through (or dead)
+      const mine = allied(u.team, castle.team);
+      if (d < 3 && (mine || gate.openAmt > 0.05) && u.pos.y - castle.center.y < 3) {
+        // nobody has the gate shut on them while standing in the gateway: a friend there holds it (or opens it), and an
+        // enemy who got in while it stood open keeps it open until he is through (or dead); a shut gate stays shut to him
         const l = castle.toLocal(u.pos.x, u.pos.z);
         if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) wedged = true;
       }
