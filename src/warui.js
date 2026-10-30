@@ -86,9 +86,11 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #hud.warpanel #crosshair, #hud.warpanel #dirs, #hud.warpanel #minimapWrap, #hud.warpanel #drawbar, #hud.warpanel #talentHint { display: none !important; }
 #shop.waronly .tabs, #shop.waronly .stat { display: none; }
 #warPanel h4 .wp-rep { float: right; text-transform: none; letter-spacing: 0.02em; font-size: 12px; padding: 2px 8px; margin-top: -3px; min-width: 0; }
-#warCmd { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 5px;
+/* (the bar sits centred in the gap between the hero panel, 16 + 324 px, and the minimap, 16 + 188 px, all in the HUD's zoomed pixels, and its rows wrap
+   when the window is too narrow for them at this UI scale: it never covers either) */
+#warCmd { position: fixed; left: 348px; right: 214px; bottom: 14px; width: fit-content; margin: 0 auto; z-index: 6; display: flex; flex-direction: column; align-items: center; gap: 5px;
   padding: 7px 9px; background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; box-shadow: 0 4px 18px rgba(0,0,0,0.45); color: var(--parch); }
-#warCmd .wc-row { display: flex; gap: 5px; align-items: stretch; }
+#warCmd .wc-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; align-items: stretch; }
 #warCmd button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 96px; padding: 4px 9px 5px; font-size: 14px; line-height: 1.15;
   font-family: Cinzel, Georgia, serif; letter-spacing: 0.03em; }
 #warCmd button kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); margin-right: 5px; }
@@ -101,7 +103,7 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warCmd .wc-forms button { min-width: 0; padding: 3px 10px; font-size: 14px; white-space: nowrap; }
 #warCmd .wc-label kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 #warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); text-align: right; padding-right: 4px; white-space: nowrap; }
-#warCmd .wc-hint { font-size: 14px; opacity: 0.8; }
+#warCmd .wc-hint { font-size: 14px; opacity: 0.8; text-align: center; }
 #warCmd .wc-hint kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
 .go-war { margin: 10px auto 4px; max-width: 620px; }
