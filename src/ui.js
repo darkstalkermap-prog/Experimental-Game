@@ -942,6 +942,7 @@ export class UI {
     $('clsHint').textContent = h ? ' · N → Talents' : this.clsHintText;
     this.heroHtml = '';
     this.heroBars = {};
+    this.fitHero();
     if (!h) { this.tab = 'army'; return; }
     this.tab = 'talents';
     $('heroBarKB').firstElementChild.style.background = TEAM_CSS[0];
@@ -954,6 +955,24 @@ export class UI {
       const prep = h.prepLeft > 0 ? h.prepLeft : g.phaseT;
       this.banner('Hero Game Mode', `${heroGoal(h)}. The armies march in ${clock(prep)} and every ${WAVES.interval} seconds after. N: talents · M: map · Q / R: abilities · Enter: ready, start now.`);
     }
+  }
+
+  // Do the roster (left), the score panel (centred) and the key line (right, up to 334 px wide) fit side by side? They grow with the UI scale and
+  // the window does not, so this is measured, not a media query: on a resize, a new UI scale (main.js) and when the hero HUD comes (not per frame).
+  // The callouts below the roster: as many of the newest as fit above the bottom-left stack (health, abilities, talent hint: 236 px from the
+  // bottom; a fixed reserve, as the stack's own height changes with what it shows), 44 px each, at least the newest one, at most the usual 4.
+  fitHero() {
+    const hud = $('hud');
+    hud.classList.remove('heronarrow');
+    delete hud.dataset.alerts;
+    if (!hud.classList.contains('hero')) return;
+    const top = $('heroTop').getBoundingClientRect(), ro = $('heroRoster').getBoundingClientRect();
+    if (top.width < 1) return;   // (the HUD is hidden: the next call measures)
+    const z = parseFloat(getComputedStyle($('heroTop')).zoom) || 1;
+    if (ro.right + 8 * z > top.left || top.right + 8 * z > innerWidth - 334 * z) hud.classList.add('heronarrow');
+    const room = innerHeight - 236 * z - $('alerts').getBoundingClientRect().top;
+    const fit = Math.max(1, Math.floor(room / (44 * z)));
+    if (fit < 4) hud.dataset.alerts = String(fit);
   }
 
   // seconds until the local hero rises (the faction's timer, or the roster's when that is what the rules keep)

@@ -124,7 +124,7 @@ $('menu').classList.remove('hidden');
 // the profiler overlay (` or ?perf) and the benchmark (window.__bench): nothing is hooked until the overlay is switched on
 initPerf({ renderer, getGame: () => game, render: () => gfx.renderFrame(1 / 60), host: gfx });
 
-function resize() { gfx.resize(); }
+function resize() { gfx.resize(); ui.fitHero(); }
 addEventListener('resize', resize);
 resize();
 
@@ -811,6 +811,7 @@ $('quitYes').addEventListener('click', () => { if (net) location.reload(); else 
 function applyUiScale(v) {
   const s = Math.min(140, Math.max(80, Number(v) || 100));
   document.documentElement.style.setProperty('--ui-scale', String(s / 100));
+  ui.fitHero();   // (the Hero Mode panels may no longer fit side by side)
 }
 applyUiScale(settings.uiscale);
 
