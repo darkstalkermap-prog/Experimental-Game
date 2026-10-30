@@ -20,6 +20,7 @@ export class Weather {
     this.kind = KINDS[active.def.weather] || null;
     this.acc = 0;
     this.filled = false;
+    this.cx = undefined; this.cz = 0;   // where the camera was last frame
   }
 
   spawn(L, cam) {
@@ -36,7 +37,10 @@ export class Weather {
     if (!this.kind) return;
     const L = this.game.fx.alpha;
     const rate = Q.level >= 1 ? this.kind.rate * Q.particles : 0;
-    if (!this.filled && rate > 0) { this.filled = true; this.acc = rate * this.kind.life * 0.9; }   // (the first frame already has the air full of it)
+    // (the first frame already has the air full of it, and so has the frame after a cut of the camera: a respawn, the camera of the ending)
+    const cut = this.cx !== undefined && (cam.x - this.cx) * (cam.x - this.cx) + (cam.z - this.cz) * (cam.z - this.cz) > 1600;
+    this.cx = cam.x; this.cz = cam.z;
+    if ((!this.filled || cut) && rate > 0) { this.filled = true; this.acc = rate * this.kind.life * 0.9; }
     this.acc += rate * dt;
     const n = Math.min(Math.floor(this.acc), 700);
     this.acc = rate > 0 ? Math.min(this.acc - n, 2) : 0;

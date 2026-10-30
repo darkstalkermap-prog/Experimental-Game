@@ -601,16 +601,20 @@ arrangement; a random seed gives a new arrangement every time. Nothing is placed
 (`okForProp` in `src/scatter.js`), and the same biome and seed always build the same world: nothing in a build uses `Math.random`, so the host and its guests
 each build their own copy from the `biome` and `seed` of the match options. Types of land the game does not know (an older client) play as the meadow.
 
-**Choosing.** The first battle is the classic land. After it the choice turns to **Random** (unless you picked a biome yourself): every battle ends with a
-"Next battle: the land" section on the end screen that shows the land that comes next, with a little picture, its twist and a **Reroll land** button (a fixed
-biome only rerolls its seed). Play Again and Quick Play start on what the preview shows. The page also opens on `?land=snow:4321` (a biome and a seed), which is
-also how to share a land. The practice courtyard is always the meadow. Online, the host picks and the guests see it in the lobby; Hero Game Mode takes biomes too.
+**Choosing.** The first battle is the classic land. After it the choice turns to **Random** (unless you picked a biome yourself): every battle ends with the land
+as the second half of the **Next battle** panel of the end screen, right under the Battle Decrees (the two share one frame): a little picture of the land that comes
+next, its name, its twist, and a **Reroll land** button (a fixed biome only rerolls its seed). Hero Game Mode has no decrees, so there the land is the whole panel.
+Play Again and Quick Play start on what the preview shows. The page also opens on `?land=snow:4321` (a biome and a seed), which is also how to share a land. The
+practice courtyard is always the meadow. Online, the host picks and the guests see it in the lobby (their end screen says that the host picks the next land);
+Hero Game Mode takes biomes too.
 
 **How it is built.** `src/biomes.js` is the table of everything a biome changes (the ground colours and the splat shader's palette, the haze, the sun and sky
 light, the plants, the grass, the weather, the twist) and the land state; the world is built after `setWorldLand(biome, seed)` (main.js `ensureMap` builds it
 again when the biome or the seed differs). The colours of the splat shader are uniforms, so every biome shares one program; the fog is a linear `THREE.Fog`
-whose colour and near distance carry the haze tint and the murk (see `atmosphere.js`). The twists are mods (`offroadSpeed`, `mudSpeed`, `archerRange`,
-`staminaDrain`, `staminaRegen`, see `src/mods.js` and `src/biometwist.js`). `src/landui.js` has the menu row and the end-screen section; `src/weather.js` the flakes, the
+whose colour and near distance carry the haze tint and the murk (see `atmosphere.js`). The twists are mods like the decrees' (`offroadSpeed`, `mudSpeed`,
+`archerRange`, `staminaDrain`, `staminaRegen`, each its own source `biome:<id>`, see `src/mods.js` and `src/biometwist.js`), so they multiply with the decrees' keys
+wherever both apply: Swift March (+20%) in the snow is +20% along the roads and +5.6% across open ground. `src/landui.js` has the menu row and the end-screen
+section; `src/weather.js` the flakes, the
 mist banks and the dust (written into the smoke layer of the effects: no extra draw call); `src/biomedust.js` the snow on the castles.
 ## Controls
 
