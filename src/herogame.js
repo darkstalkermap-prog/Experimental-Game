@@ -102,10 +102,10 @@ export class HeroMode {
     // the player's own side first (a single player without a seat stands in the middle of side 0, as before seats).
     const people = [];
     for (const sp of setup.players || []) {
-      const h = sp.me || setup.players.length === 1 ? local : g.humans.find((x) => x !== local && x.netId != null && x.netId === sp.netId);
+      const h = sp.me || (setup.players.length === 1 && !g.spectator) ? local : g.humans.find((x) => x !== local && x.netId != null && x.netId === sp.netId);
       if (h && !people.some((e) => e.h === h)) people.push({ h, seat: seatInUse(sp.hs, size) ? sp.hs : -1 });
     }
-    if (!people.some((e) => e.h === local)) people.unshift({ h: local, seat: -1 });
+    if (!people.some((e) => e.h === local) && !g.spectator) people.unshift({ h: local, seat: -1 });   // (a spectator holds no seat: spectate.js)
     const places = (side) => [...Array(size).keys()].map((i) => side * 4 + i);
     for (const e of people) {
       if (e.seat >= 0 && people.filter((o) => o.seat === e.seat).length === 1) continue;
@@ -150,7 +150,7 @@ export class HeroMode {
   seatSides() {
     const g = this.g;
     for (const team of [0, 1]) {
-      const f = g.factions[team], lead = (g.player.team === team ? g.player : this.heroes.find((h) => h.team === team)) || null;   // (this screen's hero leads its own side)
+      const f = g.factions[team], lead = (g.player.team === team && !g.spectator ? g.player : this.heroes.find((h) => h.team === team)) || null;   // (this screen's hero leads its own side)
       f.isPlayer = true; f.player = lead; f.hero = lead; f.lord = lead ? lead.name : this.sides[team].name; f.name = this.sides[team].name;
       f.gold = 0; f.respawnT = 0; f.heroDeaths = 0;
     }

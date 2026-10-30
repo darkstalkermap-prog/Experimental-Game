@@ -204,7 +204,7 @@ export class RoomNet {
     } catch { this.pieces.delete(c.sid); return; }
     const { s, me: players } = decoded;
     const me = players && players[this.id];
-    if (!s || !me) return;
+    if (!s || !players || !(this.id in players)) return;   // (a guest who watches has an entry with no hero in it, null: spectate.js)
     this.lastSid = c.sid;
     for (const sid of this.pieces.keys()) if (sid <= c.sid) this.pieces.delete(sid);
     if (Number.isFinite(c.delay) && c.delay > 0) this.snapDelay = c.delay;

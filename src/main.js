@@ -351,7 +351,7 @@ $('quickPlay').focus();   // (Enter or Space on the main menu is then Quick Play
 // Play Again: no reload. The world for it was built while the end screen was up (freshWorldSoon), so this only starts the match.
 function playAgain() {
   refreshOptions();   // (the end screen may have rolled the next battle into the stored options)
-  startSolo();
+  if (game.spectator) startSpectate(); else startSolo();   // (a battle that was watched: watch the next one)
 }
 function toMenu() {
   if (net) { location.reload(); return; }   // an online game is left by starting the page afresh
@@ -396,15 +396,30 @@ function startSolo() {
   begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], objective, war: warOn ? warSetup() : undefined, empty, colors: assignColors(colorWants([me], false)), options: matchOptions([me.team, ...empty]) });
 }
 $('play').addEventListener('click', startSolo);
+// Spectate (the quiet button under the ways to play): the battle the setup describes, watched instead of played (spectate.js). Every house is an AI lord (the
+// castles left empty stay empty), War Mode's armies are AI generals', Hero Mode's seats are all bots.
+function startSpectate() {
+  rememberLast();
+  const colors = assignColors([null, null, null, null]);
+  if (heroOn) {
+    begin(difficulty, { mode: 'single', spectator: true, localTeam: 0, players: [], hero: { win: heroWin, size: heroCount, seats: freshSeats() }, colors, options: matchOptions() });
+    return;
+  }
+  const empty = emptyTeams(soloSlots.map((s, t) => (t === soloSlot ? 'open' : s)), []);
+  begin(difficulty, { mode: 'single', spectator: true, localTeam: 0, players: [], objective, war: warOn ? warSetup() : undefined, empty, colors, options: matchOptions(empty) });
+}
+$('spectateBtn').addEventListener('click', startSpectate);
 $('quickPlay').addEventListener('click', startSolo);
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass, me: true }], practice: true, colors: assignColors([myColor, null, null, null]) }, 'small'));
 
 // ---------------- online play ----------------
 let net = null;
-// [{ team, hs, name, netId, cls, cos, col }]   team: the castle held in a war; hs: the seat in a hero match (seats.js); cos: the banner, cloak and capstones
-// the account behind the player wears (progress.js); col: the colour they fly (teams.js: no two people the same)
+// [{ team, hs, name, netId, cls, cos, col, watch }]   team: the castle held in a war; hs: the seat in a hero match (seats.js); cos: the banner, cloak and capstones
+// the account behind the player wears (progress.js); col: the colour they fly (teams.js: no two people the same); watch: they watch the battle instead of
+// playing (spectate.js: no castle, no seat, team and hs -1)
 let lobby = [];
+const seated = () => lobby.filter((p) => !p.watch);   // (the people who play: the seating rules of seats.js only ever see these)
 let coop = false;    // lobby game mode chosen by the host
 // the host's seating of the room (seats.js): the four castles of a war, the hero seats and how many a side
 const room = { slots: freshSlots(), seats: freshSeats(), size: 3 };
@@ -494,7 +509,7 @@ async function connect() {
 // ---------------- the room's seating (the host decides; seats.js has the rules) ----------------
 const heroRoom = () => (heroOn ? { win: heroWin, size: room.size, seats: room.seats } : null);
 // why the host cannot start the battle yet (null: it can)
-const startProblem = () => (heroOn ? heroProblem(room.seats, room.size, lobby) : warProblem(room.slots, lobby, coop));
+const startProblem = () => (heroOn ? heroProblem(room.seats, room.size, seated()) : warProblem(room.slots, seated(), coop));
 // what everybody's lobby shows (the host sends it as it is; a guest draws what it is sent)
 const roomView = () => ({ players: lobby, coop, obj: warOn ? 'war' : objective, war: warOn ? warSetup() : null, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
 // the first colour nobody in the room flies (`wish` when it is free)
@@ -506,8 +521,19 @@ const freeColor = (wish, who = null) => {
 // the host moves `p` to castle / seat n (its own click, or a guest's ask, checked here)
 function hostTake(p, n) {
   if (!p || !Number.isInteger(n)) return false;
-  if (heroOn) { if (!canTakeSeat(room.seats, room.size, lobby, p, n)) return false; p.hs = n; }
-  else { if (!canTakeSlot(room.slots, lobby, p, n)) return false; p.team = n; }
+  if (heroOn) { if (!canTakeSeat(room.seats, room.size, seated(), p, n)) return false; p.hs = n; }
+  else { if (!canTakeSlot(room.slots, seated(), p, n)) return false; p.team = n; }
+  if (p.watch) { p.watch = false; reseat(seated(), room.slots, room.seats, room.size); }   // (a watcher who takes a place plays: a place in the other mode too)
+  return true;
+}
+// `p` watches the battle instead of playing (on), or comes back to play (off: only to a free place)
+function hostWatch(p, on) {
+  if (!p || !!p.watch === on) return false;
+  if (on) { p.watch = true; p.team = -1; p.hs = -1; return true; }
+  const team = firstFreeSlot(room.slots, seated()), hs = firstFreeSeat(room.seats, room.size, seated());
+  if (heroOn ? hs < 0 : team < 0) return false;
+  p.watch = false; p.team = team; p.hs = hs;
+  reseat(seated(), room.slots, room.seats, room.size);
   return true;
 }
 function hostColor(p, id) {
@@ -537,18 +563,20 @@ const hostActions = {
     lobbyBroadcast();
   },
   color(id) { const me = lobby.find((p) => p.netId === null); if (hostColor(me, id)) { myColor = id; store('cw-color', id); lobbyBroadcast(); } },
-  size(n) { if (!HERO_SIZES.includes(n) || lobby.length > 2 * n) return; room.size = n; heroCount = n; store('cw-herosize', n); reseat(lobby, room.slots, room.seats, room.size); lobbyBroadcast(); },
+  size(n) { if (!HERO_SIZES.includes(n) || seated().length > 2 * n) return; room.size = n; heroCount = n; store('cw-herosize', n); reseat(seated(), room.slots, room.seats, room.size); lobbyBroadcast(); },
   win(id) { if (HERO.modes[id]) { showHeroWin(id); try { localStorage.setItem('cw-herowin', id); } catch (e) { /* ignore */ } lobbyBroadcast(); } },
-  mode(o) { selectObjective(o); reseat(lobby, room.slots, room.seats, room.size); lobbyBroadcast(); },
+  mode(o) { selectObjective(o); reseat(seated(), room.slots, room.seats, room.size); lobbyBroadcast(); },
+  watch(on) { if (hostWatch(lobby.find((p) => p.netId === null), on)) lobbyBroadcast(); },
 };
 // a guest's clicks: asks for the host
 const guestActions = {
   take(n) { net.toHost({ k: guestView && guestView.hero ? 'hseat' : 'seat', n }); },
   color(id) { if (isColorId(id)) { myColor = id; store('cw-color', id); net.toHost({ k: 'col', col: id }); } },
+  watch(on) { net.toHost({ k: 'watch', on: !!on }); },
   state() {}, move() {}, size() {}, win() {}, mode() {},
 };
 function showRoom(v, isHost) {
-  ui.renderLobby(v.players, v.coop, v.obj, v.len);
+  ui.renderLobby(v.players.filter((p) => !p.watch), v.coop, v.obj, v.len);
   drawLobby({ ...v, me: isHost ? null : net.id, host: isHost, problem: isHost ? startProblem() : null }, isHost ? hostActions : guestActions);
 }
 
@@ -569,6 +597,7 @@ function hostHears({ from, d }) {
     if (hostColor(p, d.col)) lobbyBroadcast();
     return;
   }
+  if (d.k === 'watch') { if (hostWatch(p, !!d.on)) lobbyBroadcast(); return; }   // (to watch instead of play, or back)
   if (d.k === 'seat' || d.k === 'hseat') {   // (asked in the other mode than the room's now: the host has switched meanwhile, and the ask is dropped)
     if ((d.k === 'hseat') === heroOn && hostTake(p, Number(d.n))) lobbyBroadcast();
     return;
@@ -583,7 +612,7 @@ $('hostBtn').addEventListener('click', async () => {
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   room.size = heroCount;
   lobby = [{ team: 0, hs: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout(), col: myColor }];
-  reseat(lobby, room.slots, room.seats, room.size);
+  reseat(seated(), room.slots, room.seats, room.size);
   lobbyBroadcast = () => { const v = roomView(); showRoom(v, true); net.toAll({ k: 'lobby', ...v }); };
   net.on('data', hostHears);
   for (const b of document.querySelectorAll('#lobbyModes button')) {
@@ -595,9 +624,9 @@ $('hostBtn').addEventListener('click', async () => {
   net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); lobbyBroadcast(); });
   net.on('peer', (m) => {
     if (lobby.some((p) => p.netId === m.id)) return;
-    const team = firstFreeSlot(room.slots, lobby), hs = firstFreeSeat(room.seats, room.size, lobby);
-    if (heroOn ? hs < 0 : team < 0) { net.toClient(m.id, { k: 'full' }); return; }   // (the host has closed every free place)
-    lobby.push({ team, hs, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null), col: freeColor(wishes.get(m.id)) });
+    const team = firstFreeSlot(room.slots, seated()), hs = firstFreeSeat(room.seats, room.size, seated());
+    const watch = heroOn ? hs < 0 : team < 0;   // (the host has closed every free place: the newcomer can still watch, spectate.js)
+    lobby.push({ team: watch ? -1 : team, hs: watch ? -1 : hs, watch, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null), col: freeColor(wishes.get(m.id)) });
     lobbyBroadcast();
   });
   net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); lobbyBroadcast(); });
@@ -608,14 +637,16 @@ $('startOnline').addEventListener('click', () => {
   if (startProblem()) return;
   const hero = heroOn ? { win: heroWin, size: room.size, seats: room.seats.slice() } : null;
   const war = warOn ? warSetup() : null;   // (War Mode: warmode.js; its armies are the castles of the room's list)
-  reseat(lobby, room.slots, room.seats, room.size);   // (nobody without a place)
-  const players = lobby.map((p) => ({ ...p, team: hero ? sideOfSeat(p.hs) : p.team }));   // (in a hero match a player's house is their side's)
+  reseat(seated(), room.slots, room.seats, room.size);   // (nobody without a place)
+  const players = seated().map((p) => ({ ...p, team: hero ? sideOfSeat(p.hs) : p.team }));   // (in a hero match a player's house is their side's)
+  const watchers = lobby.filter((p) => p.watch).map((p) => ({ netId: p.netId, name: p.name }));   // (they get the battle's snapshots and news: spectate.js)
   const colors = assignColors(colorWants(players, !!hero));
   const empty = hero ? [] : emptyTeams(room.slots, players);
   const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
-  net.toAll({ k: 'start', diff: difficulty, players, map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
-  const me = players.find((p) => p.netId === null);
-  begin(difficulty, { mode: 'host', localTeam: me.team, players: players.map((p) => ({ ...p, me: p === me })), coop: !hero && coop, objective, hero, war, empty, colors, options: opts });
+  net.toAll({ k: 'start', diff: difficulty, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
+  const me = players.find((p) => p.netId === null);   // (none: the host watches, and simulates the battle without a hero of its own)
+  begin(difficulty, { mode: 'host', spectator: !me, localTeam: me ? me.team : 0, players: players.map((p) => ({ ...p, me: p === me })), watchers: watchers.filter((w) => w.netId !== null),
+    coop: !hero && coop, objective, hero, war, empty, colors, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -645,11 +676,12 @@ $('joinBtn').addEventListener('click', async () => {
     }
     if (d.k === 'start' && Array.isArray(d.players)) {
       const me = d.players.find((p) => p.netId === net.id);
-      if (!me) return;
+      const watching = !me && Array.isArray(d.watch) && d.watch.includes(net.id);   // (this guest watches: spectate.js)
+      if (!me && !watching) return;
       const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
       const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
       const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
-      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);
@@ -673,7 +705,7 @@ function roomAfterMatch(s) {
   if (!net || flow.left) return;
   if (s.mode === 'client') { net.on('data', guestData); net.toHost({ k: 'cos', cos: progress.loadout() }); return; }   // (what the match earned: the host may not be listening yet, so backToLobby says it again)
   if (s.mode !== 'host') return;
-  const here = new Set(game.humans.filter((h) => !h.isBot && h !== game.player).map((h) => h.netId));
+  const here = new Set(game.humans.filter((h) => !h.isBot && h !== game.player).map((h) => h.netId).concat(game.watchers.map((w) => w.netId)));   // (and the guests who watched)
   lobby = lobby.filter((p) => p.netId === null || here.has(p.netId));
   const me = lobby.find((p) => p.netId === null);
   if (me) { me.cls = heroClass; me.cos = progress.loadout(); }   // (the match may have earned a banner, a cloak or a capstone)

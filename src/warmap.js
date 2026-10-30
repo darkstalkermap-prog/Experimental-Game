@@ -113,7 +113,7 @@ export function sanitizeWar(w) {
 export function warSides(format, humans, houses, coop) {
   if (format === 'duel' && humans.length <= 2 && !(coop && humans.length > 1)) {
     const foe = houses.find((t) => !humans.includes(t));
-    houses = humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();
+    houses = !humans.length ? houses.slice(0, 2) : humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();   // (nobody plays a battle that is watched: the first two armies)
   }
   let sides;
   if (coop && humans.length > 1) sides = humans.length >= 4 ? [[0, 1], [2, 3]] : [humans.slice(), houses.filter((t) => !humans.includes(t))];

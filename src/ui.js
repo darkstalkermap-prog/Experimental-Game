@@ -694,6 +694,16 @@ export class UI {
     $('gameover').classList.remove('hidden');
     if (g.hero) { this.heroGameOver(won, winner, reason); this.endSections(won, winner, reason); return; }
     $('goHeroes').classList.add('hidden');
+    if (g.spectator) {   // (a battle that was only watched: who won it, and what each house did; spectate.js)
+      $('goTitle').textContent = wf ? `${wf.name} wins` : 'The battle is over';
+      $('goTitle').className = '';
+      $('goText').textContent = reason || (wf ? `${wf.name} is the last ${g.war ? 'army' : 'castle'} standing.` : 'Nobody is left standing.');
+      $('goStats').innerHTML = `<div><b>${g.war ? clock(Math.floor(g.war.clock || 0)) : g.round}</b><span>${g.war ? 'of battle' : 'waves'}</span></div>`
+        + g.factions.filter((x) => !x.empty && (!g.war || x.war)).map((x) => `<div><b style="color:${TEAM_CSS[x.team]}">${x.kills}</b><span>${esc(x.name)} kills</span></div>`).join('');
+      this.endSections(won, winner, reason);
+      this.hideHud();
+      return;
+    }
     $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
     $('goTitle').className = won ? 'win' : 'lose';
     $('goText').textContent = reason || (team
@@ -819,7 +829,7 @@ export class UI {
     if (!h) return;
     const koth = g.objective === 'koth';
     if (!koth) { el.classList.add('hidden'); return; }
-    const me = g.localTeam;
+    const me = g.spectator ? -1 : g.localTeam;   // (a spectator has no side: spectate.js)
     const nm = (t) => (t === me ? 'You' : g.factions[t].name);
     let state, color = 'var(--parch)';
     if (h.contested) { state = 'Contested'; color = '#ff8a6a'; }
@@ -894,7 +904,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${rivalTagHtml(g, f)}${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam && !g.spectator ? 'You' : f.name)}</span>${rivalTagHtml(g, f)}${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -1012,8 +1022,8 @@ export class UI {
     const w = res.winner !== undefined ? res.winner : winner;
     const draw = w === undefined || w < 0;
     const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
-    $('goTitle').textContent = draw ? 'A draw' : won ? 'Victory!' : 'Defeat';
-    $('goTitle').className = draw ? '' : won ? 'win' : 'lose';
+    $('goTitle').textContent = draw ? 'A draw' : g.spectator ? `${sideName(h, w)} wins` : won ? 'Victory!' : 'Defeat';
+    $('goTitle').className = draw || g.spectator ? '' : won ? 'win' : 'lose';
     $('goText').textContent = res.reason || reason || (draw ? 'Neither side won the day.' : `${sideName(h, w)} wins the battle.`);
     $('goStats').innerHTML = `
       <div><b style="color:${TEAM_CSS[0]}">${kills(0)}</b><span>${esc(sideName(h, 0))} hero kills</span></div>
@@ -1250,12 +1260,12 @@ export class UI {
         ctx.fillStyle = '#fff'; ctx.fillText(h.name, X(h.pos.x), X(h.pos.z) - e - 5);
       }
     }
-    const p = g.player;
-    if (p.alive) {
-      const px = X(p.pos.x), pz = X(p.pos.z);
+    const p = g.player, eye = p.alive ? p : g.spectate && g.spectate.on ? g.spectate.mark : null;   // (spectating: where the camera is: spectate.js)
+    if (eye) {
+      const px = X(eye.pos.x), pz = X(eye.pos.z);
       ctx.save();
       ctx.translate(px, pz);
-      ctx.rotate(-p.yaw + Math.PI);
+      ctx.rotate(-eye.yaw + Math.PI);
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = '#000'; ctx.lineWidth = big ? 1.5 : 0;
       ctx.beginPath(); ctx.moveTo(0, -7 * m); ctx.lineTo(4.5 * m, 5 * m); ctx.lineTo(-4.5 * m, 5 * m); ctx.closePath(); ctx.fill();
