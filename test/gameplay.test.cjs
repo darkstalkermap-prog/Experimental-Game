@@ -82,6 +82,11 @@ test('snapshot codecs preserve the existing field order and compact wire format'
     horseX: 7, horseY: 8, horseZ: 9, horseYaw: 10, name: 'Hero', pitch: 11, attackDir: 2, blockDir: 3, staggered: 0, classId: 2, driving: 1, movementFlags: 3, level: 4 };
   assert.deepEqual(packHero(hero), [2, 1, 2, 3, 4, 1, 80, 100, 1, -1, 0, 1, 5, 6, 1, 7, 8, 9, 10, 'Hero', 11, 2, 3, 0, 2, 1, 3, 4]);
   assert.deepEqual(unpackHero(packHero(hero)), hero);
+  // the Hero Game Mode's fields come last (a war leaves them off): seat, hero kills, deaths, bot, respawn timer
+  const seated = { ...hero, hid: 5, heroKills: 2, deaths: 1, bot: 1, respawnT: 7.5 };
+  assert.deepEqual(packHero(seated).slice(28), [5, 2, 1, 1, 7.5]);
+  assert.deepEqual(unpackHero(packHero(seated)), seated);
+  assert.deepEqual(packHero({ ...seated, respawnT: undefined }).length, 32, 'a living hero has no timer to send');
 });
 
 test('world disposal releases owned GPU resources once and preserves shared assets', async () => {

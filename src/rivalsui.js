@@ -3,7 +3,7 @@
 // to a house in the HUD. The personalities themselves are in rivals.js and ai.js; this file is only what the player sees and chooses.
 // The switch ("Named rival lords" in Options, remembered per browser as 'cw-rivals') decides whether the menu rolls rivals at all: off, every house has the
 // classic lord. An options object that already names rivals (a test, a future menu) is taken as it is; only an empty one is rolled for.
-import { TEAM_CSS, TEAM_NAMES } from './config.js';
+import { TEAM_CSS, HOUSE_NAMES } from './config.js';
 import { rivalInfo, rollRivals } from './rivals.js';
 import { registerEndSection } from './endscreen.js';
 
@@ -111,7 +111,7 @@ export function introduceRivals(game) {
   el.id = 'rivalsCard';
   el.innerHTML = '<h3>Your rivals</h3>' + list.map((f) => {
     const r = houseRival(game, f);
-    return `<div class="rv"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><span>${esc(TEAM_NAMES[f.team])} · ${esc(r.line)}</span></div></div>`;
+    return `<div class="rv"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><span>${esc(f.name)} · ${esc(r.line)}</span></div></div>`;
   }).join('');
   hud.appendChild(el);
   setTimeout(() => { if (el.isConnected) el.remove(); }, 17000);
@@ -134,7 +134,7 @@ function fillPauseList() {
   box.classList.remove('hidden');
   box.innerHTML = '<h3>Rival lords</h3>' + list.map((f) => {
     const r = houseRival(game, f);
-    return `<div class="rvrow"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><em>${esc(TEAM_NAMES[f.team])} · ${esc(r.kind)}</em>
+    return `<div class="rvrow"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><em>${esc(f.name)} · ${esc(r.kind)}</em>
       <span>${esc(r.blurb)}</span><span class="plan">${esc(r.plan)}</span></div></div>`;
   }).join('');
 }
@@ -186,7 +186,7 @@ function section(summary) {
       const li = mk('li');
       const dot = mk('i');
       dot.style.background = TEAM_CSS[t];
-      dot.title = TEAM_NAMES[t];
+      dot.title = HOUSE_NAMES[t];
       li.append(dot, mk('b', '', r.name), mk('span', '', r.line));
       list.append(li);
     }

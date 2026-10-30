@@ -7,6 +7,9 @@ export const TEAM_COLORS = [0x2f62c8, 0xb8322a, 0x2c8a46, 0xd9a521, 0x4a3b2c];
 export const TEAM_CSS = ['#3f74e0', '#d0453b', '#38a957', '#e8b52c', '#8a6a4a'];
 export const TEAM_NAMES = ['Your Kingdom', 'House Varr', 'House Elden', 'House Sol', 'Raiders'];
 export const LORD_NAMES = ['You', 'Lord Varr', 'Lady Elden', 'Lord Sol'];
+// every castle's house and lord when nobody you know holds it (castle 1 too: a player may choose another castle, seats.js)
+export const HOUSE_NAMES = ['House Aldmoor', 'House Varr', 'House Elden', 'House Sol'];
+export const HOUSE_LORDS = ['Lord Aldmoor', 'Lord Varr', 'Lady Elden', 'Lord Sol'];
 
 export const WORLD = {
   half: 220,        // terrain extends to +-half
@@ -324,7 +327,7 @@ export const WAR = {
   },
   formats: {
     ffa: { name: 'Free-for-all', desc: 'Four armies, each for itself.' },
-    teams: { name: 'Two against two', desc: 'Blue and Green against Red and Gold.' },
+    teams: { name: 'Two against two', desc: 'Armies 1 and 3 against armies 2 and 4.' },
     duel: { name: 'One against one', desc: 'Two armies, face to face.' },
   },
 };

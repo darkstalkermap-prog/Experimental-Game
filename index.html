@@ -113,7 +113,6 @@
   #menu .hero-col .classes button { padding: 5px 2px; }
   #menu .hero-col .classes button .ic { font-size: 22px; }
   #menu .hero-col .classinfo { min-height: 0; font-size: 13.5px; line-height: 1.3; margin-bottom: 2px; }
-  #heroNote { margin: 6px 0 0; font-size: 14px; }
   #online { margin-top: 14px; }
   #invite { display: flex; gap: 6px; max-width: 460px; margin: 10px auto 0; }
   #invite input { flex: 1; min-width: 0; font-size: 14px; padding: 6px 8px; }
@@ -570,7 +569,6 @@
   #heroWin .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
   #heroWin button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 12px; font-size: 13px; }
   #heroWin button small { font-family: 'EB Garamond', Georgia, serif; font-size: 11.5px; opacity: 0.85; letter-spacing: 0; }
-  #heroNote { margin: 0 0 6px; font-style: italic; }
   #menu.hero .howto { display: none; }          /* (it tells the war: gold, soldiers, siege; Hero Mode explains itself under the Mode row) */
   .hero-only { display: none; }
   #hud.hero #command, #hud.hero #army, #hud.hero #goldbox, #hud.hero #goldpops, #hud.hero #factions, #hud.hero #hill, #hud.hero #top { display: none !important; }
@@ -653,7 +651,7 @@
   <div class="scroll wide">
     <details id="howtoHelp" class="help"><summary title="How to play">How to play</summary>
         <div class="howto">
-          You are the lord of the blue castle. Every castle sends a fresh army marching out every 30 seconds, for as long as it stands.
+          You are the lord of a castle (choose which, and your colour, in the battle setup). Every castle sends a fresh army marching out every 30 seconds, for as long as it stands.
           Earn gold from kills and spend it on soldiers, castle upgrades and siege engines; pick a hero class; and choose who garrisons your castle
           and who marches with you. Break their <b>gates</b> with swords or rams, breach their <b>walls</b> with catapults and destroy their <b>keep</b>.
           Cut down an engine's crew and it is yours for the taking. <b>Conquest</b> is the main mode: the last castle and hero standing wins.
@@ -665,7 +663,6 @@
     <div class="quick"><button id="quickPlay">Quick Play</button><div id="quickInfo" class="quickinfo"></div></div>
     <div class="menu-actions">
       <div class="row"><button id="play" title="Start a battle with the setup below">Single Player</button><button id="mpBtn">Multiplayer</button><button id="practiceBtn" title="A walled yard with training dummies: try any hero class, level and talents, and every kind of soldier by rank and tier">Practice Courtyard</button></div>
-      <div id="heroNote" class="note hidden">Hero Game Mode is single player for now. Choose Conquest or King of the Hill to play online.</div>
       <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
     </div>
     <div class="cols">
@@ -728,7 +725,7 @@
         <div class="note" id="lobbyObjDesc"></div>
         <div class="row" id="lobbyLength" role="group" aria-label="Match length"><span class="qlabel">Length</span><button data-l="standard" class="active">Standard</button><button data-l="short">Short</button></div>
         <ul id="lobbyList"></ul>
-        <div class="note">Empty castles are held by AI lords. Map size and difficulty come from the host's menu choices.</div>
+        <div class="note">A castle nobody takes is held by an AI lord (the host can close it: AI or empty). Map size and difficulty come from the host's menu choices.</div>
       </div>
       <div class="col">
         <h3 class="section" style="margin-top:0">Your hero</h3>

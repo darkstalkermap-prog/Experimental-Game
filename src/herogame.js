@@ -1,10 +1,12 @@
-// Hero Game Mode: a 3 against 3 fought out of one castle each. Nobody commands an army or buys anything: a player controls
+// Hero Game Mode: two sides of heroes (2, 3 or 4 a side: 2v2, 3v3, 4v4) fought out of one castle each. Nobody commands an army or buys anything: a player controls
 // only their hero (and the hero's talents). The armies march out of both castles by themselves, round after round tougher,
 // until one side wins. Three ways to win, chosen before the match:
 //   kills   the first side to 25 hero kills (a castle that falls still ends the match)
 //   castle  destroy the enemy keep (hero kills only decide who is ahead)
 //   timed   twenty minutes of battle: the side with more hero kills wins (a castle that falls still ends the match early)
-// Blue (team 0, the local player's castle) fights Red (team 1). The other two castles of the map stand empty.
+// The side of castle 1 (team 0) fights the side of castle 2 (team 1); each side is named after its colour (teams.js). The other two castles stand empty.
+// Online the host runs the rules (this file, and a HeroBot in every seat nobody plays); a guest's HeroMode is a mirror (opts.mirror): it keeps the
+// same fields for the HUD, filled from the host's snapshots (netsync.js), and decides nothing.
 //
 // This file is the contract between the parts that build the mode:
 //   herogame.js  (the rules: who is on which side, respawns, the kill count, the waves, the win)  fills in HeroMode
@@ -17,9 +19,11 @@ import { Player, HORSE } from './player.js';
 import { PLAYER, TROOP_CAP } from './config.js';
 import { CLASS_IDS } from './classes.js';
 import { killXp } from './heroes.js';
+import { colorName } from './teams.js';
+import { heroSize, sideOfSeat, placeOfSeat, seatInUse } from './seats.js';
 
 export const HERO = {
-  perSide: 3,
+  perSide: 3,                      // heroes a side when nothing else is said (the menu and the lobby choose 2, 3 or 4: seats.js)
   killTarget: 25,
   timeLimit: 20 * 60,              // seconds of battle in the timed mode
   prep: 30,                        // seconds before the first army marches
@@ -41,6 +45,7 @@ export const HERO = {
     barracks: { from: 6, every: 6, max: 4 },
   },
   slots: [-3.2, 0, 3.2], slotZ: 3.4,   // where the three heroes of a side stand and rise in the courtyard (castle-local x, z); the local hero takes the middle
+  slotsBySize: { 2: [-1.8, 1.8], 3: [-3.2, 0, 3.2], 4: [-4.8, -1.6, 1.6, 4.8] },   // the same for two, three and four a side
   milestone: 5,                    // a toast at every 5th hero kill of a side
   keepTie: 0.005,                  // timed mode: keeps within this share of their health count as equal
   modes: {
@@ -57,21 +62,24 @@ export const escalationTier = (spec, round) => (round < spec.from ? 0 : Math.min
 // what each class does for its side, so a trio of bots always has a front line and a ranged hero
 const ROLE = { knight: 'front', berserker: 'front', cavalier: 'front', ranger: 'ranged', mage: 'ranged', cleric: 'support' };
 const BOT_NAMES = [
-  ['Aldric', 'Mira', 'Corin', 'Elsbeth', 'Tobias'],         // Blue's
-  ['Garrick', 'Isolde', 'Brannoch', 'Sable', 'Varric'],     // Red's
+  ['Aldric', 'Mira', 'Corin', 'Elsbeth', 'Tobias'],         // the first side's
+  ['Garrick', 'Isolde', 'Brannoch', 'Sable', 'Varric'],     // the second side's
 ];
 const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
 const shuffled = (list) => list.map((v) => [Math.random(), v]).sort((a, b) => a[0] - b[0]).map((e) => e[1]);
 
 export class HeroMode {
-  // opts: { win: 'kills' | 'castle' | 'timed', classes?: { 0: [two classes], 1: [three classes] } (the bots' classes, for tests) }
+  // opts: { win: 'kills' | 'castle' | 'timed', size?: 2 | 3 | 4 (heroes a side), seats?: per seat 'open' | 'ai' | 'empty' (seats.js; who sits where
+  // comes with the players, each with its seat `hs`), mirror?: true on a guest, classes?: { 0: [classes], 1: [classes] } (the bots' classes, for tests) }
   constructor(game, opts = {}) {
     this.g = game;
     this.opts = opts;
+    this.mirror = !!opts.mirror;
     this.win = HERO.modes[opts.win] ? opts.win : 'kills';
-    // the two sides: team ids are the castle numbers (0 = Blue, the local player's; 1 = Red)
-    this.sides = [0, 1].map((team) => ({ team, name: team === 0 ? 'Blue' : 'Red', kills: 0, deaths: 0 }));
-    this.heroes = [];          // every hero in the match (Player objects, human and bot), Blue first
+    this.size = heroSize(opts.size);
+    // the two sides: team ids are the castle numbers (0 = the first castle, 1 = the second), named after their colours
+    this.sides = [0, 1].map((team) => ({ team, name: colorName(team), kills: 0, deaths: 0 }));
+    this.heroes = [];          // every hero in the match (Player objects, human and bot): the one on this screen first, then its side, then the other (order)
     this.clock = 0;            // seconds of battle so far (it starts when the first army marches)
     this.prepLeft = HERO.prep; // seconds until the first army marches (0 once it has)
     this.result = null;        // null while the match goes on; { winner: team | -1, reason: string, draw: boolean } once it is decided
@@ -86,35 +94,48 @@ export class HeroMode {
   get xpMult() { return HERO.xpMult; }          // (Player.gainXp)
 
   // ---------------- called by Game ----------------
-  // Once Game.start has built the factions: choose the two sides, make the heroes (the local player and the bots), put each
+  // Once Game.start has built the factions: seat the heroes (the people at their seats, a bot in every other seat that is not left empty), put each
   // at their keep, switch the other two houses off.
   setup(setup) {
-    const g = this.g, local = g.player;
+    const g = this.g, local = g.player, size = this.size;
+    // each person's seat (`hs` of the setup's players: seats.js). A seat that is missing or taken twice becomes the first free one, the middle of
+    // the player's own side first (a single player without a seat stands in the middle of side 0, as before seats).
+    const people = [];
+    for (const sp of setup.players || []) {
+      const h = sp.me || setup.players.length === 1 ? local : g.humans.find((x) => x !== local && x.netId != null && x.netId === sp.netId);
+      if (h && !people.some((e) => e.h === h)) people.push({ h, seat: seatInUse(sp.hs, size) ? sp.hs : -1 });
+    }
+    if (!people.some((e) => e.h === local)) people.unshift({ h: local, seat: -1 });
+    const places = (side) => [...Array(size).keys()].map((i) => side * 4 + i);
+    for (const e of people) {
+      if (e.seat >= 0 && people.filter((o) => o.seat === e.seat).length === 1) continue;
+      const side = e.h.team === 1 ? 1 : 0;
+      e.seat = -1;
+      e.seat = [side * 4 + Math.floor((size - 1) / 2), ...places(side), ...places(1 - side)].find((s) => !people.some((o) => o !== e && o.seat === s));
+    }
+    for (const e of people) { e.h.team = sideOfSeat(e.seat); e.h.heroSlot = placeOfSeat(e.seat); e.h.hid = e.seat; }
+    this.heroes = people.map((e) => e.h);
+    if (this.mirror) { this.seatSides(); return; }   // (a guest: the host's snapshots bring the other heroes)
+    const states = Array.isArray(this.opts.seats) ? this.opts.seats : [];
     const want = this.opts.classes || {};
-    const classes = [
-      (want[0] || this.mix([local.classId], HERO.perSide - 1)).slice(0, HERO.perSide - 1),
-      (want[1] || this.mix([], HERO.perSide)).slice(0, HERO.perSide),
-    ].map((list) => list.map((c) => (CLASS_IDS.includes(c) ? c : 'knight')));
-    this.heroes = [local];
-    local.heroSlot = 1;
     for (const team of [0, 1]) {
+      const free = places(team).filter((s) => !people.some((e) => e.seat === s) && states[s] !== 'empty');
+      const have = people.filter((e) => e.h.team === team).map((e) => e.h.classId);
+      const classes = (want[team] || this.mix(have, free.length)).slice(0, free.length).map((c) => (CLASS_IDS.includes(c) ? c : 'knight'));
+      while (classes.length < free.length) classes.push(this.mix(have.concat(classes), 1)[0]);
       const names = shuffled(BOT_NAMES[team]);
-      classes[team].forEach((cls, i) => {
-        const p = new Player(g, null, { remote: true, team, name: names[i], cls });
+      free.forEach((seat, i) => {
+        const p = new Player(g, null, { remote: true, team, name: names[i], cls: classes[i] });
         p.isBot = true;
         p.bot = new HeroBot(g, p, { enemyTeam: 1 - team });
-        p.heroSlot = team === 0 ? (i ? 2 : 0) : i;
+        p.heroSlot = placeOfSeat(seat);
+        p.hid = seat;
         g.humans.push(p);
         this.heroes.push(p);
       });
     }
-    for (const team of [0, 1]) {
-      const f = g.factions[team], lead = this.heroes.find((h) => h.team === team);
-      f.isPlayer = true; f.player = lead; f.hero = lead; f.lord = lead.name; f.name = this.sides[team].name;
-      f.gold = 0; f.respawnT = 0; f.heroDeaths = 0;
-    }
-    // the other two houses are switched off: no waves, no lords, no income (their castles stand empty)
-    for (const f of g.factions.slice(2)) { f.eliminated = true; f.gold = 0; f.hero = null; f.player = null; }
+    this.order();
+    this.seatSides();
     for (const p of this.heroes) {
       p.spawn(this.slotPos(p), g.castles[p.team].rot);
       if (p.bot) this.guard(p, (b) => b.reset());
@@ -122,6 +143,46 @@ export class HeroMode {
     g.phase = 'prep';
     g.phaseT = HERO.prep;
     this.prepLeft = HERO.prep;
+  }
+
+  // The two houses are the two sides (led, for the HUD's sake, by the hero on this screen or the side's first); the other two are switched off: no waves, no lords, no income
+  // (their castles stand empty).
+  seatSides() {
+    const g = this.g;
+    for (const team of [0, 1]) {
+      const f = g.factions[team], lead = (g.player.team === team ? g.player : this.heroes.find((h) => h.team === team)) || null;   // (this screen's hero leads its own side)
+      f.isPlayer = true; f.player = lead; f.hero = lead; f.lord = lead ? lead.name : this.sides[team].name; f.name = this.sides[team].name;
+      f.gold = 0; f.respawnT = 0; f.heroDeaths = 0;
+    }
+    for (const f of g.factions.slice(2)) { f.eliminated = true; f.gold = 0; f.hero = null; f.player = null; f.isPlayer = false; }
+  }
+
+  // the hero on this screen first, then its side by seat, then the other side
+  order() {
+    const me = this.g.player, mine = (p) => (p.team === me.team ? 0 : 1);
+    this.heroes.sort((a, b) => (b === me) - (a === me) || mine(a) - mine(b) || a.hid - b.hid);
+  }
+
+  // A guest's mirror: a hero the host's snapshots have brought (netsync.js) joins the roster.
+  adopt(p) {
+    if (this.heroes.includes(p)) return;
+    this.heroes.push(p);
+    this.order();
+    const f = this.g.factions[p.team];
+    if (f && !f.player) { f.player = f.hero = p; f.lord = p.name; }
+  }
+
+  // Online: a person left the match (Game.dropHuman). A hero bot takes their hero over where it stands, so the sides stay as they were.
+  toBot(p) {
+    const g = this.g;
+    if (!this.heroes.includes(p) || p.isBot) return;
+    if (p.drive) g.leaveEngine(p);
+    const name = p.name;
+    p.netId = null;
+    p.isBot = true;
+    p.bot = new HeroBot(g, p, { enemyTeam: 1 - p.team });
+    if (p.alive) this.guard(p, (b) => b.reset());
+    g.announce(`${name} left. A hero bot fights on in their place.`, p.team);
   }
 
   // Every frame the battle is simulated (single player or the host): respawns, the fountain, the clock, the win.
@@ -141,7 +202,7 @@ export class HeroMode {
       }
     }
     // the "Respawning in N s" overlay reads the house's timer
-    g.factions[0].respawnT = g.player.alive ? 0 : Math.max(0, g.player.respawnT || 0);
+    g.factions[g.player.team].respawnT = g.player.alive ? 0 : Math.max(0, g.player.respawnT || 0);
     const limit = this.timeLimit || HERO.hardCap;
     if (limit && this.clock >= limit) this.timeUp();
     else if (limit && !this.timeLimit && !this.warned && this.clock >= limit - 300) {
@@ -163,7 +224,7 @@ export class HeroMode {
     vs.deaths++;
     g.factions[victim.team].heroDeaths = vs.deaths;
     victim.respawnT = this.respawnTime(victim);
-    if (victim === g.player) g.factions[0].respawnT = victim.respawnT;
+    if (victim === g.player) g.factions[victim.team].respawnT = victim.respawnT;
     const ks = foe ? this.sides[by] : null;
     const first = foe && this.sides[0].kills + this.sides[1].kills === 0;
     if (ks) {
@@ -184,7 +245,7 @@ export class HeroMode {
 
   // ---------------- read by the HUD and the menus ----------------
   // One row per hero: { player, name, team, cls (class id), level, kills (heroes brought down), deaths, alive, respawnIn (seconds,
-  // 0 when alive), isBot, mine (the hero on this screen) }, Blue first.
+  // 0 when alive), isBot, mine (the hero on this screen) }: the hero on this screen first, then its side, then the other.
   roster() {
     return this.heroes.map((p) => ({
       player: p, name: p.name, team: p.team, cls: p.classId, level: p.level, kills: p.heroKills || 0, deaths: p.deaths,
@@ -206,7 +267,7 @@ export class HeroMode {
 
   // where a hero stands when the match begins and when they rise again
   slotPos(p) {
-    return this.g.castles[p.team].toWorld(HERO.slots[p.heroSlot] ?? 0, HERO.slotZ);
+    return this.g.castles[p.team].toWorld((HERO.slotsBySize[this.size] || HERO.slots)[p.heroSlot] ?? 0, HERO.slotZ);
   }
 
   rise(p) {

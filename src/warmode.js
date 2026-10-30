@@ -64,8 +64,12 @@ export class WarMode {
   setup(setup) {
     const g = this.g;
     const humans = setup.players.map((p) => p.team);
-    let houses = [0, 1, 2, 3];
-    if (this.format === 'duel' && humans.length <= 2 && !(g.coop && humans.length > 1)) houses = humans.length === 2 ? humans.slice().sort() : [humans[0], humans[0] === 1 ? 0 : 1].sort();
+    // (a castle the lobby or the menu left empty sends no army: seats.js)
+    let houses = [0, 1, 2, 3].filter((t) => !g.factions[t].empty);
+    if (this.format === 'duel' && humans.length <= 2 && !(g.coop && humans.length > 1)) {
+      const foe = houses.find((t) => !humans.includes(t));
+      houses = humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();
+    }
     let sides;
     if (g.coop && humans.length > 1) sides = humans.length >= 4 ? [[0, 1], [2, 3]] : [humans.slice(), houses.filter((t) => !humans.includes(t))];
     else if (this.format === 'teams') sides = [[0, 2], [1, 3]];

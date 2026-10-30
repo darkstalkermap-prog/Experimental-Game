@@ -102,9 +102,9 @@ function showFormat() {
 }
 
 // The War Mode button of the menu's Mode row and of the lobby's, and the row that chooses how the armies are set against each other. Called by main.js before
-// it wires the Mode buttons (so the new one is wired with them). ui: the page's UI (its lobby list is told when the room plays War Mode).
+// it wires the Mode buttons (so the new one is wired with them).
 // changed(): the host's lobby is sent again when the row changes.
-export function initWarMenu(ui, changed) {
+export function initWarMenu(changed) {
   style();
   onFormat = changed;
   const mk = (rowId) => {
@@ -123,25 +123,12 @@ export function initWarMenu(ui, changed) {
   $('objective').after(formatRow('warFormat', () => true));
   $('lobbyObjective').after(formatRow('lobbyWarFormat', amHost));
   showFormat();
-  // the room's list: in War Mode the slots are armies, not castles
-  const orig = ui.renderLobby.bind(ui);
-  ui.renderLobby = (players, myTeam, coop, obj, ...rest) => {
-    orig(players, myTeam, coop, obj === 'war' ? 'conquest' : obj, ...rest);
-    showWarLobby(obj === 'war');
-  };
+  // (the room's list, its Mode row and the Armies row's state in the lobby are drawn by lobbyui.js: in War Mode the castles there are armies)
   addEventListener('cw-menu', () => leaveHud());
 }
 
 // the Mode row shows (or hides) the format row
 export function showWarRow(on) { $('warFormat').classList.toggle('hidden', !on); }
-
-function showWarLobby(on) {
-  $('lobbyWarFormat').classList.toggle('hidden', !on);
-  document.querySelectorAll('#lobbyObjective button').forEach((b) => { if (on) b.classList.toggle('active', b.dataset.o === 'war'); else if (b.dataset.o === 'war') b.classList.remove('active'); });
-  if (on) $('lobbyObjDesc').textContent = `War Mode: ${WAR_DESC}`;
-  const guest = $('lobbyHostCtl').classList.contains('hidden');
-  document.querySelectorAll('#lobbyWarFormat button').forEach((b) => { b.disabled = guest; });
-}
 
 // a guest hears the host's format in the lobby message
 export function hearWar(w) {

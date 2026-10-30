@@ -224,7 +224,7 @@ export class LordAI {
     const g = this.g, f = this.f, A = this.P.aim;
     let best = null, bestScore = Infinity;
     for (const c of g.castles) {
-      if (c.fallen || allied(c.team, f.team)) continue;
+      if (c.fallen || allied(c.team, f.team) || g.factions[c.team].eliminated) continue;   // (an empty castle is nobody's war)
       const enemyTroops = g.garrisonCount(c.team);
       const dist = Math.hypot(c.center.x - f.castle.center.x, c.center.z - f.castle.center.z);
       let score = enemyTroops * A.troops + c.gate.hp / A.gate + c.keep.hp / A.keep + dist * A.dist + Math.random() * A.noise;
