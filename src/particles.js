@@ -115,6 +115,30 @@ ${FOG_ADD}
 
 function fogUniforms() { return THREE.UniformsUtils.clone(THREE.UniformsLib.fog); }
 
+// The slots written since the last upload, as at most two runs. Writes go round a ring, so after a wrap they sit at the end and at the start: one
+// range from the lowest to the highest slot would send the whole buffer every frame of a busy battle. A write joins the run it lengthens least.
+function dirtyReset(L) { L.aLo = L.max; L.aHi = -1; L.bLo = L.max; L.bHi = -1; }
+function dirtyAll(L) { L.aLo = 0; L.aHi = L.max - 1; L.bLo = L.max; L.bHi = -1; }
+function dirtyMark(L, i) {
+  if (L.aHi < 0) { L.aLo = L.aHi = i; return; }
+  if (i >= L.aLo && i <= L.aHi) return;
+  if (L.bHi >= 0 && i >= L.bLo && i <= L.bHi) return;
+  const growA = i < L.aLo ? L.aLo - i : i - L.aHi;
+  const growB = L.bHi < 0 ? (growA <= 64 ? Infinity : 0) : (i < L.bLo ? L.bLo - i : i - L.bHi);
+  if (growA <= growB) { if (i < L.aLo) L.aLo = i; else L.aHi = i; }
+  else if (L.bHi < 0) { L.bLo = L.bHi = i; }
+  else if (i < L.bLo) L.bLo = i; else L.bHi = i;
+}
+function dirtyUpload(L, stride) {
+  if (L.aHi < 0 && L.bHi < 0) return;
+  const b = L.buf;
+  b.clearUpdateRanges();
+  if (L.aHi >= 0) b.addUpdateRange(L.aLo * stride, (L.aHi - L.aLo + 1) * stride);
+  if (L.bHi >= 0) b.addUpdateRange(L.bLo * stride, (L.bHi - L.bLo + 1) * stride);
+  b.needsUpdate = true;
+  dirtyReset(L);
+}
+
 export class ParticleLayer {
   // clock: { t } shared by every layer of one FX (seconds, advanced by the game's own dt so hit-stop slows the effects too)
   constructor(scene, clock, { max, additive, order, name }) {
@@ -123,7 +147,7 @@ export class ParticleLayer {
     this.data = new Float32Array(max * S);
     this.next = 0;
     this.hw = 0;                 // slots that have ever been written (the draw covers just those until the ring wraps)
-    this.lo = max; this.hi = -1; // the freshly written range, still to upload
+    dirtyReset(this);            // the freshly written slots, still to upload (see dirtyMark)
     this.liveUntil = 0;
     const geo = new THREE.InstancedBufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
@@ -159,8 +183,7 @@ export class ParticleLayer {
     const i = this.next;
     this.next = i + 1 === this.max ? 0 : i + 1;
     if (i + 1 > this.hw) this.hw = i + 1;
-    if (i < this.lo) this.lo = i;
-    if (i > this.hi) this.hi = i;
+    dirtyMark(this, i);
     const d = this.data, o = i * S, t = this.clock.t;
     d[o] = x; d[o + 1] = y; d[o + 2] = z; d[o + 3] = t;
     d[o + 4] = vx; d[o + 5] = vy; d[o + 6] = vz; d[o + 7] = life;
@@ -183,8 +206,7 @@ export class ParticleLayer {
     if (d[o + T0] !== born) return;
     d[o + T0] = 1e30;
     const i = o / S;
-    if (i < this.lo) this.lo = i;
-    if (i > this.hi) this.hi = i;
+    dirtyMark(this, i);
   }
 
   // once a frame: send what was written, hide the layer while it is empty
@@ -192,12 +214,7 @@ export class ParticleLayer {
     const m = this.mat.uniforms;
     m.uTime.value = time;
     if (light) m.uLight.value.copy(light);
-    if (this.hi >= this.lo) {
-      this.buf.clearUpdateRanges();
-      this.buf.addUpdateRange(this.lo * S, (this.hi - this.lo + 1) * S);
-      this.buf.needsUpdate = true;
-      this.lo = this.max; this.hi = -1;
-    }
+    dirtyUpload(this, S);
     // an empty layer draws nothing (zero instances: no draw call), but stays in the scene so its shader is compiled up front
     this.geo.instanceCount = time < this.liveUntil ? this.hw : 0;
   }
@@ -207,13 +224,13 @@ export class ParticleLayer {
     const d = this.data;
     for (let o = T0; o < d.length; o += S) if (d[o] < 1e29) d[o] -= by;
     this.liveUntil -= by;
-    this.lo = 0; this.hi = this.max - 1;
+    dirtyAll(this);
   }
 
   clear() {
     this.data.fill(0);
     for (let o = T0; o < this.data.length; o += S) this.data[o] = 1e30;
-    this.next = 0; this.hw = 0; this.lo = 0; this.hi = this.max - 1; this.liveUntil = 0;
+    this.next = 0; this.hw = 0; this.liveUntil = 0; dirtyAll(this);
   }
 
   dispose() { this.geo.dispose(); this.mat.dispose(); }
@@ -268,7 +285,8 @@ export class DecalLayer {
     this.cap = max;     // how many of the slots the quality allows
     this.clock = clock;
     this.data = new Float32Array(max * DS);
-    this.next = 0; this.hw = 0; this.lo = max; this.hi = -1; this.liveUntil = 0;
+    this.next = 0; this.hw = 0; this.liveUntil = 0;
+    dirtyReset(this);
     const geo = new THREE.InstancedBufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 1, 0.5, 0.5, 2, -0.5, 0.5, 3], 3));
     geo.setIndex([0, 1, 2, 0, 2, 3]);
@@ -299,8 +317,7 @@ export class DecalLayer {
     if (i >= this.cap) i = 0;
     this.next = i + 1;
     if (i + 1 > this.hw) this.hw = i + 1;
-    if (i < this.lo) this.lo = i;
-    if (i > this.hi) this.hi = i;
+    dirtyMark(this, i);
     const d = this.data, o = i * DS, t = this.clock.t;
     d[o] = x; d[o + 1] = z; d[o + 2] = angle; d[o + 3] = size;
     d[o + 4] = h0; d[o + 5] = h1; d[o + 6] = h2; d[o + 7] = h3;
@@ -313,12 +330,7 @@ export class DecalLayer {
     const m = this.mat.uniforms;
     m.uTime.value = time;
     if (light) m.uLight.value.copy(light);
-    if (this.hi >= this.lo) {
-      this.buf.clearUpdateRanges();
-      this.buf.addUpdateRange(this.lo * DS, (this.hi - this.lo + 1) * DS);
-      this.buf.needsUpdate = true;
-      this.lo = this.max; this.hi = -1;
-    }
+    dirtyUpload(this, DS);
     this.geo.instanceCount = time < this.liveUntil ? Math.min(this.hw, this.max) : 0;
   }
 
@@ -326,10 +338,10 @@ export class DecalLayer {
     const d = this.data;
     for (let o = 8; o < d.length; o += DS) d[o] -= by;
     this.liveUntil -= by;
-    this.lo = 0; this.hi = this.max - 1;
+    dirtyAll(this);
   }
 
-  clear() { this.data.fill(0); for (let o = 9; o < this.data.length; o += DS) this.data[o] = 1; this.next = 0; this.hw = 0; this.liveUntil = 0; this.lo = 0; this.hi = this.max - 1; }
+  clear() { this.data.fill(0); for (let o = 9; o < this.data.length; o += DS) this.data[o] = 1; this.next = 0; this.hw = 0; this.liveUntil = 0; dirtyAll(this); }
 
   dispose() { this.geo.dispose(); this.mat.dispose(); }
 }
