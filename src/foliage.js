@@ -13,6 +13,7 @@ import { patchMaterial } from './shaderhook.js';
 import { shadowProxy } from './shadows.js';
 import { buildSpruce, buildPine, buildOak, buildBirch, buildRock, buildBare, buildPalm, buildCactus, buildShrub } from './foliagegeo.js';
 import { active, treeSlot } from './biomes.js';
+import { paintSpruce, paintPine, paintOak, paintBirch, CARD_FOOT } from './treecards.js';
 
 // shared by everything that moves in the wind (trees here, grass in grass.js)
 export const WIND = { time: { value: 0 }, amp: { value: 1 } };
@@ -34,15 +35,15 @@ const hash01 = (x, z, k) => { const s = Math.sin(x * 12.9898 + z * 78.233 + k * 
 const SPRUCE = { dark: [0.02, 0.075, 0.05], lite: [0.06, 0.17, 0.08], snow: 0.95 }, PINE_S = { dark: [0.028, 0.1, 0.06], lite: [0.09, 0.2, 0.1], snow: 0.9 };
 const SPECIES = {
   spruce: { build: (l) => buildSpruce(l), h: 10.2, w: 5.6, paint: (g, ox) => paintSpruce(g, ox, {}) },
-  pine: { build: (l) => buildPine(l), h: 9.8, w: 4.6, paint: (g, ox) => paintPine(g, ox, {}) },
-  oak: { build: (l) => buildOak(l), h: 8.6, w: 6.2, paint: (g, ox) => paintOak(g, ox, {}) },
+  pine: { build: (l) => buildPine(l), h: 9.8, w: 5.6, paint: (g, ox) => paintPine(g, ox, {}) },
+  oak: { build: (l) => buildOak(l), h: 8.6, w: 7.2, paint: (g, ox) => paintOak(g, ox, {}) },
   birch: { build: (l) => buildBirch(l), h: 8.8, w: 3.4, paint: (g, ox) => paintBirch(g, ox, {}) },
   spruceSnow: { build: (l) => buildSpruce(l, SPRUCE), h: 10.2, w: 5.6, paint: (g, ox) => paintSpruce(g, ox, { snow: true }) },
-  pineSnow: { build: (l) => buildPine(l, PINE_S), h: 9.8, w: 4.6, paint: (g, ox) => paintPine(g, ox, { snow: true }) },
+  pineSnow: { build: (l) => buildPine(l, PINE_S), h: 9.8, w: 5.6, paint: (g, ox) => paintPine(g, ox, { snow: true }) },
   oakBare: { build: (l) => buildBare(l, { snow: true, bark: [0.1, 0.08, 0.07], barkLite: [0.17, 0.14, 0.12] }), h: 8.6, w: 6.0, paint: (g, ox) => paintBare(g, ox, { bark: '#2b2420', snow: true, big: true }) },
   birchBare: { build: (l) => buildBare(l, { snow: true, birch: true, phase: 1.1 }), h: 8.8, w: 3.6, paint: (g, ox) => paintBare(g, ox, { bark: '#d6d3c8', twig: '#3a3530', snow: true }) },
   spruceDrab: { build: (l) => buildSpruce(l, { dark: [0.025, 0.06, 0.04], lite: [0.07, 0.12, 0.06] }), h: 10.2, w: 5.4, paint: (g, ox) => paintSpruce(g, ox, { lo: '#3d6038', mid: '#264a30', hi: '#16301f' }) },
-  mossOak: { build: (l) => buildOak(l, { dark: [0.02, 0.05, 0.03], lite: [0.09, 0.17, 0.07] }), h: 8.6, w: 6.2, paint: (g, ox) => paintOak(g, ox, { a: '#5c7a44', b: '#233624', trunk: '#3a3326' }) },
+  mossOak: { build: (l) => buildOak(l, { dark: [0.02, 0.05, 0.03], lite: [0.09, 0.17, 0.07] }), h: 8.6, w: 7.2, paint: (g, ox) => paintOak(g, ox, { a: '#5c7a44', b: '#233624', trunk: '#3a3326' }) },
   birchDrab: { build: (l) => buildBirch(l, { dark: [0.05, 0.1, 0.03], lite: [0.2, 0.27, 0.06] }), h: 8.8, w: 3.4, paint: (g, ox) => paintBirch(g, ox, { a: '#8a9a4c', b: '#3a4a26' }) },
   deadTree: { build: (l) => buildBare(l, { bark: [0.1, 0.09, 0.075], barkLite: [0.17, 0.15, 0.12], lean: 0.8, height: 7.6, count: 5, spread: 0.85, thick: 1.7, phase: 0.4 }), h: 8.0, w: 4.2, paint: (g, ox) => paintBare(g, ox, { bark: '#4a4338', lean: 18 }) },
   bleachedTree: { build: (l) => buildBare(l, { bark: [0.3, 0.26, 0.2], barkLite: [0.42, 0.37, 0.29], lean: -0.6, height: 6.8, count: 5, spread: 0.8, thick: 1.6, phase: 2 }), h: 7.2, w: 4.0, paint: (g, ox) => paintBare(g, ox, { bark: '#b4a68c', lean: -16 }) },
@@ -66,38 +67,6 @@ const blobAt = (g, cx, cy, rx, ry, a, b) => {
   grd.addColorStop(0, a); grd.addColorStop(1, b);
   g.fillStyle = grd; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); g.fill();
 };
-function paintSpruce(g, ox, c) {   // stacked ragged tiers (snow: a white cap on each)
-  g.fillStyle = '#3a2a1c'; g.fillRect(ox + 60, 205, 8, 51);
-  for (let i = 0; i < 7; i++) {
-    const t = i / 6, y = 214 - i * 28, w = 52 - 44 * Math.pow(t, 0.85);
-    const grd = g.createLinearGradient(ox + 64 - w, 0, ox + 64 + w, 0);
-    grd.addColorStop(0, c.lo || '#46803f'); grd.addColorStop(0.45, c.mid || '#2c5e38'); grd.addColorStop(1, c.hi || '#173d2a');
-    g.fillStyle = grd; g.beginPath(); g.moveTo(ox + 64, y - 46);
-    for (let k = 0; k <= 6; k++) g.lineTo(ox + 64 + w - (k / 6) * 2 * w, y + (k % 2 ? 0 : 7));
-    g.closePath(); g.fill();
-    if (c.snow) {
-      g.fillStyle = 'rgba(232,240,248,0.95)'; g.beginPath(); g.moveTo(ox + 64, y - 46);
-      g.lineTo(ox + 64 + w * 0.82, y - 6); g.lineTo(ox + 64 + w * 0.3, y - 10); g.lineTo(ox + 64, y - 3); g.lineTo(ox + 64 - w * 0.3, y - 10); g.lineTo(ox + 64 - w * 0.82, y - 6);
-      g.closePath(); g.fill();
-    }
-  }
-}
-function paintPine(g, ox, c) {   // bare trunk, a few cloud-like clumps on top
-  g.fillStyle = '#6b4a30'; g.fillRect(ox + 60, 96, 7, 160);
-  [[64, 58, 38, 22], [92, 96, 30, 18], [38, 108, 30, 17], [66, 132, 26, 14]].forEach(([x, y, rx, ry]) => {
-    blobAt(g, ox + x, y, rx, ry, '#4f8a4a', '#1f4a30');
-    if (c.snow) blobAt(g, ox + x, y - ry * 0.35, rx * 0.9, ry * 0.55, '#f2f6fa', '#b9c6d2');
-  });
-}
-function paintOak(g, ox, c) {   // a short trunk under a lumpy round crown
-  g.fillStyle = c.trunk || '#4a3322'; g.fillRect(ox + 59, 150, 10, 106);
-  [[64, 96, 52, 46], [32, 124, 30, 26], [98, 124, 30, 26], [64, 60, 34, 28], [86, 78, 26, 24]].forEach(([x, y, rx, ry]) => blobAt(g, ox + x, y, rx, ry, c.a || '#7aa63c', c.b || '#2d5a22'));
-}
-function paintBirch(g, ox, c) {   // white trunk, a narrow light crown
-  g.fillStyle = '#d8d4c6'; g.fillRect(ox + 61, 70, 5, 186);
-  g.fillStyle = '#35332c'; for (let y = 90; y < 250; y += 17) g.fillRect(ox + 61, y, 5, 3);
-  [[64, 70, 30, 40], [50, 118, 22, 26], [80, 110, 22, 28], [64, 36, 20, 24]].forEach(([x, y, rx, ry]) => blobAt(g, ox + x, y, rx, ry, c.a || '#9cc650', c.b || '#3f7a2a'));
-}
 // a leafless tree: a tapering trunk and branches that fork twice (snow lies on the forks)
 function paintBare(g, ox, c) {
   const lean = c.lean || 0;
@@ -198,12 +167,13 @@ function materials() {
   return { treeMat, rockMat, cardMat };
 }
 
-// a unit card standing on the ground, 1 m wide and 1 m tall; its size comes from the instance matrix
+// a unit card standing on the ground, 1 m wide and 1 m tall; its size comes from the instance matrix. The quad goes CARD_FOOT below the
+// ground line (v < 0 reads the strip's bottom row: the trunk goes on into the slope)
 function cardGeometry(cap) {
   const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -CARD_FOOT, 0, 0.5, -CARD_FOOT, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
   g.setAttribute('normal', new THREE.Float32BufferAttribute([0, 0.8, 0.6, 0, 0.8, 0.6, 0, 0.8, 0.6, 0, 0.8, 0.6], 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, -CARD_FOOT, 1, -CARD_FOOT, 1, 1, 0, 1], 2));
   g.setIndex([0, 1, 2, 0, 2, 3]);
   g.setAttribute('aCell', new THREE.InstancedBufferAttribute(new Float32Array(cap), 1));
   g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e5);
