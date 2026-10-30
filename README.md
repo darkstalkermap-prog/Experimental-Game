@@ -341,12 +341,16 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   Press **O** for the clickable **Orders** menu, which has orders, formations, army groups, the gate and an
   army count. Orders go to the soldiers in your **army** (see above); the garrison always defends the castle and
   the lane soldiers march on their own.
-- **Gates are solid**: a closed gate stops everybody, your own side included. It swings open for your friends as they
-  come near and shuts the moment an enemy is at it (within 5.5 m). An open gate is an open gateway for everybody: an
-  enemy (hero or soldier) who reaches it before it shuts walks straight in, and armies route through it while it stands
-  open. It never shuts on anyone, friend or foe, standing in the gateway, and a broken gate lets everyone through. You, the lord, can always call your own gate open by standing within 6 m of it, to lead a sally against
-  a gate the enemy is besieging, and so can soldiers you have ordered out (charge or assault) once they reach it.
-  The garrison stays behind a shut gate. Your arrows pass an open gate, not a shut one.
+- **Gates are solid**: a closed gate stops everybody, your own side included. A castle's gate is the door of its
+  marching troops: it swings open for the wave soldiers (and your lane), your army when you order it out, and your own
+  soldiers coming home, and shuts behind them. It stays shut while enemies come at it (any enemy within 20 m, or within
+  40 m and closing in: heroes, soldiers, riders, engines). Troops held back by enemies wait in the courtyard; after
+  12 s, if there are enough of them and no enemy is within 9 m, the gate opens and they sally out to fight. The
+  garrison never opens it (its swordsmen leave enemies outside the walls to the archers). You, the lord, have your own
+  gate opened by walking up to it (within 6 m) unless an enemy is within 9 m, so you are never shut in or out (and
+  nobody gets in behind you: see below). An open gate lets only its own side and allies through: an enemy never walks
+  in, he has to break it, and a broken gate lets everyone through. A gate never shuts on its own man in the gateway
+  unless an enemy is within 9 m. Your arrows pass an open gate, not a shut one. The numbers are `GATE` in `src/config.js`.
 - **The gate lever**: stand at the lever just inside your gate and press **E** to bar the gate. A barred gate
   stays shut for everyone, your own troops included, until you unbar it. You can also do this from the Orders
   menu.
@@ -362,8 +366,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit.
   A wall that is badly damaged loses its merlons.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
-- **Death**: your hero respawns at the keep. Each death makes the wait longer. Once your keep falls, you can no
-  longer respawn.
+- **Death**: your hero respawns in the courtyard of your own keep, wherever you fell (in an enemy castle, at the
+  wheel of an engine, on horseback). Each death makes the wait longer. Once your keep falls, you can no longer
+  respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
 - **Cavalry**: mounted troops ride through their targets, and their charges hit harder. Waves bring riders
   from about wave 7, and Elite Levies add them to every wave.
 - **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, E whistles it over.

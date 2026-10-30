@@ -51,6 +51,18 @@ export const CASTLE = {
   keepHp: 3000,
 };
 
+// Who the gate opens for and when it stays shut (Game.gateShouldOpen). Distances are from the gate, in metres.
+export const GATE = {
+  far: 40,        // an enemy closing in from this far off keeps the gate shut
+  near: 20,       // an enemy this close keeps it shut whether he comes on or not
+  closing: 0.12,  // metres nearer since the last look (GATE.every) that count as closing in
+  slip: 9,        // an enemy this close: the gate shuts even on a man in the gateway, and no sally
+  use: 10,        // own troops this near the gate (in the courtyard or outside) ask for it
+  sally: 12,      // seconds troops wait behind a shut gate before they sally out at enemies kept beyond GATE.slip
+  sallyMen: 4,    // and at least this many of them, and no fewer than the enemies coming
+  every: 0.1,     // seconds between looks
+};
+
 // Army waves, MOBA style: every castle sends a fresh wave marching out on a fixed timer, for as long as it stands.
 export const WAVES = {
   firstPrep: 60,      // preparation time before the first wave (buy and upgrade before the match)

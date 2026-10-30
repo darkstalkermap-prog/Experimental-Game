@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, HOUSE_NAMES, HOUSE_LORDS, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
-  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON, WAR_WORLD,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON, WAR_WORLD, GATE,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -578,12 +578,18 @@ export class Game {
   // Nearest hostile character or siege engine for an AI unit.
   findEnemy(unit, radius, anchor, leash, skip = null) {
     let best = null, bd = Infinity;
+    // a swordsman of the garrison inside his sealed castle (the gate standing, no breach) cannot reach anyone outside the
+    // walls: the gate does not open for him (gateShouldOpen), so he leaves them to the archers instead of crowding the gateway
+    const home = unit.homeCastle;
+    const sealed = !unit.ranged && !unit.lane && !unit.army && !unit.isHero && home && !home.fallen && home.gate.alive &&
+      home.isInside(unit.pos, 0) && !home.walls.some((w) => !w.alive) ? home : null;
     const consider = (o) => {
       if (o === skip || !o.alive || allied(o.team, unit.team) || o.drive) return;
       if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
       if (!unit.ranged && o.pos.y - unit.pos.y > 2.4) return; // up on a wall: unreachable
+      if (sealed && !sealed.isInside(o.pos, -1)) return;
       if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;
       let score = d;
       if (o.isSiege) score -= 1;
@@ -610,32 +616,61 @@ export class Game {
     return null;
   }
 
-  // The gate swings open for friends and shuts when an enemy is at it. Shut, it is solid for everybody (Physics.resolve),
-  // so nobody walks through a closed gate. It never shuts on a friend standing in the gateway, the lord (a hero)
-  // standing near it can always call it open to lead a sally, and so can soldiers who have been ordered out (charge or
-  // assault) and have reached it: a command to march out is obeyed, besieged or not.
+  // The gate is the door of the castle's marching troops and of nobody else. It stays shut while enemies are coming
+  // (any enemy within GATE.near of it, or within GATE.far and closing in: heroes, soldiers, riders, engines and their
+  // crews), and swings open only for its own side's troops on the move: the wave soldiers (and the lane), the army
+  // marching out on its lord's orders, and its own soldiers coming home from outside. The garrison never works it. The
+  // house's own hero (a player, an AI lord, a Hero Game Mode hero) standing at it (6 m) has it opened unless an enemy is
+  // within GATE.slip: he could not get out over his walls, and nobody gets in behind him. Shut, the gate is solid for everybody, and open it lets
+  // only its own side through (Physics.lets), so an enemy never slips in; enemies batter it instead (nav.gatePassable).
+  // Troops held back by enemies wait in the courtyard; when they have waited GATE.sally seconds, there are enough of
+  // them and no enemy is within GATE.slip of the gate, it opens to let them sally out and fight before the gate.
+  // It never shuts on its own man in the gateway, unless an enemy is within GATE.slip (then he is pushed clear).
+  // Worked out every GATE.every s (the host's answer is sent to guests: Castle.netState).
   gateShouldOpen(castle) {
     if (this.state !== 'playing') return false;
-    let friend = false, foe = false, hold = false, wedged = false;
-    const p = castle.gatePos, gate = castle.gate;
-    this.grid.query(p.x, p.z, 9, (u) => {
+    if (!this.simulating) return !!castle.netGateOpen;
+    if (this.time < (castle.gateNext || 0) && castle.gateWant !== undefined) return castle.gateWant;
+    castle.gateNext = this.time + GATE.every;
+    const p = castle.gatePos, cy = castle.center.y, team = castle.team;
+    let users = 0, foes = 0, danger = false, slip = false, wedged = false, lord = false;
+    const look = (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
-      if (allied(u.team, castle.team)) {
-        if (u.pos.y - castle.center.y > 3.5) return;   // archers up on the wall walk don't work the gate
-        if (d < 8) friend = true;
-        if (u.isHero && d < 6) hold = true;
-        else if (!u.isPlayer && d < 4.5 && (u.order === 'assault' || u.order === 'charge')) hold = true;   // ordered out: the gate yields
-      } else if (d < 5.5) foe = true;
-      const mine = allied(u.team, castle.team);
-      if (d < 3 && (mine || gate.openAmt > 0.05) && u.pos.y - castle.center.y < 3) {
-        // nobody has the gate shut on them while standing in the gateway: a friend there holds it (or opens it), and an
-        // enemy who got in while it stood open keeps it open until he is through (or dead); a shut gate stays shut to him
+      if (d > GATE.far) return;
+      if (!allied(u.team, team)) {
+        // (how far it was at the last look: closing in, or just standing about out there)
+        const was = u.gateLook === castle ? u.gateD : d;
+        u.gateLook = castle; u.gateD = d;
+        if (d < GATE.near || d < was - GATE.closing) { danger = true; foes++; }
+        if (d < GATE.slip) slip = true;
+        return;
+      }
+      if (d > GATE.use || u.pos.y - cy > 3.5 || u.post) return;   // (archers up on the wall walk don't work the gate)
+      const inside = castle.isInside(u.pos, -0.5);
+      if (u.isHero || u.isPlayer) { if (d < 6) lord = true; }   // (a lord at his gate wants through; idling in the courtyard he does not)
+      else if (!inside || u.lane || (u.army && u.order !== 'defend' && u.order !== 'hold')) users++;   // (not a garrison, nor an army told to stay)
+      if (d < 4) {
         const l = castle.toLocal(u.pos.x, u.pos.z);
         if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) wedged = true;
       }
-    });
-    return wedged || (friend && (hold || !foe));
+    };
+    this.grid.query(p.x, p.z, GATE.far, look);
+    for (const s of this.siege) if (s.alive && !s.abandoned && !allied(s.team, team)) look(s);   // (an engine of its own never asks for it: they are built outside)
+    let open;
+    if (slip) open = false;
+    else if (wedged && castle.gate.openAmt > 0.05) open = true;   // (let him finish going through)
+    else if (lord) open = true;   // (no enemy can slip in, and the walls are no road for a lord: he is never shut in or out)
+    else if (!users) open = false;
+    else if (!danger) open = true;
+    else open = castle.gateSally || (users >= GATE.sallyMen && users >= foes && this.time - (castle.gateWaitAt ?? this.time) > GATE.sally);
+    // (how long troops have been held back, and a sally once begun goes on until they are out or an enemy comes too close)
+    castle.gateSally = open && danger;
+    if (!users || open) castle.gateWaitAt = undefined;
+    else if (castle.gateWaitAt === undefined) castle.gateWaitAt = this.time;
+    castle.gateWant = open;
+    castle.gateUsers = users; castle.gateFoes = foes; castle.gateSlip = slip;   // (for the tests)
+    return open;
   }
 
   pushOutOfWalls(castle) {
@@ -844,6 +879,9 @@ export class Game {
   }
 
   onPlayerKilled(attacker, p = this.player) {
+    // a hero slain at the wheel of an engine lets go of it: otherwise the engine still counted him its driver and, once he
+    // rose again at his keep, carried him straight back to itself every frame (to the enemy gate it was battering)
+    if (p.drive) this.leaveEngine(p);
     stats.fell(p);   // (a run of kills ends, a hero slain is counted for the one who struck the blow)
     if (attacker && attacker.st && attacker !== p && !allied(attacker.team, p.team)) stats.slain(attacker);
     if (this.hero) { this.hero.heroDown(p, attacker); return; }   // (Hero Game Mode: its own timers, score and win)
