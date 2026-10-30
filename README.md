@@ -429,14 +429,14 @@ the Reckless" does not play like "Lady Morwen the Patient", so each match asks f
 | Lord | Style | How to meet him |
 | --- | --- | --- |
 | **the Reckless** (Rusher) | Strikes at about 2:30 with swords and riders, guards the castle thinly and mends it late. | Hold the gate through the first push, then hit back at the thin walls. |
-| **the Patient** (Turtler) | Raises walls, gate and towers first, calls the army home when a host stands at the gate, marches after 8 minutes with a huge army. | Do not feed an army to the walls: break the others first, or bring engines. |
-| **the Breaker** (Siege-lover) | Buys rams and catapults from the first minutes, keeps spearmen with them and does not march without an engine. | Kill the engines before they reach the gate (riders and archers do it best). |
+| **the Patient** (Turtler) | Raises walls, gate and towers first (its masons work cheap), calls the army home when a host stands at the gate, marches after about 8:30 with a big army. | Do not feed an army to the walls: break the others first, or bring engines. |
+| **the Breaker** (Siege-lover) | Buys rams and catapults from about 2:30 on (its engineers work cheap), keeps spearmen with them and does not march without an engine. | Kill the engines before they reach the gate (riders and archers do it best). |
 | **the Swift** (Raider) | Fast riders raid the field again and again, never for long, and leave the waves on their lanes. | Archers on the wall and riders of your own: raiders flee a fight they cannot win. |
-| **the Gilded** (Merchant) | Earns more than the others and spends it on Elite Levies, Drill Sergeants and the barracks, attacks late. | Hit early, before the levies pay off. |
+| **the Gilded** (Merchant) | Invests before it fights: Elite Levies, Drill Sergeants, a bigger barracks and thick walls first; marches after about 8 minutes, with waves that are better trained than yours. | Hit early, before the levies pay off. |
 | **the Vengeful** (Zealot) | Every wave, engine, giant and push marches on the human houses and nobody else. | Stand your gate: the other houses are left in peace. |
 | **the Ironclad** (Warlord) | Few soldiers but knights and veterans, promoted early, the lord at their head. | Archers and engines hurt plate best; stay out of the open. |
-| **the Giantsworn** (Giant-caller) | Saves every coin for a giant, keeps a thin guard, calls the next one when the last has fallen. | Kill the giant (600 gold) or hit the thin guard while the next one is paid for. |
-| **the Cunning** (Opportunist) | Waits until a castle is broken (a gate down, a keep burning), then pounces on the wreck. | Do not leave your gate broken or your keep burning. |
+| **the Giantsworn** (Giant-caller) | Saves every coin for a giant (its retinue pays two fifths), keeps a thin guard and calls the next one when the last has fallen: one every few minutes. | Kill the giant (600 gold) or hit the thin guard while the next one is paid for. |
+| **the Cunning** (Opportunist) | Drills its men and waits until a castle is broken (a gate down, a keep burning), then pounces on the wreck. | Do not leave your gate broken or your keep burning. |
 
 Each lord has six names (three Lords, three Ladies) to go with the epithet. They are shown wherever a lord is named: a **card at the start of the
 match** with each rival and how he plays, a small tag next to every house in the top-left list ("House Elden  Patient"), the **Rival lords** list in the
@@ -446,7 +446,9 @@ has a **Rivals next battle** row (with *Draw other lords*) and says how the riva
 
 **Options -> Named rival lords** (On by default, remembered in this browser) switches them off: every house then has the plain old lord ("Lord Varr", "Lady
 Elden", "Lord Sol") whose numbers are the ones the AI always had. The difficulty stays the strength scale (Easy, Normal, Hard make every lord slower or
-quicker to attack, in the same way); the lords differ in style, not in cheating. Online, the host draws the lords and sends the ids in the start message
+quicker to attack, in the same way); the lords differ in style, not in cheating (the Patient's masons, the Breaker's engineers and the Giantsworn's retinue
+each pay a share of what their plan buys, which is what keeps those plans a match for the others). Bot-versus-bot matches were used to tune them so that no lord
+is far ahead of or behind the rest. Online, the host draws the lords and sends the ids in the start message
 (`options.rivals`), the guests only show them; a player who leaves is replaced by the plain lord. Hero Game Mode and the practice courtyard have no rival
 lords.
 

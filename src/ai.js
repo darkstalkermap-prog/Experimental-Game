@@ -89,7 +89,7 @@ export class LordAI {
         if (this.try(goal.id)) {
           this.goalAt = g.time;
           if (goal.id === 'ram' || goal.id === 'catapult') this.engineNext = goal.id === 'ram' ? 'catapult' : 'ram';
-        } else { f.gold -= gift; f.earned -= gift; }
+        } else { f.gold -= gift; f.earned -= gift; floor = f.gold + 1; }   // (the shop wanted more than he thought, or said no: he keeps what he has)
       } else floor = goal.cost - gift;
     }
     const need = P.garrison ? Math.ceil(P.garrison * f.troopCap) : 0;
