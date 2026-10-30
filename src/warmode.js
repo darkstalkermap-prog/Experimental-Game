@@ -605,6 +605,8 @@ export class WarMode {
     for (const f of g.factions) {
       if (!f.war || f.eliminated) continue;
       const s = this.standing(f.team);
+      // a group following a hero who has fallen stops and holds where it is (units.js would send it home to its house's castle, far off the map)
+      if (!s.hero && f.isPlayer) for (const k of WAR_GROUPS) if (f.war.plan[k] === 'follow') this.command(f.team, k, 'hold');
       if (s.n || s.hero) continue;
       f.eliminated = true;
       g.announce((t) => (t === f.team ? 'Your army has fallen to the last man.' : `${f.name}'s army has been wiped out!`), f.team, f.team);

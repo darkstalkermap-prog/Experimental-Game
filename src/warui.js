@@ -41,6 +41,7 @@ export const WAR_DESC = `No castles: each army musters on a hill of its own, and
 const CSS = `
 #hud.war #factions, #hud.war #top, #hud.war #goldbox, #hud.war #army, #hud.war #clsHint, #hud.war #hill, #hud.war #hint, #hud.war #command, #hud.war #respawn { display: none !important; }
 body.war-on #scoreboard { display: none !important; }
+body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warTop { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none; text-align: center; min-width: 340px; max-width: calc(100% - 420px); }
 #warTop .wt-main { display: inline-flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
 #warTop .wt-clock { font-family: Cinzel, Georgia, serif; font-size: 22px; color: var(--gold); letter-spacing: 0.05em; }
@@ -96,7 +97,8 @@ body.war-on #scoreboard { display: none !important; }
 #warCmd button.on { background: linear-gradient(rgba(224,180,76,0.34), rgba(224,180,76,0.12)); border-color: var(--gold); color: #fff; }
 #warCmd button.none { opacity: 0.45; }
 #warCmd .wc-orders, #warCmd .wc-forms { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
-#warCmd .wc-forms button { min-width: 84px; padding: 3px 8px; font-size: 13px; }
+#warCmd .wc-orders button { min-width: 0; padding: 4px 8px 5px; white-space: nowrap; }
+#warCmd .wc-forms button { min-width: 0; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 #warCmd .wc-label kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 #warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 13px; color: var(--gold); min-width: 84px; text-align: right; padding-right: 4px; }
 #warCmd .wc-hint { font-size: 13px; opacity: 0.8; }

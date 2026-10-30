@@ -15,6 +15,9 @@ const tmpM = new THREE.Matrix4();
 const tmpC = new THREE.Color();
 const tmpD = new THREE.Vector3();
 
+// a ring keeps about the same size on screen: small at the hero's feet, a few metres across far down the field
+const ringScale = (cam, x, y, z) => Math.max(0.3, Math.min(2.2, Math.hypot(x - cam.x, y - cam.y, z - cam.z) * 0.018));
+
 function flagTexture(n, css) {
   const c = document.createElement('canvas');
   c.width = 64; c.height = 96;
@@ -95,7 +98,7 @@ class Marks {
         if (!u.alive || u.team !== f.team || u.isHero || u.isCrew) continue;
         if (sel !== 'all' && groupKey(u) !== sel) continue;
         const d = Math.hypot(u.pos.x - cam.x, u.pos.y - cam.y, u.pos.z - cam.z);
-        const s = Math.max(0.7, Math.min(3.2, d * 0.022));   // (about the same size on screen near and far, never smaller than a hand)
+        const s = Math.max(0.35, Math.min(3.2, d * 0.02));   // (about the same size on screen near and far)
         tmpM.makeScale(s, s, s).setPosition(u.pos.x, u.pos.y + (u.height || 1.8) + 0.45 + 0.35 * s + bob, u.pos.z);
         this.sel.setMatrixAt(n++, tmpM);
       }
@@ -112,15 +115,16 @@ class Marks {
       const bright = sel === k || sel === 'all';
       flag.material.opacity = bright ? 1 : 0.55;
       flag.position.set(d.x, y, d.z);
-      flag.rotation.y = Math.atan2(cam.x - d.x, cam.z - d.z) - Math.PI / 2 + Math.sin(t * 1.7 + i) * 0.15;   // (turned to the eye, stirring)
+      flag.rotation.y = Math.atan2(cam.x - d.x, cam.z - d.z) + Math.sin(t * 1.7 + i) * 0.2;   // (turned to the eye, stirring)
       tmpM.makeTranslation(d.x, y, d.z);
       this.poles.setMatrixAt(p++, tmpM);
-      tmpM.makeTranslation(d.x, y + 0.15, d.z);
+      const k = ringScale(cam, d.x, y, d.z);
+      tmpM.makeScale(k, 1, k).setPosition(d.x, y + 0.15, d.z);
       this.rings.setMatrixAt(r, tmpM);
       this.rings.setColorAt(r++, tmpC.set(bright ? 0xffd34d : 0xb89a50));
     });
     if (aim) {
-      const s = 0.8 + Math.sin(t * 5) * 0.06;
+      const s = ringScale(cam, aim[0], aim[1], aim[2]) * (0.9 + Math.sin(t * 5) * 0.06);
       tmpM.makeScale(s, 1, s).setPosition(aim[0], aim[1] + 0.15, aim[2]);
       this.rings.setMatrixAt(r, tmpM);
       this.rings.setColorAt(r++, tmpC.set(0xfff2b0));
