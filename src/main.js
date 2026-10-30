@@ -344,7 +344,7 @@ $('quickPlay').focus();   // (Enter or Space on the main menu is then Quick Play
 // Play Again: no reload. The world for it was built while the end screen was up (freshWorldSoon), so this only starts the match.
 function playAgain() {
   refreshOptions();   // (the end screen may have rolled the next battle into the stored options)
-  startSolo();
+  if (game.spectator) startSpectate(); else startSolo();   // (a battle that was watched: watch the next one)
 }
 function toMenu() {
   if (net) { location.reload(); return; }   // an online game is left by starting the page afresh
@@ -389,6 +389,19 @@ function startSolo() {
   begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], objective, war: warOn ? warSetup() : undefined, empty, colors: assignColors(colorWants([me], false)), options: matchOptions([me.team, ...empty]) });
 }
 $('play').addEventListener('click', startSolo);
+// Spectate (the quiet button under the ways to play): the battle the setup describes, watched instead of played (spectate.js). Every house is an AI lord (the
+// castles left empty stay empty), War Mode's armies are AI generals', Hero Mode's seats are all bots.
+function startSpectate() {
+  rememberLast();
+  const colors = assignColors([null, null, null, null]);
+  if (heroOn) {
+    begin(difficulty, { mode: 'single', spectator: true, localTeam: 0, players: [], hero: { win: heroWin, size: heroCount, seats: freshSeats() }, colors, options: matchOptions() });
+    return;
+  }
+  const empty = emptyTeams(soloSlots.map((s, t) => (t === soloSlot ? 'open' : s)), []);
+  begin(difficulty, { mode: 'single', spectator: true, localTeam: 0, players: [], objective, war: warOn ? warSetup() : undefined, empty, colors, options: matchOptions(empty) });
+}
+$('spectateBtn').addEventListener('click', startSpectate);
 $('quickPlay').addEventListener('click', startSolo);
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass, me: true }], practice: true, colors: assignColors([myColor, null, null, null]) }, 'small'));

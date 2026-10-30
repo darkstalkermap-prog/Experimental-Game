@@ -35,6 +35,7 @@ export class HostSync {
     const net = game.net;
     net.on('data', ({ from, d }) => this.onData(from, d));
     net.on('leave', (id) => {
+      game.watchers = game.watchers.filter((w) => w.netId !== id);   // (a guest who only watched: nothing to take over)
       const p = game.humans.find((h) => h.netId === id);
       if (p) game.dropHuman(p);
     });
@@ -228,6 +229,9 @@ export class HostSync {
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
+    // the guests who watch (spectate.js): the same picture of the battle and the news, no hero of their own. (Nothing they send is heard: onData only
+    // listens to the people behind the heroes.)
+    for (const w of g.watchers) g.net.toClient(w.netId, { k: 'snap', s: shared, me: null, pev: this.priv.get(w.netId) || [] });
     this.priv.clear();
   }
 
@@ -396,7 +400,7 @@ export class ClientSync {
         g.player.respawnT = state.respawnT || 0;
         continue;
       }
-      if (seat === null && team === g.localTeam) continue;
+      if (seat === null && team === g.localTeam && !g.spectator) continue;
       if (seat === null && g.hero) continue;   // (a hero without a seat: an old host)
       let h = seat !== null ? g.humans.find((o) => o.hid === seat) : g.humans.find((o) => o.team === team);
       if (!h) {

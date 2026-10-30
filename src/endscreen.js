@@ -23,7 +23,7 @@ export function buildSummary(game, won, winner, reason, log) {
   const p = game.player, f = game.localFaction;
   return {
     won, winner, reason,
-    coop: !!game.coop, mode: game.mode, hero: !!game.hero, objective: game.objective, difficulty: game.difficultyName,
+    coop: !!game.coop, mode: game.mode, spectator: !!game.spectator, hero: !!game.hero, objective: game.objective, difficulty: game.difficultyName,
     options: game.options, map: game.mapBuiltFor || '', team: game.localTeam,
     time: log.t, waves: game.round,
     cls: p.classId, name: p.name, level: p.level || 1,

@@ -101,7 +101,7 @@ function houseNumbers(g, f) {
 }
 
 export function offerFor(g) {
-  if (g.state !== 'playing' || g.practice || g.hero || !g.factions.length) return null;
+  if (g.state !== 'playing' || g.practice || g.hero || g.spectator || !g.factions.length) return null;   // (a spectator leaves by the game menu)
   const me = g.localFaction;
   if (!me) return null;
   if (g.war) {   // War Mode: a lord whose army is gone may leave the battle to the others (warmode.js)
@@ -255,7 +255,7 @@ function buildActions(s) {
   const host = s.mode === 'host';
   const box = el('div', 'go-actions');
   const main = el('div', 'go-main');
-  const primary = el('button', 'go-primary', solo ? 'Play Again' : gone ? 'Back to the menu' : host ? 'Rematch' : 'Waiting for the host…');
+  const primary = el('button', 'go-primary', solo ? (s.spectator ? 'Watch Again' : 'Play Again') : gone ? 'Back to the menu' : host ? 'Rematch' : 'Waiting for the host…');
   primary.id = 'again';
   main.append(primary);
   box.append(main);

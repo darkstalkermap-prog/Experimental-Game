@@ -127,7 +127,7 @@ const herosCounters = (s) => {
 onMatchEnd((s) => {
   const gone = document.getElementById('goStats');
   if (gone) gone.classList.remove('cwe-gone');
-  if (s.progress || /practice/.test(s.map || '')) return;   // (counted already, or the courtyard: it grants nothing)
+  if (s.progress || s.spectator || /practice/.test(s.map || '')) return;   // (counted already, the courtyard or a battle only watched: they grant nothing)
   const c = herosCounters(s);
   const m = {
     time: s.time, waves: s.waves, kills: s.kills, won: s.won, difficulty: s.difficulty, cls: s.cls, events: s.events,

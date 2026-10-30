@@ -54,6 +54,7 @@ import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 import { WarMode } from './warmode.js';
 import { WarPhysics, BOWL } from './warmap.js';
+import { Spectate } from './spectate.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -135,6 +136,9 @@ export class Game {
     this.options = sanitizeOptions(null);   // (what this match was set up with beyond the basics: see options.js)
     this.hitStop = 0;
     this.pings = new Pings(this);
+    this.spectate = new Spectate(this);   // the cameras of somebody who is out of the fight or only watches (spectate.js)
+    this.spectator = false;   // this screen only watches: no hero, no house (spectate.js)
+    this.watchers = [];       // the host: the guests who watch, each { netId, name, watcher: true } (they get the snapshots and the news, nothing else)
     this.court = this.practice ? new PracticeCourt(this) : null;
   }
 
@@ -211,16 +215,21 @@ export class Game {
     this.spawnQueue = [];
 
     const lp = this.player;
-    lp.team = setup.localTeam;
-    this.humans = [lp];
+    // A spectator holds no hero: it is not one of the humans (no house is its, nothing waits for it), and it never spawns. Its team is only an index the
+    // screens can read (castle 0); what it is told reads as for nobody's house (viewers, announce).
+    this.spectator = !!setup.spectator;
+    this.watchers = this.mode === 'host' && Array.isArray(setup.watchers) ? setup.watchers.map((w) => ({ netId: w.netId, name: w.name, team: -1, remote: true, watcher: true })) : [];
+    lp.team = this.spectator ? 0 : setup.localTeam;
+    this.humans = this.spectator ? [] : [lp];
     // (the local player's entry: marked `me`, or the one of its castle. In the Hero Game Mode several players share a castle: they are told apart by `me`)
-    const mine = setup.players.find((p) => p.me) || setup.players.find((p) => p.team === lp.team);
+    const mine = this.spectator ? null : setup.players.find((p) => p.me) || setup.players.find((p) => p.team === lp.team);
     lp.name = mine?.name || 'You';
     lp.st = blankStats();             // (what the end screen counts: stats.js)
     lp.bwave = null;
     lp.cos = progress.loadout();      // (what this browser's account wears and has earned: progress.js)
     lp.setClass(mine?.cls || 'knight');
     lp.rebuildWeapons();
+    if (this.spectator) { lp.alive = false; if (lp.viewModel) lp.viewModel.visible = false; }
     for (const p of setup.players) {
       if (p === mine) continue;
       this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
@@ -232,7 +241,7 @@ export class Game {
       const empty = !human && !setup.hero && Array.isArray(setup.empty) && setup.empty.includes(i);   // (a castle closed in the lobby: nobody holds it, seats.js)
       const rival = human || empty || this.practice || setup.hero || this.war ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
       return {
-        team: i, name: i === lp.team ? TEAM_NAMES[0] : HOUSE_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : HOUSE_LORDS[i], rival, isPlayer: !!human, player: human, castle: c,
+        team: i, name: i === lp.team && !this.spectator ? TEAM_NAMES[0] : HOUSE_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : HOUSE_LORDS[i], rival, isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: empty, empty, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
@@ -644,17 +653,23 @@ export class Game {
     else if (this.mode === 'host' && this.sync) this.sync.privateEvent(player, ev);
   }
 
+  // Everybody who is told the news: the people behind the heroes, and those who only watch (a spectator on this screen, and on the host the guests who
+  // watch: spectate.js). A watcher's team is -1 to the texts below: it reads what nobody's house would.
+  get viewers() { return this.spectator || this.watchers.length ? this.humans.concat(this.spectator ? [this.player] : [], this.watchers) : this.humans; }
+  viewTeam(h) { return h.watcher || (this.spectator && h === this.player) ? -1 : h.team; }
+
   // A toast for every person; text may depend on whose screen it is: fn(viewerTeam) -> text or null.
   announce(text, colorTeam = -1, importantTeam = -99) {
-    for (const h of this.humans) {
+    for (const h of this.viewers) {
       if (h.remote && this.mode !== 'host') continue;
-      const t = typeof text === 'function' ? text(h.team) : text;
-      if (t) this.deliver(h, { k: 'toast', text: t, team: colorTeam, imp: importantTeam === h.team || importantTeam === 'all' });
+      const vt = this.viewTeam(h);
+      const t = typeof text === 'function' ? text(vt) : text;
+      if (t) this.deliver(h, { k: 'toast', text: t, team: colorTeam, imp: importantTeam === vt || importantTeam === 'all' });
     }
   }
 
   bannerAll(title, sub) {
-    for (const h of this.humans) {
+    for (const h of this.viewers) {
       if (h.remote && this.mode !== 'host') continue;
       this.deliver(h, { k: 'banner', title, sub });
     }
@@ -685,7 +700,7 @@ export class Game {
     const name = (o, viewer) => (!o ? 'The fall' : o === viewer ? 'You' : o.isTower ? 'Tower archers' : o.name);
     const team = (o) => (o && o.team !== undefined ? o.team : RAIDER_TEAM);
     const notable = victim.isHero || victim.isGiant || (victim.def && victim.def.boss);
-    for (const h of this.humans) {
+    for (const h of this.viewers) {
       if (h.remote && this.mode !== 'host') continue;
       if (!notable && attacker !== h && victim !== h) continue;
       this.deliver(h, { k: 'kill', a: [name(attacker, h), team(attacker)], v: [name(victim, h), team(victim)] });
@@ -1237,6 +1252,7 @@ export class Game {
 
   handleInput() {
     const i = this.input;
+    if (this.spectate.input(i)) return;   // (out of the fight: the spectator's cameras take their keys; a spectator has no others: spectate.js)
     if (this.practice && i.hit('KeyP')) { this.ui.togglePractice(); return; }
     if (this.ui.practiceOpen) return;   // (the panel has the keys while it is up)
     if (this.war) { this.war.handleInput(i); return; }   // (War Mode: the army panel, the map and the orders of the fight)
@@ -1321,7 +1337,7 @@ export class Game {
     if (!left.length) this.endGame(-1);
     else if (left.every((f) => allied(f.team, left[0].team))) this.endGame(left[0].team); // one side is left standing
     else if (this.coop && !humansLeft.length) this.endGame(-1, `Your alliance has fallen. You held out for ${this.round} waves together.`);
-    else if (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length) this.endGame(-1);
+    else if (!this.spectator && (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length)) this.endGame(-1);   // (a spectator watches to the last house)
   }
 
   eliminate(f) {
@@ -1423,7 +1439,7 @@ export class Game {
 
   // the local lord presses Ready
   localReady() {
-    if (!this.readyLive) return;
+    if (!this.readyLive || this.spectator) return;
     if (this.mode === 'client') {
       if (this.readySent) return;
       this.readySent = true;
@@ -1511,7 +1527,7 @@ export class Game {
   finish(winner, reason = '', opts = {}) {
     if (this.state === 'over') return;
     this.state = 'over';
-    const won = winner >= 0 && allied(winner, this.localTeam);
+    const won = !this.spectator && winner >= 0 && allied(winner, this.localTeam);
     this.finale.start(won, winner, reason, opts);   // (builds the end screen, then shows it when the ending is over: finale.js)
   }
 
@@ -1565,7 +1581,7 @@ export class Game {
       this.time += dt;
       return;
     }
-    if (!this.war) this.alerts.update(dt);   // (the tips and alerts are about castles: War Mode has its own bar)
+    if (!this.war && !this.spectator) this.alerts.update(dt);   // (the tips and alerts are about castles: War Mode has its own bar)
     // single player pauses the world; online games keep running underneath menus
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
@@ -1586,9 +1602,10 @@ export class Game {
 
     const p = this.player;
     if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen && !(this.war && this.war.panelOpen) ? this.input : this.input.idle);
-    else this.deathCamera(dt);
+    else if (!this.spectate.on) this.deathCamera(dt);
     this.finale.camera();   // (the ending frames the falling keep: after the hero has placed the camera, before anything looks through it)
     if (this.war) this.war.camera(dt);   // (War Mode: the view over your army while its panel is open, over the battle once your hero has fallen)
+    this.spectate.camera(dt);   // (out of the fight, or only watching: the follow, free and overview cameras, last so they win; spectate.js)
     for (const h of this.humans) {
       if (h.remote) h.remoteUpdate(dt);
       h.updateHorse(dt);
