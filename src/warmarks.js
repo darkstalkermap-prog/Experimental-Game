@@ -118,8 +118,8 @@ class Marks {
       flag.rotation.y = Math.atan2(cam.x - d.x, cam.z - d.z) + Math.sin(t * 1.7 + i) * 0.2;   // (turned to the eye, stirring)
       tmpM.makeTranslation(d.x, y, d.z);
       this.poles.setMatrixAt(p++, tmpM);
-      const k = ringScale(cam, d.x, y, d.z);
-      tmpM.makeScale(k, 1, k).setPosition(d.x, y + 0.15, d.z);
+      const rs = ringScale(cam, d.x, y, d.z);
+      tmpM.makeScale(rs, 1, rs).setPosition(d.x, y + 0.15, d.z);
       this.rings.setMatrixAt(r, tmpM);
       this.rings.setColorAt(r++, tmpC.set(bright ? 0xffd34d : 0xb89a50));
     });
