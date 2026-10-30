@@ -7,7 +7,9 @@
 // The height is not sent: a guest puts the soldier on the ground (the bowl has no walls to stand on). Names (the AI lords) go beside it.
 // unpack() turns the string back into the arrays ClientSync.apply reads, in arrays it reuses.
 import { UNIT_TYPES, WORLD } from './config.js';
-import { DIR_IDX } from './combat.js';
+import * as combat from './combat.js';
+
+const DIR_IDX = combat.DIR_IDX || {};   // (the attack sides, while the game still has them)
 
 const ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const VAL = new Int8Array(128).fill(-1);
@@ -43,7 +45,7 @@ export function packUnits(units) {
     put(live, Math.round((yaw / (Math.PI * 2)) * 64) & 63, 1);
     const sw = u.swingT >= 0 ? 1 + Math.min(6, Math.floor(u.swingT * 10)) : 0;
     put(live, (sw << 3) | (u.staggerT > 0 ? 4 : 0) | (u.blockFlash > 0 || u.braced ? 2 : 0), 1);
-    put(live, (clampI(Math.round(Math.hypot(u.vel.x, u.vel.z) * 1.5), 0, 15) << 2) | (DIR_IDX[u.attackDir] & 3), 1);
+    put(live, (clampI(Math.round(Math.hypot(u.vel.x, u.vel.z) * 1.5), 0, 15) << 2) | ((DIR_IDX[u.attackDir] || 0) & 3), 1);
     put(live, clampI(Math.round((u.hp / u.maxHp) * 63), 0, 63), 1);
     put(live, ((u.rank & 7) << 3) | (u.army ? 4 : 0) | (u.lane ? 2 : 0), 1);
     if (u.isHero) names.push([u.id, u.name]);

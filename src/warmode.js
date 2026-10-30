@@ -82,7 +82,9 @@ export class WarMode {
       const si = sides.findIndex((s) => s.includes(f.team)), side = sides[si];
       const spot = sideSpot(si, sides.length, side.indexOf(f.team), side.length);
       f.war = { side: si, spot, preset: 'line', plan: { ...DEFAULT_PLAN }, start: 0, worth: 0, pickUntil: 0 };
-      f.gold = f.isPlayer ? WAR.gold : Math.round(WAR.gold * (DIFFICULTY[g.difficultyName] || DIFFICULTY.normal).aiGold);
+      // (an AI side with fewer houses than the biggest side, e.g. one general against three lords in co-op, gets more gold: it buys better soldiers)
+      const outnumbered = Math.max(...sides.map((x) => x.length)) / side.length;
+      f.gold = f.isPlayer ? WAR.gold : Math.round(WAR.gold * (DIFFICULTY[g.difficultyName] || DIFFICULTY.normal).aiGold * outnumbered);
       f.formation = 'line';
       f.troopCap = this.cap;
     }

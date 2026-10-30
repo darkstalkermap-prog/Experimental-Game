@@ -239,21 +239,22 @@ export class WarUI {
     this.t = 0;   // (show the change at once)
   }
 
-  setPanel(open) {
+  // relock: take the mouse back for the hero (only from a click or a key: a browser refuses it otherwise)
+  setPanel(open, relock = true) {
     const g = this.g, w = this.w;
     open = !!open && !w.fighting && g.state === 'playing';
     w.panelOpen = open;
     this.el.panel.classList.toggle('hidden', !open);
     $('hud').classList.toggle('warpanel', open);
     if (open) g.input.unlock();
-    else if (g.state === 'playing') g.input.lock();
+    else if (g.state === 'playing' && relock) g.input.lock();
     const vm = g.player.viewModel;
     if (vm) vm.visible = !open && g.player.alive;
     this.t = 0;
   }
 
   fightBegan() {
-    if (this.w.panelOpen) this.setPanel(false);
+    if (this.w.panelOpen) this.setPanel(false, false);   // (the timer ran out: the next click on the field takes the mouse back)
     this.t = 0;
   }
 
@@ -341,7 +342,7 @@ export class WarUI {
       main = sides.slice(0, mid).join('') + clk + sides.slice(mid).join('');
       const p = g.player;
       line = p.alive
-        ? `<kbd>F1</kbd> follow · <kbd>F2</kbd> hold here · <kbd>F3</kbd> charge · <kbd>G</kbd> ${{ all: 'everyone', infantry: 'infantry', archers: 'archers', cavalry: 'cavalry' }[p.group || 'all']} · <kbd>M</kbd> map`
+        ? `${g.input.locked ? '' : '<b>Click to take the field</b> · '}<kbd>F1</kbd> follow · <kbd>F2</kbd> hold here · <kbd>F3</kbd> charge · <kbd>G</kbd> ${{ all: 'everyone', infantry: 'infantry', archers: 'archers', cavalry: 'cavalry' }[p.group || 'all']} · <kbd>M</kbd> map`
         : `<span class="wt-fallen">${g.localFaction.eliminated ? 'Your army has fallen.' : 'You have fallen. Your army fights on without you.'}</span>${offerFor(g) ? ' · <kbd>K</kbd> twice: leave the battle' : ''}`;
     }
     if (this.shown.main !== main) { this.shown.main = main; this.topMain.innerHTML = main; }
