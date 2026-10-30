@@ -60,8 +60,8 @@ css.textContent = `
   #rivalsCard span { display: block; font-size: 14px; line-height: 1.25; color: #d9c9a2; }
   #rivalsCard small { font-size: 12px; opacity: 0.75; margin-left: 5px; font-family: Cinzel, serif; letter-spacing: 0.04em; }
   @keyframes rvcard { 0% { opacity: 0; transform: translateX(14px); } 5% { opacity: 1; transform: none; } 88% { opacity: 1; } 100% { opacity: 0; } }
-  @media (min-width: 1100px) { #factions.has-rivals { width: 420px; } }
-  @media (max-width: 1099px) { #factions em.rv { display: none; } #rivalsCard { width: 280px; } }
+  @media (min-width: 1200px) { #factions.has-rivals { width: 420px; } }
+  @media (max-width: 1199px) { #factions em.rv { display: none; } #rivalsCard { width: 280px; } }
   #factions em.rv { flex: none; font-style: normal; font-size: 10px; line-height: 13px; color: #e8d9a0; border: 1px solid rgba(232,217,160,0.5); border-radius: 3px;
     padding: 0 3px; margin-left: 6px; letter-spacing: 0.03em; }
   #pauseRivals { margin: 16px auto 4px; max-width: 540px; text-align: left; }
