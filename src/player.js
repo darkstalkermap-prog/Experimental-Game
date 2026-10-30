@@ -7,7 +7,7 @@ import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y 
 import { avoidCastles } from './nav.js';
 import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
-import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
+import { CLASSES, classOf, Buffs, SWITCH, RANGER, abilityOf } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
@@ -70,6 +70,9 @@ export class Player {
     this.hintT = 0;
     this.vmDown = 0;           // how far the weapons are lowered (while climbing)
     this.aiming = null;        // holding Q to place the Ranger's volley: { slot, t, at, far }
+    this.power = null;         // the Ranger's Power Shot being drawn: { t } (it looses itself when the draw is full: tickPower)
+    this.throwT = 0;           // the Snare Trap leaving the hand (1 -> 0: the first-person arm, viewmodel.js)
+    this.arrowT = 0;           // the Ranger's quiver filling again (RANGER.arrowEvery)
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.vy = 0;
@@ -298,16 +301,16 @@ export class Player {
   get armor() { return PLAYER.armor + this.mods.armor; }
   get dmgMult() { return this.mods.melee * (this.buffs.get('rage') || 1) * (this.hp < this.maxHp * 0.5 ? 1 + (this.mods.bloodied || 0) : 1); }
   get blockPower() { return Math.min(0.97, this.shield.block + (this.mods.block || 0)); }
-  get drawTime() { return this.bow.draw * (this.mods.draw || 1) * (this.buffs.has('focus') ? talentFx(this, 'focus', { draw: 1 }).draw : 1); }   // (Hunter's Focus: the first arrow after a roll is drawn at once)
+  get drawTime() { return this.bow.draw * (this.mods.draw || 1) * (this.zoomed ? talentFx(this, 'zoomDraw', 1) : 1); }   // (Steady Aim, a Ranger talent: quicker zoomed in)
   get sword() { return SWORDS[this.lv.sword]; }
   get shield() { return SHIELDS[this.lv.shield]; }
   get bow() { return BOWS[this.lv.bow]; }
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (1 - this.buffs.get('slow')) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }   // (slow: near a sprung Snare Trap)
   // seconds an ability takes to recharge: the class passive and the talents shorten it
-  abilityCd(slot) { const d = this.cls[slot]; return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
+  abilityCd(slot) { const d = abilityOf(this, slot); return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
@@ -600,7 +603,7 @@ export class Player {
     if (m.wheel || (warKeys && input.hit('KeyX'))) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyH')) this.drinkPotion();
     // Q: most abilities go off at once; the Ranger's volley is aimed with a circle (hold it, let go to loose it)
-    if (input.hit('KeyQ')) { if (this.cls.q.aimed) this.beginAim('q'); else this.useAbility('q', input); }
+    if (input.hit('KeyQ')) { if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input); }
     if (input.hit('KeyR')) { this.cancelAim(); this.useAbility('r', input); }
 
     if (input.hit('KeyE')) {
@@ -643,6 +646,8 @@ export class Player {
       if (this.buffs.has('whirl')) { this.atk = null; this.blocking = false; }
       else this.swordInput(dt, m);
       this.zoomed = false;
+    } else if (this.power) {
+      this.blocking = false;   // (Power Shot: the bow is held at full draw until it looses itself, tickPower)
     } else {
       this.blocking = false;
       if (m.left && this.arrows > 0 && !this.aiming) this.drawT += dt;
@@ -654,6 +659,8 @@ export class Player {
       this.zoomed = m.right;
     }
     this.shake = Math.max(0, this.shake - dt);
+    this.tickPower(dt);
+    if (this.throwT > 0) this.throwT = Math.max(0, this.throwT - dt / 0.45);
 
     // regen when out of combat (the host decides this in online games)
     if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
@@ -717,6 +724,7 @@ export class Player {
       if (this.drawT > 0) speed *= 0.6;
       if (this.aiming) speed *= 0.7;
       speed *= 1 - (1 - BODY.duckSpeed) * this.duck;
+      if (this.buffs.has('rooted')) speed = 0;   // (caught in a Snare Trap)
       if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18 * biomeRules().drain);   // (the heat of the desert drains it faster and slows its return: biometwist.js)
       else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
       const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
@@ -728,6 +736,7 @@ export class Player {
       this.vel.z += (tz - this.vel.z) * k;
     }
 
+    if (this.mounted && this.buffs.has('rooted')) this.rideSpeed = 0;   // (a horse caught in a Snare Trap)
     if (this.dash) {
       const d = this.dash;
       d.t -= dt;
@@ -943,13 +952,13 @@ export class Player {
 
   updateAim(dt, input) {
     const g = this.game, a = this.aiming;
-    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || this.cls.q.id !== 'volley') { this.cancelAim(); return; }
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || abilityOf(this, 'q').id !== 'volley') { this.cancelAim(); return; }
     a.t += dt;
     const eyePos = new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z);
     const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
     a.at.copy(r.pos);
     a.far = r.far;
-    g.aimRing.show(a.at, VOLLEY.radius * talentFx(this, 'volleyRadius', 1), a.far, a.t);
+    g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
     if (input.release('KeyQ')) {
       const at = a.at.clone();
       this.cancelAim();
@@ -968,45 +977,69 @@ export class Player {
     this.abilCd.q = Math.max(0, this.abilCd.q - dt);
     this.abilCd.r = Math.max(0, this.abilCd.r - dt);
     this.buffs.update(dt);
+    // the Ranger's quiver fills again, an arrow at a time (where the battle is run: a guest's count comes with the snapshot)
+    if (this.mods.marksman && this.game.mode !== 'client' && this.alive) {
+      if (this.arrows >= PLAYER.maxArrows) this.arrowT = 0;
+      else if ((this.arrowT += dt) >= RANGER.arrowEvery * talentFx(this, 'arrowEvery', 1)) { this.arrowT = 0; this.arrows++; }
+    }
   }
+
+  // Power Shot: Q starts a full, held draw (useAbility); when it is drawn the arrow looses itself along the hero's aim. A stagger, a
+  // climb or a fall drops it, and nothing is spent. The hero's own screen draws it (a bot's runs where the battle is: HeroBot.act).
+  tickPower(dt) {
+    const pw = this.power;
+    if (!pw) return;
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.mounted) { this.power = null; this.drawT = 0; return; }
+    if (this.weapon !== 'bow') this.setWeapon('bow');
+    pw.t += dt;
+    const P = RANGER.power, full = P.draw * talentFx(this, 'powerDraw', 1);
+    this.drawT = this.drawTime * Math.min(1, pw.t / (full * 0.75));   // (the string comes back in three quarters of the time, and is held)
+    if (pw.t < full) return;
+    this.power = null;
+    this.drawT = 0;
+    if (this.vm) this.vm.recoil = 1;   // (the loose, in the first-person arms)
+    this.castAbility('q', this.lookDir());
+  }
+
 
   // Press Q (attack) or R (defence). The movement part happens here on your own screen at once; the rest is
   // worked out by whoever runs the battle.
   useAbility(slot, input, at = null) {
     const g = this.game;
-    const def = this.cls[slot];
+    const def = abilityOf(this, slot);
     if (!def || !this.alive || this.drive) return;
     if (this.staggerT > 0) { g.audio.play('deny'); return; }
-    const again = def.id === 'evade' && this.buffs.has('twin');   // Twin Roll: one more roll while the first one's window is open
-    if (this.abilCd[slot] > 0 && !again) { g.audio.play('deny'); return; }
+    if (this.abilCd[slot] > 0 || (this.power && slot === 'q')) { g.audio.play('deny'); return; }
     const dir = this.lookDir();
     const fl = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / fl, fz = dir.z / fl;
     switch (def.id) {
       case 'bash': this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break;
       case 'lancecharge': this.dash = { x: fx, z: fz, v: this.mounted ? 20 : 13, t: 1.1 * talentFx(this, 'chargeTime', 1) }; break;
-      case 'evade': {
-        // the way you are moving, or straight back when standing still
-        let mx = 0, mz = 0;
-        const sx = Math.sin(this.yaw), sz = Math.cos(this.yaw);
-        if (input.down('KeyW')) { mx += sx; mz += sz; }
-        if (input.down('KeyS')) { mx -= sx; mz -= sz; }
-        if (input.down('KeyA')) { mx += sz; mz -= sx; }
-        if (input.down('KeyD')) { mx -= sz; mz += sx; }
-        const ml = Math.hypot(mx, mz);
-        if (ml < 0.01) { mx = -sx; mz = -sz; } else { mx /= ml; mz /= ml; }
-        this.dash = { x: mx, z: mz, v: 32, t: 0.28 };
-        break;
-      }
+      case 'powershot':
+        // the draw first (tickPower looses it); not on horseback or halfway up a wall
+        if (this.mounted || this.climb) { g.audio.play('deny'); return; }
+        this.cancelAim();
+        this.setWeapon('bow');
+        this.power = { t: 0 };
+        g.audio.play('bow', this.isBot ? this.pos : null);
+        return;
+      case 'trap': this.throwT = 1; break;
       case 'fireball': this.castFlash = 1; this.castColor = 0xff8a2a; break;
       case 'smite': this.castFlash = 1; this.castColor = 0xffe9a0; break;
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
       case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
       default: break;
     }
+    this.castAbility(slot, dir, at);
+  }
+
+  // the ability goes off: worked out here, or (a guest) by the host
+  castAbility(slot, dir, at = null) {
+    const g = this.game;
     const cam = this.camera ? this.camera.position.clone() : this.eyePos();
     if (this.netClient) {
-      if (again) this.buffs.del('twin'); else this.abilCd[slot] = this.abilityCd(slot);
+      this.abilCd[slot] = this.abilityCd(slot);
       const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
       if (at) msg.at = [at.x, at.y, at.z].map(r2);
       g.net.toHost(msg);
@@ -1170,10 +1203,10 @@ export class Player {
   // spawn the arrow (host / single player)
   fireFrom(from, dir, draw) {
     if (this.arrows <= 0) return;
-    const speed = 30 + 32 * draw;
-    const focus = this.buffs.get('focus');   // Hunter's Focus: the first arrow after a roll hits harder
-    if (focus) this.buffs.del('focus');
-    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bowDmg * (0.4 + 0.6 * draw) * (focus || 1), this);
+    const speed = (30 + 32 * draw) * (this.zoomed ? talentFx(this, 'zoomSpeed', 1) : 1);
+    // Piercing Shots (the Ranger): a full draw goes on through the first body into the ones behind it
+    const pierce = this.mods.marksman && draw >= RANGER.pierceDraw ? { pierce: talentFx(this, 'pierce', RANGER.pierce) } : null;
+    this.game.projectiles.fireArrow(from, dir.clone().multiplyScalar(speed), this.team, this.bowDmg * (0.4 + 0.6 * draw), this, false, '', pierce);
     this.arrows--;
   }
 

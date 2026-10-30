@@ -58,10 +58,12 @@ export class HostSync {
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
-    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false, ability = '') => {
-      fire(from, vel, team, dmg, owner, big, ability);
+    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false, ability = '', opts = null) => {
+      fire(from, vel, team, dmg, owner, big, ability, opts);
       const ev = { k: 'arrow', p: v3(from), v: v3(vel), t: team };
       if (big) ev.b = 1;
+      if (opts && opts.power) ev.pw = 1;                          // (a Power Shot flies flat and through everyone ...
+      else if (opts && opts.pierce) ev.pc = opts.pierce.length;   // ... a Ranger's full draw through a few: the guests' copies do the same)
       this.shared.push(ev);
     };
     const spell = g.projectiles.fireSpell.bind(g.projectiles);
@@ -493,7 +495,7 @@ export class ClientSync {
     switch (ev.k) {
       case 'fx': if (g.fx[ev.f]) g.fx[ev.f](vec(ev.p), ...(ev.a || [])); break;
       case 'snd': g.audio.play(ev.n, ev.p ? vec(ev.p) : null); break;
-      case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null, !!ev.b); break;
+      case 'arrow': g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null, !!ev.b, '', ev.pw ? { power: 1 } : ev.pc > 0 ? { pierce: new Array(Math.min(4, ev.pc | 0)).fill(1) } : null); break;
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;
       case 'spell': g.projectiles.fireSpell(ev.s, vec(ev.p), vec(ev.v), ev.t, 0, null, ev.r); break;
       case 'bolt': g.magic.showBolt(ev.pts.map(vec), ev.c); break;

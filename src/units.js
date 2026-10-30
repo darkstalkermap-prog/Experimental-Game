@@ -50,6 +50,7 @@ export class Unit {
     this.xp = 0;
     this.rank = 1;
     this.slowT = 0;
+    this.rootT = 0; this.snareT = 0; this.snareMul = 1;   // a Ranger's Snare Trap: held fast, or slowed near it (classes.js)
     this.braced = false;
     this.siegeBonus = t.siegeBonus || 1;   // vs siege engines
     this.structMult = t.structMult || 0.6; // vs gates and keeps (hand weapons are poor at this)
@@ -525,6 +526,8 @@ export class Unit {
     if (this.blockFlash > 0) this.blockFlash -= dt;
     if (this.ghostT > 0) this.ghostT -= dt;
     if (this.slowT > 0) { this.slowT -= dt; if (Math.random() < dt * 6) g.fx.frost(this.chest(new THREE.Vector3()), 1); }
+    if (this.rootT > 0) this.rootT -= dt;
+    if (this.snareT > 0) this.snareT -= dt;
 
     let moving = false;
     const tgt = this.target;
@@ -609,6 +612,8 @@ export class Unit {
     if (marchVer !== mods.version) { marchVer = mods.version; marchMul = mods.mul('speed'); }
     let sp = this.speed * marchMul * (this.order === 'hold' && d < 3 ? 0.6 : 1);
     if (this.slowT > 0) sp *= 0.5;
+    if (this.snareT > 0) sp *= this.snareMul;
+    if (this.rootT > 0) sp = 0;
     if (this.hasteT > 0) sp *= this.hasteMul;
     sp *= groundMul(this.game, this, dt);   // deep snow, mud (biometwist.js)
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;

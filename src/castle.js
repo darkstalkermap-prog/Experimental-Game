@@ -14,6 +14,7 @@ import { populate } from './props.js';
 import { customBanner } from './textures.js';
 import { highlights } from './highlights.js';
 import { Collapse } from './castlecollapse.js';
+import { downMask, applyDownMask } from './towerarchers.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerR, towerH, keepW, keepH, towerOff, walk: WALK } = CASTLE;
 const TC = H + towerOff; // corner tower centres
@@ -799,6 +800,7 @@ export class Castle {
       this.wallLevel, this.gateLevel, this.towerLevel,
       br.map((w) => Math.round(w.hp)), Math.round(br[0] ? br[0].maxHp : 0), this.gateLocked ? 1 : 0,
       this.gateWant ? 1 : 0,   // (whether the host's gate is swinging open: a guest's own soldiers lack the orders to work it out)
+      downMask(this),          // (which tower archers are down: towerarchers.js)
     ];
   }
 
@@ -812,6 +814,7 @@ export class Castle {
     this.wallLevel = a[6]; this.gateLevel = a[7]; this.towerLevel = a[8];
     if (!!a[11] !== this.gateLocked) this.setGateLocked(!!a[11]);
     this.netGateOpen = !!a[12];
+    applyDownMask(this, a[13] | 0);
     const br = this.walls.filter((w) => w.breakable);
     br.forEach((w, i) => {
       const hp = a[9][i];

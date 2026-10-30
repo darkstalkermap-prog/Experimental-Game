@@ -56,6 +56,7 @@ import { WarMode } from './warmode.js';
 import { FIELD } from './warmap.js';
 import { WarPhysics } from './warphysics.js';
 import { Spectate } from './spectate.js';
+import { tickArchers, livingOn } from './towerarchers.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -757,7 +758,7 @@ export class Game {
       case 'gold': this.ui.goldPopup(ev.g); break;
       case 'xp': this.ui.xpPopup(ev.n); break;
       case 'lvl': this.ui.levelUp(ev.n); break;
-      case 'hit': this.ui.hitMarker(); this.player.onHitLanded(!!ev.heavy); break;
+      case 'hit': this.ui.hitMarker(!!ev.head); if (ev.head) this.audio.play('headshot'); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); if (this.player.vm) this.player.vm.feedback(ev.text); break;
       case 'stagger': this.player.stagger(ev.t); break;
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
@@ -790,7 +791,7 @@ export class Game {
       return;
     }
     // soldiers may block with shield or weapon
-    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && target.tryBlock(attacker, info)) {
+    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && !info.power && target.tryBlock(attacker, info)) {   // (a Power Shot goes through shields)
       const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
       this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
       this.audio.play('block', target.pos);
@@ -837,7 +838,7 @@ export class Game {
       else this.fx.blood(p, info.ranged ? 5 : 9);
     }
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
-    if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
+    if (attacker && attacker.isPlayer) this.deliver(attacker, info.head ? { k: 'hit', heavy: true, head: 1 } : { k: 'hit', heavy: (info.charge || 0) >= 0.8 });   // (head: a headshot, its own marker and sound)
     const hp0 = target.hp;
     this.lastHit = info;   // (what the blow was, for the match log: see onUnitKilled)
     target.takeDamage(dmg, attacker, info);
@@ -1736,10 +1737,13 @@ export class Game {
 
   updateTowers(c, dt) {
     if (!c.towerLevel || c.fallen) return;
+    tickArchers(c, dt);
     for (let i = 0; i < c.towers.length; i++) {
       c.towerCd[i] -= dt;
       if (c.towerCd[i] > 0) continue;
-      c.towerCd[i] = 2.6 / c.towerLevel;
+      const men = livingOn(c, i);   // (each archer on the roof looses every 2.6 s: a fallen one is a slower tower)
+      if (!men) continue;
+      c.towerCd[i] = 2.6 / men;
       const top = c.towers[i].top;
       let best = null, bd = 48;
       this.grid.query(top.x, top.z, 48, (u) => {
