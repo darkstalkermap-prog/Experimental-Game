@@ -3,6 +3,8 @@
 //   earth round castles, the bare top of the hill and the practice sand (aMask.xyz), the forest canopy on the mountains' foot (aMask.w),
 //   and the bare mountain above the trees and the snow (aAlt). Roads are worked out here from their lines, so they have ruts and pebbles.
 //   Slopes steeper than about 60 degrees turn to rock with strata and cracks. Small detail also bumps the normal, and fades out with distance.
+//   The colours it paints with are a palette of uniforms (uPal, set per biome by setBiomeLook: the meadow's are the colours it always had), so every biome
+//   shares one program; ponds and ice (the third mask) are glossy.
 import * as THREE from 'three';
 import { grassDetailTexture } from './textures.js';
 import { detailTexture, noiseTexture } from './terraintex.js';

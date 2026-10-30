@@ -3,8 +3,8 @@
 // ponds). This file is pure data and a few helpers; the modules that draw read it:
 //   terrain.js / terrainmat.js   `ground` (the colours of the baked ground), `pal` (the splat shader's palette), `patch` (ponds, ice, pale hardpan)
 //   atmosphere.js / world.js     `air` (haze tint, mist, overcast, sun and sky light)
-//   world.js / foliage.js / scenery.js / grass.js   `flora`, `grass`
-//   weather.js                   `weather`        biometwist.js   `twist` and `mods`
+//   world.js / scatter.js / foliage.js / scenery.js / grass.js   `flora`, `grass`      weather.js   `weather`      biomedust.js   `dust` (snow on the castles)
+//   biometwist.js   `twist` and `mods`      fx.js   `dry` (footstep dust)      ui.js   `map` (the minimap)      landui.js   `thumb` (the picture of the next land)
 // The land is chosen before the world is built (`setWorldLand`, see main.js) and everything built afterwards is dressed for it. The classic
 // land is meadow with seed 0: every number of it is the value the game had before biomes existed. Nothing in a build may use Math.random: the
 // same biome and seed give the same world on every machine (the host and its guests build their own copy).

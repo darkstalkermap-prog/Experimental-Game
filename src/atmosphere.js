@@ -348,8 +348,10 @@ const SKY_FRAGMENT = `
           vec3 top = ATM_SUN_TINT * 1.45 + vec3(0.12, 0.13, 0.15);
           vec3 cc = mix(belly, top, shade);
           // an overcast biome (uMurk): the clouds are the grey of its haze, lit from within, with no sunlit edges
-          vec3 grey = atmHazeB(vec3(0.0, 0.35, 0.94), uTint, uMurk);
-          cc = mix(cc, mix(grey * 0.62, grey * 1.04, shade), uMurk);
+          if (uMurk > 0.0) {
+            vec3 grey = atmHazeB(vec3(0.0, 0.35, 0.94), uTint, uMurk);
+            cc = mix(cc, mix(grey * 0.62, grey * 1.04, shade), uMurk);
+          }
           // silver lining: thin edges near the sun glow
           cc += ATM_SUN_TINT * 1.6 * pow(max(mu, 0.0), 10.0) * (1.0 - dens) * smoothstep(0.0, 0.35, dens) * (1.0 - uMurk);
           float a = smoothstep(0.0, 0.55, dens) * fade;
