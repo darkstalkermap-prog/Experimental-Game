@@ -9,6 +9,7 @@ import { Q, LEVELS } from './quality.js';
 import { Post } from './post.js';
 import { settings } from './settings.js';
 import { installShadowHooks } from './shadows.js';
+import { HAZE_FAR } from './atmosphere.js';
 
 const AUTO_KEY = 'cw-auto';   // the level the Auto choice settled on (kept per browser)
 const WINDOW = 60;           // frames the adaptive resolution looks at
@@ -151,10 +152,10 @@ class Gfx {
 
   // pixel ratio of the drawing buffer: what the device and the quality allow, times the adaptive share
   ratio() { return Math.max(0.35, Math.min(window.devicePixelRatio || 1, Q.pixelRatio) * this.scale); }
-  // the lowest scale the governor may go to: the quality's dynMin of the full size, but never below 3/4 of one drawn pixel per screen
-  // pixel (on an ordinary 1x screen half the resolution looks soft and hazy, worst on War Mode's long views; a busy battle that is
-  // still slow there gets a lower quality level from Auto instead, which costs less clarity). A high-DPI screen keeps the deeper range.
-  dynFloor() { return Math.min(1, Math.max(Q.dynMin, 0.75 / Math.min(window.devicePixelRatio || 1, Q.pixelRatio))); }
+  // the lowest scale the governor may go to: the quality's dynMin of the full size, but never below 0.85 of one drawn pixel per screen
+  // pixel (on an ordinary 1x screen a stretched frame looks soft and hazy, worst on War Mode's long views; a busy battle that is still
+  // slow there gets a lower quality level from Auto instead, which costs less clarity). A high-DPI screen keeps the deeper range.
+  dynFloor() { return Math.min(1, Math.max(Q.dynMin, 0.85 / Math.min(window.devicePixelRatio || 1, Q.pixelRatio))); }
 
   // (re)size the drawing buffer when the window or the ratio changed
   resize(force = false) {
@@ -165,7 +166,13 @@ class Gfx {
       r.setPixelRatio(ratio);
       r.setSize(innerWidth, innerHeight);
       this.lastRatio = ratio; this.lastW = innerWidth; this.lastH = innerHeight;
-      if (this.post) { r.getDrawingBufferSize(this.size); this.post.setup(this.size.x, this.size.y); }
+      if (this.post) {
+        r.getDrawingBufferSize(this.size); this.post.setup(this.size.x, this.size.y);
+        // fewer drawn pixels than the screen has (the adaptive resolution, or a level's cap under a high-DPI screen): the browser stretches
+        // the frame, so the sharpening leans in a little harder to win back what the stretch blurs
+        const fill = ratio / (window.devicePixelRatio || 1);
+        this.post.sharpBoost = fill < 0.99 ? 1 + 1.2 * (1 - fill) : 1;
+      }
     }
     if (game) {
       game.camera.aspect = innerWidth / innerHeight;
@@ -178,7 +185,7 @@ class Gfx {
     const r = this.renderer;
     if (!r) return;
     r.toneMappingExposure = Q.exposure;
-    if (this.game) { this.game.camera.far = Math.max(400, Q.viewDist); this.game.camera.updateProjectionMatrix(); }
+    if (this.game) { this.game.camera.far = Math.max(HAZE_FAR, Q.viewDist); this.game.camera.updateProjectionMatrix(); }
     this.scale = 1; this.pending = 0; this.fn = 0; this.ceiling = 1; this.backoff = 45000; this.lastChange = performance.now();
     this.resize(true);
   }

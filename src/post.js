@@ -1,7 +1,10 @@
 // Post-processing: the scene is drawn into a half-float target (linear HDR radiance; multisampled where `Q.msaa` asks for it), then
-//   bloom (a down/up-sampled chain: soft, wide, cheap)  ->  composite (exposure, tone curve, grade, vignette, dither)  ->  FXAA
-// and the result goes to the canvas. FXAA is what smooths the edges wherever the target has no samples. Everything is behind `Q.post`;
-// when no pass is on gfx.js draws straight to the canvas instead.
+//   bloom (a down/up-sampled chain: soft, wide, cheap)  ->  composite (sharpen, exposure, tone curve, grade, vignette, dither)  ->  FXAA
+// and the result goes to the canvas. FXAA is what smooths the edges wherever the target has no samples (Medium); High and Ultra have 4x
+// multisampling and no FXAA (it softened every texture of the frame for edges the samples had already smoothed). A light sharpening
+// (`Q.sharpen`) runs where the picture is otherwise finished: in the composite when there is no FXAA, in FXAA's own pass (on the pixels
+// it leaves alone, from the taps it has read anyway) when there is. Everything is behind `Q.post`; when no pass is on gfx.js draws
+// straight to the canvas instead.
 // The passes are single full-screen triangles with their own tiny ShaderMaterials; targets are created lazily and resized with the canvas.
 import * as THREE from 'three';
 import { NEUTRAL_GLSL } from './atmosphere.js';
@@ -9,6 +12,17 @@ import { Q } from './quality.js';
 
 const VERT = `varying vec2 vUv;
 void main() { vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 0.0, 1.0); }`;
+
+// Clamped, contrast-adaptive sharpening (in the spirit of AMD's CAS): the pixel moves away from the average of its four neighbours, but
+// never past the darkest or the brightest of them (so no halo, no ringing), and less where the neighbourhood is already contrasty (an
+// edge is not hardened into stairs, grass blades do not start to flicker). `amt` 0..1; works on linear radiance and on display values alike.
+const SHARPEN_GLSL = `
+vec3 shSharpen(vec3 c, vec3 n, vec3 s, vec3 w, vec3 e, float amt) {
+  vec3 mn = min(c, min(min(n, s), min(w, e))), mx = max(c, max(max(n, s), max(w, e)));
+  float lmn = dot(mn, vec3(0.2126, 0.7152, 0.0722)), lmx = dot(mx, vec3(0.2126, 0.7152, 0.0722));
+  float k = amt * (1.0 - smoothstep(0.35, 0.85, (lmx - lmn) / (lmx + 1e-3)));
+  return clamp(c + (c - (n + s + w + e) * 0.25) * (k * 2.0), mn, mx);
+}`;
 
 // 5-tap downsample (the one used for the bloom chain: the centre, which a bilinear tap makes a 2x2 average, and the four diagonal
 // neighbours); with FIRST the first level weighs bright taps down so single hot pixels do not flicker
@@ -68,15 +82,14 @@ uniform vec2 uTexel;
 uniform vec3 uCam;   // x: desaturate, y: flash, z: unused (camfx.js)
 uniform vec3 uFlash;
 ${NEUTRAL_GLSL}
+${SHARPEN_GLSL}
 float ign(vec2 p) { return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
 void main() {
   vec3 c = texture2D(tScene, vUv).rgb;
   #ifdef SHARPEN
-    vec3 n = texture2D(tScene, vUv + vec2(0.0, -uTexel.y)).rgb + texture2D(tScene, vUv + vec2(0.0, uTexel.y)).rgb
-           + texture2D(tScene, vUv + vec2(-uTexel.x, 0.0)).rgb + texture2D(tScene, vUv + vec2(uTexel.x, 0.0)).rgb;
-    c += (c - n * 0.25) * uSharp;
-    c = max(c, vec3(0.0));
+    c = shSharpen(c, texture2D(tScene, vUv + vec2(0.0, -uTexel.y)).rgb, texture2D(tScene, vUv + vec2(0.0, uTexel.y)).rgb,
+      texture2D(tScene, vUv + vec2(-uTexel.x, 0.0)).rgb, texture2D(tScene, vUv + vec2(uTexel.x, 0.0)).rgb, uSharp);
   #endif
   #ifdef BLOOM
     c += texture2D(tBloom, vUv).rgb * uBloom;
@@ -106,18 +119,26 @@ const FXAA = `
 varying vec2 vUv;
 uniform sampler2D tColor;
 uniform vec2 uTexel;
+uniform float uSharp;
+${SHARPEN_GLSL}
 float fxLuma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 vec3 fxFetch(vec2 uv) { return texture2D(tColor, uv).rgb; }
 void main() {
   vec2 uv = vUv;
   vec3 rgbM = fxFetch(uv);
   float lM = fxLuma(rgbM);
-  float lN = fxLuma(fxFetch(uv + vec2(0.0, -uTexel.y))), lS = fxLuma(fxFetch(uv + vec2(0.0, uTexel.y)));
-  float lW = fxLuma(fxFetch(uv + vec2(-uTexel.x, 0.0))), lE = fxLuma(fxFetch(uv + vec2(uTexel.x, 0.0)));
+  vec3 rgbN = fxFetch(uv + vec2(0.0, -uTexel.y)), rgbS = fxFetch(uv + vec2(0.0, uTexel.y));
+  vec3 rgbW = fxFetch(uv + vec2(-uTexel.x, 0.0)), rgbE = fxFetch(uv + vec2(uTexel.x, 0.0));
+  float lN = fxLuma(rgbN), lS = fxLuma(rgbS), lW = fxLuma(rgbW), lE = fxLuma(rgbE);
   float rangeMin = min(lM, min(min(lN, lS), min(lW, lE)));
   float rangeMax = max(lM, max(max(lN, lS), max(lW, lE)));
   float range = rangeMax - rangeMin;
-  if (range < max(0.0625, rangeMax * 0.166)) { gl_FragColor = vec4(rgbM, 1.0); return; }   // (low-contrast texture is left alone: it is not an edge)
+  // low-contrast texture is not an edge: it is left alone, only sharpened (the threshold is FXAA's "high quality" one, a little stricter in the
+  // dark, so the grain of grass and stone is not smeared as if it were a jagged line)
+  if (range < max(0.0833, rangeMax * 0.166)) {
+    gl_FragColor = vec4(uSharp > 0.0 ? shSharpen(rgbM, rgbN, rgbS, rgbW, rgbE, uSharp) : rgbM, 1.0);
+    return;
+  }
   float lNW = fxLuma(fxFetch(uv + vec2(-uTexel.x, -uTexel.y))), lNE = fxLuma(fxFetch(uv + vec2(uTexel.x, -uTexel.y)));
   float lSW = fxLuma(fxFetch(uv + vec2(-uTexel.x, uTexel.y))), lSE = fxLuma(fxFetch(uv + vec2(uTexel.x, uTexel.y)));
   float lNS = lN + lS, lWE = lW + lE, lNWNE = lNW + lNE, lSWSE = lSW + lSE, lNWSW = lNW + lSW, lNESE = lNE + lSE;
@@ -164,7 +185,7 @@ void main() {
   float lumaAvg = (1.0 / 12.0) * (2.0 * (lNS + lWE) + lNWSW + lNESE);
   float sp1 = clamp(abs(lumaAvg - lM) / range, 0.0, 1.0);
   float sp2 = (-2.0 * sp1 + 3.0) * sp1 * sp1;
-  finalOffset = max(finalOffset, sp2 * sp2 * 0.5);
+  finalOffset = max(finalOffset, sp2 * sp2 * 0.3);   // (sub-pixel smoothing: FXAA's default 0.75 smears fine texture)
   vec2 finalUv = uv;
   if (horz) finalUv.y += finalOffset * step1; else finalUv.x += finalOffset * step1;
   gl_FragColor = vec4(fxFetch(finalUv), 1.0);
@@ -208,7 +229,8 @@ export class Post {
       tScene: { value: null }, tBloom: { value: null }, uExposure: { value: 1 }, uBloom: { value: 0.1 }, uVignette: { value: 0.2 }, uAspect: { value: 1 }, uSharp: { value: 0 },
       uTexel: v2(), uCam: { value: new THREE.Vector3() }, uFlash: { value: new THREE.Vector3(1, 1, 1) },
     });
-    this.matFxaa = passMaterial(FXAA, { tColor: { value: null }, uTexel: v2() });
+    this.matFxaa = passMaterial(FXAA, { tColor: { value: null }, uTexel: v2(), uSharp: { value: 0 } });
+    this.sharpBoost = 1;   // gfx.js raises it while the adaptive resolution draws fewer pixels than the screen has (the browser stretches the frame)
     // what camfx.js and friends may set: desaturate and flash amounts (0..1) and the flash colour (linear)
     this.cam = { desaturate: 0, flash: 0, flashColor: new THREE.Color(1, 1, 1) };
     this.defineKey = '';
@@ -255,13 +277,15 @@ export class Post {
       else if (this.ldrRT.width !== w || this.ldrRT.height !== h) this.ldrRT.setSize(w, h);
     } else if (this.ldrRT) { this.ldrRT.dispose(); this.ldrRT = null; }
     // composite variants
-    const key = `${p.bloom ? 'B' : ''}${p.grade ? 'G' : ''}${p.vignette ? 'V' : ''}`;
+    const sharp = !this.aa && Q.sharpen > 0;   // (with FXAA the sharpening runs in its pass instead)
+    const key = `${p.bloom ? 'B' : ''}${p.grade ? 'G' : ''}${p.vignette ? 'V' : ''}${sharp ? 'S' : ''}`;
     if (key !== this.defineKey) {
       const d = this.matComposite.defines;
-      delete d.BLOOM; delete d.GRADE; delete d.VIGNETTE;
+      delete d.BLOOM; delete d.GRADE; delete d.VIGNETTE; delete d.SHARPEN;
       if (p.bloom) d.BLOOM = '';
       if (p.grade) d.GRADE = '';
       if (p.vignette) d.VIGNETTE = '';
+      if (sharp) d.SHARPEN = '';
       this.matComposite.needsUpdate = true;
       this.defineKey = key;
     }
@@ -306,7 +330,7 @@ export class Post {
       const rts = this.bloomRT;
       this.matDown0.uniforms.tInput.value = this.sceneRT.texture;
       this.matDown0.uniforms.uTexel.value.set(1 / w, 1 / h);
-      this.matDown0.uniforms.uThreshold.value.set(1.5, 0.8, 0);
+      this.matDown0.uniforms.uThreshold.value.set(2.2, 0.7, 0);   // (only what is truly bright glows: sunlit snow and sand stay crisp)
       this.pass(this.matDown0, rts[0]);
       for (let i = 1; i < rts.length; i++) {
         this.matDown.uniforms.tInput.value = rts[i - 1].texture;
@@ -326,8 +350,11 @@ export class Post {
     u.tScene.value = this.sceneRT.texture;
     u.tBloom.value = bloomTex;
     u.uExposure.value = Q.exposure;
-    u.uBloom.value = 0.10;
-    u.uVignette.value = 0.30;
+    u.uBloom.value = 0.07;
+    u.uVignette.value = 0.22;
+    const sharpen = Math.min(1, (Q.sharpen || 0) * this.sharpBoost);
+    u.uSharp.value = sharpen;
+    this.matFxaa.uniforms.uSharp.value = sharpen;
     u.uAspect.value = w / h;
     u.uTexel.value.set(1 / w, 1 / h);
     u.uCam.value.set(this.cam.desaturate, this.cam.flash, 0);

@@ -314,7 +314,7 @@ export const WAR = {
   fightLimit: 6 * 60,
   // the clear-air haze and the valley mist, as a share of the usual land's (atmosphere.js). The war modes are seen across a few dozen metres, to the next
   // castle; War Mode's battle is watched from a hilltop across the whole field, 150 to 300 m, and at the usual density it melts into a white haze.
-  haze: 0.42,
+  haze: 0.55,
   gold: 10000,
   armyCap: 200,
   totalCap: 800,

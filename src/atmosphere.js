@@ -11,6 +11,11 @@ import { skyLightGLSL } from './skylight.js';
 import { active } from './biomes.js';
 import { WAR, WAR_WORLD } from './config.js';
 
+// the clear-air haze's density (1/m): optical depth (d * HAZE_K)^2 at d metres (see the fog chunk; ATM_K0 there is the same number)
+export const HAZE_K = 1 / 650;
+// the far plane must reach past where the haze has closed (tau 3.4, 97 %) whatever Q.viewDist says
+export const HAZE_FAR = 1100;
+
 // the sun stands still: a warm afternoon, about 30 degrees above the horizon (everything that needs it reads this one vector)
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
 export const SUN_LIGHT_COLOR = 0xffd9a8;
@@ -39,8 +44,8 @@ vec3 atmHazeB(vec3 d, vec3 tint, float murk) {
   float mu = clamp(dot(d, ATM_SUN), -1.0, 1.0);
   vec3 zenith = ${lin3(0.27, 0.46, 0.79)};
   vec3 mid = ${lin3(0.44, 0.64, 0.91)};
-  vec3 low = ${lin3(0.68, 0.82, 0.96)};
-  vec3 hor = ${lin3(0.84, 0.90, 0.95)};
+  vec3 low = ${lin3(0.63, 0.79, 0.95)};   // (a clear blue down to the hills: paler read as a milky veil over every distant slope)
+  vec3 hor = ${lin3(0.80, 0.875, 0.94)};
   vec3 sky = mix(hor, low, smoothstep(0.0, 0.10, y));
   sky = mix(sky, mid, smoothstep(0.06, 0.42, y));
   sky = mix(sky, zenith, smoothstep(0.30, 1.0, y));
@@ -77,7 +82,7 @@ vec3 atmNeutral(vec3 color) {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Fog. Optical depth = clear-air haze (grows with the square of the distance, so the near field stays crisp) + valley mist (an
 // exponential layer, integrated along the ray, denser low in the valley). The fog colour is the sky in the direction of the ray, so
-// distant things melt into the sky: pale and cool away from the sun, warm and bright toward it. fogDensity carries the scale (Q.viewDist).
+// distant things melt into the sky: pale and cool away from the sun, warm and bright toward it. fogDensity carries the scale (HAZE_K, the biome, War Mode).
 const FOG_VERTEX_PARS = `#ifdef USE_FOG
   varying vec3 vFogRay;
 #endif`;
@@ -94,9 +99,9 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     uniform float fogFar;
   #endif
   ${ATM_GLSL}
-  const float ATM_K0 = 1.0 / 400.0;   // the clear-air density that fogDensity is measured against
-  const float ATM_MIST = 0.0030;      // valley mist: extinction per metre at the valley floor
-  const float ATM_MIST_H = 30.0;      // ... falling to 1/e at this height above it
+  const float ATM_K0 = 1.0 / 650.0;   // the clear-air density that fogDensity is measured against
+  const float ATM_MIST = 0.0008;      // valley mist: extinction per metre at the valley floor (a breath of depth in the valley, not a white wall:
+  const float ATM_MIST_H = 30.0;      // ... falling to 1/e at this height above it              at 0.003 the castles 150 m off were half gone)
   vec3 atmFogColor(vec3 dir, float f, vec3 tint, float murk) {
     vec3 haze = atmHazeB(dir, tint, murk);
     float mu = max(dot(dir, ATM_SUN), 0.0);
@@ -122,7 +127,7 @@ const FOG_FRAGMENT_PARS = `#ifdef USE_FOG
     float dy = h1 - h0;
     float la = exp(-h0 / ATM_MIST_H), lb = exp(-h1 / ATM_MIST_H);
     float mist = abs(dy) > 0.02 ? (la - lb) * ATM_MIST_H / dy : la;
-    tau += ATM_MIST * (1.0 + 2.5 * murk) * (k / ATM_K0) * dist * mist * smoothstep(6.0, 110.0, dist);
+    tau += ATM_MIST * (1.0 + 1.5 * murk) * (k / ATM_K0) * dist * mist * smoothstep(20.0, 180.0, dist);
     float f = 1.0 - exp(-tau);
     if (f < 0.0015) return color;   // (nearer than about 15 m the haze is under half a grey level: not worth evaluating the sky for it)
     vec3 dir = ray / max(dist, 1e-3);
@@ -486,7 +491,10 @@ export function createAtmosphere(scene, renderer = null) {
       mat.uniforms.uTime.value = this.time;
       const clouds = Q.clouds | 0;
       if (mat.defines.CLOUDS !== clouds) { mat.defines.CLOUDS = clouds; mat.needsUpdate = true; }
-      scene.fog.far = (1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog * (WAR_WORLD.on ? WAR.haze : 1);   // (the shader takes it as the density: see the fog chunk; War Mode's own: config.js)
+      // (the shader takes it as the density: see the fog chunk; War Mode's own: config.js). The same at every quality level: the air is as clear on
+      // Low as on Ultra (the far plane is far enough at every level for the haze to have closed by then: gfx.js), 600 m sees about a third
+      // of the way into it (tau 1 at 650 m: 14 % at 250 m, 32 % at 400 m)
+      scene.fog.far = HAZE_K * air.fog * (WAR_WORLD.on ? WAR.haze : 1);
       if (direct !== !usesPost()) { direct = !usesPost(); setTint(); }
     },
   };

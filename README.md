@@ -1156,7 +1156,14 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   a few milliseconds and made strafing judder. Walking speed changes and jumps come out the same at any frame rate, and the
   short hit-stop when your blow lands holds the world, not your own steps.
 - Mouse look uses raw input where the browser supports it.
-- Edges are smoothed by 4x multisampling of the scene target plus FXAA at High and Ultra and by FXAA alone at Medium; the canvas itself has samples only at Low, where the scene is drawn straight into it.
+- Edges are smoothed by 4x multisampling of the scene target at High and Ultra (no FXAA on top: it softened every texture; it comes back by itself on a GPU
+  that cannot multisample the target) and by FXAA at Medium (tuned to leave fine texture alone); the canvas itself has samples only at Low, where the
+  scene is drawn straight into it. Medium, High and Ultra finish the frame with a light sharpening (`Q.sharpen`, `src/post.js`): each pixel is pushed
+  away from its neighbours' average but never past the darkest or brightest of them, and less on hard edges, so there are no halos and no shimmer; it
+  costs nothing extra at Medium (it runs in FXAA's pass on the taps FXAA reads anyway) and four texture reads per pixel at High.
+- Clarity: the clear-air haze is the same at every level (`HAZE_K` in `src/atmosphere.js`: about 14 % at 250 m, 32 % at 400 m) and the valley mist
+  is a light layer that starts past 20 m; texture filtering is 4x anisotropic at Low, 8x at Medium and the GPU's most (16x) at High and Ultra
+  (`src/aniso.js`); Medium draws up to 1.5 and High up to 2 device pixels per CSS pixel, so 125 %, 150 % and 2x screens get their own resolution.
 - Sun shadows read five samples of the soft filter where a pixel is clearly in light or shadow, and all of them only near a shadow edge.
 
 ## Current limits
@@ -1171,9 +1178,9 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Graphics quality (Auto / Low / Medium / High / Ultra) is in Options, on the main menu and the game menu. Auto
   picks a level for the machine (and steps down if even the lowest resolution cannot keep the frame rate); Low turns
   off shadows, grass and the post passes for slower computers. Whatever the level, the render resolution drops by
-  itself when frames get slow and creeps back up when they are calm, never below 3/4 of the screen's own pixels (lower looks
-  soft; Auto drops a quality level instead) (switch off under Options: Adaptive resolution);
+  itself when frames get slow and creeps back up when they are calm, never below 85 % of the screen's own pixels (lower looks
+  soft; Auto drops a quality level instead; while it is lowered the sharpening leans in a little harder) (switch off under Options: Adaptive resolution);
   the frame counter shows it next to the fps. The sky, fog, sun shadows (two cascades, snapped to the shadow map's
-  texels), the HDR post passes (bloom, tone curve and grade, vignette, FXAA) and the quality tunables are in
+  texels), the HDR post passes (bloom of only the truly bright, tone curve and grade, vignette, sharpening, FXAA) and the quality tunables are in
   `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js` and `src/quality.js`. No three.js add-ons are vendored.
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.
