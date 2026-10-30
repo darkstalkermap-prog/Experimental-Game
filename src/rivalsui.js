@@ -50,14 +50,13 @@ let given = '';   // the rivals the last start was given, as a string
 const css = document.createElement('style');
 css.id = 'rivalsCss';
 css.textContent = `
-  #rivalsCard { position: absolute; right: 16px; top: 150px; width: 330px; padding: 10px 14px 12px; background: var(--panel); border: 1px solid var(--edge);
-    border-right: 3px solid var(--gold); border-radius: 4px; opacity: 0; animation: rvcard 13s ease-out forwards; }
+  #rivalsCard { position: absolute; right: 16px; top: 150px; width: 360px; padding: 10px 14px 12px; background: var(--panel); border: 1px solid var(--edge);
+    border-right: 3px solid var(--gold); border-radius: 4px; opacity: 0; z-index: -1; animation: rvcard 13s ease-out 3.2s forwards; }   /* (after the banner is gone, and under the map and the shop) */
   #rivalsCard h3 { margin: 0 0 6px; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
   #rivalsCard .rv { display: grid; grid-template-columns: 12px 1fr; gap: 0 9px; margin: 7px 0 0; }
   #rivalsCard .rv i, .rvrow i { width: 10px; height: 10px; border-radius: 2px; margin-top: 5px; display: inline-block; }
   #rivalsCard b { font-family: Cinzel, serif; font-size: 15px; font-weight: 700; color: #f4e6c4; }
   #rivalsCard span { display: block; font-size: 14px; line-height: 1.25; color: #d9c9a2; }
-  #rivalsCard small { font-size: 12px; opacity: 0.75; margin-left: 5px; font-family: Cinzel, serif; letter-spacing: 0.04em; }
   @keyframes rvcard { 0% { opacity: 0; transform: translateX(14px); } 5% { opacity: 1; transform: none; } 88% { opacity: 1; } 100% { opacity: 0; } }
   @media (min-width: 1200px) { #factions.has-rivals { width: 420px; } }
   @media (max-width: 1199px) { #factions em.rv { display: none; } #rivalsCard { width: 280px; } }
@@ -112,10 +111,10 @@ export function introduceRivals(game) {
   el.id = 'rivalsCard';
   el.innerHTML = '<h3>Your rivals</h3>' + list.map((f) => {
     const r = houseRival(game, f);
-    return `<div class="rv"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><small>${esc(TEAM_NAMES[f.team])}</small><span>${esc(r.blurb)}</span></div></div>`;
+    return `<div class="rv"><i style="background:${TEAM_CSS[f.team]}"></i><div><b>${esc(r.name)}</b><span>${esc(TEAM_NAMES[f.team])} · ${esc(r.line)}</span></div></div>`;
   }).join('');
   hud.appendChild(el);
-  setTimeout(() => { if (el.isConnected) el.remove(); }, 13500);
+  setTimeout(() => { if (el.isConnected) el.remove(); }, 17000);
 }
 
 // ---------------- the game menu ----------------
