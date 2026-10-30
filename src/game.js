@@ -53,7 +53,8 @@ import { applyBiomeRules, twistLine } from './biometwist.js';
 import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 import { WarMode } from './warmode.js';
-import { WarPhysics, FIELD } from './warmap.js';
+import { FIELD } from './warmap.js';
+import { WarPhysics } from './warphysics.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];

@@ -3,15 +3,13 @@
 // slope). Two sides get two hills face to face; three or four armies (a free-for-all) get one hill each, round the field. Behind the hills and round the
 // edge the ground climbs into the plateau and the mountains of the usual land (its biome colours, its trees on the heights). No castles, roads or middle
 // hill. Everything here is a pure function of the position, the map size and the number of hills (WAR_WORLD.hills, part of the world's key in main.js),
-// so the host and every guest build the same ground.
+// so the host and every guest build the same ground. This file is the plain maths (no page, no three.js: the tests run it as it is); the ground itself
+// is WarPhysics (warphysics.js).
 //   field   the low ground between the hills: gently rolling, a metre or two of relief
 //   hill    a flat top (FIELD.hw across, FIELD.hd deep from the middle of the hill) FIELD.height above the field, its slopes FIELD.slope long all round,
 //           no steeper than about 25 degrees (every unit walks up and down: nothing in physics.js stops a climb, and nothing should look like a cliff)
 //   rim     past FIELD.rim from the middle the ground rises towards the edge of the map and the mountains
-import { WORLD, WAR_WORLD } from './config.js';
-import { Physics, CASTLE_SITES } from './physics.js';
-import { wallHeight } from './landscape.js';
-import { smoothstep } from './noise.js';
+import { WORLD, WAR_WORLD, WAR } from './config.js';
 
 // the field's sizes for the current map (metres): set by layoutField, which WarPhysics calls before any height is asked for
 //   hills    how many (2 face to face, 3 or 4 round the field)
@@ -81,37 +79,6 @@ export function fieldProfile(x, z) {
   return Math.max(hill, rise);
 }
 
-// The world of a War Mode match: the ground is the field and its hills, and the four castles (the houses still have one each, as every house does) stand
-// far outside the map, hidden: nothing reaches them, no road runs to them and they shape no ground (see WarMode.setup).
-export class WarPhysics extends Physics {
-  constructor(seed) {
-    layoutField();
-    super(seed);
-    const far = 50000;
-    CASTLE_SITES.length = 0;
-    CASTLE_SITES.push({ x: 0, z: far, rot: Math.PI }, { x: 0, z: -far, rot: 0 }, { x: far, z: 0, rot: -Math.PI / 2 }, { x: -far, z: 0, rot: Math.PI / 2 });
-    this.war = true;
-  }
-
-  rawHeight(x, z) {
-    const { fbm } = this.noise;
-    const base = fieldProfile(x, z);
-    const top = smoothstep(FIELD.height - 2, FIELD.height - 0.2, base);   // (1 on the hilltops: kept nearly flat for the formations)
-    const r = Math.hypot(x, z);
-    const outer = smoothstep(FIELD.rim - 20, FIELD.rim + 40, r);          // the heights round the edge are rough
-    const slopeK = (1 - top) * (1 - outer);                                // the slopes and the field roll a little
-    let h = base + 1.2;
-    h += (0.5 + 1.3 * slopeK + 3.2 * outer) * fbm(x * 0.012 + 3.1, z * 0.012 - 1.7, 3);
-    h += (0.25 + 0.55 * slopeK + 1.4 * outer) * fbm(x * 0.05, z * 0.05, 2);
-    h += wallHeight(Math.max(Math.abs(x), Math.abs(z)), x, z, this.noise);   // (the land's mountains round the edge, as on every map)
-    return h;
-  }
-
-  // the height the ground's dressing reads (terrain.js, grass.js: forest floor, the canopy under the trees, the treeline, snow): measured from the field's
-  // own hills, so a hilltop is meadow as the low ground of any map is, not the dark, blotched forest floor of a mountainside with no trees on it
-  dressHeight(x, z, h) { return h - fieldProfile(x, z); }
-}
-
 // may a tree or a rock stand here (scatter.js)? Not on the field, the hills or their slopes: the armies need the room. The rise towards the edge and the
 // low ground between neighbouring hills far from the middle carry the forest.
 export function fieldPropOk(x, z) {
@@ -130,4 +97,33 @@ export function sideSpot(side, sides, slot = 0, of = 1) {
   const lateral = (slot - (of - 1) / 2) * Math.min(56, FIELD.hw * 0.62);
   const d = FIELD.front + 4;   // (the hero stands 5 m in front of this: on the very edge of the top, looking down the slope)
   return { x: -fx * d + rx * lateral, z: -fz * d + rz * lateral, yaw: Math.atan2(fx, fz), fx, fz };
+}
+
+// ---------------- the sides of a match ----------------
+const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+
+// what a War Mode match is set up with ({ format }), cleaned (the menu, the lobby's start message and a guest's copy all go through this)
+export function sanitizeWar(w) {
+  const f = w && typeof w === 'object' && own(WAR.formats, w.format) ? w.format : 'ffa';
+  return { format: f };
+}
+
+// How the houses of a match are set against each other: [[teams]] one entry per side. humans: the players' teams; houses: the teams that take the field
+// (a castle the lobby or the menu left empty sends no army: seats.js); coop: the lobby's Co-op (the players on one side against the AI).
+export function warSides(format, humans, houses, coop) {
+  if (format === 'duel' && humans.length <= 2 && !(coop && humans.length > 1)) {
+    const foe = houses.find((t) => !humans.includes(t));
+    houses = humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();
+  }
+  let sides;
+  if (coop && humans.length > 1) sides = humans.length >= 4 ? [[0, 1], [2, 3]] : [humans.slice(), houses.filter((t) => !humans.includes(t))];
+  else if (format === 'teams') sides = [[0, 2], [1, 3]];
+  else sides = houses.map((t) => [t]);
+  return { houses, sides: sides.map((s) => s.filter((t) => houses.includes(t))).filter((s) => s.length) };
+}
+// the number of hills a match's world needs (one per side: warmap.js), from its setup, before the world is built (main.js; the same on every screen)
+export function warHills(setup) {
+  const humans = (setup.players || []).map((p) => p.team);
+  const houses = [0, 1, 2, 3].filter((t) => humans.includes(t) || !(Array.isArray(setup.empty) && setup.empty.includes(t)));
+  return Math.max(2, Math.min(4, warSides(sanitizeWar(setup.war).format, humans, houses, !!setup.coop).sides.length));
 }
