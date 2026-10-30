@@ -27,7 +27,7 @@
 //   clouds         sky: 0 plain gradient · 1 one cloud layer · 2 two layers with sun lighting
 //   msaa           samples of the multisampled scene target when a post pass is on (0 = none)
 //   post           full-screen passes: { bloom, aa (FXAA), vignette, grade, ao } (all false = the scene goes straight to the canvas)
-//                  edges are smoothed by msaa (High, Ultra), by FXAA (Medium) or by the canvas's own samples (Low: see canvasNeedsAA in gfx.js)
+//                  edges are smoothed by msaa and FXAA together (High, Ultra), by FXAA alone (Medium) or by the canvas's own samples (Low: see canvasNeedsAA in gfx.js)
 //   exposure       tone-mapping exposure
 export const LEVELS = ['low', 'medium', 'high', 'ultra'];
 
@@ -48,7 +48,7 @@ const PRESETS = {
     level: 2, pixelRatio: 1.75, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 2048, shadowNearMap: 2048, shadowDist: 90, shadowTaps: 12,
     crowdShadowDist: 23, crowdNear: 15, crowdRich: 20, kitShadows: true, props: 1, decals: 384, lodScale: 1.25, detail: 2,
     grass: 1, grassDist: 44, trees: 1, viewDist: 1400, terrain: 2, aniso: 4, wind: true, particles: 1, clouds: 2, msaa: 4,
-    post: { bloom: true, aa: false, vignette: true, grade: true, ao: false }, exposure: 1.25,
+    post: { bloom: true, aa: true, vignette: true, grade: true, ao: false }, exposure: 1.25,
   },
   ultra: {
     level: 3, pixelRatio: 2, dynRes: true, dynMin: 0.5, shadows: true, shadowMap: 3072, shadowNearMap: 2048, shadowDist: 120, shadowTaps: 16,

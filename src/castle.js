@@ -333,10 +333,13 @@ export class Castle {
     };
     // the walls: pieces for each state of each segment, merged again whenever one changes
     this.wallParts = this.walls.map((seg, i) => G.wallParts(seg, d, seed * 31 + i));
-    // faces buried in other stone are seen from nowhere, so they are not drawn (a wall piece is only tested against what always stands)
-    const solid = [fixed, K, A];
-    for (const P of solid) P.cull(solid.filter((o) => o !== P));
-    for (const w of this.wallParts) for (const P of [w.full, w.damaged, w.gone]) P.cull(solid);
+    // faces buried in other stone are seen from nowhere, so they are not drawn. A wall piece is only tested against what always stands; the keep and the towers
+    // (K) fall in the finish and are hidden then (hideKeep), so what they bury has to stay drawn: K is culled by the rest but culls nothing of it
+    const stays = [fixed, A];
+    K.cull(stays);
+    fixed.cull([A]);
+    A.cull([fixed]);
+    for (const w of this.wallParts) for (const P of [w.full, w.damaged, w.gone]) P.cull(stays);
     this.fixedParts = fixed;
     this.wallMesh = mesh(null, 'masonry', this.mergeWalls(), true);
     this.wallsDirty = false;
