@@ -157,13 +157,13 @@ export function confirmOffer(g, ui) {
 }
 
 // ---------------------------------------------------------------- the HUD pieces (called a few times a second by ui.update)
-const last = { ready: '', offer: '', hillY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
+const last = { ready: '', offer: '', hillY: 0, targetY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
 const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 // a new match starts with nothing shown (ui.reset)
 export function resetHud() {
   last.ready = last.offer = '';
-  last.hillY = 0;
-  $('hill').style.top = '';
+  last.hillY = last.targetY = 0;
+  $('hill').style.top = $('target').style.top = '';
   last.told.clear();
   armedUntil = 0;
   for (const id of ['readyRow', 'offerRow']) $(id).classList.add('hidden');
@@ -188,12 +188,14 @@ export function updateHud(g, ui) {
       setText($('shopReady'), rv.alone ? 'Ready' : `Ready · ${rv.n}/${rv.of}`);
     }
   }
-  // The King of the Hill panel hangs under the top panel, which grows by a row for Ready, for the offer and for the decrees (decrees.js): it follows the real bottom edge
-  const hill = $('hill');
-  if (!g.hero && !hill.classList.contains('hidden')) {
-    const top = $('top');
-    const y = top.offsetTop + top.offsetHeight + 8;
+  // The King of the Hill panel and the label of the soldier you aim at hang under the top panel, which grows by a row for Ready, for the offer and for the decrees
+  // (decrees.js): they follow its real bottom edge instead of a fixed place
+  if (!g.hero) {
+    const top = $('top'), hill = $('hill'), tg = $('target');
+    let y = top.offsetTop + top.offsetHeight + 8;
     if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
+    if (!hill.classList.contains('hidden')) y += hill.offsetHeight + 6;
+    if (y !== last.targetY) { last.targetY = y; tg.style.top = `${y}px`; }
   }
   const o = offerFor(g);
   const armed = performance.now() < armedUntil;
