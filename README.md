@@ -333,7 +333,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   soldiers can be **promoted** in the shop (Army tab): Swordsman or Spearman to Knight, Archer to Longbowman,
   Cavalry to Lancer. They keep their rank.
 - **Giants**: once you've saved 1,600 gold, your castle can **summon a giant** (shop, Siege tab). The
-  6-metre giant marches on your target castle, smashing gates and keeps. Its club flattens and staggers
+  6-metre giant, a hunched two-headed ettin in a fur kilt with a stone hammer (its house shows in the sash, the banner on
+  its kilt and the rag on the hammer), marches on your target castle, smashing gates and keeps. Its hammer flattens and staggers
   everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
   summon giants too.
 - **Commanding your army**: while your army has soldiers, the orders bar at the bottom of the screen shows your orders and their keys.
@@ -944,6 +945,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
 | `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, three deaths; a cape hangs toward the ground and lies along the back of a man fallen on his face), and the catalogue of parts they wear (a body of lofted rings that swells at the muscles and tapers at the joints, a skull with a face, helmets fitted to it, armour, weapons, shields, heraldry) built from primitives with baked shading |
+| `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints (so it takes the same poses and is drawn by the same crowd batches), its own shapes (bald scowling heads with long beards, a bare muscled trunk, fur kilt with an iron boss and the house banner, rag-bound shins and forearms, bare feet, a stone hammer) and a hunched, heavy layer over the soldier's walk, swing and deaths |
 | `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn steel; cloth that sways, capes that stream behind a runner, skirts and tassets that ride up onto the thighs in a crouch) and its face and emblem atlases |
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |

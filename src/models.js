@@ -11,6 +11,7 @@ import { getShape, shapeGeo, SHAPES } from './shapes.js';
 import { unitMaterial, unitMaterials } from './unitmat.js';
 import { unitTextures } from './unittex.js';
 import { SKIRT } from './modelkit.js';
+import { buildGiant, poseGiant, poseGiantDead } from './giantmodel.js';
 
 export { unitMaterial };
 
@@ -74,6 +75,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
   if (opts && opts.cape && SHAPES.has(opts.cape)) desc = { ...desc, cape: opts.cape };   // a cloak the lord has earned (progress.js)
   const raider = team === RAIDER_TEAM;
+  if (desc.giant && !(opts && opts.hero)) return buildGiant(type, team, variant, raider ? RAIDER_CLOTH[variant % 3] : TEAM_COLORS[team] ?? 0xffffff, desc);   // (an ettin of its own: giantmodel.js)
   const arm = raider && !desc.plate ? 'skin' : desc.arm;
   const root = new THREE.Group();
   const body = joint(root, 0, 0, 0);
@@ -134,6 +136,7 @@ export function buildHeroBody(classId, team, variant = 2, cape = null) { return 
 // Better training, better kit: tier 1 steel pauldrons, 2 a cloak, 3 gold at the throat and on the shield, 4 gold pauldrons and wings on the
 // helm, 5 a gilded breastplate and a long cloak.
 export function rigSetTier(m, tier) {
+  if (m.giant) return;   // (no kit to show, and the giant's build is its own)
   m.tier = tier;
   m.inst[3] = m.baseBits | tierBits(tier);
   m.kit.on = tier > 0;
@@ -347,6 +350,7 @@ export function poseSoldier(m, st) {
     T.rotation.x = 0.12;
   }
   m.inst[13] = Math.min(1, sp / 7);
+  if (m.giant) poseGiant(m, st);
   settleCloth(m);
 }
 
@@ -402,6 +406,7 @@ export function poseDeath(m, t, kind, side = 1) {
     J(m.shR, -0.6 * e1 - 0.2 * e2, 0, 0.5 * e2); J(m.elR, -0.9 * e1, 0, 0);
   }
   if (m.weapon) m.weapon.rotation.x = m.weaponTilt - 0.4 * e1;
+  if (m.giant) poseGiantDead(m, t);
   m.inst[13] = kind === 1 ? -e2 : 0;   // (no wind of his running left in the cape; face down, it sags over his legs: unitmat.js)
   settleCloth(m);
 }
