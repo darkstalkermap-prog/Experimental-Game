@@ -151,6 +151,10 @@ class Gfx {
 
   // pixel ratio of the drawing buffer: what the device and the quality allow, times the adaptive share
   ratio() { return Math.max(0.35, Math.min(window.devicePixelRatio || 1, Q.pixelRatio) * this.scale); }
+  // the lowest scale the governor may go to: the quality's dynMin of the full size, but never below 3/4 of one drawn pixel per screen
+  // pixel (on an ordinary 1x screen half the resolution looks soft and hazy, worst on War Mode's long views; a busy battle that is
+  // still slow there gets a lower quality level from Auto instead, which costs less clarity). A high-DPI screen keeps the deeper range.
+  dynFloor() { return Math.min(1, Math.max(Q.dynMin, 0.75 / Math.min(window.devicePixelRatio || 1, Q.pixelRatio))); }
 
   // (re)size the drawing buffer when the window or the ratio changed
   resize(force = false) {
@@ -203,7 +207,7 @@ class Gfx {
     if (this.fn >= 40 && slow / this.fn > 0.3 && cpuMs < 0.75 * dtMs) {
       const mean = sum / this.fn;
       const f = Math.min(0.95, Math.max(0.78, Math.sqrt(16.7 / mean)));
-      const next = Math.max(Q.dynMin, Math.min(this.scale - 0.05, Math.round((this.scale * f) / 0.05) * 0.05));
+      const next = Math.max(this.dynFloor(), Math.min(this.scale - 0.05, Math.round((this.scale * f) / 0.05) * 0.05));
       if (next < this.scale - 1e-3) {
         if (now - this.lastUp < 8000) this.backoff = Math.min(this.backoff * 2, 480000);   // the step up just failed: wait longer next time
         this.ceiling = Math.max(next, this.scale - 0.05); this.ceilingAt = now;
@@ -215,7 +219,7 @@ class Gfx {
     // Auto only: stuck at the lowest resolution and still slow for a good while: the level is too high for this machine
     const a = this.auto, g = this.game;
     if (Q.choice === 'auto' && g && g.state === 'playing' && !g.paused) {
-      const floor = this.scale <= Q.dynMin + 0.001;
+      const floor = this.scale <= this.dynFloor() + 0.001;
       if (floor && dtMs > 24) a.floorT += dtMs / 1000; else a.floorT = Math.max(0, a.floorT - dtMs / 1000);
       if (a.floorT > 6 && Q.level > 0 && a.drops < 3 && now - a.lastDrop > 20000) { a.drops++; a.lastDrop = now; a.floorT = 0; this.stepDownAuto(); }
     }

@@ -1065,7 +1065,8 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Graphics quality (Auto / Low / Medium / High / Ultra) is in Options, on the main menu and the game menu. Auto
   picks a level for the machine (and steps down if even the lowest resolution cannot keep the frame rate); Low turns
   off shadows, grass and the post passes for slower computers. Whatever the level, the render resolution drops by
-  itself when frames get slow and creeps back up when they are calm (switch off under Options: Adaptive resolution);
+  itself when frames get slow and creeps back up when they are calm, never below 3/4 of the screen's own pixels (lower looks
+  soft; Auto drops a quality level instead) (switch off under Options: Adaptive resolution);
   the frame counter shows it next to the fps. The sky, fog, sun shadows (two cascades, snapped to the shadow map's
   texels), the HDR post passes (bloom, tone curve and grade, vignette, FXAA) and the quality tunables are in
   `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js` and `src/quality.js`. No three.js add-ons are vendored.
