@@ -23,6 +23,7 @@ import { rivalTagHtml, houseRival, lobbyRivalName } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
+const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };   // (no DOM write when nothing changed)
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // The three jobs a soldier can have (see Game.assignRole)
@@ -753,6 +754,7 @@ export class UI {
     $('buffs').innerHTML = '';   // (the list is only written when it changes: a label of the last match would stay through the next preparation)
     this.heroSeen = undefined;   // (the next frame asks the new world again whether this is the Hero Game Mode, and sets or clears the HUD's hero classes)
     this.goldShown = null;
+    this.noArmy = this.inBattle = undefined;
     this.hudT = 0;
     resetFlowHud();
   }
@@ -798,16 +800,18 @@ export class UI {
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
       if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: the practice panel'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
-      $('weapon').textContent = p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
+      setText($('weapon'), p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
-        : `${p.bow.name} · ${p.arrows} arrows`;
-      $('potions').textContent = `Potions ${p.potions} (H)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : '');
-      const grp = { all: 'Whole army', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
-      const ord = { follow: 'Following', hold: 'Holding', charge: 'Charging', defend: 'Defending', assault: 'Assaulting' }[p.lastOrder || 'defend'];
+        : `${p.bow.name} · ${p.arrows} arrows`);
+      setText($('potions'), `Potions ${p.potions} (H)` + (p.hasHorse ? ` · Horse ${Math.ceil(p.horseHp)}/320 (E)` : ''));
+      // where your soldiers are (the group, formation and order are on the orders bar, which shows while the army has soldiers)
       const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
-      const form = FORMATIONS[f.formation || 'line'].name;
       const rc = g.roleCounts(g.localTeam);
-      $('army').textContent = `Garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''} · ${form} · ${grp} · ${ord}`;
+      setText($('army'), `🏰 Garrison ${rc.garrison} · ⚔ Army ${rc.army} · ➤ Lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''}`);
+      // the HUD's quieter states: no orders bar without an army, no key reminders once the fighting has begun
+      const hud = $('hud'), noArmy = rc.army === 0, inBattle = !!g.practice || g.phase !== 'prep';
+      if (noArmy !== this.noArmy) { this.noArmy = noArmy; hud.classList.toggle('noarmy', noArmy); }
+      if (inBattle !== this.inBattle) { this.inBattle = inBattle; hud.classList.toggle('inbattle', inBattle); }
       $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
       $('clsName').style.color = p.cls.color;
       $('lvl').textContent = ` · Lv ${p.level}`;
