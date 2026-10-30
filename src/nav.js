@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { CASTLE } from './config.js';
 import { allied } from './teams.js';
-import { GATE_OPEN } from './physics.js';
 
 const H = CASTLE.H;
 const TC = H + CASTLE.towerOff;        // corner tower centres
@@ -76,13 +75,14 @@ export function avoidCastles(game, pos, goal, mem = null) {
   return goal;
 }
 
-// Can someone of `team` go through this castle's gate now? A broken gate, an open one (for anybody: an enemy who
-// finds it open walks straight in) or, for its own side, one that will swing open for them.
+// Can someone of `team` go through this castle's gate? A broken gate lets everybody through; a standing one only its
+// own side (and allies), when it swings open for them (Game.gateShouldOpen), and not at all while it is barred. To an
+// enemy a standing gate is shut, open or not (Physics.lets): he batters it or finds a breach.
 export function gatePassable(castle, team) {
   const g = castle.gate;
   if (!g.alive) return true;
   if (castle.gateLocked) return false;
-  return allied(g.team, team) || g.openAmt >= GATE_OPEN;
+  return allied(g.team, team);
 }
 
 export function entriesFor(castle, team) {

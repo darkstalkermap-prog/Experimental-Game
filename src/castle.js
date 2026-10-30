@@ -791,6 +791,7 @@ export class Castle {
       Math.round(this.keep.hp), this.keep.maxHp, this.fallen ? 1 : 0,
       this.wallLevel, this.gateLevel, this.towerLevel,
       br.map((w) => Math.round(w.hp)), Math.round(br[0] ? br[0].maxHp : 0), this.gateLocked ? 1 : 0,
+      this.gateWant ? 1 : 0,   // (whether the host's gate is swinging open: a guest's own soldiers lack the orders to work it out)
     ];
   }
 
@@ -803,6 +804,7 @@ export class Castle {
     if (a[5] && !this.fallen) { this.fallen = true; this.keep.alive = false; this.applyFallenVisual(); }
     this.wallLevel = a[6]; this.gateLevel = a[7]; this.towerLevel = a[8];
     if (!!a[11] !== this.gateLocked) this.setGateLocked(!!a[11]);
+    this.netGateOpen = !!a[12];
     const br = this.walls.filter((w) => w.breakable);
     br.forEach((w, i) => {
       const hp = a[9][i];

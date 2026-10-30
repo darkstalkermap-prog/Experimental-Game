@@ -235,11 +235,11 @@ export class Physics {
     return STEER;   // (shared: every caller reads x and z straight away)
   }
 
-  // Does this collider let someone of `team` through? A gate that stands open is an open gateway for anyone, friend or
-  // foe (it swings open for its own side; an enemy who reaches it before it shuts walks in); shut or barred, it is solid
-  // for everybody.
+  // Does this collider let someone of `team` through? A gate that stands open lets its own side (and its allies) through
+  // and nobody else: it only opens for its own marching troops while no enemy is near (Game.gateShouldOpen), and an enemy
+  // who runs at it then still finds it solid. Shut or barred, it is solid for everybody.
   lets(c, team) {
-    if (c.kind === 'gate') return c.passTeam >= 0 && c.ref.openAmt >= GATE_OPEN;
+    if (c.kind === 'gate') return c.passTeam >= 0 && c.ref.openAmt >= GATE_OPEN && allied(c.passTeam, team);
     return c.passTeam >= 0 && allied(c.passTeam, team);
   }
 
