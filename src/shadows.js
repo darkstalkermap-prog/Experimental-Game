@@ -106,7 +106,7 @@ export class ShadowRig {
     const taps = Math.max(5, Math.min(16, Q.shadowTaps | 0 || 8));
     sun.shadow.radius = taps * 16 + Math.min(6, Math.max(1.1, 0.07 / this.near.texel));
     far.shadow.radius = Math.min(6, Math.max(1.1, 0.12 / this.farC.texel));
-    this.farInterval = Q.level >= 3 ? 1 / 6 : 1 / 4;   // (what it holds is static: castles and trees; it is redrawn at once when it re-centres)
+    this.farInterval = Q.level >= 3 ? 1 / 20 : 1 / 15;
     this.farAge = 1e9;
   }
 
