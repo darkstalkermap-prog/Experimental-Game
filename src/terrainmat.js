@@ -1,4 +1,4 @@
-// Materials for the ground, one per Q.terrain level: 0 plain vertex colours, 1 plus a detail texture, 2 the splat shader.
+// Materials for the ground, one per Q.terrain level: 0 and 1 the light shader (baked vertex colours and the detail texture: see LITE_COLOR), 2 the splat shader.
 //   The splat shader lays the ground out from the data the geometry carries (terrain.js): the grass colour (aBase), masks for the trampled
 //   earth round castles, the bare top of the hill and the practice sand (aMask.xyz), the forest canopy on the mountains' foot (aMask.w),
 //   and the bare mountain above the trees and the snow (aAlt). Roads are worked out here from their lines, so they have ruts and pebbles.
@@ -6,12 +6,10 @@
 //   The colours it paints with are a palette of uniforms (uPal, set per biome by setBiomeLook: the meadow's are the colours it always had), so every biome
 //   shares one program; ponds and ice (the third mask) are glossy.
 import * as THREE from 'three';
-import { grassDetailTexture } from './textures.js';
 import { detailTexture, noiseTexture } from './terraintex.js';
 import { patchMaterial } from './shaderhook.js';
 
 const cache = [];
-let detail1 = null;
 const U = {
   uDetail: { value: null }, uNoise: { value: null }, uRoads: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uRoadExt: { value: 1e5 },
   uPal: { value: Array.from({ length: 17 }, () => new THREE.Vector3()) }, uBiomeK: { value: new THREE.Vector2(1, 0) },
@@ -57,7 +55,16 @@ uniform vec3 uPal[17]; uniform vec2 uBiomeK;   // the biome's palette, and x: ho
 #define P_SNOW uPal[16]
 varying vec3 vWPos; varying vec3 vWN; varying vec3 vBase; varying vec4 vMask; varying vec2 vAlt;
 float gBump = 0.0;
-float gWet = 0.0;`;
+float gWet = 0.0;
+// the detail texture read from above (xz), and on slopes also along x and z, weighted by w (the normal's share of each axis, sharpened):
+// flat ground reads it once, a slope twice; a weight too small to see skips its read
+vec4 triDetail(vec3 P, vec3 w, float s, mat2 r, vec2 o) {
+  vec4 c = vec4(0.0);
+  if (w.y > 0.02) c += texture2D(uDetail, r * P.xz * s + o) * w.y;
+  if (w.x > 0.02) c += texture2D(uDetail, r * P.zy * s + o) * w.x;
+  if (w.z > 0.02) c += texture2D(uDetail, r * P.xy * s + o) * w.z;
+  return c / max(w.x * step(0.02, w.x) + w.y * step(0.02, w.y) + w.z * step(0.02, w.z), 1e-3);
+}`;
 
 const FRAG_COLOR = `
 {
@@ -66,25 +73,29 @@ const FRAG_COLOR = `
   vec3 N = normalize(vWN);
   float dist = length(vViewPosition);
   float fine = 1.0 - smoothstep(25.0, 170.0, dist);           // small detail fades out with distance
-  float strokes = 1.0 - smoothstep(10.0, 60.0, dist);         // the blade strokes repeat every 2.3 m: gone before the repeat can show as a grid
+  float strokes = 1.0 - smoothstep(14.0, 70.0, dist);         // the blade tufts repeat every 2.3 m: gone before the repeat can show as a grid
+  float midK = 1.0 - smoothstep(60.0, 220.0, dist);           // the coarse layer (8.5 m) carries the texture of the middle distance
   float steep = 1.0 - N.y;
+  // the ground layers are read from above, and on a slope also from the side (blended by the normal), so a bank is not smeared into streaks
+  vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
   vec4 n2 = texture2D(uNoise, p * 0.021 + vec2(0.57, 0.29));
   vec4 n3 = texture2D(uNoise, p * 0.083 + vec2(0.31, 0.93));
   float peb = texture2D(uNoise, p * 0.9).a;
-  vec4 d1 = texture2D(uDetail, p * 0.43);
-  vec4 d2 = texture2D(uDetail, mat2(0.8, -0.6, 0.6, 0.8) * p * 0.117 + vec2(0.37, 0.11));
+  vec4 d1 = triDetail(vWPos, tw, 0.43, mat2(1.0, 0.0, 0.0, 1.0), vec2(0.0));
+  vec4 d2 = triDetail(vWPos, tw, 0.117, mat2(0.8, -0.6, 0.6, 0.8), vec2(0.37, 0.11));
 
-  // grass: the colour baked into the vertices, broken up by blade strokes at two scales
-  float gv = d1.r * (0.55 + d2.r * 0.9) * 1.7;
+  // grass: the colour baked into the vertices, broken up by tufts of blades near by and by the coarse layer farther out
+  float gv = d1.r * (0.55 + d2.r * 0.9) * 1.5;
   float macro = 0.72 + 0.56 * (n2.g * 0.55 + n3.g * 0.45);    // (the same average as the strokes, but it never repeats)
-  vec3 col = vBase * mix(macro, 0.42 + 0.7 * gv, strokes * uBiomeK.x);
-  float bump = (d1.r - 0.5) * 0.045 * strokes;
+  float far = mix(macro, macro * (0.7 + 0.55 * d2.r), midK);
+  vec3 col = vBase * mix(far, mix(far, 0.42 + 0.7 * gv, strokes), uBiomeK.x);
+  float bump = ((d1.r - 0.5) * 0.06 * strokes + (d2.r - 0.5) * 0.04 * midK) * uBiomeK.x;
 
   // the foot of the mountains: a canopy of round crowns, lit like real tree tops through the bump
   float canopy = vMask.w;
   if (canopy > 0.002) {   // (only on the foot of the mountains: everywhere else the two reads below would be thrown away)
-    vec4 c1 = texture2D(uDetail, p * 0.0278);
-    vec4 c2 = texture2D(uDetail, mat2(0.6, 0.8, -0.8, 0.6) * p * 0.0091 + vec2(0.21, 0.67));
+    vec4 c1 = triDetail(vWPos, tw, 0.0278, mat2(1.0, 0.0, 0.0, 1.0), vec2(0.0));
+    vec4 c2 = triDetail(vWPos, tw, 0.0091, mat2(0.6, 0.8, -0.8, 0.6), vec2(0.21, 0.67));
     float dome = c1.a * (0.5 + c2.a);
     vec3 canopyCol = mix(P_CROWN_GAP, P_CROWN_TOP, smoothstep(0.05, 0.8, dome)) * (0.7 + 0.6 * n2.g);
     col = mix(col, canopyCol, canopy);
@@ -172,13 +183,62 @@ const FRAG_NORMAL = `
 }
 `;
 
+// The light ground shader of Low and Medium: the baked vertex colour (terrain.js: every layer, the roads and the rock already mixed in) with the
+// same detail texture as the splat shader on top. Which of its channels a spot takes is read from the colour itself: green ground gets the
+// tufts of blades, brown and grey ground the soil grain, steep ground the cracks of the rock, white ground (snow) only a faint grain. Without it
+// the ground of a 2 m vertex grid was a smooth wash of colour (Low) or a smear of streaks (Medium). Low reads the texture once; Medium twice
+// (a coarse layer that breaks the tiling and carries the middle distance) and bumps the normal with it.
+const LITE_DECL = `uniform sampler2D uDetail; uniform vec2 uBiomeK;
+varying vec3 vWPos; varying vec3 vWN;
+float gBump = 0.0;`;
+const LITE_COLOR = `
+{
+  vec2 p = vWPos.xz;
+  vec3 N = normalize(vWN);
+  float dist = length(vViewPosition);
+  float near = 1.0 - smoothstep(14.0, 80.0, dist);
+  vec3 c = vColor;
+  float lum = dot(c, vec3(0.3, 0.55, 0.15));
+  float green = clamp((c.g - max(c.r, c.b)) / max(lum, 0.03) * 3.0, 0.0, 1.0);   // grass, 0 for earth, sand, rock and snow
+  float snow = smoothstep(0.55, 0.75, min(c.r, min(c.g, c.b)));
+  float rock = smoothstep(0.42, 0.62, 1.0 - N.y) * (1.0 - green) * (1.0 - snow);   // (the forest floor on the mountains is steep too, but green)
+  vec4 d1 = texture2D(uDetail, p * 0.43);
+#ifdef LITE_TWO
+  vec4 d2 = texture2D(uDetail, mat2(0.8, -0.6, 0.6, 0.8) * p * 0.117 + vec2(0.37, 0.11));
+  float midK = 1.0 - smoothstep(60.0, 220.0, dist);
+#else
+  vec4 d2 = vec4(0.56);
+  float midK = 0.0;
+#endif
+  float gm = mix(1.0, 0.45 + 0.68 * d1.r * (0.55 + d2.r * 0.9) * 1.5, near * uBiomeK.x);
+  gm *= mix(1.0, 0.72 + 0.5 * d2.r, midK * (1.0 - near) * uBiomeK.x);
+  float sm = mix(1.0, (0.7 + 0.6 * d1.g) * (0.85 + 0.3 * d2.g), max(near, 0.6 * midK));
+  float rm = mix(1.0, (0.75 + 0.5 * d1.g) * (1.0 - 0.22 * smoothstep(0.7, 0.95, d1.b)), max(near, 0.6 * midK));
+  float m = mix(mix(sm, gm, green), rm, rock);
+  m = mix(m, 1.0 + (d1.g - 0.5) * 0.12 * near, snow);
+  diffuseColor.rgb *= c * m;
+  gBump = (mix(mix(d1.g, d1.r, green), d1.b, rock) - 0.5) * 0.05 * near * (1.0 - snow * 0.7);
+}
+`;
+const LITE_NORMAL = FRAG_NORMAL;
+
 export function terrainMaterial(level) {
   if (cache[level]) return cache[level];
   let m;
-  if (level === 0) m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 });
-  else if (level === 1) {
-    if (!detail1) detail1 = grassDetailTexture();
-    m = new THREE.MeshStandardMaterial({ vertexColors: true, map: detail1, roughness: 0.97, metalness: 0 });
+  if (level < 2) {
+    U.uDetail.value = detailTexture();
+    m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.97, metalness: 0 });
+    if (level === 1) m.defines = { LITE_TWO: '' };
+    patchMaterial(m, 'terrain-lite' + level, (shader) => {
+      shader.uniforms.uDetail = U.uDetail; shader.uniforms.uBiomeK = U.uBiomeK;
+      shader.vertexShader = shader.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; varying vec3 vWN;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWPos = position; vWN = normal;');
+      shader.fragmentShader = shader.fragmentShader
+        .replace('#include <common>', '#include <common>\n' + LITE_DECL)
+        .replace('#include <color_fragment>', LITE_COLOR);
+      if (level === 1) shader.fragmentShader = shader.fragmentShader.replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + LITE_NORMAL);
+    });
   } else {
     U.uDetail.value = detailTexture();
     U.uNoise.value = noiseTexture();
