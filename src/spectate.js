@@ -64,6 +64,9 @@ function bar() {
   el.className = 'panel';
   el.innerHTML = '<div class="sb-out"></div><div class="sb-who"><span class="sb-mode"></span><b class="sb-name"></b><span class="sb-sub"></span></div><div class="sb-hp"><i></i></div><div class="sb-keys"></div>';
   $('hud').appendChild(el);
+  el.parts = {};
+  for (const k of ['out', 'mode', 'name', 'sub', 'keys']) el.parts[k] = el.querySelector('.sb-' + k);
+  el.parts.hp = el.querySelector('.sb-hp i');
   return el;
 }
 
@@ -78,7 +81,7 @@ export class Spectate {
     this.t = 0;
     this.hudT = 0;
     this.shown = {};         // what the bar shows now (DOM is only written when it changes)
-    this.classes = '';
+    this.classes = null;     // (the HUD's classes as last written: null, so a new match writes them once whatever the last one left)
     // the cameras' own state
     this.orbit = 0; this.lift = 0.4; this.dist = 7;            // follow: around the target, above it, how far
     this.camYaw = 0;
@@ -185,6 +188,7 @@ export class Spectate {
     if (on !== this.was) {
       this.was = on;
       if (on) {
+        if (!g.spectator) this.mode = 'follow';   // (each time a hero falls the camera starts behind somebody: the free and overview ones start from it)
         if (!this.target || !this.target.alive) this.target = this.pickFirst();
         this.snap = true;
         if (g.player.viewModel) g.player.viewModel.visible = false;
@@ -228,7 +232,7 @@ export class Spectate {
     const k = this.snap ? 1 : 1 - Math.exp(-dt * 3);
     this.camYaw = wrap(this.camYaw + wrap(want - this.camYaw) * k);
     const d = this.dist * big, h = 1.5 * big;
-    const tp = t.mesh && !t.pos ? t.mesh.position : t.pos;
+    const tp = t.pos;
     tmpL.set(tp.x, tp.y + h, tp.z);
     const cl = Math.cos(this.lift);
     tmpV.set(tp.x - Math.sin(this.camYaw) * d * cl, tp.y + h + Math.sin(this.lift) * d, tp.z - Math.cos(this.camYaw) * d * cl);
@@ -308,7 +312,7 @@ export class Spectate {
     const g = this.g, hud = $('hud');
     if (!hud) return;
     const cls = on ? (g.spectator ? 'spectating spectator' : 'spectating') : '';
-    if (cls !== this.classes || (on && !hud.classList.contains('spectating'))) {
+    if (cls !== this.classes) {
       this.classes = cls;
       hud.classList.toggle('spectating', on);
       hud.classList.toggle('spectator', on && !!g.spectator);
@@ -318,29 +322,29 @@ export class Spectate {
     this.hudT -= dt;
     if (this.hudT > 0) return;
     this.hudT = 0.1;
-    const el = bar(), s = this.shown;
+    const el = bar(), s = this.shown, q = el.parts;
     const set = (k, node, v, html = false) => { if (s[k] !== v) { s[k] = v; if (html) node.innerHTML = v; else node.textContent = v; } };
-    set('out', el.querySelector('.sb-out'), this.outLine());
+    set('out', q.out, this.outLine());
     const t = this.mode === 'follow' ? this.target : null;
-    set('mode', el.querySelector('.sb-mode'), MODE_NAME[this.mode] || '');
+    set('mode', q.mode, MODE_NAME[this.mode] || '');
     const lord = t && !t.cls;   // (an AI lord is a soldier of the lord type; a hero is a Player with a class)
     const name = t ? `${!lord && t.cls.icon ? t.cls.icon + ' ' : ''}${t.name || 'Lord'}` : this.mode === 'follow' ? 'Nobody to follow' : '';
-    set('name', el.querySelector('.sb-name'), name);
-    const nameEl = el.querySelector('.sb-name'), col = t ? TEAM_CSS[t.team] || '#fff' : '';
+    set('name', q.name, name);
+    const nameEl = q.name, col = t ? TEAM_CSS[t.team] || '#fff' : '';
     if (s.col !== col) { s.col = col; nameEl.style.color = col; }
     const f = t ? g.factions[t.team] : null;
     const sub = t ? [f ? f.name : '', lord ? 'Lord' : `${t.cls.name} · Lv ${t.level || 1}`, t.alive ? '' : 'fallen'].filter(Boolean).join(' · ') : '';
-    set('sub', el.querySelector('.sb-sub'), sub);
+    set('sub', q.sub, sub);
     const hp = t && t.alive && t.maxHp ? clamp(t.hp / t.maxHp, 0, 1) : 0;
     const w = t ? `${(hp * 100).toFixed(0)}%` : '0%';
-    if (s.hp !== w) { s.hp = w; el.querySelector('.sb-hp i').style.width = w; }
+    if (s.hp !== w) { s.hp = w; q.hp.style.width = w; }
     if (s.nohp !== !t) { s.nohp = !t; el.classList.toggle('nohp', !t); }
     if (s.keys === null || s.keys === undefined || s.keysMode !== this.mode) {
       s.keysMode = this.mode;
       const keys = this.mode === 'free' ? '<kbd>WASD</kbd> fly · <kbd>Shift</kbd> fast · <kbd>Space</kbd> back to the heroes · <kbd>C</kbd> overview'
         : this.mode === 'overview' ? '<kbd>WASD</kbd> move · mouse turn · wheel height · <kbd>C</kbd> back to the heroes · <kbd>Space</kbd> free camera'
           : '<kbd>LMB</kbd><kbd>RMB</kbd> or <kbd>Q</kbd><kbd>E</kbd> previous / next · <kbd>Space</kbd> free camera · <kbd>C</kbd> overview';
-      set('keys', el.querySelector('.sb-keys'), keys + ' · <kbd>Tab</kbd> scores', true);
+      set('keys', q.keys, keys + ' · <kbd>Tab</kbd> scores', true);
     }
   }
 
