@@ -51,7 +51,7 @@ export const TIPS = [
   { id: 'h-d-rise', hero: true, at: 'death', text: 'You rise again at your keep in a few seconds. [N] spends talent points while you wait.' },
   { id: 'h-o-modes', hero: true, at: 'over', text: 'Try another way to win: the first to the hero kills, destroying the enemy keep, or the timed match.' },
   { id: 'duck', learn: 'ducked', text: 'Hold [C] to duck: arrows fly over your head and a battlement hides you completely.' },
-  { id: 'climb', learn: 'climbed', text: 'Jump at a wall of your own castle ([Space]) to scramble up onto the wall walk.' },
+  { id: 'climb', learn: 'climbed', text: 'Jump at a castle wall ([Space]) to climb over the battlements onto the wall walk. An enemy\'s wall is slower, and a hit knocks you off.' },
   { id: 'guard', learn: 'guarded', text: 'Hold right click to block: your shield stops blows from the front. Raise it just as a blow lands to parry.' },
   { id: 'swing', text: 'Left click swings your sword; hold it to keep swinging. Strike at the side of an enemy who is blocking.' },
   { id: 'shop', learn: 'shop', text: 'Press [B] for the shop: troops, castle upgrades, siege engines and your hero class.' },

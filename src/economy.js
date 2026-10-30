@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON, HORSE_COST } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 import { mods } from './mods.js';
 import { gateRepairFactor, noteGateRepair } from './comeback.js';
@@ -150,13 +150,7 @@ export const SHOP = [
     can: (g, f) => (f.player.lv.bow >= 1 ? 'Owned' : true),
     apply: (g, f) => { f.player.lv.bow = 1; f.player.recalc(); },
   },
-  {
-    id: 'horse', tab: 'items', name: 'Warhorse', playerOnly: true,
-    desc: () => 'A barded destrier. Press E to mount and dismount, or to whistle for it. Hold Shift to gallop; charging adds damage and tramples foes.',
-    cost: () => 400,
-    can: (g, f) => (f.player.hasHorse ? 'Owned' : true),
-    apply: (g, f) => { f.player.giveHorse(); },
-  },
+
   {
     id: 'arrows', tab: 'items', name: 'Quiver of Arrows', playerOnly: true,
     desc: (g, f) => `+20 arrows (${f.player.arrows}/${PLAYER.maxArrows})`,
@@ -192,6 +186,17 @@ export const SHOP = [
     cost: () => SIEGE_TYPES.catapult.cost,
     can: (g, f) => (f.castle.fallen ? 'Castle has fallen' : !g.siegeTarget(f) ? 'No target' : g.siegeCount(f.team) >= 4 ? 'Too many engines' : true),
     apply: (g, f) => g.buildSiege(f, 'catapult'),
+  },
+
+  // A warhorse for the hero, whatever the class (a Cavalier rides out with one already). It stays bought until it is
+  // killed; then another can be bought. Listed on the Class tab, with the hero's other choices (the Items tab is closed).
+  {
+    id: 'horse', tab: 'class', name: 'Warhorse', playerOnly: true,
+    desc: (g, f) => (f.player.hasHorse ? 'You have a warhorse. E mounts and dismounts, or whistles it over when it is far away.'
+      : 'A barded destrier for your hero, any class. E mounts and dismounts (or whistles it over); Shift gallops; a charge hits harder and tramples men on foot, and the horse takes half the blows aimed at you. Lost if it is killed.'),
+    cost: () => HORSE_COST,
+    can: (g, f) => (f.player.hasHorse ? 'You have one' : !f.player.alive ? 'Not while you are down' : true),
+    apply: (g, f) => { f.player.giveHorse(); f.player.notify('Your warhorse is brought round. Press E to mount.'); },
   },
 
   summon(0), summon(1), summon(2), summon(3),

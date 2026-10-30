@@ -86,6 +86,7 @@ export const START_GOLD = 500;
 export const TRICKLE = 1.5;   // gold a second that every standing house earns just by holding its castle
 export const GIANT_COST = 1600;
 export const SUMMON = { cost: 500, protect: 2 };   // calling a fallen ally back to life (co-op Conquest): the gold it takes, and the seconds they are untouchable on rising
+export const HORSE_COST = 400;   // the shop's warhorse for a hero of any class (a Cavalier starts with one)
 export const GATE_REPAIR_COST = 1500;   // repairing a damaged gate or rebuilding a broken one (the Iron-Banded Gate upgrades are priced on their own)
 
 // Comeback mechanics (src/comeback.js): what a house that is losing is given. The AI lords play by the same rules as the people.

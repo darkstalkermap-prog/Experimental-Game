@@ -200,8 +200,11 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - **Castle**: repair or reinforce the gate, repair or thicken the walls, restore the keep, and add tower archers.
     Repairing the gate (or rebuilding a broken one) costs **1500 gold**, the same for every house, so a gate that falls
     is a real loss (`GATE_REPAIR_COST` in `src/config.js`). The Iron-Banded Gate upgrades are priced on their own.
-  - **Items** (greyed out for now): better swords, a kite shield, a war bow, a warhorse, arrows and healing
-    draughts. The tab is disabled in the shop until the items come back.
+  - **Items** (greyed out for now): better swords, a kite shield, a war bow, arrows and healing draughts. The tab is
+    disabled in the shop until the items come back.
+  - **Warhorse** (on the Class tab, **400 gold**, `HORSE_COST` in `src/config.js`): a horse for your hero, whatever the class
+    (a Cavalier starts with one). It is yours until it is killed; then you can buy another. Online, a guest's purchase goes
+    through the host like every other.
   - **Siege**: battering rams, catapults and the giant, plus where your armies march (Auto lanes, or a castle you choose).
 
   **Every upgrade changes how things look**, so you can see what you bought (and what a rival has built) from across
@@ -224,18 +227,14 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   first few minutes they also now and then send their whole garrison, and sometimes their hero, on a push at
   the weakest castle (yours included), and their waves and engines follow it. They pull back to defend when
   their gate falls.
-- **Directional combat** (Bannerlord style):
-  - Flick the mouse to choose a direction: left, right, up for an overhead, or down for a thrust. Then hold
-    left-click to wind up and release to strike. A longer wind-up hits harder.
-  - Overheads and thrusts reach further and hit hard but catch one or two enemies. Side swings can hit three.
-  - Right-click raises your shield. It always softens blows from the front, and guarding the side the blow
-    comes from stops it completely.
-  - Guard just as a blow lands (or switch to that side at the last moment) to **parry**. The attacker
-    staggers and is open.
-  - Red chevrons around the crosshair show the side each incoming swing comes from.
-  - Right-click during a wind-up to **feint**. Enemies who fall for it block far less for a moment.
-  - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords
-    block, feint, circle you, and aim for the side you aren't guarding.
+- **Melee** (simple on purpose):
+  - Left click swings your sword; hold it to keep swinging. The swings take turns (from the right, from the left, now and
+    then overhead) just for the look of it: you never choose a direction, and every swing reaches and hits the same.
+  - Right click raises your shield. It stops any blow from in front (each one costs a little stamina; with too little
+    left the shield only softens it), and softens arrows and spells from in front. Blows from the side or behind get through.
+  - Raise the shield just as a blow lands to **parry**: the attacker staggers and is open.
+  - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords block and
+    circle you, looking for your side.
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** is a defence. The numbers are in `src/classes.js`.
@@ -338,8 +337,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   army count. Orders go to the soldiers in your **army** (see above); the garrison always defends the castle and
   the lane soldiers march on their own.
 - **Gates are solid**: a closed gate stops everybody, your own side included. It swings open for your friends as they
-  come near and shuts the moment an enemy is at it (within 5.5 m), and it never shuts on someone standing in the
-  gateway. You, the lord, can always call your own gate open by standing within 6 m of it, to lead a sally against
+  come near and shuts the moment an enemy is at it (within 5.5 m). An open gate is an open gateway for everybody: an
+  enemy (hero or soldier) who reaches it before it shuts walks straight in, and armies route through it while it stands
+  open. It never shuts on anyone, friend or foe, standing in the gateway, and a broken gate lets everyone through. You, the lord, can always call your own gate open by standing within 6 m of it, to lead a sally against
   a gate the enemy is besieging, and so can soldiers you have ordered out (charge or assault) once they reach it.
   The garrison stays behind a shut gate. Your arrows pass an open gate, not a shut one.
 - **The gate lever**: stand at the lever just inside your gate and press **E** to bar the gate. A barred gate
@@ -363,7 +363,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   from about wave 7, and Elite Levies add them to every wave.
 - **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, E whistles it over.
   Shift gallops. Charging adds damage and tramples enemies on foot. The horse takes half the hits you'd take,
-  and if it dies a Cavalier gets a fresh one the next time they respawn.
+  and if it dies a Cavalier gets a fresh one the next time they respawn. Any other class can buy one in the shop
+  (Class tab, 400 gold).
 - **Music and sound**: the game makes its own medieval music as you play, with no audio files: a lute, a
   recorder, a drone, hand drums and a war horn in the old church modes. It is calm during preparation and
   builds into drums and a war horn when enemies are close, you are hurt, or an army is at your gate. Browsers
@@ -728,12 +729,11 @@ Bots and AI houses keep the default look. Your account is yours alone: nothing i
 | Key | Action |
 | --- | --- |
 | WASD / Shift / Space | Move / sprint / jump |
-| Space (at your own castle's wall) | Jump at a wall of your own castle from outside, or at the edge of the wall walk from its courtyard, to climb up and stand on the wall walk (a prompt shows when you can) |
+| Space (at a castle wall) | Jump at a castle wall from outside, or at the edge of the wall walk from its courtyard, to climb up and over the battlements onto the wall walk (a prompt shows when you can; an enemy's wall is slower and costs more stamina) |
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
-| Mouse flick | Choose attack / guard direction (left, right, up = overhead, down = thrust) |
-| Left click | Hold to wind up, release to strike; with the bow, hold and release to shoot |
-| Right click | Guard with your shield; feint while winding up; zoom with the bow |
+| Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
+| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
 | Q | Class ability: attack (Ranger: hold to place the volley circle, let go to loose it) |
 | R | Class ability: defence |
@@ -781,11 +781,14 @@ Versus nobody else sees it and in co-op the whole side does. The numbers are in 
 Stairs on both sides of the courtyard lead up to the wall walk, which goes all the way around the castle and into the corner towers.
 
 **Climbing and ducking.** The walls are 8 m high, far past a jump, so a hero who stands at the foot of a wall on the outside
-and jumps at it (Space, facing it, within about a metre and a half) scrambles up it: about a second, 20 stamina, and the hero
-ends up on the wall walk behind the battlements. From the courtyard the same jump takes you up onto the edge of the wall walk
-(not from underneath its planking). It works only on the walls of **your own castle** (not on an enemy's, not on a
-breach, not while ducking; trying on someone else's wall tells you so), a "Space: Climb the wall" prompt shows when it will
-work, and other players see the climb. Holding **C** ducks: the head and the hitbox
+and jumps at it (Space, facing it, within about a metre and a half) scrambles up it and mantles over the battlements onto the
+wall walk. The hero goes over through a crenel, the gap between two merlons nearest to where they stand, never through the
+stone. From the courtyard the same jump takes you up onto the edge of the wall walk (not from underneath its planking). On your
+own (or an ally's) walls it takes about a second and 20 stamina. An **enemy's** wall can be climbed too, but it takes about
+1.7 times as long and 35 stamina (`BODY.enemyClimb` in `src/config.js`), and the defenders get their chance: a solid hit (a
+heavy blow, or an arrow or blow worth more than 8% of your health) knocks a climber off any wall until they are over the top.
+Not on a breach, not while ducking or mounted. A "Space: Climb onto the wall walk" (or "Climb the enemy wall") prompt shows
+when it will work, and other players see the climb. Holding **C** ducks: the head and the hitbox
 drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
 walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
 
@@ -851,8 +854,8 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |
-| `src/player.js` | First-person hero: movement, directional sword and shield, bow, horse, view-model |
-| `src/combat.js` | Shared rules for attack and guard directions |
+| `src/player.js` | First-person hero: movement, sword and shield, bow, horse, climbing, view-model |
+| `src/combat.js` | The melee numbers: the hero's swing, the parry window, what a block costs, the look of each swing |
 | `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |
 | `src/grass.js` | Wind-swept grass that grows around the camera |
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes, in the style of the lord's personality (the classic lord's numbers are the old ones) |
