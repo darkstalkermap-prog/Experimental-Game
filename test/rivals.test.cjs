@@ -75,7 +75,9 @@ test('a lord\'s push is announced by his name and his own verb; a wave takes his
 });
 
 test('the match options accept the ids of the personalities', async () => {
-  const { sanitizeOptions } = await load('src/options.js');
+  // (options.js reads the biome ids from biomes.js, which a data: import cannot resolve: its one import is replaced by the list)
+  const text = fs.readFileSync(path.join(__dirname, '..', 'src/options.js'), 'utf8').replace(/import \{ BIOME_IDS \} from '\.\/biomes\.js';/, "const BIOME_IDS = ['meadow', 'snow', 'marsh', 'desert'];");
+  const { sanitizeOptions } = await import('data:text/javascript;base64,' + Buffer.from(text).toString('base64'));
   const o = sanitizeOptions({ rivals: ['', 'rusher3', 'classic', 'turtler'] });
   assert.deepEqual(o.rivals, ['', 'rusher3', 'classic', 'turtler']);
   assert.deepEqual(sanitizeOptions({ rivals: [5, 'Bad Id', 'x'.repeat(40), null] }).rivals, ['', '', '', '']);

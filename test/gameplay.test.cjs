@@ -74,8 +74,8 @@ test('snapshot codecs preserve the existing field order and compact wire format'
   const { packFaction, unpackFaction, packHero, unpackHero } = await load('src/snapshot.js');
   const faction = { gold: 500, troopCap: 12, training: 2, eliminated: 0, kills: 3, heroDeaths: 4,
     respawnT: 5, siegeTarget: -1, recruitRole: 1, earned: 900,
-    isPlayer: 1, lord: 'Lord', name: 'Blue', formation: 'line', levies: 6 };
-  assert.deepEqual(packFaction(faction), [500, 12, 2, 0, 3, 4, 5, -1, 1, 900, 1, 'Lord', 'Blue', 'line', 6]);
+    isPlayer: 1, lord: 'Lord', name: 'Blue', formation: 'line', levies: 6, wage: 10, stand: 1 };
+  assert.deepEqual(packFaction(faction), [500, 12, 2, 0, 3, 4, 5, -1, 1, 900, 1, 'Lord', 'Blue', 'line', 6, 10, 1]);   // (wage and stand were appended by the comeback rules: the older fields keep their places)
   assert.deepEqual(unpackFaction(packFaction(faction)), faction);
   const hero = { team: 2, x: 1, y: 2, z: 3, yaw: 4, alive: 1, hp: 80, maxHp: 100,
     blocking: 1, swingT: -1, weapon: 0, mounted: 1, heading: 5, rideSpeed: 6, hasHorse: 1,
