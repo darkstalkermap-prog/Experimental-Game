@@ -308,7 +308,7 @@ renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 // the menu's Castle, Others, Teams and Colour rows: one player's seat (lobbyui.js draws them, seats.js says what may be)
 heroOnSolo = () => heroOn;
 function showSolo() {
-  drawSolo({ hero: heroOn, slot: soloSlot, side: soloSide, slots: soloSlots, size: heroCount, color: myColor }, {
+  drawSolo({ hero: heroOn, war: warOn, slot: soloSlot, side: soloSide, slots: soloSlots, size: heroCount, color: myColor }, {
     slot(t) { soloSlot = t; soloSlots[t] = 'open'; store('cw-slot', t); store('cw-slots', soloSlots.join()); afterSolo(); },
     side(s) { soloSide = s ? 1 : 0; store('cw-side', soloSide); afterSolo(); },
     state(t) {   // an AI lord or nobody (a war needs two houses: the last AI lord stays)

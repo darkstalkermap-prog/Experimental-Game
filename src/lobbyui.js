@@ -31,10 +31,11 @@ function style() {
 .swatches button.sw.active { border-color: #fff; box-shadow: 0 0 0 2px #5a1d12 !important; }
 .swatches button.sw:disabled { opacity: 0.25; }
 .seatrow { align-items: center; }
-.seatrow .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
-.seatrow button { padding: 5px 12px; font-size: 13px; }
+#lobby .seatrow .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+#lobby .seatrow button { padding: 5px 12px; font-size: 13px; }
+#menu .setup #warFormat, #menu .setup .seatrow { order: 2; }   /* (the setup card orders its rows: these come after the Mode row and its own rows, before the map) */
 .seatrow button i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: -1px; }
-.seatrow button small { opacity: 0.75; margin-left: 4px; }
+.seatrow button small { opacity: 0.75; }
 `;
   document.head.appendChild(s);
 }
@@ -55,7 +56,7 @@ function row(id, label, parent, before = null) {
   if (!el) {
     el = document.createElement('div');
     el.id = id;
-    el.className = 'row seatrow';
+    el.className = 'row seatrow seg';   // (seg: the page's chip buttons)
     if (before && before.parentNode === parent) parent.insertBefore(el, before); else parent.appendChild(el);
   }
   el.dataset.label = label;
@@ -167,7 +168,7 @@ export function drawLobby(v, on) {
 }
 
 // ---------------- the main menu (one player) ----------------
-// v: { hero (bool), slot (your castle in a war), side (your side in a hero match), slots (the war's castles: 'open' | 'ai' | 'empty'), size, color }
+// v: { hero (bool), war (bool: War Mode, the castles are armies), slot (your castle in a war), side (your side in a hero match), slots (the war's castles: 'open' | 'ai' | 'empty'), size, color }
 // on: { slot(t), side(s), state(t), size(n), color(id) }
 export function drawSolo(v, on) {
   style();
@@ -186,7 +187,7 @@ export function drawSolo(v, on) {
     buttons(play, 'Side', [0, 1].map((s) => ({ v: s, html: chip(s, s === v.side ? '<small>you</small>' : ''), active: s === v.side, title: `Fight for castle ${s + 1}` })), (s) => on.side(Number(s)));
     buttons(size, 'Teams', HERO_SIZES.map((n) => ({ v: n, html: `${n} v ${n}`, active: n === v.size, title: `${n} heroes a side: you and ${n - 1} bot${n > 2 ? 's' : ''} against ${n}` })), (n) => on.size(Number(n)));
   } else {
-    buttons(play, 'Castle', [0, 1, 2, 3].map((t) => ({ v: t, html: chip(t, t === v.slot ? '<small>you</small>' : ''), active: t === v.slot, title: `Play castle ${t + 1}` })), (t) => on.slot(Number(t)));
+    buttons(play, v.war ? 'Army' : 'Castle', [0, 1, 2, 3].map((t) => ({ v: t, html: chip(t, t === v.slot ? '<small>you</small>' : ''), active: t === v.slot, title: `Lead ${v.war ? 'army' : 'castle'} ${t + 1}` })), (t) => on.slot(Number(t)));
     buttons(rivals, 'Others', [0, 1, 2, 3].filter((t) => t !== v.slot).map((t) => ({ v: t, html: chip(t, `<small>${v.slots[t] === 'empty' ? 'empty' : 'AI lord'}</small>`), active: v.slots[t] !== 'empty', title: v.slots[t] === 'empty' ? `Castle ${t + 1} stands empty: click to give it an AI lord` : `An AI lord holds castle ${t + 1}: click to leave it empty` })), (t) => on.state(Number(t)));
   }
   rivals.classList.toggle('hidden', !!v.hero);
