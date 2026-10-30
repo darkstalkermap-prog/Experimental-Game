@@ -243,7 +243,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** is a defence. The numbers are in `src/classes.js`.
-  - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). **Q Shield Bash**: lunge forward
+  - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). He carries a tall kite shield (so do knight
+    soldiers and the AI lords), painted with your arms; in first person it is carried low and turned aside, and on guard its top
+    sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash**: lunge forward
     and slam your shield into everything ahead for heavy damage, a long stun and a shove. **R Bulwark**: for 5 s
     you take 70% less damage and can't be staggered; allies beside you take 40% less.
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
@@ -823,9 +825,8 @@ counts like the others (its rounds stand in for waves, and it has no gold or arm
 fills. A step costs the Renown shown (counted from the previous step; what you earn beyond it carries over): Raven banner 250,
 Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,250 in all.
 
-- **Banners** (Raven, Wolf, Stag, Boar, Dragon, Bear, Crown, Rose): an emblem painted on the hanging banners, flags and levy
-  standards of your castle (the field stays your house colour, so houses can still be told apart) and a plaque on your
-  first-person shield. `src/emblems.js` draws them with canvas paths; there are no images.
+- **Banners** (Raven, Wolf, Stag, Boar, Dragon, Bear, Crown, Rose): more sigils for your arms (below). `src/emblems.js` draws
+  every sigil with canvas paths; there are no images.
 - **Cloaks** (Crimson Mantle, Greenwood Cloak, Wolfskin Mantle, Midnight Cape): a cloak on your hero's body, which the other
   players see. In first person you cannot see your own back, and in single player nobody else is looking, so the Renown panel
   shows it on a small figure.
@@ -841,6 +842,20 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
   tree, under the capstone, only for an account that has earned them (and in the practice yard, where anybody may try them), and
   they stay out of the lists that walk the tree (bots, the practice yard's "All talents").
+
+**Your arms** (`src/heraldry.js`): in the Renown panel you choose a **sigil** (ten are free from the first match: Lion, Eagle,
+Tower, Crossed Swords, Cross, Sun, Crescent, Fleur-de-lis, Star and Oak; the eight banners above come with Renown; "House" is
+your house's own emblem), how the **field** is divided (plain, per pale, per fess, quarterly, per bend, a chevron, per saltire or
+a bordure) and a **second tint** (silver, gold, black, red, green, blue, purple or orange: on a plain field it colours the sigil,
+on a divided one the other part of the field). The field's main colour is always your house colour, so houses can still be told
+apart, and a sigil that would vanish on its field is drawn in silver or black instead. A click wears it; the choice is kept in
+the browser with the rest of the account. Your arms fly on your castle's hanging banners, flags and levy standards; your
+soldiers wear them on their surcoats and shields; your hero carries them on his shield (the Knight's kite is painted with them
+whole, the other classes show the sigil on a plaque) and a Renown cloak carries the sigil on its back; the lobby and the
+scoreboard show each lord's arms as a small shield. AI lords keep their house's emblem (tower, crossed swords, oak, sun; the
+raiders a skull), which is now the same on their banners and on their soldiers. In the world the arms are cells of the soldiers'
+emblem atlas (`src/unittex.js`): eight for the houses and eight painted at the start of a match for the lords who bear their own,
+their tint and sigil colour given to the shader as two small uniform arrays, so no draw call or material is added.
 
 A new banner or cloak is put on at once if you wear nothing in its place (so it is seen in the very next battle, even if you
 never visit the menu); what you chose to wear is never swapped.
@@ -864,9 +879,9 @@ Veteran, Sergeant, Captain, Champion, Banneret, Marshal, Warden, Warlord) begin 
 and 3200 points; a rank rises on the class's button in the menu and the lobby as a small numeral. Mastery opens nothing: it is a
 record of how long you have fought as that class.
 
-**Online.** Each player's look (banner, cloak and the capstones they have earned) travels in the lobby entry as `cos`
-(`{ banner, cloak, alts }`, ids only, cleaned on receipt) and in the start message, so every screen draws your banner on your
-castle and your cloak on your hero; the host lets a guest learn an alternate capstone only if the guest's entry says they have it.
+**Online.** Each player's look (arms, cloak and the capstones they have earned) travels in the lobby entry as `cos`
+(`{ banner, cloak, div, tint, alts }`: `banner` is the sigil; ids only, cleaned on receipt) and in the start message, so every
+screen draws your arms on your castle, soldiers and shield and your cloak on your hero; the host lets a guest learn an alternate capstone only if the guest's entry says they have it.
 Bots and AI houses keep the default look. Your account is yours alone: nothing is shared between players.
 
 ## The screens

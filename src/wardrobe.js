@@ -3,7 +3,10 @@
 // is added to the menu here (next to Options and Controls), so the menu's own markup is not touched.
 import { progress, trackInfo, renownTo, rankOf, BESTS, MASTERY_CLASSES } from './progress.js';
 import { ITEMS, ITEM_BY_KEY, itemTitle } from './unlocks.js';
-import { previewCanvas } from './cosmetics.js';
+import { previewCanvas, armsBanner } from './cosmetics.js';
+import { FREE_SIGILS, BANNERS, DIVISIONS, TINTS, sigilName } from './unlocks.js';
+import { armsOf, armsCanvas, css } from './heraldry.js';
+import { TEAM_COLORS } from './config.js';
 import { CLASSES } from './classes.js';
 import { clockText } from './matchlog.js';
 
@@ -67,6 +70,26 @@ const CSS = `
 .wd-acct { font-size: 14px; margin-top: 8px; opacity: 0.85; }
 #wardrobe .scroll > .row:last-child { position: sticky; bottom: 0; z-index: 2; margin: 14px -34px 0; padding: 12px 34px 16px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }   /* (Back stays in view) */
 @media (max-width: 700px) { .wd-top { grid-template-columns: 1fr; } }
+.wd-arms { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.wd-arms .pv { display: flex; gap: 14px; align-items: flex-end; justify-content: center; padding: 8px; border: 1px solid rgba(90,60,20,0.35); border-radius: 4px; background: rgba(255,255,255,0.3); }
+.wd-arms .pv canvas { display: block; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.45)); }
+.wd-arms h4 { margin: 0 0 4px; font: 600 12px Cinzel, serif; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; }
+.wd-arms h4 small { font: italic 13px 'EB Garamond', Georgia, serif; letter-spacing: 0; text-transform: none; color: #4a3a22; margin-left: 6px; }
+.wd-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 9px; }
+.wd-sig { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; width: 56px; min-height: 0; padding: 4px 2px 3px; background: rgba(255,255,255,0.3) !important; color: #2a1f14 !important; border: 1px solid rgba(90,60,20,0.35) !important; border-radius: 4px; letter-spacing: 0; }
+.wd-sig:hover:not(.locked) { background: rgba(255,246,210,0.75) !important; border-color: #b8862a !important; }
+.wd-sig canvas { width: 34px; height: 41px; }
+.wd-sig b { font: 600 10.5px/1.1 Cinzel, serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 54px; }
+.wd-sig.worn { border: 2px solid #b8862a !important; background: linear-gradient(#fff6d2, #efd88f) !important; box-shadow: 0 0 8px rgba(224,180,76,0.7); }
+.wd-sig.locked { cursor: default; }
+.wd-sig.locked canvas { filter: grayscale(1) brightness(0.85); opacity: 0.5; }
+.wd-sig.locked b { opacity: 0.6; }
+.wd-sig .lock { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 15px; }
+.wd-sig .nw { position: absolute; top: 1px; right: 1px; padding: 0 3px; font: 700 8px/1.4 Cinzel, serif; background: #8c1f24; color: #f6e8c0; border-radius: 2px; }
+.wd-div canvas { width: 30px; height: 36px; }
+.wd-tint { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid rgba(60,40,15,0.5) !important; box-shadow: inset 0 -3px 6px rgba(0,0,0,0.25); }
+.wd-tint.worn { border: 3px solid #fff6d2 !important; box-shadow: 0 0 0 2px #b8862a, 0 0 8px rgba(224,180,76,0.8); }
+
 `;
 
 const $ = (id) => document.getElementById(id);
@@ -146,8 +169,8 @@ function render() {
   }
   const worn = el('div', 'wd-worn');
   const fig = (label, canvas) => { const f = el('figure'); f.append(canvas, el('figcaption', '', label)); return f; };
-  const banner = ITEM_BY_KEY[`banner:${a.equipped.banner}`], cloak = ITEM_BY_KEY[`cloak:${a.equipped.cloak}`];
-  worn.append(fig(banner ? `${banner.name} banner` : 'House banner', banner ? previewCanvas(banner, 56, 84, 0) : defaultBanner(56, 84)));
+  const cloak = ITEM_BY_KEY[`cloak:${a.equipped.cloak}`];
+  worn.append(fig(a.equipped.banner ? `${sigilName(a.equipped.banner)} banner` : 'House banner', armsBanner(armsOf(a.equipped), 56, 84, 0)));
   worn.append(fig(cloak ? cloak.name : 'No cloak', cloak ? previewCanvas(cloak, 60, 84, 0) : previewCanvas({ kind: 'cloak', id: 'none' }, 60, 84, 0)));
   top.append(tot, nx, worn);
   sc.append(top);
@@ -155,16 +178,8 @@ function render() {
   const cols = el('div', 'cols');
   const left = el('div', 'col'), right = el('div', 'col');
   const wear = (kind) => (id) => { progress.equip(kind, id); progress.markSeen(); render(); };
-  // banners
-  const bh = el('h3', 'section', 'Banners'); bh.append(el('small', '', 'on your castle and your shield'));
-  left.append(bh);
-  const bg = el('div', 'wd-grid');
-  const defB = el('button', 'wd-card' + (a.equipped.banner ? '' : ' worn')); defB.type = 'button'; defB.dataset.item = 'banner:';
-  defB.append(defaultBanner(92, 138), el('b', '', 'House'), el('small', '', a.equipped.banner ? 'Click to wear' : 'Worn'));
-  defB.addEventListener('click', () => wear('banner')(''));
-  bg.append(defB);
-  for (const it of ITEMS.filter((x) => x.kind === 'banner')) bg.append(itemCard(a, it, a.equipped.banner, wear('banner')));
-  left.append(bg);
+  // the arms: sigil, field and tint (heraldry.js), with the banner and the shield they make
+  left.append(armsSection(a));
   // cloaks
   const ch = el('h3', 'section', 'Cloaks'); ch.append(el('small', '', 'other players see it on your hero'));
   left.append(ch);
@@ -175,7 +190,7 @@ function render() {
   cg.append(defC);
   for (const it of ITEMS.filter((x) => x.kind === 'cloak')) cg.append(itemCard(a, it, a.equipped.cloak, wear('cloak')));
   left.append(cg);
-  left.append(el('div', 'wd-note', 'In first person you cannot see your own back: a cloak shows on your hero to the other players of an online game. Your banner flies over your castle and shows on your shield.'));
+  left.append(el('div', 'wd-note', 'In first person you cannot see your own back: a cloak shows on your hero to the other players of an online game, with your sigil on it. Your arms fly over your castle and show on your shield and your soldiers. AI lords keep the arms of their houses.'));
   // mastery
   right.append(el('h3', 'section', 'Class mastery'));
   for (const id of MASTERY_CLASSES) {
@@ -226,9 +241,70 @@ function render() {
   p.append(sc);
 }
 
-// the banner of the house itself, as it is without an emblem of the account (blue, the colour you play)
-function defaultBanner(w, h) {
-  return previewCanvas({ kind: 'banner', id: '' }, w, h, 0);
+// The arms: the banner and shield they make, then a row of sigils (the house's own, the free ones, then the ones Renown unlocks: locked ones say
+// how far off they are), the divisions of the field and the second tints. A click wears it at once (progress.js keeps it).
+function armsSection(a) {
+  const box = el('div');
+  const h = el('h3', 'section', 'Your arms'); h.append(el('small', '', 'on your castle, your soldiers, your shield and your cloak'));
+  box.append(h);
+  const arms = armsOf(a.equipped), house = TEAM_COLORS[0];
+  const wrap = el('div', 'wd-arms');
+  const pv = el('div', 'pv'); pv.title = 'Your banner and your shield, in the colour of your house';
+  pv.append(armsBanner(arms, 64, 128, 0), armsCanvas(arms, house, 0, 84, 100));
+  const ctl = el('div');
+  const wear = (kind, id) => { progress.equip(kind, id); progress.markSeen(); render(); };
+  const head = (text, note) => { const e = el('h4', '', text); if (note) e.append(el('small', '', note)); return e; };
+  // sigils
+  ctl.append(head('Sigil', 'the free ones, and more with Renown'));
+  const sr = el('div', 'wd-row');
+  const nextKey = (trackInfo(a).next || {}).key;
+  const sig = (id, name, item) => {
+    const open = !item || a.unlocked.includes(item.key);
+    const b = el('button', 'wd-sig wd-card' + (arms.sig === id ? ' worn' : '') + (open ? '' : ' locked'));
+    b.type = 'button';
+    b.dataset.item = item ? item.key : `sigil:${id}`;
+    b.append(armsCanvas({ ...arms, sig: id }, house, 0, 68, 82), el('b', '', name));
+    if (open) {
+      b.title = arms.sig === id ? `${name}: worn` : `${name}: click to bear it`;
+      b.addEventListener('click', () => wear('banner', id));
+      if (item && a.unlocked.indexOf(item.key) >= a.seen) b.append(el('span', 'nw', 'NEW'));
+    } else {
+      b.setAttribute('aria-disabled', 'true');
+      if (item.key === nextKey) b.classList.add('next');
+      b.title = `${name}: ${num(renownTo(a, item.key))} Renown to go. ${item.blurb}`;
+      b.append(el('span', 'lock', '🔒'));
+    }
+    return b;
+  };
+  sr.append(sig('', 'House', null));
+  for (const s of FREE_SIGILS) sr.append(sig(s.id, s.name, null));
+  for (const bn of BANNERS) sr.append(sig(bn.id, bn.name, ITEM_BY_KEY[`banner:${bn.id}`]));
+  ctl.append(sr);
+  // the field
+  ctl.append(head('Field', 'how it is divided'));
+  const dr = el('div', 'wd-row');
+  for (const d of DIVISIONS) {
+    const b = el('button', 'wd-sig wd-div' + (arms.div === d.id ? ' worn' : ''));
+    b.type = 'button'; b.dataset.div = d.id; b.title = d.name;
+    b.append(armsCanvas({ ...arms, div: d.id, sig: arms.sig || '' }, house, 0, 60, 72), el('b', '', d.name));
+    b.addEventListener('click', () => wear('div', d.id));
+    dr.append(b);
+  }
+  ctl.append(dr);
+  // the tint
+  ctl.append(head('Tint', arms.div === 'plain' ? 'the colour of the sigil' : 'the other part of the field'));
+  const tr = el('div', 'wd-row');
+  for (const t of TINTS) {
+    const b = el('button', 'wd-tint' + (arms.tint === t.id ? ' worn' : ''));
+    b.type = 'button'; b.dataset.tint = t.id; b.title = t.name; b.setAttribute('aria-label', t.name);
+    b.style.background = css(t.hex);
+    b.addEventListener('click', () => wear('tint', t.id));
+    tr.append(b);
+  }
+  ctl.append(tr);
+  wrap.append(pv, ctl);
+  box.append(wrap);
+  return box;
 }
 
 function show() {

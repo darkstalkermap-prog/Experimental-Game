@@ -3,8 +3,20 @@
 import { TEAM_COLORS } from './config.js';
 import { bannerTexture, customBanner } from './textures.js';
 import { paintCloakFigure } from './emblems.js';
+import { isCustom } from './heraldry.js';
 import { CLOAKS } from './unlocks.js';
 import { CLASSES } from './classes.js';
+
+// the banner of the arms `arms` (heraldry.js) on a canvas of w x h, in the colour of house `team`
+export function armsBanner(arms, w = 64, h = 96, team = 0) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const col = TEAM_COLORS[team] ?? TEAM_COLORS[0];
+  const tex = isCustom(arms) ? customBanner(col, team, arms) : bannerTexture(col, team);
+  const bw = Math.min(w, h / 2);
+  c.getContext('2d').drawImage(tex.image, (w - bw) / 2, 0, bw, h);
+  return c;
+}
 
 // a canvas element of the item `it` (an entry of ITEMS) at `w` x `h` pixels; `team` colours the banner's field (the house you play)
 export function previewCanvas(it, w = 64, h = 96, team = 0) {

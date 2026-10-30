@@ -74,7 +74,7 @@ const SHIELD_REST = { x: -0.37, y: -0.3, z: -0.58, rx: -0.18, ry: 0.62, rz: 0.12
 const GUARD = { x: -0.2, y: -0.24, z: -0.52, rx: -0.05, ry: 0.3, rz: 0.06 };   // the shield brought across the front
 // the Knight's tall kite: carried lower and turned further out of the way, and on guard held with its top just under the eyes (it reaches
 // a third higher above the grip than a round shield does), so the enemy stays in sight over its rim
-const KITE_REST = { x: -0.43, y: -0.4, z: -0.6, rx: -0.2, ry: 0.74, rz: 0.14 };
+const KITE_REST = { x: -0.45, y: -0.43, z: -0.6, rx: -0.2, ry: 0.76, rz: 0.14 };
 const KITE_GUARD = { x: -0.19, y: -0.36, z: -0.55, rx: -0.08, ry: 0.3, rz: 0.06 };
 // The bow. At rest it is held low across the front, an arrow on the string. Drawing, the bow arm comes up straight at the mark and the
 // string hand pulls the nock back along the arrow's line to the anchor under the jaw (BOW_ANCHOR, the nock's place at full draw; the eye

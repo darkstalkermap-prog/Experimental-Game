@@ -2,7 +2,7 @@
 // (`cos`: banner = the sigil, div, tint; progress.js keeps them) and show on the castle's banners and flags (textures.js), the first-person shield
 // (vmtex.js), the soldiers' surcoats and shields, the hero's shield and cloak (the emblem atlas, unittex.js) and the chips of the lobby and the
 // scoreboard (armsChip here). Every one of them takes its colours from armsColors, so all of them agree.
-import { TINTS, DIVISION_IDS, TINT_IDS, SIGIL_IDS } from './unlocks.js';
+import { TINTS, DIVISIONS, DIVISION_IDS, TINT_IDS, SIGIL_IDS, sigilName } from './unlocks.js';
 import { paintEmblem, HOUSE_SIGILS } from './emblems.js';
 import { TEAM_COLORS } from './config.js';
 import { lordCell, setTeamCell, resetArmsCells, setRigEmblem } from './unittex.js';
@@ -17,6 +17,11 @@ export function armsOf(cos) {
     div: DIVISION_IDS.includes(cos.div) ? cos.div : 'plain',
     tint: TINT_IDS.includes(cos.tint) ? cos.tint : 'argent',
   };
+}
+// the arms in words: "Lion on Per pale, Blue and Gold" (the house colour is not named)
+export function armsTitle(cos) {
+  const a = armsOf(cos), t = TINTS.find((x) => x.id === a.tint);
+  return `${a.sig ? sigilName(a.sig) : 'House emblem'}${a.div === 'plain' ? (a.tint !== 'argent' ? ` in ${t.name}` : '') : ` on ${DIVISIONS.find((d) => d.id === a.div).name}, with ${t.name}`}`;
 }
 export const armsKey = (a) => `${a.sig}|${a.div}|${a.tint}`;
 // arms that differ from the house's own (which every AI lord flies)
