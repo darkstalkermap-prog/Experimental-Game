@@ -687,8 +687,9 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
   a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
   of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
-  `src/config.js`) a faster pace brings the first castle down sooner (after 4 to 6 minutes instead of 6 to 10), but the lords
-  never finish a war by themselves, with or without it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
+  `src/config.js`) the lords hold out, with the comeback rules even more than before: the first castle of a Standard war fell
+  after about 12 minutes and only two wars in six were over within 30, while in Short wars the clock decided all six. A
+  faster pace brings the early war forward but not the end of it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
   The Hero Game Mode (its own timed match) and the practice courtyard keep their own pace.
 
 ## Code layout
