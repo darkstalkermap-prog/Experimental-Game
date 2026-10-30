@@ -276,6 +276,22 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
 }
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+// The hammer arm through a blow, [shoulder x, elbow x, shoulder z]: the soldier's keyframes on the giant's own clock, so the head
+// lands when the blow does (units.js strikes at 0.32): up and back, down, a moment on the ground, back to rest.
+const G_WIND = { over: [-2.9, -1.2, 0], right: [-1.2, -1.3, -1.25] }, G_END = { over: [-0.55, -0.15, 0], right: [-0.8, -0.2, 0.7] };
+const _from = [0, 0, 0];
+function giantSwing(m, t, over, armSwing) {
+  const W = over ? G_WIND.over : G_WIND.right, E = over ? G_END.over : G_END.right;
+  _from[0] = -0.3 + armSwing * 0.4; _from[1] = -0.55; _from[2] = -0.1;
+  let a, b, k;
+  if (t < 0.2) { a = _from; b = W; k = t / 0.2; }
+  else if (t < 0.3) { a = W; b = E; k = (t - 0.2) / 0.1; }
+  else if (t < 0.42) { a = E; b = E; k = 0; }
+  else { a = E; b = _from; k = Math.min(1, (t - 0.42) / 0.2); }
+  k = k * k * (3 - 2 * k);
+  m.shR.rotation.x = a[0] + (b[0] - a[0]) * k; m.elR.rotation.x = a[1] + (b[1] - a[1]) * k; m.shR.rotation.z = a[2] + (b[2] - a[2]) * k;
+}
+
 // On top of the soldier's pose (poseSoldier has set every joint): the giant's bulk and weight. The body's offsets are a man's, so they
 // are scaled up; he stoops, the heads come up to look ahead, the arms hang wide of the lats and forward; he rolls from foot to foot as
 // he walks; a blow is brought down with the whole body, the free arm thrown out for balance.
@@ -285,8 +301,9 @@ export function poseGiant(m, st) {
   m.body.position.multiplyScalar(GIANT_SCALE);
   const t = st.swingT, swinging = t >= 0;
   const att = swinging ? Math.sin(Math.min(1, t / 0.62) * PI) : 0;
-  const strike = swinging && t > 0.22 ? clamp01(1 - Math.abs(t - 0.4) / 0.2) : 0;   // (the moment the head comes down)
+  const strike = !swinging || t < 0.2 ? 0 : t < 0.32 ? clamp01((t - 0.2) / 0.12) : 1 - clamp01((t - 0.44) / 0.14);   // (the moment the head comes down)
   const over = st.attackDir !== 'right';
+  if (swinging) giantSwing(m, t, over, walking ? Math.sin(ph) * Math.min(0.55, sp * 0.1 + 0.05) : 0);
   const hunch = 0.34 + 0.04 * Math.sin(idle * 1.1) * (1 - stride);
   const lean = hunch + (over ? 0.15 : 0.1) * strike - 0.12 * att * (1 - strike);
   m.torso.rotation.x += lean;
@@ -311,8 +328,7 @@ export function poseGiant(m, st) {
     m.shL.rotation.x += (-0.5 - m.shL.rotation.x) * att * 0.6;
     m.shL.rotation.z += 0.55 * att;
     m.elL.rotation.x -= 0.4 * att;
-    const post = t > 0.4 ? 1 - clamp01((t - 0.5) / 0.12) : strike;
-    m.weapon.rotation.x += (over ? -0.75 : -0.55) * att + (over ? -0.35 - 0.3 * clamp01((t - 0.38) / 0.08) * att : 0) * post;
+    m.weapon.rotation.x += (over ? -0.75 : -0.55) * att + (over ? -0.35 : 0.25) * strike;
   }
   // the hurt flinch is bigger: the heads thrown back
   if (st.hurt > 0) m.head.rotation.x -= 0.2 * st.hurt;
