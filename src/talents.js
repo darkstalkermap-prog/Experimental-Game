@@ -22,6 +22,7 @@ export const TUNE = {
     bulwarkRadius: 4,      // Phalanx: metres added to the reach ...
     bulwarkAlly: 0.1,      //   ... and more of the damage allies do not take (on top of 40%)
     reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker
+    bastion: { share: 0.3, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): this share of every melee blow taken under Bulwark is stored, and when it ends the shield slams down: the store strikes the foes within this reach (shared between them) and staggers them. Avenging Wall hands back 40% at once, to the one who struck; the slam comes to about the same in all
   },
   berserker: {
     whirlRadius: 0.2,      // Cyclone: a longer reach
@@ -34,6 +35,7 @@ export const TUNE = {
     hp: 0.1,               //   ... and health
     rageTime: 3,           // Endless Fury: seconds added to Blood Rage ...
     rageDmg: 0.1,          //   ... and more damage during it (on top of 25%)
+    tithe: 0.08,           // Blood Tithe (alternative to Reaper): the share of your health the last strike of a Whirlwind gives back (Reaper gives 1.5% a foe, a strike)
   },
   ranger: {
     volleyRadius: 0.15,    // Wide Volley: a wider circle
@@ -43,6 +45,7 @@ export const TUNE = {
     speed: 0.06, draw: 0.1,        // Fleet-Footed: faster on foot, and the bow draws quicker
     rollAgain: 2.5,        // Twin Roll: seconds in which a second roll is allowed
     focus: { time: 4, dmg: 1.4, draw: 0.25 },   // Hunter's Focus: after a roll, for this long, the next arrow draws at this share of the time and hits this much harder
+    aimed: 0.9,            // Steady Aim (alternative to Second Wave): the share of the volley's arrows that pick a foe (18 + 5 arrows; 70% without it)
   },
   mage: {
     fireRadius: 0.2,       // Greater Blast: wider explosions
@@ -55,6 +58,7 @@ export const TUNE = {
     wardChill: 2,          //   ... that slows for longer ...
     wardStun: 0.5,         //   ... and staggers for longer
     shatter: { dmg: 90, radius: 6, stun: 1, chill: 3 },   // Shatter: when the ward breaks, a frost burst (damage, reach, stagger, chill)
+    snap: { time: 6, dmg: 1.5 },   // Cold Snap (alternative to Shatter): when the ward breaks, the next Fireball within this many seconds hits this much harder
   },
   cleric: {
     smiteRadius: 0.2,      // Holy Wrath: a wider blast
@@ -66,6 +70,7 @@ export const TUNE = {
     healRadius: 4,         //   ... reaching metres further
     aegis: { cut: 0.25, time: 5 },     // Divine Aegis: those healed take this much less damage for this long
     pulse: { delay: 3, scale: 0.6 },   // Second Dawn: a second heal after this many seconds, at this share of the first
+    mercy: { below: 0.4, more: 0.6 },  // Mercy (alternative to Second Dawn): allies below this share of their health are healed this much more
   },
   cavalier: {
     chargeDmg: 0.2,        // Couched Lance: harder charges
@@ -77,6 +82,7 @@ export const TUNE = {
     rallyTime: 3,          //   ... that lasts longer
     rallyAlly: 0.1,        // Banner of Valour: more damage allies do not take ...
     rallySelf: 0.1,        //   ... and you
+    shieldwall: { radius: 20, time: 5, cut: 0.2 },   // Shieldwall Charge (alternative to Vanguard!): allies this near, and you, take this much less damage for this long
   },
 };
 
@@ -185,7 +191,29 @@ export const TALENTS = [
     desc: `Rally Cry shields allies ${pc(V.rallyAlly)} more, and you ${pc(V.rallySelf)} more.`, fx: { rallyAlly: V.rallyAlly, rallySelf: V.rallySelf } },
 ];
 
-export const TALENT_BY_ID = Object.fromEntries(TALENTS.map((t) => [t.id, t]));
+// Alternate capstones: Renown unlocks (unlocks.js), one for each class. Each stands in the capstone's own place in the tree (same level, same talent above
+// it, `alt` names the capstone it replaces), costs the same one point and is a sidegrade: a different effect that is no bigger than the original's, so
+// choosing it is a matter of taste and never of power. A hero has one or the other (they cannot be learnt together), and Respec lets them change their mind.
+// They are kept out of TALENTS (and talentsOf) on purpose: everything that walks "the tree" (bots, the practice yard's All talents) stays as it was.
+export const ALT_TALENTS = {
+  kn_bastion: { id: 'kn_bastion', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', alt: 'kn_avenge', icon: '🔨', name: 'Bastion Strike',
+    desc: `While Bulwark stands ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
+  bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
+    desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
+  rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', alt: 'rg_wave', icon: '👁', name: 'Steady Aim',
+    desc: `${pc(R.aimed)} of the volley's arrows seek out a foe in the circle, instead of seven in ten.`, fx: { volleyAimed: R.aimed } },
+  mg_snap: { id: 'mg_snap', cls: 'mage', br: 'r', tier: 4, needs: 'mg_glacier', alt: 'mg_shatter', icon: '💠', name: 'Cold Snap',
+    desc: `When the ward breaks, your next Fireball within ${M.snap.time} s hits ${pc(M.snap.dmg - 1)} harder.`, fx: { snap: M.snap } },
+  cl_mercy: { id: 'cl_mercy', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', alt: 'cl_bloom', icon: '🙏', name: 'Mercy',
+    desc: `Healing Light heals those below ${pc(C.mercy.below)} health ${pc(C.mercy.more)} more.`, fx: { mercy: C.mercy } },
+  cv_aegis: { id: 'cv_aegis', cls: 'cavalier', br: 'q', tier: 4, needs: 'cv_thunder', alt: 'cv_vanguard', icon: '🐴', name: 'Shieldwall Charge',
+    desc: `Allies within ${V.shieldwall.radius} m, and you, take ${pc(V.shieldwall.cut)} less damage for ${V.shieldwall.time} s when you charge.`, fx: { chargeGuard: V.shieldwall } },
+};
+export const altsOf = (cls) => Object.values(ALT_TALENTS).filter((t) => t.cls === cls);
+const ALT_OF = {};   // capstone id -> the ids of its alternates
+for (const a of Object.values(ALT_TALENTS)) (ALT_OF[a.alt] || (ALT_OF[a.alt] = [])).push(a.id);
+
+export const TALENT_BY_ID = Object.fromEntries([...TALENTS, ...Object.values(ALT_TALENTS)].map((t) => [t.id, t]));
 export const talentsOf = (cls) => TALENTS.filter((t) => t.cls === cls);
 export const tierLevel = (tier) => tier + 1;   // the hero level a tier needs
 
@@ -218,7 +246,17 @@ export function talentLock(p, id) {
   if (t.cls !== p.classId) return `A talent of the ${t.cls}`;
   if (p.level < tierLevel(t.tier)) return `Needs level ${tierLevel(t.tier)}`;
   if (t.needs && !hasTalent(p, t.needs)) return `Needs ${TALENT_BY_ID[t.needs].name}`;
+  if (t.alt && !altEarned(p, id)) return 'Unlocked with Renown';
+  const rival = t.alt ? t.alt : (ALT_OF[id] || []).find((a) => hasTalent(p, a));   // the capstone and its alternates share one place
+  if (rival && hasTalent(p, rival)) return `Instead of ${TALENT_BY_ID[rival].name}`;
   return null;
+}
+
+// Has this hero earned the alternate capstone? Their account says so (p.cos.alts: ours from the browser, another player's from the lobby); the practice
+// yard lets anyone try them.
+export function altEarned(p, id) {
+  if (p.game && p.game.practice) return true;
+  return !!(p.cos && p.cos.alts && p.cos.alts.includes(id));
 }
 
 // Why the hero cannot learn this talent now (null when they can): everything the rules ask for.

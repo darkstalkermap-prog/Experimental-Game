@@ -38,6 +38,8 @@ import { XP, killXp, MAX_LEVEL } from './heroes.js';
 import { Alerts } from './alerts.js';
 import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
+import { stats, blankStats } from './stats.js';
+import { progress } from './progress.js';
 import { highlights } from './highlights.js';
 import { Finale } from './finale.js';
 import { warmCollapse } from './castlecollapse.js';
@@ -197,13 +199,17 @@ export class Game {
     this.humans = [lp];
     const byTeam = new Map(setup.players.map((p) => [p.team, p]));
     lp.name = byTeam.get(lp.team)?.name || 'You';
+    lp.st = blankStats();             // (what the end screen counts: stats.js)
+    lp.bwave = null;
+    lp.cos = progress.loadout();      // (what this browser's account wears and has earned: progress.js)
     lp.setClass(byTeam.get(lp.team)?.cls || 'knight');
     lp.rebuildWeapons();
     for (const p of setup.players) {
       if (p.team === lp.team) continue;
-      this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls }));
+      this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
     }
 
+    for (const c of this.castles) c.setBanner(((this.humans.find((h) => h.team === c.team) || {}).cos || {}).banner);   // (a lord's banner on their castle; AI houses keep theirs)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
       return {
@@ -747,9 +753,11 @@ export class Game {
     }
     if (info.melee) this.audio.play(target.def && (target.def.body === 'plate' || target.def.body === 'mail') ? 'clang' : 'hit', target.pos);
     if (attacker && attacker.isPlayer) this.deliver(attacker, { k: 'hit', heavy: (info.charge || 0) >= 0.8 });
+    const hp0 = target.hp;
     this.lastHit = info;   // (what the blow was, for the match log: see onUnitKilled)
     target.takeDamage(dmg, attacker, info);
     this.lastHit = null;
+    if (attacker && attacker.st) stats.dealt(attacker, hp0 > 0 ? Math.min(dmg, hp0) : dmg);   // (the end screen's damage dealt)
     if (attacker && attacker.gainXp && !attacker.isPlayer) attacker.gainXp(Math.min(dmg, 60) * 0.05);
     if (attacker && attacker.isPlayer && !info.ranged) {
       const steal = attacker.buffs.get('lifesteal');
@@ -775,6 +783,7 @@ export class Game {
     const bounty = (u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10)) * mods.mul('bounty');
     if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
+    if (attacker && attacker.st && by >= 0 && !allied(by, u.team)) stats.kill(attacker);   // (the run of kills)
     if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
     if (by >= 0 && !allied(by, u.team)) this.heroXp(attacker, killXp(u), u.pos);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
@@ -789,6 +798,8 @@ export class Game {
   }
 
   onPlayerKilled(attacker, p = this.player) {
+    stats.fell(p);   // (a run of kills ends, a hero slain is counted for the one who struck the blow)
+    if (attacker && attacker.st && attacker !== p && !allied(attacker.team, p.team)) stats.slain(attacker);
     if (this.hero) { this.hero.heroDown(p, attacker); return; }   // (Hero Game Mode: its own timers, score and win)
     const f = this.factions[p.team];
     f.heroDeaths++;
@@ -804,6 +815,7 @@ export class Game {
 
   onSiegeDestroyed(s, attacker) {
     const by = attacker ? attacker.team : -1;
+    if (attacker && attacker.st && !allied(by, s.team)) stats.engine(attacker);
     if (by !== s.team) this.credit(by, (BOUNTY[s.type] || 100) * mods.mul('bounty'), s.chest(new THREE.Vector3()));
     if (by >= 0 && !allied(by, s.team)) this.heroXp(attacker, killXp(s), s.pos);
     highlights.engine(this, s, attacker, this.lastHit);
@@ -813,6 +825,7 @@ export class Game {
 
   onStructureDestroyed(part, attacker) {
     const owner = this.factions[part.team];
+    if (attacker && attacker.st && !allied(attacker.team, part.team) && (part.kind === 'gate' || part.kind === 'wall')) stats.breach(attacker);
     if (attacker && attacker.team !== undefined && !allied(attacker.team, part.team)) this.heroXp(attacker, part.kind === 'gate' ? XP.gate : XP.wall, part.pos || part.castle.center);
     if (part.kind === 'gate') {
       if (attacker && !allied(attacker.team, part.team)) this.credit(attacker.team, BOUNTY.gate);
@@ -823,6 +836,7 @@ export class Game {
   }
 
   onCastleFallen(castle, attacker) {
+    if (attacker && attacker.st && !allied(attacker.team, castle.team)) stats.keep(attacker);
     if (this.hero) { this.audio.play('collapse', castle.keep.pos); this.hero.keepFell(castle); return; }   // (a fallen keep ends the Hero Game Mode)
     const f = this.factions[castle.team];
     if (attacker && !allied(attacker.team, castle.team)) { this.credit(attacker.team, BOUNTY.keep); this.heroXp(attacker, XP.keep, castle.keep.pos); }

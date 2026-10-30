@@ -14,6 +14,10 @@ import { HeroBot } from './herobot.js';
 import { mods as rules } from './mods.js';
 import { rules as biomeRules } from './biometwist.js';
 import { ViewModel } from './viewmodel.js';
+import { matchlog } from './matchlog.js';
+import { blankStats } from './stats.js';
+import { sanitizeLoadout, noLoadout } from './progress.js';
+import { CLOAKS } from './unlocks.js';
 
 // the rule modifier `heroSpeed` (a Battle Decree), read from the rules only when they change
 let walkVer = -1, walkM = 1;
@@ -111,6 +115,9 @@ export class Player {
     this.lastHurt = -99;
     this.kills = 0;
     this.deaths = 0;
+    this.st = blankStats();    // what the end screen counts about this hero (stats.js)
+    this.bwave = null;         // the Bulwark that is storing the blows taken, for Bastion Strike (classes.js)
+    this.cos = opts.cos ? sanitizeLoadout(opts.cos) : noLoadout();   // what the account behind this hero wears and has earned (progress.js)
     this.sensitivity = 0.0022;
     this.baseFov = 75;   // field of view setting
     this.bob = 0;
@@ -139,15 +146,17 @@ export class Player {
 
   // ---------- third-person body for other people's heroes ----------
   buildBody() {
-    this.body = buildHeroBody(this.classId, this.team, 2);
+    const cloak = CLOAKS.find((c) => c.id === this.cos.cloak);   // (the cloak the account behind this hero wears, if any)
+    this.body = buildHeroBody(this.classId, this.team, 2, cloak ? cloak.shape : null);
     this.bodyClass = this.classId;
+    this.bodyCloak = this.cos.cloak;
     this.game.scene.add(this.body.root);
     this.buildTag();
   }
 
   // (another class: a new look)
   restyleBody() {
-    if (!this.body || this.bodyClass === this.classId) return;
+    if (!this.body || (this.bodyClass === this.classId && this.bodyCloak === this.cos.cloak)) return;
     this.game.scene.remove(this.body.root);
     this.buildBody();
   }
@@ -327,7 +336,9 @@ export class Player {
 
   // The class itself and what hangs off it on every screen (the abilities need a moment to ready).
   adoptClass(id) {
+    if (this.isLocal && id !== this.classId) matchlog.record('class', { cls: id, from: this.classId });   // (class mastery is shared by the time spent in each)
     this.classId = id;
+    this.bwave = null;
     this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
     this.dash = null;
@@ -1159,6 +1170,8 @@ export class Player {
     if (this.buffs.has('ghost')) return;              // mid-roll: nothing touches you
     const reflect = this.buffs.get('reflect');        // Avenging Wall (Knight talent): part of a melee blow is dealt back
     if (reflect && info.melee && attacker && attacker !== this && attacker.alive) this.game.damage(attacker, amount * reflect, this, { magic: true, splash: true });
+    const store = this.bwave;                         // Bastion Strike (Knight talent): the same blows are kept for the slam that ends Bulwark
+    if (store && info.melee && attacker && attacker !== this && attacker.alive && store.t < store.delay) store.sum += amount * store.wave.share;
     const guard = this.buffs.get('guard');
     if (guard) amount *= guard;
     if (this.buffs.has('ward')) {

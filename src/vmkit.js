@@ -190,7 +190,7 @@ const SHIELD_STYLE = {
   mage: { rim: PAINT.gold, boss: PAINT.steelDull, k: 0.9 },
   cleric: { rim: PAINT.gold, boss: PAINT.gold, k: 0.95 },
 };
-// o: { cls, team, lv (0 round, 1 kite), detail }
+// o: { cls, team, lv (0 round, 1 kite), detail, emblem (the banner the account wears, or '') }
 export function shieldGeometry(o) {
   const m = new Mesher();
   const sides = sidesFor(o.detail) + 8;
@@ -240,7 +240,7 @@ export function shieldGeometry(o) {
   m.pop();
   m.pop();
   const geo = m.build();
-  return { geo, map: shieldFace(o.cls, o.team, shape), half, shape };
+  return { geo, map: shieldFace(o.cls, o.team, shape, o.emblem || ''), half, shape };
 }
 
 // ---------------------------------------------------------------- the bow

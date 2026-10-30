@@ -395,7 +395,7 @@ export class Upgrades {
     this.add(this.standardMeshes, wood, M.wood);
     this.add(this.standardMeshes, iron, M.iron);
     this.add(this.standardMeshes, gold, M.gold);
-    const flagMat = M.banners[c.team];
+    const flagMat = c.flagMat || M.banners[c.team];   // (the lord's own emblem, if the account wears one: see Castle.setBanner)
     this.add(this.standardMeshes, cloth, flagMat, c.group, false);
   }
 }

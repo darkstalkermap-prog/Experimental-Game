@@ -13,6 +13,8 @@ import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
 import { active } from './biomes.js';
+import { progress, rankOf } from './progress.js';
+import { lookText } from './unlocks.js';
 import { updateDecreeHud, showPauseDecrees } from './decrees.js';
 import { showPauseLand } from './landui.js';
 import { updateComebackHud } from './comeback.js';
@@ -52,11 +54,13 @@ export function renderClassPicker(root, info, selected, onPick) {
     describe(id);
     onPick(id);
   };
+  const mastery = progress.get().mastery;   // (a small badge on a class you have risen in: progress.js)
   for (const id of CLASS_IDS) {
     const c = CLASSES[id];
     const b = document.createElement('button');
     b.dataset.cls = id;
-    b.innerHTML = `<span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small>`;
+    const rk = rankOf(mastery[id] || 0);
+    b.innerHTML = `<span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small>${rk.rank > 1 ? `<i class="mrk" title="${esc(c.name)} mastery: ${esc(rk.name)} (rank ${rk.rank} of 10)">${rk.roman}</i>` : ''}`;
     b.addEventListener('click', () => pick(id));
     root.appendChild(b);
     buttons[id] = b;
@@ -684,7 +688,7 @@ export class UI {
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
       <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) + (lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {

@@ -1,11 +1,22 @@
 // The Talents tab of the shop (B, or N for short): the hero's class tree drawn as nodes in tiers with lines between them,
 // the hint on the HUD while a talent point is waiting, and the small icons of what is learnt beside the ability icons.
 import { CLASSES } from './classes.js';
-import { talentsOf, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
+import { talentsOf, altsOf, altEarned, TALENT_BY_ID, talentLock, respecBlock, tierLevel } from './talents.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const BRANCH_COL = { q: 2, r: 3 };   // the grid column of each branch (the first holds the level of each row)
+
+// the alternate capstone (one the account has earned with Renown, or any in the practice yard) sits one row below the capstone it can stand in for, with "or" between
+// them. A tree without one is exactly the tree it always was: the ones not earned are in the Renown panel of the menu, not here
+function injectAltCss() {
+  if (document.getElementById('cw-talent-alt')) return;
+  const st = document.createElement('style');
+  st.id = 'cw-talent-alt';
+  st.textContent = `.tnode.alt::before { content: 'or'; position: absolute; left: 50%; top: -19px; transform: translateX(-50%); font: italic 14px 'EB Garamond', Georgia, serif; opacity: 0.75; }
+.tnode.alt .tag { display: inline-block; margin-left: 6px; padding: 0 5px; font: 600 9.5px/15px Cinzel, serif; letter-spacing: 0.06em; border: 1px solid rgba(224,180,76,0.6); border-radius: 3px; color: var(--gold); vertical-align: 2px; }`;
+  document.head.appendChild(st);
+}
 
 // Build the tree of the hero's class into the shop grid. Afterwards only classes, texts and states change (see refresh),
 // so a node is never replaced under the cursor and every click lands.
@@ -16,7 +27,7 @@ export function buildTalentTab(ui, grid) {
   root.className = 'tal-wrap';
   root.style.setProperty('--cls', cls.color);
   root.innerHTML = `<div class="tal-head"><h5>${esc(cls.icon)} ${esc(cls.name)} talents</h5><span class="tal-pts"></span><button class="respec">Respec</button></div>
-    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose. <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
+    <div class="tal-note">You earn a talent point at every level after the first. A talent needs the level shown beside its row and the talent above it, and four points cannot buy a whole tree: choose.${g.player.cos && g.player.cos.alts.length ? ' A capstone you unlocked with Renown stands under the usual one, as a different choice.' : ''} <b>Respec</b> gives every point back, free, at your own castle (inside its walls or just outside them).${g.hero ? '' : ' Changing class starts a new tree.'}</div>
     <div class="tal-tree"></div>`;
   const tree = root.querySelector('.tal-tree');
   const put = (el, row, col) => { el.style.gridRow = row; el.style.gridColumn = col; tree.appendChild(el); return el; };
@@ -33,12 +44,14 @@ export function buildTalentTab(ui, grid) {
     put(lv, tier + 1, 1);
   }
   const nodes = [];
-  for (const t of talentsOf(p.classId)) {
+  const alts = altsOf(p.classId).filter((t) => altEarned(p, t.id));
+  if (alts.length) injectAltCss();
+  for (const t of [...talentsOf(p.classId), ...alts]) {
     const el = document.createElement('button');
-    el.className = 'tnode locked' + (t.needs ? ' child' : '');
+    el.className = 'tnode locked' + (t.alt ? ' alt' : t.needs ? ' child' : '');
     el.dataset.talent = t.id;
     el.dataset.tier = t.tier;
-    el.innerHTML = `<span class="ti">${esc(t.icon)}</span><b>${esc(t.name)}</b><small>${esc(t.desc)}</small><em class="ts"></em>`;
+    el.innerHTML = `<span class="ti">${esc(t.icon)}</span><b>${esc(t.name)}${t.alt ? '<span class="tag">RENOWN</span>' : ''}</b><small>${esc(t.desc)}</small><em class="ts"></em>`;
     el.addEventListener('click', () => {
       const ok = g.localLearnTalent(t.id);
       el.classList.remove('bought', 'nope');
@@ -46,7 +59,7 @@ export function buildTalentTab(ui, grid) {
       el.classList.add(ok ? 'bought' : 'nope');
       ui.refreshShop();
     });
-    put(el, t.tier + 1, BRANCH_COL[t.br]);
+    put(el, t.tier + 1 + (t.alt ? 1 : 0), BRANCH_COL[t.br]);
     nodes.push({ t, el, status: el.querySelector('.ts'), last: '' });
   }
   const respec = root.querySelector('.respec');

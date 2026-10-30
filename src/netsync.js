@@ -8,6 +8,7 @@ import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
 import { DIRS, DIR_IDX } from './combat.js';
 import { mirrorTalents } from './talents.js';
+import { stats, absorbStats } from './stats.js';
 import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
 import { standFor } from './comeback.js';
@@ -217,8 +218,11 @@ export class HostSync {
     this.priv.clear();
   }
 
+  // (each guest is also sent its own numbers for the end screen: the host is the only one that sees every blow)
   sendEnd(winner, reason = '', hl = null) {
-    this.g.net.toAll({ k: 'end', winner, reason, hl });   // (hl: the notable moments of the match, for the guests' highlight line: see highlights.js)
+    const st = {};
+    for (const h of this.g.humans) if (h.netId !== null && h.netId !== undefined && h.st) st[h.netId] = stats.pack(h);
+    this.g.net.toAll({ k: 'end', winner, reason, hl, st });   // (hl: the notable moments of the match, for the guests' highlight line: see highlights.js)
   }
 }
 
@@ -235,7 +239,7 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null });
+    else if (d.k === 'end') { if (d.st) absorbStats(d.st[this.g.net.id]); this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null }); }
   }
 
   apply(d) {

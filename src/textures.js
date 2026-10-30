@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 import { aniso } from './aniso.js';
+import { paintEmblem } from './emblems.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -131,7 +132,7 @@ export function roofTexture(seed = 5) {
 const EMBLEMS = ['lion', 'tree', 'sun', 'tower', 'skull'];
 
 // Heraldic banner for a team: field colour plus an emblem.
-export function bannerTexture(colorHex, team) {
+export function bannerTexture(colorHex, team, emblem = '') {
   const [c, ctx] = canvas(128, 256);
   const col = '#' + colorHex.toString(16).padStart(6, '0');
   ctx.fillStyle = col;
@@ -151,7 +152,9 @@ export function bannerTexture(colorHex, team) {
   const e = EMBLEMS[team % EMBLEMS.length];
   ctx.save();
   ctx.translate(64, 108);
-  if (e === 'lion') {
+  if (emblem && paintEmblem(ctx, emblem, 46, '#efe2b3', col)) {
+    // the emblem of a banner the lord has earned (progress.js): the field stays the colour of the house
+  } else if (e === 'lion') {
     ctx.beginPath(); ctx.arc(0, -20, 18, 0, Math.PI * 2); ctx.fill();
     ctx.fillRect(-16, -6, 32, 40);
     ctx.fillRect(-20, 30, 10, 22); ctx.fillRect(10, 30, 10, 22);
@@ -180,6 +183,14 @@ export function bannerTexture(colorHex, team) {
   }
   ctx.restore();
   return finish(c, false);
+}
+
+// the banners with an earned emblem, one texture for each (house colour, emblem) pair; kept for the visit
+const earned = new Map();
+export function customBanner(colorHex, team, emblem) {
+  const key = `${colorHex}:${emblem}`;
+  if (!earned.has(key)) earned.set(key, bannerTexture(colorHex, team, emblem));
+  return earned.get(key);
 }
 
 export function soilTexture(seed = 13) {

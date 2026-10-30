@@ -618,6 +618,72 @@ whose colour and near distance carry the haze tint and the murk (see `atmosphere
 wherever both apply: Swift March (+20%) in the snow is +20% along the roads and +5.6% across open ground. `src/landui.js` has the menu row and the end-screen
 section; `src/weather.js` the flakes, the
 mist banks and the dust (written into the smoke layer of the effects: no extra draw call); `src/biomedust.js` the snow on the castles.
+
+## Renown, unlocks and records
+
+Every match you play to its end earns **Renown**, won or lost, and the end screen says how much and how far it takes you
+("340 / 500 to unlock the Wolf banner"). Renown only ever accumulates: it has no deadline, nothing to keep up and nothing that
+can be lost, and what it unlocks is for show or a different choice, never for power, so a new player is never behind. It all
+lives in your browser (`localStorage['cw-progress']`, one versioned JSON object; a damaged or missing record is a fresh account,
+a browser that keeps nothing plays on with the account in memory for the visit). Delete that key to start again.
+
+**What a match is worth** (`RENOWN` in `src/progress.js`, shown on the end screen as "The fight 30 · Time held 53 · Waves 39 ·
+Kills 18 · Victory 50"): 30 for the fight (in full from the fourth minute), 3.5 for each minute held (up to 25), 1.5 for each wave
+(up to 30), 0.6 for each kill of yours (up to 100) and 50 for a victory, times 0.8 on Easy, 1 on Normal, 1.2 on Hard. That is about 80
+to 250 for an ordinary match, so the first unlock comes in two or three. The match is counted once, when it ends; a conceded or
+lost match counts, a match you leave or reload before it ends does not, and the practice courtyard grants nothing. Hero Game Mode
+counts like the others (its rounds stand in for waves, and it has no gold or army).
+
+**The unlock track** (`src/unlocks.js`): 18 steps in a fixed order, so there is always exactly one next unlock and a bar that only
+fills. A step costs the Renown shown (counted from the previous step; what you earn beyond it carries over): Raven banner 250,
+Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,250 in all.
+
+- **Banners** (Raven, Wolf, Stag, Boar, Dragon, Bear, Crown, Rose): an emblem painted on the hanging banners, flags and levy
+  standards of your castle (the field stays your house colour, so houses can still be told apart) and a plaque on your
+  first-person shield. `src/emblems.js` draws them with canvas paths; there are no images.
+- **Cloaks** (Crimson Mantle, Greenwood Cloak, Wolfskin Mantle, Midnight Cape): a cloak on your hero's body, which the other
+  players see. In first person you cannot see your own back, and in single player nobody else is looking, so the Renown panel
+  shows it on a small figure.
+- **Alternate capstone talents**, one for each class, in the capstone's own place in the talent tree. Each costs one point like
+  the capstone it can stand in for, replaces it (a hero has one or the other, and Respec lets them change their mind) and is a
+  **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` and its numbers, in `src/talents.js`).
+  Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
+  the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
+  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
+  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Second Wave): 90% of a volley's arrows
+  seek out a foe, not 70%. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
+  harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
+  Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
+  tree, under the capstone, only for an account that has earned them (and in the practice yard, where anybody may try them), and
+  they stay out of the lists that walk the tree (bots, the practice yard's "All talents").
+
+A new banner or cloak is put on at once if you wear nothing in its place (so it is seen in the very next battle, even if you
+never visit the menu); what you chose to wear is never swapped.
+
+**The Renown button** on the main menu (next to Options) opens the panel: your Renown, the next unlock with its bar, every banner,
+cloak and capstone (the locked ones say how much Renown they still need), what you wear with a small preview (click an unlocked
+card to wear it, "House" and "None" take it off), the mastery rank of each class and your records. A dot on the button counts
+unlocks you have not looked at.
+
+**On the end screen** two sections (`src/endprogress.js`, registered with `registerEndSection`): *Your battle* shows kills, the
+longest run of kills without falling, damage dealt, waves, army kills, gold, deaths and time, each with your best beside it, and
+"New best: 47 kills!" with a flourish when a record falls (the first match sets its records quietly), then the mastery of the
+class you played rising ("Knight rank III → IV: Sergeant!"); *Renown* shows what the match earned and how it adds up, the
+unlock if the bar was filled, and the bar towards the next one. The counters (damage, streak, gates and walls broken, heroes
+slain, engines destroyed, keeps felled) come from small hooks in `Game.damage` and the `on...` handlers (`src/stats.js`); a
+guest is sent its own numbers by the host with the end message.
+
+**Class mastery**: each match adds mastery points to the class you played (shared by the time spent in each, if you changed
+class on the way): 20 for the match, 1 per kill, 1.2 per wave, 2.5 per minute, 30 for a victory. Ranks I to X (Squire, Footman,
+Veteran, Sergeant, Captain, Champion, Banneret, Marshal, Warden, Warlord) begin at 0, 100, 250, 450, 700, 1000, 1400, 1900, 2500
+and 3200 points; a rank rises on the class's button in the menu and the lobby as a small numeral. Mastery opens nothing: it is a
+record of how long you have fought as that class.
+
+**Online.** Each player's look (banner, cloak and the capstones they have earned) travels in the lobby entry as `cos`
+(`{ banner, cloak, alts }`, ids only, cleaned on receipt) and in the start message, so every screen draws your banner on your
+castle and your cloak on your hero; the host lets a guest learn an alternate capstone only if the guest's entry says they have it.
+Bots and AI houses keep the default look. Your account is yours alone: nothing is shared between players.
+
 ## Controls
 
 | Key | Action |
@@ -731,6 +797,8 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/finale.js`, `src/castlecollapse.js`, `src/highlights.js` | The ending of a match: the show (slow motion, camera, letterbox, banner, skip), the falling keep and towers (blocks with a plan each), and the highlight line |
 | `src/physics.js`, `src/projectiles.js` | Terrain and colliders (including the merlons), arrows and boulders |
 | `src/net.js`, `src/peernet.js`, `src/roomnet.js`, `src/netsync.js` | Online play: connection (own server, browser-to-browser, or claude.ai live room), snapshots from the host, and pose/actions from clients |
+| `src/progress.js`, `src/unlocks.js`, `src/stats.js` | The account (Renown, unlocks, mastery, records) and its maths and storage, the unlock catalogue and track, and the per-match counters the end screen reads |
+| `src/endprogress.js`, `src/wardrobe.js`, `src/cosmetics.js`, `src/emblems.js` | The end screen's battle and Renown sections, the menu's Renown panel, the pictures of what is unlocked, and the banner emblems painted on canvas |
 | `server/server.js` | Node server: serves the game and relays messages between players in a room |
 
 Three.js r160 is vendored in `vendor/` (MIT licence), so the game runs offline.

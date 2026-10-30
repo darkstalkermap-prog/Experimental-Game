@@ -65,7 +65,8 @@ function setColor(arr, i, hex) { _col.set(hex); arr[i] = _col.r; arr[i + 1] = _c
 
 // Build a posable soldier (the rig only: the crowd draws it). opts.hero: a hero class instead of a unit type's look.
 export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
-  const desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
+  let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
+  if (opts && opts.cape && SHAPES.has(opts.cape)) desc = { ...desc, cape: opts.cape };   // a cloak the lord has earned (progress.js)
   const raider = team === RAIDER_TEAM;
   const arm = raider && !desc.plate ? 'skin' : desc.arm;
   const root = new THREE.Group();
@@ -120,7 +121,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   if (tier) rigSetTier(m, tier);
   return m;
 }
-export function buildHeroBody(classId, team, variant = 2) { return buildSoldier('lord', team, variant, 0, { hero: classId }); }
+export function buildHeroBody(classId, team, variant = 2, cape = null) { return buildSoldier('lord', team, variant, 0, { hero: classId, cape }); }
 
 // Better training, better kit: tier 1 steel pauldrons, 2 a cloak, 3 gold at the throat and on the shield, 4 gold pauldrons and wings on the
 // helm, 5 a gilded breastplate and a long cloak.
