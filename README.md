@@ -333,7 +333,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   6-metre giant marches on your target castle, smashing gates and keeps. Its club flattens and staggers
   everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
   summon giants too.
-- **Commanding your army**: the command bar at the bottom of the screen always shows your orders and their keys.
+- **Commanding your army**: while your army has soldiers, the orders bar at the bottom of the screen shows your orders and their keys.
   Press **O** for the clickable **Orders** menu, which has orders, formations, army groups, the gate and an
   army count. Orders go to the soldiers in your **army** (see above); the garrison always defends the castle and
   the lane soldiers march on their own.
@@ -722,6 +722,23 @@ record of how long you have fought as that class.
 (`{ banner, cloak, alts }`, ids only, cleaned on receipt) and in the start message, so every screen draws your banner on your
 castle and your cloak on your hero; the host lets a guest learn an alternate capstone only if the guest's entry says they have it.
 Bots and AI houses keep the default look. Your account is yours alone: nothing is shared between players.
+
+## The screens
+
+One look throughout: parchment cards with ink for the menus, dark glass with gold edges for the HUD and the in-battle panels;
+Cinzel for names and buttons, Garamond for what you read. Long explanations sit behind a small **?** and open when asked for.
+
+- **Main menu**: Quick Play first, with the setup it will start written under it; then Single Player, Multiplayer and the
+  Practice Courtyard; then Renown, Options and Controls. Below, two panels side by side: **Battle setup** (mode, map, land,
+  difficulty, length, decrees, one row each; the **?** in its corner shows what each choice means) and **Your hero**.
+  **How to play** (top right) opens the short guide to the war.
+- **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
+  potions, where your soldiers are); top left the houses, top centre the wave and its clock, top right the gold. The orders bar
+  shows only while your army has soldiers, and the key reminder (top right) and the minimap's ping hint only in the
+  preparation. On screens of 1800 × 1000 and up the HUD is drawn a fifth larger.
+- **Shop**: one size for every tab (it does not jump as you switch), a tab strip, the gold at the top right.
+- **Options** come in four groups (Sound, Mouse and view, Graphics, Battle) with their notes behind a **?**; **Controls** in
+  five (Move and fight, Your castle and army, Map and markers, The battle, Hero Game Mode).
 
 ## Controls
 
