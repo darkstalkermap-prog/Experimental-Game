@@ -888,8 +888,8 @@ Not on a breach, not while ducking or mounted. A "Space: Climb onto the wall wal
 when it will work, and other players see the climb. **Up on top of the wall:** on the wall walk (or a tower roof), walk up to
 the battlements and press Space facing them: the hero mantles up onto the top of the nearest merlon (1.3 m, a little more than a
 jump) in under half a second for 8 stamina (an enemy's: slower and 14). From there you can look out, step back down, walk along
-the top (between merlons you drop back into the crenel and onto the walk, never off the outside) or jump off the wall. A jump
-that runs into a merlon lands on top of it too. "Space: Climb onto the battlements" shows when you can (`BODY.mantle*`).
+the top (between merlons you drop back into the crenel and onto the walk, never off the outside) or jump off the wall.
+"Space: Climb onto the battlements" shows when you can (`BODY.mantle*`).
 Holding **C** ducks: the head and the hitbox
 drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
 walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
