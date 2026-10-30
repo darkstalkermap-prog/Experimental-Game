@@ -8,11 +8,12 @@
 // Keys in use (add yours here when you hook one into the rules; `mul` keys multiply across sources, `sum` keys add up, `flag` keys are on if any source says so):
 //   mul  waveSize      units in every wave                        mul  waveGap       seconds between waves
 //   mul  income        passive gold income                        mul  bounty        gold for a kill
-//   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item)
+//   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item; cost.recruit, cost.siege,
+//                      cost.upgrade, cost.gear, cost.castle for a group of them: the lists are in economy.js)
 //   mul  speed         march speed of soldiers                    mul  heroSpeed     walking speed of heroes
-//   sum  startGold     gold at the start of the match
+//   mul  respawn       seconds until a fallen hero or lord rises  sum  startGold     gold at the start of the match
 //   mul  prep          seconds of preparation before the first wave        mul  growth       how much tougher every wave's soldiers get (WAVES.growth)
-//   mul  siegeGrowth   how much harder later waves and engines hit gates and walls (WAVES.siegeGrowth)    [source 'length': the Short match, see config.js LENGTHS]
+//   mul  siegeGrowth   how much harder later waves and engines hit gates and walls (WAVES.siegeGrowth)    [source 'length:short': the Short match, see config.js LENGTHS]
 export const mods = {
   version: 0,
   sources: new Map(),

@@ -16,6 +16,7 @@ import { gfx } from './gfx.js';
 import { LEVELS, applyQuality } from './quality.js';
 import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
+import { pendingDecrees } from './decrees.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -113,9 +114,9 @@ selectMap(mapSize);
 // the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
-const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
-// Between matches the stored options are the truth: the end screen's sections roll the next battle into them (decrees, land) and save, so a rematch reads them
-// afresh. The menu pieces change `options` in memory and the next start saves them.
+const matchOptions = () => { options = sanitizeOptions({ ...options, decrees: pendingDecrees() }); saveOptions(options); return options; };   // (the Battle Decrees come from decrees.js: the end screen rolls them)
+// Between matches the stored options are the truth: the end screen's sections roll the next battle into them (land, rivals) and save, so a rematch reads them
+// afresh (the decrees are asked from decrees.js at every start, above). The menu pieces change `options` in memory and the next start saves them.
 const refreshOptions = () => { options = loadOptions(); };
 
 // match length (Standard / Short, options.length): the war modes only, the Hero Game Mode has its own length
@@ -551,7 +552,7 @@ for (const [id, key, apply, unit] of SLIDERS) {
 }
 
 // switches in the options panel (alerts.js looks at the settings as it goes)
-for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres']]) {
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres'], ['optFinale', 'finale'], ['optDecrees', 'decrees']]) {
   const el = $(id), out = el.nextElementSibling;
   const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
   show();

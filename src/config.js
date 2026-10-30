@@ -81,9 +81,24 @@ export const clock = (sec) => {
 };
 
 export const START_GOLD = 500;
+export const TRICKLE = 1.5;   // gold a second that every standing house earns just by holding its castle
 export const GIANT_COST = 1600;
 export const SUMMON = { cost: 500, protect: 2 };   // calling a fallen ally back to life (co-op Conquest): the gold it takes, and the seconds they are untouchable on rising
 export const GATE_REPAIR_COST = 1500;   // repairing a damaged gate or rebuilding a broken one (the Iron-Banded Gate upgrades are priced on their own)
+
+// Comeback mechanics (src/comeback.js): what a house that is losing is given. The AI lords play by the same rules as the people.
+export const COMEBACK = {
+  // Underdog's wage. A house is measured by what it can fight with (see strengthOf): the health of its keep, gate and walls, the worth of its
+  // soldiers and engines, and half its purse. Clearly behind the enemy houses' average (below `enter`) it is paid a bonus wage, a share of what
+  // it already earns without fighting (`min` when only just behind, `max` when almost beaten), until it climbs back (above `leave`).
+  wage: { from: 3, enter: 0.6, leave: 0.8, min: 0.3, max: 0.8, every: 1 },   // `from`: no wage before this wave (the opening is level); `every`: seconds between looks
+  strength: { keep: 1500, gate: 300, walls: 300, purse: 0.5 },   // points for a whole keep, a whole gate, whole walls; a coin counts for `purse` points
+  gateRepair: 0.5,   // rebuilding a gate that has fallen costs this share of GATE_REPAIR_COST
+  // Last Stand: once a match, when the keep is below `keep` of its health. The hero is healed (and rises at once if it had fallen); for `time` seconds
+  // the house's soldiers and the hero hit `dmg` times as hard and move `speed` times as fast, and the hero takes `heroGuard` of the damage for `heroTime`
+  // seconds; `militia` free soldiers rise at the keep. `held`: seconds after which the log notes that the keep still stands.
+  stand: { keep: 0.25, time: 20, dmg: 1.3, speed: 1.25, heroGuard: 0.6, heroTime: 10, militia: 6, held: 30 },
+};
 
 export const DIFFICULTY = {
   easy:   { wave: 0.7, enemyStat: 0.85, aiGold: 0.8, aiAggro: 0.7 },

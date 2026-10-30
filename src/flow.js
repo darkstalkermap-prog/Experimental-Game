@@ -293,10 +293,12 @@ export function roomGone(text) {
   if (m) m.remove();
 }
 
-// the end screen is built when the match ends but may come into view later (after a finishing show): the keys wait from the moment it is in view
+// the end screen is built when the match ends but comes into view later when the ending has a show (finale.js keeps it see-through as 'finale-wait' and the key
+// that skips the show is not passed on): the keys wait from the moment it is in view, not from the moment it was built
 let wasUp = false;
 new MutationObserver(() => {
-  const up = !$('gameover').classList.contains('hidden');
+  const c = $('gameover').classList;
+  const up = !c.contains('hidden') && !c.contains('finale-wait');
   if (up && !wasUp) flow.endShownAt = performance.now();
   wasUp = up;
 }).observe($('gameover'), { attributes: true, attributeFilter: ['class'] });

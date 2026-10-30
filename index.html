@@ -794,12 +794,14 @@
       <label>Alerts and sounds <input id="optAlerts" type="checkbox"><output></output></label>
       <label>Tips <input id="optTips" type="checkbox"><output></output></label>
       <label>Adaptive resolution <input id="optDynres" type="checkbox"><output></output></label>
+      <label>Big finishes <input id="optFinale" type="checkbox"><output></output></label>
+      <label>Battle Decrees <input id="optDecrees" type="checkbox"><output></output></label>
     </div>
     <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
       <button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button><button data-q="ultra">Ultra</button>
     </div>
     <div class="note">Auto picks a level for your machine and lowers the resolution a little whenever the frame rate drops. Low turns off shadows and grass for the smoothest play; Ultra adds the sharpest shadows and ambient occlusion.</div>
-    <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then.</div>
+    <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then. Battle Decrees: after each battle, one or two random rule changes are rolled for the next (you can reroll them or play a classic battle).</div>
     <div class="row"><button id="optionsBack">Back</button></div>
   </div>
 </div>
@@ -826,7 +828,9 @@
       <div class="war"><b>O</b><span>Orders menu (click to command troops)</span>
       <b>B</b><span>Shop &amp; upgrades</span>
       <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
-      <b>U</b><span>Co-op Conquest: call a fallen ally back to life for 500 gold (the bar under the shop's tabs does the same)</span></div>
+      <b>U</b><span>Co-op Conquest: call a fallen ally back to life for 500 gold (the bar under the shop's tabs does the same)</span>
+      <b>L</b><span>Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same)</span>
+      <b>R (end screen)</b><span>Roll the next battle's Battle Decrees again</span></div>
       <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
       <b>Enter</b><span>Ready: start the first wave now instead of waiting out the preparation (online: when everyone is ready)</span>
       <b>K</b><span>When a battle is decided: concede and start the next one (or finish a war you have won); press twice to confirm</span>
@@ -837,6 +841,7 @@
       <b>Middle (hold)</b><span>Marker wheel: move the mouse to Go here / Attack / Defend / Danger / Need help, let go to place it</span>
       <b>Map click</b><span>On the big map or the minimap, while the mouse is free: left click puts down a marker, right click removes yours</span>
       <b>Tab</b><span>Scoreboard</span>
+      <b>Any key</b><span>At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go to the results</span>
       <div class="war"><b>F1 / Z</b><span>Your army: follow me</span>
       <b>F2 / X</b><span>Your army: hold here</span>
       <b>F3</b><span>Your army: charge</span>

@@ -155,8 +155,8 @@ export class Projectiles {
   }
 
   // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands
-  fireArrow(from, vel, team, dmg, owner, big = false) {
-    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0 };
+  fireArrow(from, vel, team, dmg, owner, big = false, ability = '') {
+    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0, ability };
     const fx = this.game.fx;
     fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075);
     e.tr = fx._to; e.trb = fx._tb;
@@ -223,7 +223,7 @@ export class Projectiles {
         if (p.kind === 'arrow') {
           const hit = this.hitCharacter(next, p.team, 0.15);
           if (hit) {
-            g.damage(hit, p.dmg, p.owner, { ranged: true, dir: p.vel });
+            g.damage(hit, p.dmg, p.owner, { ranged: true, dir: p.vel, ability: p.ability });
             g.audio.play('arrowHit', next);
             this.kill(i, p);
             done = true;
@@ -378,9 +378,9 @@ export class Projectiles {
     g.magic.flash(at, 0xff8a30, 9);
     if (!g.simulating) return;
     // gates, keeps and siege engines burn; stone walls shrug it off
-    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(p.dmg * 0.6, p.owner);
+    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(p.dmg * 0.6, p.owner, 'Fireball');
     const s = g.siegeAt(at, p.team, p.radius);
-    if (s) g.damage(s, p.dmg * 0.8, p.owner, { magic: true });
+    if (s) g.damage(s, p.dmg * 0.8, p.owner, { magic: true, ability: 'Fireball' });
     g.grid.query(at.x, at.z, p.radius + 1, (u) => {
       if (!u.alive || allied(u.team, p.team)) return;
       const d = Math.hypot(u.pos.x - at.x, u.pos.z - at.z);
@@ -388,7 +388,7 @@ export class Projectiles {
       const c = u.chest(new THREE.Vector3());
       if (!g.physics.lineClear(at.x, at.y, at.z, c.x, c.y, c.z, p.team)) return; // walls shelter from the blast
       const k = 1 - 0.5 * Math.min(1, d / p.radius);
-      g.damage(u, p.dmg * k, p.owner, { magic: true, splash: true });
+      g.damage(u, p.dmg * k, p.owner, { magic: true, splash: true, ability: 'Fireball' });
       if (u.alive && p.owner && p.owner.isPlayer) g.abilities.scorch(u, p);   // (a Mage talent sets the foes alight)
       if (u.stagger && d < p.radius * 0.6) u.stagger(0.5, { pos: at });
     });

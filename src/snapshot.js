@@ -9,7 +9,7 @@ function codec(fields) {
 
 export const { pack: packFaction, unpack: unpackFaction } = codec([
   'gold', 'troopCap', 'training', 'eliminated', 'kills', 'heroDeaths', 'respawnT', 'siegeTarget',
-  'recruitRole', 'earned', 'isPlayer', 'lord', 'name', 'formation', 'levies',
+  'recruitRole', 'earned', 'isPlayer', 'lord', 'name', 'formation', 'levies', 'wage', 'stand',
 ]);
 
 export const { pack: packHero, unpack: unpackHero } = codec([
