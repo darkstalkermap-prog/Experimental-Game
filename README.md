@@ -420,6 +420,108 @@ away panel, `pos` adds the pointer. `game.alerts.tip(text)` shows a hint line, a
 that the player knows something now. The details are in the header of `src/alerts.js`, and the sounds (`alertLow`,
 `alertDanger`, `tick`, `heartbeat`, `streak`, `chime`, ...) are in `src/alertsounds.js`.
 
+## Big finishes
+
+The end of a match is a short show, not a cut to a menu (`src/finale.js`). When the match is decided:
+
+- **Slow motion.** In single player the world's step is really scaled: it eases down to about 0.3 in a sixth of a second, holds,
+  and eases back to 1 over the last second, so soldiers, arrows and dust all slow together. Online nobody can slow the host's
+  shared world, so only what you see and hear changes (the camera, the effects, the sound and the short wait).
+- **The war horn** (`src/horn.js`, built from WebAudio nodes like everything else): a rising call and a long full chord over
+  timpani for a victory, one low dark horn that sags at its end over a slowing heartbeat of drums for a defeat. The music is
+  ducked under it and comes back, and the sounds of the world are dulled while time is slowed. (A shorter call sounds when the
+  last rival keep falls but the match goes on, with a moment of slow motion in your own view; the horn that opens a battle and
+  every tenth wave has the same brass voice now.)
+- **The keep falls** (`src/castlecollapse.js`). The keep and the four corner towers are drawn again from the same shapes cut
+  into blocks about 3 m across and roof patches; each block has a plan worked out once (the structure shakes and leans, the
+  stone lets go from the top downwards, tumbles, lands in a ring of rubble and hops once), and a frame only evaluates the plan
+  at the time `t`, so it is identical on every screen, takes a millisecond or two a frame while it plays, nothing afterwards,
+  and uses three meshes in place of the keep's own. Dust clouds, fire bursts, a shock ring, a rumble and the camera shake come
+  with it. A stump (with one tooth of wall left standing) and its rubble burn for the rest of the match, the same state a
+  castle is redrawn in after a change of graphics quality.
+- **The camera** frames the keep that decided it (the last rival keep for a victory, your own for a defeat) from the side you
+  were on: high and wide at first, then pushing in over the wall and sweeping a little, under a letterbox (if you stand in sight of
+  the keep, the first third of a second is your own view in slow motion before the cut); after the show it goes on drifting round
+  the ruin behind the end screen. With no keep to look at (King of the Hill, a keep that fell long ago) the same slow motion, horn and
+  banner play in your own view, shorter.
+- **The banner** closes the show: Victory or Defeat and the best moment of the match, and the same line is the end screen's
+  first section ("Moment of the battle").
+- **Skip**: any key or click (after half a second, so that the blow that ended it does not skip it), or Esc, goes straight to
+  the end screen. The end screen is built the moment the match is decided and waits see-through behind the show, so nothing
+  that reads it is late. A concede, a lost connection and the practice yard have no show. Hero Game Mode has it when a keep
+  decided the battle; a win on kills or on the clock gets the horn and the highlight line and the end screen at once.
+  **Options → Big finishes** switches it all off.
+
+The highlight line (`src/highlights.js`) is worked out from the match log (`src/matchlog.js`): gates, wall segments and keeps
+remember who hurt them (a Fireball, a sword, a Smite, a catapult, a ram, the army), and the hero who did a fifth of the damage
+or more is named before the army that did the rest. Lords slain, several foes to one sweep of an ability, the first blood and an
+engine burned are recorded too, and a gate that held through the whole match is told when nothing better is. Each moment is
+scored (a keep falling > a lord slain > a gate > a sweep ...; more when you did it, most when a named ability did) and the best
+is put in words from your side: "Your Fireball broke the north gate at 8:42", "House Varr's army brought down your keep at
+14:48". In an online game the host sends the notable moments with the end of the match, and every screen tells them for its own
+player. Code that wants a moment in the line records a `matchlog` event of one of the types in the header of
+`src/highlights.js`; code that hurts a gate, wall or keep passes the ability's name as the third argument of `takeDamage`.
+
+## Battle Decrees and comebacks
+
+**Battle Decrees.** When a battle ends, the game rolls one or two *decrees* for the next one: random rule changes such as
+"Giants cost half" or "Double waves: every house sends twice the soldiers". The end screen shows them under **Next battle**,
+each with its effect in a line, and two buttons: **Reroll** (key **R**; as often as you like, it is a hook and not a currency) and
+**Classic battle** (play the next one without decrees). The main menu has the same row, and Play Again, Single Player and
+hosting all start with what you saw. At the start of the battle a banner names the decrees, a line under the wave timer keeps
+them in view, and the Esc menu lists them with their effects. The first battle you ever play is classic, and
+**Options -> Battle Decrees** switches the whole thing off (no roll, classic battles) and back on. Decrees rule every house,
+the AI lords included. Hero Game Mode and the practice courtyard have none.
+
+| Decree | What it does |
+| --- | --- |
+| Giants' Bargain | Giants cost half |
+| The Great Muster | Double waves: every house sends twice the soldiers (and has room for them) |
+| Gold Rain | Income +50% (the trickle and every wave's wage) |
+| Hard Winter | Soldiers cost 25% more and the waves come 25% less often |
+| Swift March | Soldiers march 20% faster |
+| Blood Price | Every kill pays double |
+| Siege Season | Battering rams and catapults cost half |
+| Iron Discipline | Barracks, Drill Sergeants and Elite Levies cost half |
+| Smiths' Holiday | Swords, shields, bows, horses, potions and arrows cost half |
+| War Chest | Start with 600 more gold, but earn 20% less |
+| Cavalry Fever | Cavalry and Lancers cost 40% less |
+| Heroes' Return | Heroes and lords rise in half the time; heroes walk 10% faster |
+| Lean Times | Income -30%, but every kill pays 50% more |
+| Long Siege | Waves come 40% less often and are 60% bigger |
+| Eager Armies | Waves come 30% faster |
+| Mercenary Fair | Soldiers cost 30% less, but kills pay 40% less |
+| Masons' Holiday | Gate, wall, keep and tower works cost half |
+| Archery Contest | Archers cost half |
+
+The wave wage comes with each wave, so a decree that changes the pace changes the wages with it. Two decrees rolled together never push the same rule (a pace decree with a gold decree, never two of a kind), and a roll never
+repeats the decrees of the battle just played. In the shop a price that a decree changed shows the usual price struck out beside
+the new one. Online the host rolls and rerolls; the decrees travel to the guests in the start message (`options.decrees`), the
+guests set the same rule modifiers and see the same prices, banner and line, and their end screen shows the host's roll read-only.
+
+**How it is built.** `src/decrees.js` holds the catalogue (`DECREES`: id, name, icon, one-line text and the rule modifiers each
+sets), the roll, the end-screen section (order 50) and the menu row; `Game.start` puts the decrees of `options.decrees` in force
+as `mods` sources (`decree:<id>`, see `src/mods.js` for the keys and where each is read: wave size and gap, income, bounty, march
+and hero speed, respawn time, starting gold, and the shop prices in `src/economy.js`). A new decree is one more entry.
+
+**Comeback mechanics** (`src/comeback.js`, numbers in `COMEBACK` in `src/config.js`). Losing should be a fight, not a slow defeat.
+All three rules are decided by the host and apply to the AI lords exactly as to people.
+- **Underdog's wage.** From wave 3 on, every second the game weighs each house: the health of its keep, gate and walls, what its
+  soldiers and engines are worth (their price, by health) and half its purse. A house far behind the average of its enemies
+  (below 60%, until it climbs above 80%) is paid a bonus wage, 30% to 80% of what it already earns without fighting (the more it
+  is behind the more it gets, about 60 to 200 gold a minute by mid-game), paid out in a lump every ten seconds. The HUD shows
+  "Underdog's wage +N gold/min" beside the gold, and a toast explains it the first time.
+- **Cheaper gate.** Rebuilding a gate that has fallen costs 750 instead of 1500 (stacking with decrees). The shop's Repair Gate
+  card says so and shows both prices.
+- **Last Stand** (**L**, or the glowing button above the minimap). Once a match, when your keep is below 25% of its health: your
+  hero is healed and refreshed (and rises at once at the keep if it had fallen), and for 20 seconds your soldiers and your hero hit 30%
+  harder and move 25% faster (the hero also takes 40% less damage for 10 s), and six militia rise in the courtyard. A war horn,
+  golden rings and a flash across the screen mark it, a banner says so. The AI lords call theirs the moment their keep drops that low.
+  Online a guest's L is sent to the host. There is none in Hero Game Mode (no gold, and a fallen keep ends the mode).
+
+The log (`matchlog`, see its header) records `decrees` and `comeback` events (`underdog`, `gate`, `last_stand`, `stand_held`),
+and the end screen adds a "Comeback" ribbon when they did something for your house.
+
 ## Hero Game Mode
 
 Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
@@ -567,12 +669,15 @@ Bots and AI houses keep the default look. Your account is yours alone: nothing i
 | B | Open the shop (the Army tab is where you choose garrison, army and lane; the Class tab switches your hero class, at your own castle) |
 | N | Talents: the shop on the Talents tab (press again to close) |
 | U | Co-op Conquest: call the first fallen ally back to life for 500 gold (the bar under the shop's tabs has a button for each) |
+| L | Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same) |
+| R (end screen) | Roll the next battle's Battle Decrees again |
 | P | Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies) |
 | M | Big map (the mouse is free while it is up; press again to close) |
 | Middle click | Ping what the crosshair is on: a foe or an enemy castle part is **Attack** (red), your own castle or an ally is **Defend** (blue), plain ground is **Go here** (gold). Allies see it |
 | Middle button (hold) | Marker wheel round the crosshair: move the mouse towards Go here / Attack / Defend / Danger / Need help and let go to place a marker there; let go in the middle for the ordinary ping |
 | Map click | On the big map or the HUD minimap, while the mouse is free: left click puts down a marker of the kind chosen in the palette beside the big map, right click removes your nearest one |
 | Tab | Scoreboard |
+| Any key or click | At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go straight to the results (see Big finishes) |
 | F1 or Z | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
 | F3 | Army: charge |
@@ -635,6 +740,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes |
 | `src/teams.js` | Who fights whom: co-op sides |
 | `src/economy.js` | Shop items, shared by the player and the AI |
+| `src/decrees.js`, `src/comeback.js` | Battle Decrees (the catalogue, the roll, the end-screen "Next battle" panel) and the comeback rules (underdog's wage, cheaper gate, Last Stand); both work through `src/mods.js` |
 | `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |
 | `src/terrain.js`, `src/landscape.js`, `src/terrainmat.js`, `src/terraintex.js` | The land: culled chunks that follow the physics heights exactly, the far mountains beyond the play area, the ground shader (grass, soil, road ruts, rock strata, snow) |
 | `src/foliage.js`, `src/foliagegeo.js`, `src/scenery.js`, `src/grass.js` | Trees and rocks as instanced models in three levels of detail with wind, the forest on the mountains, the grass that grows around the camera |
@@ -649,7 +755,9 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/alerts.js` | Callouts, kill streaks, tips, the idle nudge, the away log and the background ticker for hidden tabs; `raise(key, {...})` is the way in |
 | `src/alertsounds.js` | The sounds of the alerts (bells, brass, ticks, heartbeat), added to the registry in `audio.js` |
 | `src/audio.js` | Sound effects and the volume buses |
+| `src/horn.js` | The war horn of the ending (victory fanfare, defeat dirge, the call of the last keep) and the ducking of the music under it |
 | `src/music.js` | The procedural medieval music: lute, recorder, drone, drums and horn |
+| `src/finale.js`, `src/castlecollapse.js`, `src/highlights.js` | The ending of a match: the show (slow motion, camera, letterbox, banner, skip), the falling keep and towers (blocks with a plan each), and the highlight line |
 | `src/physics.js`, `src/projectiles.js` | Terrain and colliders (including the merlons), arrows and boulders |
 | `src/net.js`, `src/peernet.js`, `src/roomnet.js`, `src/netsync.js` | Online play: connection (own server, browser-to-browser, or claude.ai live room), snapshots from the host, and pose/actions from clients |
 | `src/progress.js`, `src/unlocks.js`, `src/stats.js` | The account (Renown, unlocks, mastery, records) and its maths and storage, the unlock catalogue and track, and the per-match counters the end screen reads |

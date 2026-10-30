@@ -6,8 +6,11 @@ import { navigate, avoidCastles } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
 import { allied } from './teams.js';
+import { mods } from './mods.js';
 
 const tmp = new THREE.Vector3();
+// the rule modifier `speed` (a Battle Decree), read from the rules only when they change and not for every step of every soldier
+let marchVer = -1, marchMul = 1;
 let NEXT_ID = 1;
 
 export class Unit {
@@ -604,7 +607,8 @@ export class Unit {
     const d = Math.hypot(dx, dz);
     if (d < stopDist) return false;
     const fac = this.game.factions[this.team];
-    let sp = this.speed * (this.order === 'hold' && d < 3 ? 0.6 : 1);
+    if (marchVer !== mods.version) { marchVer = mods.version; marchMul = mods.mul('speed'); }
+    let sp = this.speed * marchMul * (this.order === 'hold' && d < 3 ? 0.6 : 1);
     if (this.slowT > 0) sp *= 0.5;
     if (this.hasteT > 0) sp *= this.hasteMul;
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;

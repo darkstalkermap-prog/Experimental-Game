@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { patchMaterial } from './shaderhook.js';
 import { Q } from './quality.js';
+import { F, R } from './fxtex.js';
 
 // the wind: one clock for every cloth; `amp` is 0 when the quality setting has the wind off
 export const WIND = { time: { value: 0 }, amp: { value: 1 } };
@@ -207,4 +208,44 @@ export class FireSet {
     this.group.add(this.mesh);
   }
   update() { if (this.dirty) this.rebuild(); }
+}
+
+// ---------------------------------------------------------------- the dust of a fall
+// A bank of big, slow, soft puffs thrown up round p when a keep or a tower comes down: they rise and spread for several seconds, so that the fall
+// is seen through dust. (Each screen makes its own: nothing here is replicated.) r: how wide the bank starts, n: how many puffs, size: how big they grow.
+export function dustBank(fx, p, r, n, size) {
+  const A = fx.alpha, TAU = Math.PI * 2, k = fx.q(n);
+  // (slow motion shows only a third of a puff's life while the show lasts: they start big and fast, so that the dust is there from the first moment)
+  for (let i = 0; i < k; i++) {
+    const th = Math.random() * TAU, d = Math.sqrt(Math.random()) * r, sp = 1.5 + Math.random() * 3.2;
+    const s0 = size * (0.5 + Math.random() * 0.3), s1 = size * (1.1 + Math.random() * 0.6);
+    const o = A.spawn(F.PUFF1 + ((Math.random() * 3) | 0), R.DUST, p.x + Math.cos(th) * d, p.y + Math.random() * 2.5, p.z + Math.sin(th) * d,
+      Math.cos(th) * sp, 1.0 + Math.random() * 2.6, Math.sin(th) * sp, 3.6 + Math.random() * 2.6, s0, s1);
+    const g = 0.8 + Math.random() * 0.2;
+    A.tint(o, g, g * 0.98, g * 0.94, 0.75 + Math.random() * 0.25);
+    A.motion(o, 1.1, -0.12, 0.7, -1.2);
+    A.spin(o, Math.random() * TAU, (Math.random() - 0.5) * 0.35);
+  }
+}
+
+// A burst of fire at p (r: how big): a soft glow, tongues of flame thrown out and up, a plume of soot. (Like Fx.explosion without its ring and the scorch
+// on the ground below, which suit a boulder landing, not a roof burning high up.) Each screen makes its own.
+const FIRE_GLOW = { r: 1, g: 0.62, b: 0.25 };
+export function fireBurst(fx, p, r) {
+  const G = fx.add, A = fx.alpha, TAU = Math.PI * 2, rr = (a, b) => a + Math.random() * (b - a);
+  fx.flash(p, FIRE_GLOW, r * 3, 0.55, 0.9);
+  for (let i = 0, k = fx.q(14); i < k; i++) {
+    const th = rr(0, TAU), y = rr(0.1, 1), c = Math.sqrt(1 - y * y), sp = rr(0.5, 1.1) * r * 1.5;
+    const o = G.spawn(F.FLAME, R.FIRE, p.x, p.y, p.z, Math.cos(th) * c * sp, y * sp * 0.9, Math.sin(th) * c * sp, rr(0.7, 1.2), r * rr(0.3, 0.5), r * rr(0.6, 1.0));
+    G.tint(o, 1.6, 1.3, 1.0, 1);
+    G.motion(o, 2.4, -2.2, 0.3, -1);
+    G.spin(o, rr(-0.5, 0.5), 0);
+  }
+  for (let i = 0, k = fx.q(8); i < k; i++) {
+    const th = rr(0, TAU), sp = rr(0.5, 2.4);
+    const o = A.spawn(F.PUFF1 + ((Math.random() * 3) | 0), R.SOOT, p.x, p.y + rr(0, 0.5), p.z, Math.cos(th) * sp, rr(1.5, 4.5), Math.sin(th) * sp, rr(2.8, 4.4), r * rr(0.4, 0.7), r * rr(1.2, 2.0));
+    A.tint(o, 1, 1, 1, 0.85);
+    A.motion(o, 1.3, -0.4, 0.5, -1.8);
+    A.spin(o, rr(0, TAU), rr(-0.5, 0.5));
+  }
 }

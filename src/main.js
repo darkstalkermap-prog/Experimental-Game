@@ -18,6 +18,7 @@ import { loadOptions, saveOptions, sanitizeOptions } from './options.js';
 import { progress, sanitizeLoadout } from './progress.js';
 import { endSound } from './endprogress.js';   // (the end screen's battle and Renown sections)
 import './wardrobe.js';       // (the Renown panel of the menu)
+import { pendingDecrees } from './decrees.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -111,7 +112,7 @@ selectMap(mapSize);
 // the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
-const matchOptions = () => { options = sanitizeOptions(options); saveOptions(options); return options; };
+const matchOptions = () => { options = sanitizeOptions({ ...options, decrees: pendingDecrees() }); saveOptions(options); return options; };   // (the Battle Decrees come from decrees.js: the end screen rolls them)
 
 // game mode: Conquest is the main one (the page always opens on it), King of the Hill puts a prize in the middle of the map
 let objective = 'conquest';
@@ -399,7 +400,7 @@ for (const [id, key, apply, unit] of SLIDERS) {
 }
 
 // switches in the options panel (alerts.js looks at the settings as it goes)
-for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres']]) {
+for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynres', 'dynres'], ['optFinale', 'finale'], ['optDecrees', 'decrees']]) {
   const el = $(id), out = el.nextElementSibling;
   const show = () => { el.checked = !!settings[key]; out.textContent = settings[key] ? 'On' : 'Off'; };
   show();

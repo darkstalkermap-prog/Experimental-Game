@@ -11,11 +11,16 @@ import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
+import { mods as rules } from './mods.js';
 import { ViewModel } from './viewmodel.js';
 import { matchlog } from './matchlog.js';
 import { blankStats } from './stats.js';
 import { sanitizeLoadout, noLoadout } from './progress.js';
 import { CLOAKS } from './unlocks.js';
+
+// the rule modifier `heroSpeed` (a Battle Decree), read from the rules only when they change
+let walkVer = -1, walkM = 1;
+const walkMul = () => { if (walkVer !== rules.version) { walkVer = rules.version; walkM = rules.mul('heroSpeed'); } return walkM; };
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -287,7 +292,7 @@ export class Player {
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = this.cls[slot]; return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }

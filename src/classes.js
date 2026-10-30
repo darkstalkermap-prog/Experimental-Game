@@ -247,7 +247,7 @@ export class Abilities {
     const reach = talentFx(p, 'bashReach', 1), stun = 1.6 + talentFx(p, 'bashStun', 0);
     this.eachFoe(p.team, c.x, c.z, 3.4 * reach, (o) => {
       if ((o.pos.x - p.pos.x) * f.x + (o.pos.z - p.pos.z) * f.z < -0.5) return;   // never behind you
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 1 });
+      g.damage(o, dmg, p, { melee: true, splash: true, charge: 1, ability: 'Shield Bash' });
       if (!o.alive) return;
       if (o.stagger) o.stagger(stun, p);
       if (o.vel && !o.isPlayer) { o.vel.x += f.x * 10; o.vel.z += f.z * 10; }
@@ -274,7 +274,7 @@ export class Abilities {
     this.eachFoe(p.team, p.pos.x, p.pos.z, w.radius, (o) => { foes.push(o); }, p.pos.y, 3);
     const each = foes.length ? e.sum / foes.length : 0;   // (what the shield took in is shared out among the foes around it)
     for (const o of foes) {
-      if (each > 0) g.damage(o, each, p, { magic: true, splash: true });
+      if (each > 0) g.damage(o, each, p, { magic: true, splash: true, ability: 'Bastion Strike' });   // (the name the highlight line of the end screen tells)
       if (o.alive && o.stagger) o.stagger(w.stun, p);
     }
     this.emit('bwave', p.pos, ZERO, null, w.radius / 5);
@@ -291,7 +291,7 @@ export class Abilities {
     const dmg = p.meleeDmg * 0.85, reach = talentFx(p, 'whirlRadius', 1);
     let foes = 0;
     this.eachFoe(p.team, p.pos.x, p.pos.z, 4.2 * reach, (o) => {
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5 });
+      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5, ability: 'Whirlwind' });
       if (o.alive && o.stagger) o.stagger(0.45, p);
       if (!o.isSiege) foes++;
     }, p.pos.y, 2.8);
@@ -368,7 +368,7 @@ export class Abilities {
       }
       from.set(L.x - e.f.x * V.fallBack, L.y + V.fallH, L.z - e.f.z * V.fallBack);
       const v = new THREE.Vector3((L.x - from.x) / T, (L.y - from.y) / T + 0.5 * G_ARROW * T, (L.z - from.z) / T);
-      g.projectiles.fireArrow(from, v, e.p.team, e.dmg, e.p, true);
+      g.projectiles.fireArrow(from, v, e.p.team, e.dmg, e.p, true, 'Arrow Volley');
     }
   }
 
@@ -444,7 +444,7 @@ export class Abilities {
       const at = b.o.chest(new THREE.Vector3());
       g.fx.fireTrail(at);
       g.fx.sparks(at, 3);
-      g.damage(b.o, b.dmg, b.p, { magic: true, splash: true });
+      g.damage(b.o, b.dmg, b.p, { magic: true, splash: true, ability: 'Fireball' });
     }
   }
 
@@ -466,7 +466,7 @@ export class Abilities {
     if (!s) return;
     const g = this.g, dmg = s.dmg * p.mods.spell;
     this.eachFoe(p.team, p.pos.x, p.pos.z, s.radius, (o) => {
-      g.damage(o, dmg, p, { magic: true, splash: true });
+      g.damage(o, dmg, p, { magic: true, splash: true, ability: 'Frost Ward' });
       if (!o.alive) return;
       if (o.slowT !== undefined) o.slowT = Math.max(o.slowT, s.chill);
       if (o.stagger) o.stagger(s.stun, p);
@@ -482,13 +482,13 @@ export class Abilities {
     const reach = talentFx(p, 'smiteRadius', 1), radius = s.radius * reach, stun = 0.8 + talentFx(p, 'smiteStun', 0);
     const hit = new Set();
     this.eachFoe(p.team, at.x, at.z, radius, (o, d) => {
-      g.damage(o, dmg * (1 - 0.4 * Math.min(1, d / radius)), p, { magic: true, splash: true });
+      g.damage(o, dmg * (1 - 0.4 * Math.min(1, d / radius)), p, { magic: true, splash: true, ability: 'Smite' });
       if (o.alive && o.stagger) o.stagger(stun, { pos: at });
       hit.add(o);
     }, at.y, 4);
     const chain = talentFx(p, 'smiteChain', null);
     if (chain) this.chainSmite(p, at, hit, dmg, chain);
-    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(dmg * 0.5, p);
+    if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(dmg * 0.5, p, 'Smite');
     const sky = at.clone();
     sky.x += (Math.random() - 0.5) * 3; sky.z += (Math.random() - 0.5) * 3; sky.y += 42;
     g.magic.showBolt([sky, at], s.color);
@@ -505,7 +505,7 @@ export class Abilities {
     const pts = [at.clone().setY(at.y + 1)];
     for (const { o } of foes.slice(0, chain.foes)) {
       pts.push(o.chest(new THREE.Vector3()));
-      g.damage(o, dmg * chain.dmg, p, { magic: true, splash: true });
+      g.damage(o, dmg * chain.dmg, p, { magic: true, splash: true, ability: 'Smite' });
       if (o.alive && o.stagger) o.stagger(0.5, { pos: at });
     }
     if (pts.length > 1) g.magic.showBolt(pts, SPELLS.smite.color);   // (every screen sees it: Magic.onBolt)
@@ -560,7 +560,7 @@ export class Abilities {
     this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
-      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1), p, { melee: true, splash: true, charge: 1 });
+      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1), p, { melee: true, splash: true, charge: 1, ability: 'Lance Charge' });
       if (!o.alive) return;
       if (o.stagger) o.stagger(1.3, p);
       if (o.vel && !o.isPlayer) { o.vel.x += e.f.x * 12; o.vel.z += e.f.z * 12; }

@@ -5,9 +5,22 @@
 // Events are for sentences ("Your Fireball broke the north gate at 8:42"), counters are for numbers. Keep events few (hundreds per match at most).
 //
 // Counter / event names in use (add yours here):
-//   counters  dmg · streak · slain · breaches · engines · keeps     what THE HERO ON THIS SCREEN did (stats.js; a guest is told its numbers at the end):
-//             damage dealt to foes, the longest run of kills without falling, enemy heroes killed, gates and walls broken, siege engines destroyed, keeps
-//             brought down. (kills, deaths and gold are the hero's and the house's own fields: see buildSummary in endscreen.js)
+//   events (highlights.js; { t, type, house, by, kind, weapon, at }: house = whose it was, by = the house that did it, kind = hero | army | engine | giant | tower,
+//     weapon = 'Fireball' | 'sword' | 'catapult' | 'army' ...):
+//     gate · wall · keep (a gate, a wall segment or a keep fell; `at` = where the castle stands on the map) · lord (a lord was slain)
+//     engine (a siege engine was destroyed; `what` = ram | catapult) · multikill (n foes to one sweep of an ability) · firstblood (the local hero's first kill)
+//     laststand (a Last Stand saved a keep: the comeback rules record { by: the house, kind: 'hero', weapon: 'Last Stand' } and the end screen tells it) ·
+//     none of these is recorded on a guest: the host sends the notable ones with the end of the match
+//   counters (highlights.js): gates · walls · keeps (parts that fell) · gateHit (damage the local gate took)
+//   event 'decrees' { ids }                      decrees.js: the Battle Decrees in force this match (once, at the start)
+//   event 'comeback' { kind, team, ... }         comeback.js: kind 'underdog' (a house became the underdog: wage gold a minute, ratio) · 'gate' (a fallen gate was
+//                                                rebuilt at half price: saved) · 'last_stand' (the Last Stand was called: keep = health left in %) ·
+//                                                'stand_held' (30 s after a Last Stand the keep still stands)
+//   counters wageGold, gateSaved, lastStand      comeback.js, the local house only: gold the underdog's wage paid · gold saved on a rebuilt gate · 1 once the Last Stand was called
+//   counters  heroDmg · heroStreak · heroSlain · heroBreaches · heroEngines · heroKeeps     what THE HERO ON THIS SCREEN did (stats.js; a guest is told its numbers at the
+//             end): damage dealt to foes, the longest run of kills without falling, enemy heroes killed, gates and walls broken, siege engines destroyed, keeps
+//             brought down. (The 'hero' in each name keeps them apart from the counters that highlights.js makes of the events: gates, walls, keeps, engines ...
+//             are everybody's; kills, deaths and gold are the hero's and the house's own fields: see buildSummary in endscreen.js)
 //   event     'class' { cls, from }                                 the hero on this screen took up another class (progress.js shares class mastery by time)
 export const matchlog = {
   t: 0,            // seconds of match played
