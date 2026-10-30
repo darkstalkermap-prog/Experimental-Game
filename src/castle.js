@@ -8,7 +8,7 @@ import { materials, box, shadowed, partsMaterial } from './materials.js';
 import { Upgrades } from './upgrades.js';
 import { Q, onQuality } from './quality.js';
 import { Parts, place } from './parts.js';
-import { Cloth, clothMaterial, updateWind, FireSet, dustBank } from './castlefx.js';
+import { Cloth, clothMaterial, updateWind, FireSet, dustBank, fireBurst } from './castlefx.js';
 import * as G from './castlegeo.js';
 import { populate } from './props.js';
 import { highlights } from './highlights.js';
@@ -643,7 +643,8 @@ export class Castle {
         if (near && ev.s > 2.4) fin.jolt(0.12);
         break;
       case 'burst':
-        fx.explosion(p, ev.s);
+        fireBurst(fx, p, ev.s);
+        g.camfx.boom(p, ev.s / 5);
         break;
       case 'ignite':
         this.igniteRuin(col);

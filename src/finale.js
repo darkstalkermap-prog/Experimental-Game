@@ -34,7 +34,7 @@ const CSS = `
 #finale .bar.bottom { bottom: 0; transform: translateY(100%); }
 #finale.on .bar { transform: none; }
 #finale .card { position: absolute; left: 0; right: 0; top: 60%; text-align: center; opacity: 0; transform: translateY(14px) scale(1.04); transition: opacity 0.7s ease, transform 0.9s ease; padding: 16px 16px 22px;
-  background: radial-gradient(ellipse 55% 100% at 50% 50%, rgba(0,0,0,0.5), rgba(0,0,0,0)); }
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(0,0,0,0.55), rgba(0,0,0,0)); }
 #finale.said .card { opacity: 1; transform: none; }
 #finale.leave .card { opacity: 0; transition: opacity 0.5s ease; }
 #finale .card h2 { margin: 0; font-family: 'Cinzel', Georgia, serif; font-weight: 900; font-size: clamp(38px, 8vw, 92px); letter-spacing: 0.14em; color: #f0c860;
@@ -177,7 +177,7 @@ export class Finale {
   // the cut to the show's own camera: a flash (gold for a victory, blood red for a defeat), and the weapon in the hero's hand goes
   flashCut() {
     const cf = this.g.camfx;
-    if (this.won) cf.flashFrom(1, 0.86, 0.5, 0.75, 3.4); else cf.flashFrom(0.5, 0.05, 0.02, 0.6, 3);
+    if (this.won) cf.flashFrom(1, 0.86, 0.5, 0.6, 8); else cf.flashFrom(0.5, 0.05, 0.02, 0.5, 7);
     this.vmHide();
   }
 
