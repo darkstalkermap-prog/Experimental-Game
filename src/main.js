@@ -225,6 +225,10 @@ function freshWorldSoon() {
     if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
     const [size, practice] = game.mapBuiltFor.split('+');
     ensureMap(size, !!practice);
+    // (a disposed world takes the shader programs of its own materials with it: compile the effect shaders of the new one now, a moment after the build as a task of
+    // its own, while the end screen is still, instead of in the click that starts the match)
+    const fresh = game;
+    freshTimer = setTimeout(() => { if (game === fresh && fresh.state === 'menu') fresh.warmup(); }, 120);
   };
   freshTimer = setTimeout(tick, 250);
 }

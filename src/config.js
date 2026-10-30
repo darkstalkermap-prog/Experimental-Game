@@ -66,7 +66,7 @@ export const WAVES = {
 // soldiers and engines that grow tougher a quarter quicker: a source of rule modifiers, src/mods.js, put in by Game.start for the war modes) and after `limit`
 // seconds of play the war is decided on points (castles standing, then the health of the keeps, then kills, then soldiers; Game.timeUp), so that it is over in
 // about ten to twelve minutes whatever happens. Why a clock and not only a tempo: in bot-vs-bot wars (the lords play every house) a faster tempo makes the early war
-// quicker (the first castle falls at about half the time) but not the end of it: nobody takes the last keep, with or without the pace. A person does, by spending the
+// quicker (the first castle falls after 4 to 6 minutes instead of 6 to 10) but not the end of it: nobody takes the last keep, with or without the pace. A person does, by spending the
 // surplus gold on a giant and engines and leading the siege, but how long that takes cannot be measured without people. Standard sets nothing: the war as it was.
 export const LENGTHS = {
   standard: { name: 'Standard', time: 'no time limit', desc: 'The war as it always was: a new army every 30 seconds, until one castle stands.', mods: null, limit: 0 },
