@@ -17,7 +17,7 @@ export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'ca
 export const CLASSES = {
   knight: {
     name: 'Knight', icon: '🛡', color: '#a9bfe3', role: 'Vanguard',
-    blurb: 'Plate armour and a tower shield: the hardest hero to bring down.',
+    blurb: 'Plate armour and a kite shield: the hardest hero to bring down.',
     mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1, bow: 0.8, spell: 1, block: 0.1 },
     passive: 'Your shield blocks 10% more of the damage from the front.',
     q: { id: 'bash', icon: '💥', name: 'Shield Bash', cd: 9, desc: 'Lunge forward and slam your shield into everything ahead: heavy damage, knocked back and stunned.' },
