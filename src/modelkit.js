@@ -4,12 +4,14 @@
 //   color   the colour itself, or a grey shade when the part takes a per-soldier colour (house cloth, skin, hair)
 //   aSurf   roughness, metalness, colour slot (SLOT), feature gate (0 always shown; n shown while bit n of the soldier's flags is set;
 //           -n shown while it is clear)
-//   aFx     cloth sway weight (0..0.99 hanging cloth, 1..2 capes), pattern (PAT), u, v (for the face and emblem atlases)
+//   aFx     cloth sway weight (0..0.99 hanging cloth, 1..2 capes; + SKIRT on a skirt), pattern (PAT), u, v (for the face and emblem atlases)
 // unitmat.js reads them in the shader. Ambient occlusion is baked into `color` (darker under things, lighter on top).
 import * as THREE from 'three';
 
 // colour slots: which per-instance colour a part takes (see unitmat.js)
 export const SLOT = { fixed: 0, cloth: 1, skin: 2, hair: 3, clothDark: 4, clothLight: 5, skinDark: 6, glow: 7 };
+// added to the sway weight of the parts of a skirt (hanging from the pelvis): they follow the thighs up in a crouch (unitmat.js)
+export const SKIRT = 2;
 // surface patterns drawn in the fragment shader
 export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11 };
 // [roughness, metalness]
