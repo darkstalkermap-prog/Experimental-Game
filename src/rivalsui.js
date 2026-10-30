@@ -36,11 +36,16 @@ export const lobbyRivals = () => (on ? upcomingRivals() : null);
 // the match options for a start: when nothing is named yet and named rivals are on, the houses that are not led by a person (`humans`: their teams) get the
 // rolled lords, and the next roll starts fresh. (A person who leaves an online game is replaced by the plain old lord.)
 export function withRivals(o, humans = [0]) {
-  if (!on || !o || !Array.isArray(o.rivals) || o.rivals.some((r) => r)) return o;
+  if (!on || !o || !Array.isArray(o.rivals)) return o;
+  // (the lords of the battle just played, handed back by a rematch that reuses its options, are not a choice: they are drawn anew)
+  if (o.rivals.some((r) => r) && (!given || o.rivals.join() !== given)) return o;
   last = upcomingRivals();
   next = null;
-  return { ...o, rivals: last.map((id, t) => (humans.includes(t) ? '' : id)) };
+  const rivals = last.map((id, t) => (humans.includes(t) ? '' : id));
+  given = rivals.join();
+  return { ...o, rivals };
 }
+let given = '';   // the rivals the last start was given, as a string
 
 // ---------------- styles ----------------
 const css = document.createElement('style');
@@ -158,12 +163,13 @@ function section(summary) {
   if (summary.hero || !on) return null;
   const events = summary.events || [];
   const had = events.filter((e) => e.type === 'rival').map((e) => ({ team: e.team, r: rivalInfo(e.id) })).filter((x) => x.r);
+  // the houses that were led by AI lords this time have an AI lord next time too (the others are people)
+  const houses = had.length ? had.map((x) => x.team) : summary.mode === 'single' ? [1, 2, 3] : [];
+  if (!houses.length) return null;
   const el = document.createElement('div');
   el.className = 'nb-row nb-rivals';
   const draw = () => {
     const ids = upcomingRivals();
-    // the houses that were led by AI lords this time have an AI lord next time too (the others are people)
-    const houses = had.length ? had.map((x) => x.team) : [1, 2, 3];
     const fate = had.map((x) => {
       const ev = events.find((e) => e.type === 'rivalFell' && e.team === x.team);   // (only the host's AI notes the time; a guest can still see the ruin)
       const ruin = current && current.castles[x.team] && current.castles[x.team].fallen;

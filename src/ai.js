@@ -83,15 +83,13 @@ export class LordAI {
     const goal = P.goals && !(P.goalGap && g.time - this.goalAt < P.goalGap) ? this.goal() : null;
     let floor = 0;
     if (goal) {
-      const gift = goal.id === 'giant' && P.giantGift ? Math.round(goal.cost * P.giantGift) : 0;   // (the retinue of the Giantsworn pays part of every giant)
+      const gift = P.gifts && P.gifts[goal.id] ? Math.round(goal.cost * P.gifts[goal.id]) : 0;   // (his retinue, his masons, ... pay part of the price)
       if (f.gold + gift >= goal.cost) {
-        if (gift && f.gold < goal.cost) {
-          f.gold += gift; f.earned += gift;
-          if (!this.try(goal.id)) { f.gold -= gift; f.earned -= gift; } else this.goalAt = g.time;
-        } else if (this.try(goal.id)) {
+        f.gold += gift; f.earned += gift;
+        if (this.try(goal.id)) {
           this.goalAt = g.time;
           if (goal.id === 'ram' || goal.id === 'catapult') this.engineNext = goal.id === 'ram' ? 'catapult' : 'ram';
-        }
+        } else { f.gold -= gift; f.earned -= gift; }
       } else floor = goal.cost - gift;
     }
     const need = P.garrison ? Math.ceil(P.garrison * f.troopCap) : 0;
