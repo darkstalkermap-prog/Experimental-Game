@@ -155,6 +155,7 @@ export class Hill {
   // ---------- how it looks ----------
   build() {
     const g = this.g, phys = g.physics, R = HILL.radius, P = this.pos;
+    if (phys.war) return;   // (War Mode's bowl has no hill: an open floor)
     const mat = (o, depthTest = true) => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: o, depthWrite: false, side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending, fog: false, depthTest });
     this.group = new THREE.Group();

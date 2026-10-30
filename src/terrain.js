@@ -12,6 +12,7 @@ import { forestDensity } from './landscape.js';
 import { terrainMaterial, setRoads, setBiomeLook } from './terrainmat.js';
 import { Q } from './quality.js';
 import { active } from './biomes.js';
+import { BOWL } from './warmap.js';
 
 const CHUNK = 64;   // cells per chunk side (128 m)
 // far rings: cell size and how wide the ring is (each ring starts where the last ended, snapped to the next cell size)
@@ -91,11 +92,15 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   // the same layers as masks, for the shader
   let castle = 0, hill = 0, sandW = 0, patchW = 0;
   if (!o.far) {   // (beyond the play area there are no castles, hill or yard)
-    for (const s of CASTLE_SITES) {
-      const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
-      castle = Math.max(castle, (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2));
+    if (physics.war) {   // War Mode's bowl: no castles or hill; the floor is trampled bare in patches where the armies stand and fight
+      castle = (1 - smoothstep(BOWL.floor * 0.6, BOWL.floor * 0.95, Math.hypot(x, z))) * smoothstep(0.45, 0.8, n2) * 0.6;
+    } else {
+      for (const s of CASTLE_SITES) {
+        const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
+        castle = Math.max(castle, (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2));
+      }
+      hill = (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8;
     }
-    hill = (1 - smoothstep(HILL.plateau - 1, HILL.plateau + 7, Math.hypot(x, z))) * 0.8;
   }
   if (physics.practice && !o.far) {
     const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
@@ -186,7 +191,7 @@ export class Terrain {
     this.scene = scene;
     this.physics = physics;
     this.roadDist = env.roadDist;
-    setRoads(env.roads);
+    setRoads(env.roads, !!physics.war);
     setBiomeLook(active.def);   // (the splat shader's palette: uniforms, so every biome shares one program)
     this.group = new THREE.Group();
     this.group.userData.owner = 'a3 terrain';
