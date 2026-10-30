@@ -12,7 +12,7 @@
 // (1 / 2 / 3 pick follow / free / overview too.) The HUD while spectating is a small bar (who you watch, the camera, the keys), the minimap, the scores and the
 // kill feed; the hero's own bars, the abilities and the crosshair go (CSS below, by the classes `spectating` and `spectator` on #hud).
 import * as THREE from 'three';
-import { TEAM_CSS, WORLD } from './config.js';
+import { SUMMON, TEAM_CSS, WORLD } from './config.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -356,7 +356,12 @@ export class Spectate {
     if (g.spectator || !f) return '';
     if (g.war) return f.eliminated ? 'Your army has fallen.' : 'You have fallen. Your army fights on without you.';
     if (g.hero) { const n = Math.ceil(g.ui.heroRespawn ? g.ui.heroRespawn() : f.respawnT); return n > 0 ? `You have fallen · back in ${n} s` : 'You rise again…'; }
-    if (f.eliminated || f.castle.fallen) return f.eliminated && !(g.callableBack && g.callableBack(f)) ? 'Your house has been destroyed.' : 'Your keep has fallen: no respawn.';
+    if (f.eliminated || f.castle.fallen) {
+      // (co-op: an ally may still summon you, so say what it costs them, as the old death screen did)
+      const back = !!(g.callableBack && g.callableBack(f));
+      if (f.eliminated && !back) return 'Your house has been destroyed.';
+      return back ? `Your keep has fallen: no respawn · an ally can call you back for ${SUMMON.cost} gold` : 'Your keep has fallen: no respawn.';
+    }
     return `You have fallen · respawn in ${Math.ceil(Math.max(0, f.respawnT))} s`;
   }
 }

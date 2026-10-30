@@ -624,7 +624,8 @@ export class Game {
   // within GATE.slip: he could not get out over his walls, and nobody gets in behind him. Shut, the gate is solid for everybody, and open it lets
   // only its own side through (Physics.lets), so an enemy never slips in; enemies batter it instead (nav.gatePassable).
   // Troops held back by enemies wait in the courtyard; when they have waited GATE.sally seconds, there are enough of
-  // them and no enemy is within GATE.slip of the gate, it opens to let them sally out and fight before the gate.
+  // them and no enemy is within GATE.slip of the gate, it opens to let them sally out and fight before the gate. An army
+  // its lord has ordered to charge (or assault) sallies at once, whatever its number, unless an enemy is within GATE.slip.
   // It never shuts on its own man in the gateway, unless an enemy is within GATE.slip (then he is pushed clear).
   // Worked out every GATE.every s (the host's answer is sent to guests: Castle.netState).
   gateShouldOpen(castle) {
@@ -633,7 +634,7 @@ export class Game {
     if (this.time < (castle.gateNext || 0) && castle.gateWant !== undefined) return castle.gateWant;
     castle.gateNext = this.time + GATE.every;
     const p = castle.gatePos, cy = castle.center.y, team = castle.team;
-    let users = 0, foes = 0, danger = false, slip = false, wedged = false, lord = false;
+    let users = 0, foes = 0, danger = false, slip = false, wedged = false, lord = false, ordered = false;
     const look = (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
@@ -649,7 +650,10 @@ export class Game {
       if (d > GATE.use || u.pos.y - cy > 3.5 || u.post) return;   // (archers up on the wall walk don't work the gate)
       const inside = castle.isInside(u.pos, -0.5);
       if (u.isHero || u.isPlayer) { if (d < 6) lord = true; }   // (a lord at his gate wants through; idling in the courtyard he does not)
-      else if (!inside || u.lane || (u.army && u.order !== 'defend' && u.order !== 'hold')) users++;   // (not a garrison, nor an army told to stay)
+      else if (!inside || u.lane || (u.army && u.order !== 'defend' && u.order !== 'hold')) {   // (not a garrison, nor an army told to stay)
+        users++;
+        if (u.army && (u.order === 'charge' || u.order === 'assault')) ordered = true;   // (the lord has sent his army out: a sally on his word)
+      }
       if (d < 4) {
         const l = castle.toLocal(u.pos.x, u.pos.z);
         if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) wedged = true;
@@ -663,7 +667,8 @@ export class Game {
     else if (lord) open = true;   // (no enemy can slip in, and the walls are no road for a lord: he is never shut in or out)
     else if (!users) open = false;
     else if (!danger) open = true;
-    else open = castle.gateSally || (users >= GATE.sallyMen && users >= foes && this.time - (castle.gateWaitAt ?? this.time) > GATE.sally);
+    // (an army its lord has ordered to charge goes at once, however few: it is his call, as it is when he stands at the gate himself)
+    else open = ordered || castle.gateSally || (users >= GATE.sallyMen && users >= foes && this.time - (castle.gateWaitAt ?? this.time) > GATE.sally);
     // (how long troops have been held back, and a sally once begun goes on until they are out or an enemy comes too close)
     castle.gateSally = open && danger;
     if (!users || open) castle.gateWaitAt = undefined;

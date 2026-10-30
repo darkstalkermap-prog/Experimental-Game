@@ -345,7 +345,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   marching troops: it swings open for the wave soldiers (and your lane), your army when you order it out, and your own
   soldiers coming home, and shuts behind them. It stays shut while enemies come at it (any enemy within 20 m, or within
   40 m and closing in: heroes, soldiers, riders, engines). Troops held back by enemies wait in the courtyard; after
-  12 s, if there are enough of them and no enemy is within 9 m, the gate opens and they sally out to fight. The
+  12 s, if there are enough of them and no enemy is within 9 m, the gate opens and they sally out to fight; an army you
+  order to Charge or Assault goes out at once, however few, unless an enemy is within 9 m. The
   garrison never opens it (its swordsmen leave enemies outside the walls to the archers). You, the lord, have your own
   gate opened by walking up to it (within 6 m) unless an enemy is within 9 m, so you are never shut in or out (and
   nobody gets in behind you: see below). An open gate lets only its own side and allies through: an enemy never walks
