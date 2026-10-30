@@ -63,6 +63,11 @@ function tierBits(t) {
 const _col = new THREE.Color();
 function setColor(arr, i, hex) { _col.set(hex); arr[i] = _col.r; arr[i + 1] = _col.g; arr[i + 2] = _col.b; }
 
+// (a giant is not a man scaled up: he is broader and deeper for his height, or he looks a beanpole)
+function bodyScale(body, desc, tier) {
+  const s = desc.scale * (desc.giant ? 1 : TIER_SCALE(tier)), w = desc.giant ? 1.22 : 1;
+  body.scale.set(s * w, s, s * w);
+}
 // Build a posable soldier (the rig only: the crowd draws it). opts.hero: a hero class instead of a unit type's look.
 export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
   let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
@@ -71,7 +76,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const arm = raider && !desc.plate ? 'skin' : desc.arm;
   const root = new THREE.Group();
   const body = joint(root, 0, 0, 0);
-  body.scale.setScalar(desc.scale * (desc.giant ? 1 : TIER_SCALE(tier)));
+  bodyScale(body, desc, tier);
   // (a man of 1.8 m: hip joints at 0.95, knees at 0.51, the waist at 1.07, shoulder joints at 1.43, elbows at 1.12, the neck at 1.5)
   const pelvis = joint(body, 0, 0.97, 0);
   const hipL = joint(pelvis, 0.09, -0.02, 0), hipR = joint(pelvis, -0.09, -0.02, 0);
@@ -132,7 +137,7 @@ export function rigSetTier(m, tier) {
   m.kit.on = tier > 0;
   for (const p of m.kitArms) p.on = tier > 0;
   if (m.kitShield) m.kitShield.on = tier >= 3;
-  m.body.scale.setScalar(m.desc.scale * (m.desc.giant ? 1 : TIER_SCALE(tier)));
+  bodyScale(m.body, m.desc, tier);
 }
 // veterans wear a plume: team colour from rank 3, gold at rank 5
 export function rigSetRank(m, rank) {
