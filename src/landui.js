@@ -5,6 +5,8 @@ import { BIOME_IDS, BIOMES, land, saveLand, rollLand, landName, biomeOf, SEED_MA
 import { mulberry32 } from './noise.js';
 import { registerEndSection, onMatchEnd } from './endscreen.js';
 
+const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
 const CSS = `
 .landrow { align-items: center; }
 .landrow .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
@@ -31,6 +33,9 @@ const CSS = `
 .nb-land .nb-was { margin-top: 3px; font-size: 13.5px; font-style: italic; opacity: 0.7; }
 .nb-row + .nb-land .nb-title { display: none; }
 .nb-row + .nb-land .nb-sub { font: 700 13px Cinzel, Georgia, serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: #5a1d12; opacity: 1; }
+#pauseLand { margin: 6px auto 10px; max-width: 520px; padding: 8px 14px; text-align: left; font-size: 15px; line-height: 1.3; border: 1px solid #8a6a3a; border-radius: 4px; background: rgba(255,248,226,0.4); }
+#pauseLand .pl-h { font: 700 13px Cinzel, Georgia, serif; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; margin-bottom: 3px; }
+#pauseLand b { color: #3b120b; }
 @media (max-width: 560px) { .nb-land .nb-landbody { flex-direction: column; text-align: center; } }
 @media (prefers-reduced-motion: reduce) { .nb-land .nb-thumb { animation: none; } }
 `;
@@ -207,6 +212,27 @@ function landThumb(biome, seed) {
   return c;
 }
 
+// The pause screen names the land of the battle and its twist (the opening banner says it once; this stays), above the Battle Decrees' box (decrees.js). Nothing for
+// the classic land.
+export function showPauseLand(game) {
+  let box = document.getElementById('pauseLand');
+  if (!box) {
+    const anchor = document.getElementById('pauseDecrees') || document.getElementById('pauseNote');
+    if (!anchor || !anchor.parentNode) return;
+    injectCss();
+    box = mk('div');
+    box.id = 'pauseLand';
+    anchor.parentNode.insertBefore(box, anchor);
+  }
+  const o = game.options, show = !game.practice && !!o && (o.biome !== 'meadow' || !!o.seed);
+  box.classList.toggle('hidden', !show);
+  box.textContent = '';
+  if (!show) return;
+  const d = biomeOf(o.biome);
+  box.append(mk('div', 'pl-h', 'The land'), mk('b', '', landName(o.biome, o.seed)), ' ' + d.short);
+  if (d.twist) box.append(' ', mk('b', 'pl-twist', d.twist.name + ':'), ' ' + d.twist.text);
+}
+
 // ---- after a battle: the land of the next one ----
 // the first battle is the classic land; from then on the choice is Random unless the player picked one on the menu
 onMatchEnd(() => {
@@ -221,7 +247,6 @@ onMatchEnd(() => {
 
 // The "Next battle" panel of the end screen is the Battle Decrees' (decrees.js, order 50, class `nb-row`): the land is the second half of it, a `nb-row` placed right
 // after it (order 51), and the two join into one panel (their CSS). Without the decrees (Hero Mode) the land stands alone and carries the panel's title itself.
-const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 
 registerEndSection('land', 51, (summary) => {
   injectCss();

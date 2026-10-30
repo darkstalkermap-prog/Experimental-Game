@@ -14,6 +14,7 @@ import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
 import { active } from './biomes.js';
 import { updateDecreeHud, showPauseDecrees } from './decrees.js';
+import { showPauseLand } from './landui.js';
 import { updateComebackHud } from './comeback.js';
 
 const $ = (id) => document.getElementById(id);
@@ -693,7 +694,7 @@ export class UI {
   // ---------- menus ----------
   showPause(show) {
     $('pause').classList.toggle('hidden', !show);
-    if (show) { this.toggleMap(false); showPauseDecrees(this.game); }
+    if (show) { this.toggleMap(false); showPauseDecrees(this.game); showPauseLand(this.game); }
   }
 
   gameOver(won, winner = -1, reason = '') {
