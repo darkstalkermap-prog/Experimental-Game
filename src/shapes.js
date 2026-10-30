@@ -529,6 +529,24 @@ def('bow.long', (b) => {
   });
 }, true);
 
+// the same bows at full draw, an arrow on the string: the limbs bent back toward the archer, the string drawn to the nock. The nock is where
+// models.js (drawPose) puts the anchor under the jaw, in this frame; the arrow lies over the bow hand and its head stands past the bow.
+const NOCK = [-0.074, 0.317, 0.163], REST = [-0.014, -0.36, 0.045];
+def('bow.drawn', (b) => drawnBow(b, 0.58, 0.27, K.wood), true);
+def('bow.long.drawn', (b) => drawnBow(b, 0.79, 0.31, 0x8a6a3c), true);
+function drawnBow(b, half, bend, wood) {
+  b.within(GRIP, () => {
+    const pts = [-half, -0.55 * half, -0.27 * half, 0, 0.27 * half, 0.55 * half, half].map((z) => [0, -0.36 + bend * (z / half) ** 2, z]);
+    b.sweep(pts, 0.022, 0.012, { c: wood, m: 'wood', p: PAT.grain, seg: 5, segs: b.pick(14, 10, 6) });
+    for (const s of [-1, 1]) b.rod([0, -0.36 + bend, s * half], NOCK, 0.004, 0.004, { c: K.linen, m: 'cloth', seg: 3 });
+    b.rod([0, -0.4, 0.07], [0, -0.3, -0.07], 0.026, 0.026, { ...leather });
+    const d = REST.map((v, i) => v - NOCK[i]), n = Math.hypot(...d), tip = REST.map((v, i) => v + (d[i] / n) * 0.07);
+    b.rod(NOCK, tip, 0.006, 0.006, { c: K.wood, m: 'wood', seg: 4 });
+    b.cone(tip, tip.map((v, i) => v + (d[i] / n) * 0.06), 0.012, { ...steel, seg: 4 });
+    if (b.level < 2) b.rod(NOCK.map((v, i) => v + (d[i] / n) * 0.02), NOCK.map((v, i) => v + (d[i] / n) * 0.13), 0.016, 0.016, { c: K.linen, m: 'cloth', seg: 3 });
+  });
+}
+
 // ---------------------------------------------------------------- horses (frame at the ground below the middle of the animal)
 // (a horse's coat takes the skin colour slot, its mane and tail the hair slot, its caparison the house cloth)
 const hide = { s: 'skin', m: 'skin' };

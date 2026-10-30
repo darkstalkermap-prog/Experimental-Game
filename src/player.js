@@ -99,6 +99,8 @@ export class Player {
     this.potions = 1;
     this.weapon = 'sword';
     this.swingT = -1;          // animation clock other people see on this hero's body
+    this.bowT = -1;            // ... and with the bow: drawing (0..0.42 as the string comes back), then the loose and its follow-through (0.55..0.9)
+    this.netDraw = 0;          // how far a guest's bow is drawn (from his pose messages, on the host)
     this.struck = false;
     this.blocking = false;
     // melee: left click swings, right click guards in front (combat.js)
@@ -208,7 +210,15 @@ export class Player {
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
     b.root.rotation.y = this.mounted ? this.heading : this.yaw;
     rigSetBow(b, this.weapon === 'bow');
-    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0 });
+    // the bow's clock (models.js drawPose): the string comes back as the hero draws; let go well drawn, the loose plays out
+    const draw = this.weapon !== 'bow' ? 0 : this.drawT > 0 ? Math.min(1, this.drawT / this.drawTime) : this.netDraw;
+    if (draw > 0) this.bowT = 0.42 * draw;
+    else if (this.bowT >= 0) {
+      if (this.bowT < 0.55) this.bowT = this.bowT > 0.25 ? 0.55 : -1;
+      else if ((this.bowT += dt) > 0.9) this.bowT = -1;
+    }
+    if (this.weapon !== 'bow') this.bowT = -1;
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.weapon === 'bow' && this.bowT >= 0 ? this.bowT : this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0 });
     this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4 - 0.7 * this.duck), this.pos.z);
   }
 
@@ -238,6 +248,7 @@ export class Player {
       if (n.b && !this.blocking) this.blockStart = this.game.time - (n.ba || 0);
       this.blocking = !!n.b;
       this.weapon = n.w ? 'bow' : 'sword';
+      this.netDraw = n.w ? Math.max(0, Math.min(1, +n.dr || 0)) : 0;
       this.mounted = !!n.m && this.hasHorse;
       this.radius = this.mounted ? 0.8 : 0.4;
       this.climbing = !!n.cl;
@@ -246,7 +257,7 @@ export class Player {
       this.rideSpeed = n.rs;
       if (!this.mounted && n.hx !== undefined) { this.horsePos.set(n.hx, n.hy, n.hz); this.horseYaw = n.hyaw; }
     }
-    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > 0.62) this.swingT = -1; }
+    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.weapon === 'bow' ? 0.9 : 0.62)) this.swingT = -1; }   // (a bow's shot clock runs longer)
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
       if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
@@ -264,6 +275,7 @@ export class Player {
       vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
       ba: r2(Math.max(0, this.game.time - this.blockStart)),
       m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed), dk: this.ducking ? 1 : 0, cl: this.climb ? 1 : 0 };
+    if (this.weapon === 'bow' && this.drawT > 0) m.dr = r2(Math.min(1, this.drawT / this.drawTime));   // (so the others see the bow drawn)
     if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
     return m;
   }

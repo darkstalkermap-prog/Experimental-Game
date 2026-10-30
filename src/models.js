@@ -20,6 +20,9 @@ const COATS = [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x9a8a78, 0xd8d0c4, 0x8a5a30];
 const RAIDER_CLOTH = [0x4d3a28, 0x3e3a30, 0x5a2e22];
 
 export const WEAPON_TILT = { sword: -1.15, spear: -1.5, lance: -1.55, axe: -1.0, greataxe: -0.9, staff: -2.6, club: -0.9, mace: -1.0, bow: 0 };
+// How each weapon is turned about its own grip in the fist: a blade is gripped with its edges in line with the knuckles (the sword
+// is modelled with its edges across the hand, so it is turned a quarter); an axe's bit already faces where the knuckles do.
+const WEAPON_ROLL = { sword: Math.PI / 2 };
 // Drill Sergeants: every level of training puts a soldier in better kit (see shapes.js for the gates). The man stands a little taller.
 export const TIER_SCALE = (tier) => 1 + 0.012 * tier;
 export const SADDLE_Y = 1.03;   // how far a rider's root is raised to sit in the saddle
@@ -93,14 +96,14 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const foreStyle = arm === 'leather' ? 'cloth' : arm;
   add(shL, 'arm.' + arm); add(shR, 'arm.' + arm); add(elL, 'fore.' + foreStyle); add(elR, 'fore.' + foreStyle);
   if (desc.shield) add(elL, 'shield.' + desc.shield);
-  let weapon = null, weaponPart = null, bowPart = null;
+  let weapon = null, weaponPart = null, bowPart = null, bowDrawn = null;
   const wk = desc.weapon && desc.weapon !== 'none' && desc.weapon !== 'bow' ? desc.weapon : null;
   if (wk) {
     weapon = joint(elR, 0, -0.31, 0.004);   // (in the fist)
-    weapon.rotation.x = WEAPON_TILT[wk] ?? -1;
+    weapon.rotation.set(WEAPON_TILT[wk] ?? -1, WEAPON_ROLL[wk] || 0, 0);
     weaponPart = add(weapon, 'weapon.' + wk);
   }
-  if (desc.bow) bowPart = add(elL, desc.bow, desc.weapon === 'bow');
+  if (desc.bow) { bowPart = add(elL, desc.bow, desc.weapon === 'bow'); bowDrawn = add(elL, desc.bow + '.drawn', false); }
   const cape = desc.cape ? joint(torso, 0, 0.42, -0.125) : null;
   if (cape) add(cape, desc.cape);
   if (desc.quiver) add(torso, 'quiver');
@@ -113,7 +116,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const look = lookFor(variant + 1);
   const m = {
     kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, cape,
-    weaponTilt: WEAPON_TILT[wk] ?? -1, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart,
+    weaponTilt: WEAPON_TILT[wk] ?? -1, weaponRoll: WEAPON_ROLL[wk] || 0, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart, bowDrawn,
     kitArms, kitShield, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
   };
   m.farKey = `${m.hero || type}${raider && !desc.plate ? ':r' : ''}${m.mounted ? ':m' : ''}`;
@@ -154,6 +157,7 @@ export function rigSetBow(m, bow) {
   if (!m.bowPart || !!m.bowOn === !!bow) return;
   m.bowOn = !!bow;
   m.bowPart.on = !!bow;
+  m.bowDrawn.on = false;
   if (m.weaponPart) m.weaponPart.on = !bow;
   m.ranged = !!bow;
 }
@@ -214,7 +218,8 @@ const lerp = (a, b, k) => a + (b - a) * k;
 const ease = (k) => k * k * (3 - 2 * k);
 
 // Arm keyframes per attack direction, [shoulder x, elbow x, shoulder z, torso twist, weapon tilt offset] (the weapon arm is at -x, so
-// outward is a negative z turn and a twist towards the weapon side is negative).
+// outward is a negative z turn and a twist towards the weapon side is negative). With the edge in line with the knuckles (WEAPON_ROLL)
+// the edge leads every one of these blows, the sideways ones too (the swing carries the fist round with it).
 const WIND = {
   over: [-2.8, -1.3, 0, 0, 0],
   right: [-1.5, -1.3, -1.25, -0.45, -0.3],
@@ -227,6 +232,61 @@ const END = {
   left: [-1.4, -0.2, -0.8, -0.4, -0.3],
   thrust: [-1.55, 0, 0, 0.15, -0.45],
 };
+// ---------------------------------------------------------------- a shot with the bow
+// On the shot's clock t (seconds; the arrow flies at DRAW.loose): the archer turns side-on to the mark (the head stays on it), the bow arm
+// comes up straight at it with the bow upright, and the string hand draws back along the arrow's line to the anchor under the jaw, the
+// draw elbow up and behind; at the loose the string snaps home and the hand flies on back past the jaw; then the bow comes down. Both arms
+// are solved in the torso's frame as two bones with a hinged elbow. ('bow.drawn' is the bow bent with an arrow on the string: its nock
+// sits where this pose puts the anchor, so the two must change together.)
+const DRAW = { turn: -0.95, raise: 0.2, pull: [0.1, 0.4], loose: 0.55, lower: 0.72, end: 0.9, arrow: 0.7, brace: 0.15 };
+const BONE = 0.31;   // (upper arm and forearm, to the fist)
+const SHOULDER_L = new THREE.Vector3(0.195, 0.36, -0.01), SHOULDER_R = new THREE.Vector3(-0.195, 0.36, -0.01);
+const UP = new THREE.Vector3(0, 1, 0), DOWN = new THREE.Vector3(0, -1, 0);
+const _dir = new THREE.Vector3(), _right = new THREE.Vector3(), _anchor = new THREE.Vector3(), _grip = new THREE.Vector3(), _hand = new THREE.Vector3(), _pole = new THREE.Vector3();
+const _d = new THREE.Vector3(), _e = new THREE.Vector3(), _u = new THREE.Vector3(), _f = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3(), _p = new THREE.Vector3();
+const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion();
+export const drawWeight = (t) => (t < 0 ? 0 : t < DRAW.lower ? ease(clamp01(t / DRAW.raise)) : 1 - ease(clamp01((t - DRAW.lower) / (DRAW.end - DRAW.lower))));
+// put the fist of the arm (shoulder joint sh at S, elbow joint el) on tgt, the elbow bent toward pole; with `up`, the arm's frame is
+// turned so its z points that way (the bow upright in the hand). w blends from the pose already set.
+function reachArm(sh, el, S, tgt, pole, w, up) {
+  _d.subVectors(tgt, S);
+  const len = _d.length(), d = Math.min(len, BONE * 1.998);
+  _d.multiplyScalar(1 / Math.max(len, 1e-4));
+  const h = Math.sqrt(Math.max(BONE * BONE - d * d / 4, 0));
+  _p.copy(pole).addScaledVector(_d, -pole.dot(_d)).normalize();
+  _e.copy(S).addScaledVector(_d, d / 2).addScaledVector(_p, h);
+  _u.subVectors(_e, S).normalize();
+  _f.copy(S).addScaledVector(_d, d).sub(_e).normalize();
+  _y.copy(_u).negate();
+  if (up) { _z.copy(up).addScaledVector(_y, -up.dot(_y)).normalize(); _x.crossVectors(_y, _z); }
+  else { _x.crossVectors(_f, _u).normalize(); _z.crossVectors(_x, _y); }
+  let bend = Math.atan2(-_f.dot(_z), -_f.dot(_y));
+  if (bend > 0.01 && !up) { _x.negate(); _z.negate(); bend = Math.atan2(-_f.dot(_z), -_f.dot(_y)); }   // (an elbow only bends one way)
+  _q.setFromRotationMatrix(_m4.makeBasis(_x, _y, _z));
+  sh.quaternion.slerp(_q, w);
+  el.rotation.set(lerp(el.rotation.x, bend, w), 0, 0);
+}
+function drawPose(m, t) {
+  const w = drawWeight(t);
+  const drawn = m.bowPart.on || m.bowDrawn.on;
+  if (w <= 0 || !drawn) { if (m.bowDrawn.on) { m.bowDrawn.on = false; m.bowPart.on = true; } return; }
+  const loosed = t >= DRAW.loose, pull = loosed ? 1 : ease(clamp01((t - DRAW.pull[0]) / (DRAW.pull[1] - DRAW.pull[0])));
+  const fly = loosed ? ease(clamp01((t - DRAW.loose) / 0.08)) : 0;   // (the hand flying back off the string)
+  const psi = m.pelvis.rotation.y + m.torso.rotation.y;   // (the torso's turn: the mark is straight ahead of the feet)
+  _dir.set(-Math.sin(psi), 0, Math.cos(psi));
+  _right.set(-Math.cos(psi), 0, -Math.sin(psi));
+  _anchor.set(0, 0.47, -0.012).addScaledVector(_dir, 0.1).addScaledVector(_right, 0.02);
+  _grip.copy(_anchor).addScaledVector(_dir, DRAW.arrow); _grip.y -= 0.03;
+  if (loosed) _hand.copy(_anchor).addScaledVector(_dir, -0.12 * fly).addScaledVector(_right, 0.06 * fly);
+  else _hand.copy(_grip).addScaledVector(_dir, -lerp(DRAW.brace, DRAW.arrow, pull));
+  reachArm(m.shL, m.elL, SHOULDER_L, _grip, DOWN, w, UP);
+  _pole.copy(_dir).negate().addScaledVector(UP, 0.7).normalize();
+  reachArm(m.shR, m.elR, SHOULDER_R, _hand, _pole, w);
+  m.head.rotation.y = lerp(m.head.rotation.y, -psi, w);
+  const bent = !loosed && pull > 0.55 && w > 0.5;
+  m.bowDrawn.on = bent; m.bowPart.on = !bent;
+}
+
 // How deep a crouch goes (hips back, thighs forward, knees folded, body lowered and leaning in), at full crouch.
 const CROUCH = { hip: -1.45, knee: 2.0, drop: 0.47, back: 0.3, lean: 0.5, hipFwd: 0.25 };
 
@@ -292,10 +352,8 @@ export function poseSoldier(m, st) {
   const t = st.swingT;
   if (t >= 0) {
     if (m.ranged) {
-      const a = Math.min(1, t / 0.35);
-      lx = -1.52 * a; ly = 0; lz = -0.05; le = -0.05 * a;
-      sh = -1.45 * a; el = -1.9 * a; rz = -0.15 * a;
-      tx += 0.04 * a; twist = 0.25 * a;
+      const w = drawWeight(t);   // (the arms themselves are solved in drawPose, below)
+      twist = DRAW.turn * w; tx += 0.03 * w;
     } else if (m.lance && mounted) {
       sh = -1.2; el = -0.3;
     } else {
@@ -332,7 +390,8 @@ export function poseSoldier(m, st) {
   H.rotation.set(-tx * 0.6 - 0.3 * (stag + hurt) + 0.02 * Math.sin(idle * 0.9), -(ty + P.rotation.y) * 0.5 + look * 0.85 + 0.12 * Math.sin(idle * 0.37) * Math.sin(idle * 0.11) * still, 0);
   m.shL.rotation.set(lx, ly, lz); m.elL.rotation.set(le, 0, 0);
   m.shR.rotation.set(sh, 0, rz); m.elR.rotation.set(el, 0, 0);
-  if (m.weapon) m.weapon.rotation.x = m.weaponTilt + tiltOff;
+  if (m.weapon) m.weapon.rotation.set(m.weaponTilt + tiltOff, m.weaponRoll, 0);
+  if (m.ranged && m.bowDrawn) drawPose(m, t);
   if (st.climb && !mounted) {
     // hauling up a wall: hands over each other above the head, feet scrabbling at the stone
     const w = (st.time || 0) * 9;
@@ -401,7 +460,7 @@ export function poseDeath(m, t, kind, side = 1) {
     J(m.shL, -0.6 * e1 - 0.5 * e2, 0, -0.5 * e2); J(m.elL, -0.8 * e1, 0, 0);
     J(m.shR, -0.6 * e1 - 0.2 * e2, 0, 0.5 * e2); J(m.elR, -0.9 * e1, 0, 0);
   }
-  if (m.weapon) m.weapon.rotation.x = m.weaponTilt - 0.4 * e1;
+  if (m.weapon) m.weapon.rotation.set(m.weaponTilt - 0.4 * e1, m.weaponRoll, 0);
   m.inst[13] = kind === 1 ? -e2 : 0;   // (no wind of his running left in the cape; face down, it sags over his legs: unitmat.js)
   settleCloth(m);
 }
@@ -503,7 +562,7 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
     warmed.add(key);
     const m = buildSoldier(type, team, variant, tier);
     const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
-    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume')) for (const l of levels) warmTasks.push([p.shape, l]);
+    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume') || p === m.bowDrawn) for (const l of levels) warmTasks.push([p.shape, l]);
     warmTasks.push([m, 3]);
     if (m.mounted) { const h = buildHorse(team, variant, team !== RAIDER_TEAM); for (const p of h.parts) for (const l of levels) warmTasks.push([p.shape, l]); warmTasks.push([h, 3]); }
     return;

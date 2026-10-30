@@ -190,7 +190,7 @@ export class HostSync {
         hp: Math.round(h.hp),
         maxHp: h.maxHp,
         blocking: h.blocking ? 1 : 0,
-        swingT: h.swingT >= 0 ? r2(h.swingT) : -1,
+        swingT: h.weapon === 'bow' ? (h.bowT >= 0 ? r2(h.bowT) : -1) : h.swingT >= 0 ? r2(h.swingT) : -1,   // (with the bow: its shot clock)
         weapon: h.weapon === 'bow' ? 1 : 0,
         mounted: h.mounted ? 1 : 0,
         heading: r2(h.heading),
@@ -428,7 +428,7 @@ export class ClientSync {
       h.lastNetX = state.x; h.lastNetZ = state.z;
       h.alive = !!state.alive;
       h.hp = state.hp; h.maxHp = state.maxHp;
-      if (state.swingT >= 0 && h.swingT < 0) h.swingT = state.swingT;
+      if (state.swingT >= 0 && (h.swingT < 0 || state.weapon)) h.swingT = state.swingT;   // (a bow's clock follows the host: a draw can be held)
       h.attackDir = DIRS[state.attackDir] || 'right';
       h.blockDir = DIRS[state.blockDir] || 'right';
       h.staggerT = state.staggered ? 0.3 : 0;
