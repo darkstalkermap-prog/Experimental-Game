@@ -608,11 +608,10 @@ export class Player {
     this.climbing = !!this.climb;
     if ((this.hintT -= dt) <= 0) {
       this.hintT = 0.15;
-      // (the prompt: false, or 'own' / 'foe' for a wall that a jump would climb now)
-      const l = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround && this.stamina >= BODY.climbStamina &&
-        g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height, null);
-      const foe = l && l.owner !== undefined && !allied(l.owner, this.team);
-      this.climbHint = !l ? false : foe ? (this.stamina >= BODY.enemyClimb.stamina * (l.low ? BODY.mantleShare : 1) ? 'foe' : false) : 'own';
+      // (the prompt: 'own' when a jump would climb one of your own side's walls now; an enemy's walls are never climbed)
+      const l = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround &&
+        g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height, this.team);
+      this.climbHint = l && this.stamina >= this.climbCost(l) ? 'own' : false;
       this.climbTop = !!(l && l.low);   // (the prompt says where to: the wall walk, or the top of the battlements)
     }
     if (this.aiming) this.updateAim(dt, input);
@@ -744,7 +743,7 @@ export class Player {
     // centimetres at 60 fps and more at 30)
     let ny = this.pos.y + this.vy * dt - 0.5 * WORLD.gravity * dt * dt;
     this.vy -= WORLD.gravity * dt;
-    const ground = g.physics.groundHeight(this.pos.x, this.pos.z, Math.max(this.pos.y, ny));
+    const ground = g.physics.groundHeight(this.pos.x, this.pos.z, Math.max(this.pos.y, ny), this.mounted ? undefined : this.team);   // (a hero on foot may stand on their own merlons)
     if (ny <= ground) {
       ny = ground; this.vy = 0; this.onGround = true;
     } else if (this.onGround && this.vy <= 0 && this.pos.y - ground < STEP) {
@@ -835,25 +834,34 @@ export class Player {
     this.eye = BODY.eye - (BODY.eye - BODY.duckEye) * this.duck;
   }
 
+  climbCost(l) { return Math.round(BODY.climbStamina * (l.low ? BODY.mantleShare : 1)); }
+
   // Jump at a castle wall and the hero scrambles up it and mantles over the battlements through a crenel onto the wall walk
-  // (or, from the courtyard, up onto the edge of the walk). Your own walls take about a second and some stamina; an
-  // enemy's take longer and cost more (BODY.enemyClimb), and a heavy blow knocks the climber off (see stagger). Returns
-  // whether a climb began (false: nothing to climb, so the jump goes ahead).
+  // (or, from the courtyard, up onto the edge of the walk; from the walk, up onto the top of a merlon). Only your own side's
+  // walls (yours, an ally's): an enemy castle is taken through its gate or a breach, never over its walls, so a jump at
+  // one is just a jump (and a word that it cannot be climbed). It takes about a second and some stamina, and a heavy blow
+  // knocks the climber off (see stagger). Returns whether a climb began (false: nothing to climb, so the jump goes ahead).
   tryClimb() {
     const g = this.game;
     if (this.mounted || this.drive || this.climb || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (!this.onGround && this.pos.y - ground > 2.2) return false;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, null);
-    if (!l) return false;
-    const foe = l.owner !== undefined && !allied(l.owner, this.team);
-    const cost = Math.round((foe ? BODY.enemyClimb.stamina : BODY.climbStamina) * (l.low ? BODY.mantleShare : 1));
-    if (this.stamina < cost) { this.notify(foe ? 'Too tired to climb an enemy wall.' : 'Too tired to climb.'); this.sound('deny'); return true; }
+    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, this.team);
+    if (!l) {
+      // an enemy's wall right there: say why nothing happens (not every jump: once in a while)
+      if (g.time > (this.noClimbAt || 0) && g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, null)) {
+        this.noClimbAt = g.time + 4;
+        if (this.isLocal) this.notify('Enemy walls cannot be climbed: take the gate or a breach.');
+      }
+      return false;
+    }
+    const cost = this.climbCost(l);
+    if (this.stamina < cost) { this.notify('Too tired to climb.'); this.sound('deny'); return true; }
     this.stamina -= cost;
-    const dur = (l.low ? BODY.mantleTime : 0.5 + (l.top - this.pos.y) * 0.08) * (foe ? BODY.enemyClimb.slow : 1);
+    const dur = l.low ? BODY.mantleTime : 0.5 + (l.top - this.pos.y) * 0.08;
     this.climb = { t: 0, dur, x0: this.pos.x, y0: this.pos.y, z0: this.pos.z,
-      hx: l.hang.x, hz: l.hang.z, lx: l.land.x, lz: l.land.z, top: l.top, puff: 0, foe };
+      hx: l.hang.x, hz: l.hang.z, lx: l.land.x, lz: l.land.z, top: l.top, puff: 0 };
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.onGround = false;

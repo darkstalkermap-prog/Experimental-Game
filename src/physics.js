@@ -6,6 +6,7 @@ import { allied } from './teams.js';
 import { wallHeight } from './landscape.js';
 
 export const STEP = 0.65; // max height a character can step up
+const NO_TEAM = -99;      // groundHeight without a hero's side (see there)
 const LEDGE_KINDS = new Set(['wall', 'walk']);   // what a hero can climb onto: curtain walls and the planking of the wall walk
 const STEER = { x: 0, z: 0 };   // what steerAroundTrees returns (soldiers walk round trunks, rocks and the standing stones)
 export const GATE_OPEN = 0.7;   // how far a gate must have swung open (0 shut, 1 wide) before anyone can pass it
@@ -183,26 +184,28 @@ export class Physics {
     return c.heightFn ? c.heightFn(x, z) : c.top;
   }
 
-  // Highest walkable surface under (x,z) that is reachable from footY.
+  // Highest walkable surface under (x,z) that is reachable from footY. `team`: a hero of that side, who can also stand on the
+  // tops of their own (and allies') merlons; without it (soldiers, spawns, the horse) merlon tops are not ground at all.
   // (The collider lists are walked directly rather than through near(): a generator per call was the largest single cost of a
   // frame. The order of the lists is the order near() yields them in: castle buckets, then the loose-collider cell.)
-  groundHeight(x, z, footY) {
+  groundHeight(x, z, footY, team = NO_TEAM) {
     let g = this.terrainHeight(x, z);
     const buckets = this.buckets;
     for (let i = 0; i < buckets.length; i++) {
       const b = buckets[i];
-      if (Math.abs(x - b.cx) < b.r + 1 && Math.abs(z - b.cz) < b.r + 1) g = this.raise(b.list, x, z, footY, g);
+      if (Math.abs(x - b.cx) < b.r + 1 && Math.abs(z - b.cz) < b.r + 1) g = this.raise(b.list, x, z, footY, g, team);
     }
     const cell = this.grid.get(this.gridKey(Math.floor(x / this.cell), Math.floor(z / this.cell)));
-    if (cell) g = this.raise(cell, x, z, footY, g);
+    if (cell) g = this.raise(cell, x, z, footY, g, team);
     return g;
   }
 
-  raise(list, x, z, footY, g) {
+  raise(list, x, z, footY, g, team) {
     for (let i = 0; i < list.length; i++) {
       const c = list[i];
       if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
       if (!c.active || c.noWalk) continue;
+      if (c.kind === 'merlon' && (team === NO_TEAM || !allied(c.team, team))) continue;   // (an enemy's battlements are never a foothold)
       const t = c.heightFn ? c.heightFn(x, z) : c.top;
       if (t > g && t <= footY + STEP) g = t;
     }
@@ -323,20 +326,20 @@ export class Physics {
   // A wall (or the edge of the wall walk) right in front of someone standing at (x,z) that they can scramble up, with
   // the spot to hang on at the foot of it and the spot to climb out onto the top. Walls are far higher than a jump,
   // so this is how a hero gets up without the stairs: from outside, up the face of a curtain wall, or from the
-  // courtyard, up onto the edge of the wall walk. `team` limits it to one castle's walls (null: any castle; the caller
-  // decides what an enemy's wall costs, see Player.tryClimb). From outside the hero goes over the battlements through a
-  // crenel (the gap between two merlons), never through the stone. Returns null when there is nothing to climb: nothing
+  // courtyard, up onto the edge of the wall walk. `team`: the climber's side, and only its own and its allies' walls count
+  // (null: any castle's, to tell that an enemy wall is there; Player.tryClimb never climbs one). From outside the hero goes
+  // over the battlements through a crenel (the gap between two merlons), never through the stone. Returns null when there is nothing to climb: nothing
   // within reach, not facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
   // From the wall walk or a tower roof, the same jump at the battlements mantles the hero up onto the top of a merlon (the
   // nearest one in front: standing at a crenel, the one beside it), so they can stand on top of the wall and look or jump
   // over. Those returns carry low: true.
-  ledge(x, z, footY, radius, fx, fz, height = 1.8, team = -99) {
+  ledge(x, z, footY, radius, fx, fz, height = 1.8, team = null) {
     if (this.covered(x, z, footY, height)) return null;
     let best = null, bd = Infinity;
     for (const c of this.near(x, z, radius + BODY.climbReach + 1)) {
       const low = c.kind === 'merlon';
       if ((!low && !LEDGE_KINDS.has(c.kind)) || !c.active) continue;
-      if (team !== null && (c.team !== undefined ? c.team : c.ref && c.ref.team) !== team) continue;
+      if (team !== null && !allied(c.team !== undefined ? c.team : c.ref && c.ref.team, team)) continue;   // (only your own side's walls)
       const rise = c.top - footY;
       if (low ? rise < BODY.mantleMin || rise >= BODY.climbMin : rise < BODY.climbMin || rise > BODY.climbMax) continue;
       const dx = x - clamp(x, c.minX, c.maxX), dz = z - clamp(z, c.minZ, c.maxZ);
@@ -362,7 +365,7 @@ export class Physics {
       const land = { x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2 };
       const probe = { x: land.x, z: land.z };
       if (this.resolve(probe, Math.min(radius, 0.3), c.top, height, -99)) return null;
-      if (this.groundHeight(land.x, land.z, c.top) < c.top - 0.05) return null;
+      if (this.groundHeight(land.x, land.z, c.top, owner) < c.top - 0.05) return null;
       return { c, owner, top: c.top, nx, nz, hang: { x, z }, land, low: true };
     }
     // the face, and where along it we are (kept off the very ends, where a tower stands)
