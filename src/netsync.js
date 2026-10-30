@@ -11,7 +11,7 @@ import { mirrorTalents } from './talents.js';
 import { stats, absorbStats } from './stats.js';
 import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
-import { standFor } from './comeback.js';
+import { standFor, packComeback, absorbComeback } from './comeback.js';
 import { placeOfSeat } from './seats.js';
 import { packUnits, unpackUnits, thinEvents } from './warnet.js';
 export { Interp, setInterpDelay } from './interpolation.js';
@@ -90,7 +90,6 @@ export class HostSync {
     switch (d.a) {
       case 'pose': if (!p.drive) p.netPose = d; break;
       case 'swing': p.swingT = 0; if (DIRS[d.d]) { p.attackDir = DIRS[d.d]; p.atkDir = p.attackDir; } break;
-      case 'feint': p.feintedAt = g.time; p.swingT = -1; break;
       case 'strike':
         if (!p.alive) break;
         p.netPose = d;
@@ -237,8 +236,14 @@ export class HostSync {
   // so the guests' screens come up at once instead of looking for a falling keep (finale.js)
   sendEnd(winner, reason = '', hl = null, quick = false) {
     const st = {};
-    for (const h of this.g.humans) if (h.netId !== null && h.netId !== undefined && h.st) st[h.netId] = stats.pack(h);
-    this.g.net.toAll({ k: 'end', winner, reason, hl, q: quick ? 1 : 0, st });
+    const cb = {};   // (and its house's part of the comeback: comeback.js packComeback)
+    for (const h of this.g.humans) {
+      if (h.netId === null || h.netId === undefined) continue;
+      if (h.st) st[h.netId] = stats.pack(h);
+      const c = packComeback(this.g, h.team);
+      if (c) cb[h.netId] = c;
+    }
+    this.g.net.toAll({ k: 'end', winner, reason, hl, q: quick ? 1 : 0, st, cb });
   }
 }
 
@@ -257,6 +262,7 @@ export class ClientSync {
     if (d.k === 'snap') this.apply(d);
     else if (d.k === 'end') {
       if (d.st) absorbStats(d.st[this.g.net.id]);
+      if (d.cb) absorbComeback(d.cb[this.g.net.id], this.g.localTeam);
       if (this.g.hero && !this.g.hero.result) this.g.hero.result = { winner: d.winner, reason: d.reason || '', draw: !(d.winner >= 0) };   // (the hero end screen reads it)
       this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null, quick: !!d.q });
     }
@@ -296,7 +302,7 @@ export class ClientSync {
       u.interp.push(x, y, z, yaw, speed);
       if (u.alive && !alive) { u.alive = false; u.deathT = 0; }
       if (swingT >= 0 && u.swingT < 0) u.swingT = swingT;
-      if (swingT < 0 && u.swingT >= 0 && u.swingT < 0.3) u.swingT = -1; // interrupted or feinted
+      if (swingT < 0 && u.swingT >= 0 && u.swingT < 0.3) u.swingT = -1; // interrupted
       u.attackDir = DIRS[dirIdx] || 'over';
       if (stag && u.staggerT <= 0) { u.staggerT = 0.4; u.staggerMax = 0.5; }
       if (blk) u.blockFlash = 0.2;

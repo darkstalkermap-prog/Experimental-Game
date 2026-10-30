@@ -12,6 +12,7 @@ import * as WORLD from './world.js';
 import { active } from './biomes.js';
 
 const MAX_ALPHA = 3200;
+const WEATHER_SLOTS = 1024;   // the smoke layer's own slots for the weather (weather.js: at most ~1000 flakes alive, at the highest quality)
 const MAX_ADD = 2400;
 const MAX_DECALS = 384;
 const TAU = Math.PI * 2;
@@ -52,7 +53,7 @@ export class FX {
   constructor(scene, game = null) {
     this.game = game;
     this.clock = { t: 0 };
-    this.alpha = new ParticleLayer(scene, this.clock, { max: MAX_ALPHA, additive: false, order: 3, name: 'smoke' });
+    this.alpha = new ParticleLayer(scene, this.clock, { max: MAX_ALPHA + WEATHER_SLOTS, additive: false, order: 3, name: 'smoke', reserve: WEATHER_SLOTS });
     this.add = new ParticleLayer(scene, this.clock, { max: MAX_ADD, additive: true, order: 4, name: 'glow' });
     this.decals = new DecalLayer(scene, this.clock, MAX_DECALS);
     // what the scene's lights say, relative to the first reading, so smoke and dust are dimmer at dusk and warmer at sunset

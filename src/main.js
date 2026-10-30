@@ -802,7 +802,12 @@ addEventListener('keydown', (e) => {
     if (ui.shopOpen) { input.pressed.delete(e.code); ui.toggleShop(false); return; }
     if (ui.mapOpen) { ui.toggleMap(false); return; }
     if (ui.practiceOpen) { ui.togglePractice(false); return; }
-    if (game.war && game.war.panelOpen) { game.war.ui.setPanel(false); return; }   // (War Mode's army panel)
+    if (game.war && game.war.panelOpen) {   // (War Mode's army panel)
+      // (a browser never captures the mouse from Esc, and the refusal would bring up the pause menu: the next click on the field takes it instead)
+      game.war.ui.setPanel(false, false);
+      ui.toast('Click to look around (B brings the army panel back)');
+      return;
+    }
     if (game.state !== 'playing') return;
     if (performance.now() - lastUnlockAt < 350) return;   // the release of the mouse has just opened the menu
     if (shown('pause')) closePause(); else openPause();

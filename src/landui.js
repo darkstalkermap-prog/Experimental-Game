@@ -128,7 +128,7 @@ function buildRow(id) {
   return row;
 }
 
-// Put the row on the menu, beside the Map row; the lobby's copy (for the host) goes above the player list. `hooks.onChange(land)` runs after every change.
+// Put the row on the menu, beside the Map row; the lobby's copy (for the host) goes with the match settings. `hooks.onChange(land)` runs after every change.
 export function initLandMenu(hooks = {}) {
   injectCss();
   onChange = hooks.onChange || onChange;
@@ -138,11 +138,13 @@ export function initLandMenu(hooks = {}) {
   if (list && !document.getElementById('lobbyLandRow')) {
     const row = buildRow('lobbyLandRow');
     row.classList.add('hidden');   // (only the host picks: a guest sees the note below)
-    list.insertAdjacentElement('beforebegin', row);
+    // (with the other match settings, under the Length row; the seat list sits up top)
+    const at = document.getElementById('lobbyLength') || list.previousElementSibling;
+    at.insertAdjacentElement('afterend', row);
     const note = document.createElement('div');
     note.className = 'note hidden';
     note.id = 'lobbyLandNote';
-    list.insertAdjacentElement('beforebegin', note);
+    row.insertAdjacentElement('afterend', note);
   }
 }
 

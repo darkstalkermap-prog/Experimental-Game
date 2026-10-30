@@ -141,11 +141,15 @@ function dirtyUpload(L, stride) {
 
 export class ParticleLayer {
   // clock: { t } shared by every layer of one FX (seconds, advanced by the game's own dt so hit-stop slows the effects too)
-  constructor(scene, clock, { max, additive, order, name }) {
+  // reserve: slots at the top of the buffer kept for a steady stream of its own (the weather, spawnReserved), so that a big fight writing round the main
+  // ring cannot wipe the snow out of the air, nor the snow eat the fight's slots
+  constructor(scene, clock, { max, additive, order, name, reserve = 0 }) {
     this.max = max;
+    this.ring = max - reserve;   // where the main ring wraps
     this.clock = clock;
     this.data = new Float32Array(max * S);
     this.next = 0;
+    this.rnext = this.ring;
     this.hw = 0;                 // slots that have ever been written (the draw covers just those until the ring wraps)
     dirtyReset(this);            // the freshly written slots, still to upload (see dirtyMark)
     this.liveUntil = 0;
@@ -181,7 +185,17 @@ export class ParticleLayer {
   // Write a particle; returns its offset in `data` for the setters below. Everything not given here starts neutral.
   spawn(frame, ramp, x, y, z, vx, vy, vz, life, s0, s1) {
     const i = this.next;
-    this.next = i + 1 === this.max ? 0 : i + 1;
+    this.next = i + 1 === this.ring ? 0 : i + 1;
+    return this.write(i, frame, ramp, x, y, z, vx, vy, vz, life, s0, s1);
+  }
+  // the same, in the reserved slots (a layer without any falls back on the main ring)
+  spawnReserved(frame, ramp, x, y, z, vx, vy, vz, life, s0, s1) {
+    if (this.ring === this.max) return this.spawn(frame, ramp, x, y, z, vx, vy, vz, life, s0, s1);
+    const i = this.rnext;
+    this.rnext = i + 1 === this.max ? this.ring : i + 1;
+    return this.write(i, frame, ramp, x, y, z, vx, vy, vz, life, s0, s1);
+  }
+  write(i, frame, ramp, x, y, z, vx, vy, vz, life, s0, s1) {
     if (i + 1 > this.hw) this.hw = i + 1;
     dirtyMark(this, i);
     const d = this.data, o = i * S, t = this.clock.t;
@@ -230,7 +244,7 @@ export class ParticleLayer {
   clear() {
     this.data.fill(0);
     for (let o = T0; o < this.data.length; o += S) this.data[o] = 1e30;
-    this.next = 0; this.hw = 0; this.liveUntil = 0; dirtyAll(this);
+    this.next = 0; this.rnext = this.ring; this.hw = 0; this.liveUntil = 0; dirtyAll(this);
   }
 
   dispose() { this.geo.dispose(); this.mat.dispose(); }

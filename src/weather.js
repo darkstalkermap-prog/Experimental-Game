@@ -1,5 +1,5 @@
 // Light weather of a biome (biomes.js `weather`): flakes drifting down in the snow, banks of mist over the marsh, dust blowing across the desert. It is
-// written into the smoke layer of the effects (fx.js: the same soft sprites, the same draw call), a few particles at a time in a column of air round the
+// written into the smoke layer of the effects (fx.js: the same soft sprites, the same draw call; slots of their own at the top of it), a few particles at a time in a column of air round the
 // camera; once written, a particle costs the CPU nothing (the vertex shader moves it). Only at medium quality and above, scaled by Q.particles.
 import { F, R } from './fxtex.js';
 import { Q } from './quality.js';
@@ -28,7 +28,7 @@ export class Weather {
     const x = cam.x + Math.cos(a) * r, z = cam.z + Math.sin(a) * r;
     const y = this.game.physics.terrainHeight(x, z) + 0.2 + Math.random() * K.height;
     const life = K.life * rr(0.8, 1.2), s = rr(K.size[0], K.size[1]);
-    const o = L.spawn(K.frame, K.ramp, x, y, z, K.wind[0] + rr(-K.gust, K.gust), K.wind[1] * rr(0.7, 1.3), K.wind[2] + rr(-K.gust, K.gust), life, s, s * K.end);
+    const o = L.spawnReserved(K.frame, K.ramp, x, y, z, K.wind[0] + rr(-K.gust, K.gust), K.wind[1] * rr(0.7, 1.3), K.wind[2] + rr(-K.gust, K.gust), life, s, s * K.end);
     L.tint(o, 1, 1, 1, K.alpha * rr(0.6, 1));
     L.motion(o, 0, 0, K.swirl * rr(0.5, 1.2), 0);
   }

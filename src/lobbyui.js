@@ -154,8 +154,9 @@ export function drawLobby(v, on) {
   let sw = $('lobbyColors');
   if (!sw) {
     const wrap = document.createElement('div');
-    wrap.innerHTML = '<h3 class="section">Your colour</h3><div id="lobbyColors"></div><div class="note" id="lobbyColorNote"></div>';
-    $('lobbyClassInfo').after(wrap);
+    // (at the top of the column, above the hero cards: on a short window it must not end up below the fold)
+    wrap.innerHTML = '<h3 class="section" style="margin-top:0">Your colour</h3><div id="lobbyColors"></div><div class="note" id="lobbyColorNote"></div>';
+    $('lobbyClassPick').parentNode.prepend(wrap);
     sw = $('lobbyColors');
   }
   const taken = new Map(players.filter((p) => p !== mine && p.col).map((p) => [p.col, p.name]));

@@ -303,6 +303,8 @@
   .toast { background: var(--panel); border-left: 4px solid var(--gold); border-radius: 0 4px 4px 0; padding: 5px 14px; font-size: 15.5px; transition: opacity 0.8s; text-align: center; text-shadow: 0 1px 2px #000; }
   .toast.important { font-size: 18px; color: #ffdcc8; border-left-color: var(--red); background: rgba(70,14,10,0.8); }
   .toast.fade { opacity: 0; }
+  .toast.bump { animation: toastbump 0.25s ease-out; }
+  @keyframes toastbump { 0% { transform: scale(1.06); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
   #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
   .kill { background: rgba(0,0,0,0.55); padding: 3px 10px; }
   .kill .x { opacity: 0.6; }
@@ -719,16 +721,16 @@
     <div class="cols">
       <div class="col">
         <div id="invite"><input id="inviteLink" readonly aria-label="Invite link"><button id="copyInvite">Copy Invite</button></div>
+        <ul id="lobbyList"></ul>
+        <div class="note">A castle nobody takes is held by an AI lord (the host can close it: AI or empty). Map size and difficulty come from the host's menu choices.</div>
         <div class="row" id="lobbyModes"><button data-mode="versus" class="active">Versus</button><button data-mode="coop">Co-op</button></div>
         <div class="note" id="lobbyMode">Versus: every castle for itself.</div>
         <div class="row" id="lobbyObjective"><button data-o="conquest" class="active">Conquest</button><button data-o="koth">King of the Hill</button></div>
         <div class="note" id="lobbyObjDesc"></div>
         <div class="row" id="lobbyLength" role="group" aria-label="Match length"><span class="qlabel">Length</span><button data-l="standard" class="active">Standard</button><button data-l="short">Short</button></div>
-        <ul id="lobbyList"></ul>
-        <div class="note">A castle nobody takes is held by an AI lord (the host can close it: AI or empty). Map size and difficulty come from the host's menu choices.</div>
       </div>
       <div class="col">
-        <h3 class="section" style="margin-top:0">Your hero</h3>
+        <h3 class="section">Your hero</h3>
         <div class="classes" id="lobbyClassPick" role="group" aria-label="Your hero class"></div>
         <div class="classinfo" id="lobbyClassInfo"></div>
       </div>

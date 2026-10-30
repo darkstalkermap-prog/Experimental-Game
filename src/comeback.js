@@ -21,7 +21,7 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
 
 // per match: timers and the soldiers whose blows are strengthened (created by startComeback, read from game.cb)
 export function startComeback(game) {
-  game.cb = { t: 0, look: COMEBACK.wage.every, pay: 0, owed: [0, 0, 0, 0], told: [false, false, false, false], boosts: [], checks: [], asked: -99 };
+  game.cb = { t: 0, look: COMEBACK.wage.every, pay: 0, owed: [0, 0, 0, 0], paid: [0, 0, 0, 0], saved: [0, 0, 0, 0], told: [false, false, false, false], boosts: [], checks: [], asked: -99 };
   for (const f of game.factions) { f.wage = 0; f.stand = 0; f.underdog = false; }
 }
 
@@ -81,7 +81,32 @@ export function gateRepairFactor(game, f) {
 // the shop has just rebuilt a broken gate for `saved` gold less than the full price
 export function noteGateRepair(game, f, saved) {
   matchlog.record('comeback', { kind: 'gate', team: f.team, saved: Math.round(saved) });
+  if (game.cb) game.cb.saved[f.team] += Math.round(saved);
   if (f.team === game.localTeam) matchlog.add('gateSaved', Math.round(saved));
+}
+
+// ---------------- the end screen of a guest ----------------
+// The host alone sees the wage paid, the gate rebuilt and the Last Stand: with the end of the match it tells each guest its house's part
+// (netsync.js sendEnd), small: [wage gold, gold saved on the gate, Last Stand clock or -1, keep % then, 1 if the keep held]. Null when there is nothing.
+export function packComeback(game, team) {
+  const cb = game.cb;
+  if (!cb || !(team >= 0 && team < 4)) return null;
+  const mine = (e, kind) => e.type === 'comeback' && e.kind === kind && e.team === team;
+  const ls = matchlog.events.find((e) => mine(e, 'last_stand'));
+  if (!cb.paid[team] && !cb.saved[team] && !ls) return null;
+  return [Math.round(cb.paid[team]), Math.round(cb.saved[team]), ls ? Math.round(ls.t) : -1, ls ? ls.keep : 0, matchlog.events.some((e) => mine(e, 'stand_held')) ? 1 : 0];
+}
+// the guest's side: into its match log, where the end screen's ribbon (below) reads it. Never trusted beyond numbers in range.
+export function absorbComeback(c, team) {
+  if (!Array.isArray(c) || c.length < 5) return;
+  const n = (v, max) => { v = Number(v); return Number.isFinite(v) ? Math.max(0, Math.min(max, Math.round(v))) : 0; };
+  if (n(c[0], 1e7)) matchlog.counters.wageGold = n(c[0], 1e7);
+  if (n(c[1], 1e7)) matchlog.counters.gateSaved = n(c[1], 1e7);
+  if (Number(c[2]) >= 0 && !matchlog.events.some((e) => e.type === 'comeback' && e.kind === 'last_stand' && e.team === team)) {
+    matchlog.record('comeback', { kind: 'last_stand', team, keep: n(c[3], 100), t: n(c[2], 1e6) });
+    if (c[4]) matchlog.record('comeback', { kind: 'stand_held', team, t: n(c[2], 1e6) });
+    matchlog.counters.lastStand = 1;
+  }
 }
 
 // ---------------- Last Stand ----------------
@@ -186,6 +211,7 @@ export function updateComeback(game, dt) {
       cb.owed[f.team] -= n;
       f.gold += n;
       f.earned += n;
+      cb.paid[f.team] += n;   // (every house's: a guest is told its own at the end, packComeback)
       if (f.team === game.localTeam) matchlog.add('wageGold', n);
       if (f.isPlayer && f.player) game.deliver(f.player, { k: 'gold', g: n });
     }
@@ -220,7 +246,8 @@ const CSS = `
   background: linear-gradient(rgba(58,44,14,0.86), rgba(34,26,10,0.86)); border: 1px solid rgba(224,180,76,0.7); border-radius: 4px; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 #wageBadge b { color: #fff3cf; }
 #wageBadge i { font-style: normal; margin-right: 5px; }
-@media (max-width: 1150px) { #wageBadge { right: 16px; top: 60px; } }
+@media (max-width: 1150px) { #wageBadge { right: 16px; top: 60px; } #hud.wage #hint { top: 100px; } }   /* (under the gold: the key line steps down below it) */
+@media (max-width: 900px) { #wageBadge { font-size: 11px; padding: 3px 8px 4px; letter-spacing: 0; } }   /* (clear of the wave panel in the middle) */
 #lastStand { position: absolute; right: 16px; bottom: 238px; display: flex; align-items: center; gap: 12px; padding: 8px 18px 8px 12px; cursor: pointer; pointer-events: auto;
   color: #fff3cf; background: linear-gradient(rgba(120,32,18,0.94), rgba(66,14,8,0.94)); border: 2px solid #f0c24e; border-radius: 6px; box-shadow: 0 0 18px rgba(240,194,78,0.65), 0 4px 14px rgba(0,0,0,0.6);
   animation: standPulse 1.1s ease-in-out infinite; }
@@ -269,6 +296,7 @@ export function updateComebackHud(ui, game) {
     r.text = text;
     r.badge.innerHTML = text;
     r.badge.classList.toggle('hidden', !wage);
+    document.getElementById('hud').classList.toggle('wage', !!wage);
     r.badge.title = 'You are behind the other houses, so the realm pays you extra until you catch up.';
   }
   const ask = game.cb && game.time - game.cb.asked < 1.5;

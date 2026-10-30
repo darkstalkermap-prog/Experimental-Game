@@ -95,13 +95,22 @@ export class UI {
 
   // ---------- notifications ----------
   toast(msg, team = -1, important = false) {
+    // the same line again while it is still up (a buy button clicked over and over with no gold, ...): show it again instead of stacking copies
+    const top = $('toasts').firstChild;
+    if (top && top.textContent === msg && !top.classList.contains('fade')) {
+      clearTimeout(top._t1); clearTimeout(top._t2);
+      top.classList.remove('bump'); void top.offsetWidth; top.classList.add('bump');
+      top._t1 = setTimeout(() => top.classList.add('fade'), 4200);
+      top._t2 = setTimeout(() => top.remove(), 5000);
+      return;
+    }
     const el = document.createElement('div');
     el.className = 'toast' + (important ? ' important' : '');
     if (team >= 0) el.style.borderLeftColor = TEAM_CSS[team];
     el.textContent = msg;
     $('toasts').prepend(el);
-    setTimeout(() => el.classList.add('fade'), 4200);
-    setTimeout(() => el.remove(), 5000);
+    el._t1 = setTimeout(() => el.classList.add('fade'), 4200);
+    el._t2 = setTimeout(() => el.remove(), 5000);
     while ($('toasts').children.length > 6) $('toasts').lastChild.remove();
   }
 
