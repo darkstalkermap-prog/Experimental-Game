@@ -392,8 +392,12 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 - **Game menu**: **Esc** opens the standard menu: **Resume**, **Options**, **Controls** and **Quit to Main
   Menu**. In single player the world freezes; online, the battle goes on while you are in the menu. Esc again
   resumes (it closes the shop, Options or Controls first). **Options** has master, music and sound-effects
-  volume, mouse sensitivity, field of view, the **Alerts and sounds** and **Tips** switches (below) and graphics
-  quality, all remembered in your browser. The main menu has the same Options and Controls.
+  volume, mouse sensitivity, field of view, the **UI scale** (80-140 %), the **Alerts and sounds** and **Tips** switches
+  (below) and graphics quality, all remembered in your browser. The main menu has the same Options and Controls.
+- **Click to fight**: the browser hands the game the mouse only from a click. When it refuses (the start of a battle,
+  Resume pressed too soon after Esc) or takes the mouse away without Esc (another window, alt-tab), the whole screen says
+  **Click to fight** (spectating: Click to watch); one click anywhere and you are back. A single player's battle waits
+  meanwhile; online it goes on. Esc still opens the game menu.
 
 ## Alerts and tips
 
@@ -892,19 +896,25 @@ One look throughout: parchment cards with ink for the menus, dark glass with gol
 Cinzel for names and buttons, Garamond for what you read. Long explanations sit behind a small **?** and open when asked for.
 
 - **Main menu**: Quick Play first, with the setup it will start written under it; then Single Player, Multiplayer and the
-  Practice Courtyard; then a quiet row: Spectate, Renown, Options and Controls. Below, two panels side by side: **Battle setup** (mode, map, land,
-  difficulty, length, decrees, one row each; the **?** in its corner shows what each choice means) and **Your hero**.
-  **How to play** (top right) opens the short guide to the war.
+  Practice Courtyard; then a quiet row: Spectate, Renown, Options, Controls and **What's new**. Below, two panels side by side:
+  **Battle setup** and **Your hero**. The setup shows Mode, Difficulty and Length; Castle, Others, Colour, Map, Land (and its
+  seed) and Next battle are folded under **More options** (open or closed is remembered). The **?** in its corner shows what
+  each choice means. **How to play** (top right) opens the short guide to the war.
+- **What's new**: the changes of every update, newest first, in plain words. The button carries a *New* mark until you have
+  looked since the last update (and the panel marks the updates that are new to you). The list is one array at the top of
+  `src/whatsnew.js`: add an update by putting a new entry first.
 - **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
   potions, where your soldiers are); top left the houses, top centre the wave and its clock, top right the gold. The orders bar
-  shows only while your army has soldiers, and the key reminder (top right) and the minimap's ping hint only in the
-  preparation. Near a castle (about 75 m from its middle, or looking straight at one up to 150 m away) a small **castle
-  panel** fades in under the top panel: the house, its keep's hit points, its gate (strength, or open, barred, broken)
-  and its walls (sections standing and their strength), for any castle, yours or a rival's, and while spectating; not
-  in War Mode or the Hero Game Mode (whose top panel shows both keeps and gates). On screens of 1800 × 1000 and up the
-  HUD is drawn a fifth larger.
+  shows only while your army has soldiers. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
+  **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
+  base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a
+  castle (about 75 m from its middle, or looking straight at one up to 150 m away) a small **castle panel** fades in under
+  the top panel: the house, its keep's hit points, its gate (strength, or open, barred, broken) and its walls (sections
+  standing and their strength), for any castle, yours or a rival's, and while spectating; not in War Mode or the Hero Game
+  Mode (whose top panel shows both keeps and gates).
 - **Shop**: one size for every tab (it does not jump as you switch), a tab strip, the gold at the top right.
-- **Options** come in four groups (Sound, Mouse and view, Graphics, Battle) with their notes behind a **?**; **Controls** in
+- **Options** come in four groups (Sound, Mouse and view with the UI scale, Graphics, Battle) with their notes behind a **?**; **Controls** in
   five (Move and fight, Your castle and army, Map and markers, The battle, Hero Game Mode).
 
 ## Controls
@@ -1086,6 +1096,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/physics.js`, `src/projectiles.js` | Terrain and colliders (including the merlons), arrows and boulders |
 | `src/net.js`, `src/peernet.js`, `src/roomnet.js`, `src/netsync.js` | Online play: connection (own server, browser-to-browser, or claude.ai live room), snapshots from the host, and pose/actions from clients |
 | `src/progress.js`, `src/unlocks.js`, `src/stats.js` | The account (Renown, unlocks, mastery, records) and its maths and storage, the unlock catalogue and track, and the per-match counters the end screen reads |
+| `src/whatsnew.js` | The What's new button and panel of the main menu, and its list of updates |
 | `src/endprogress.js`, `src/wardrobe.js`, `src/cosmetics.js`, `src/emblems.js` | The end screen's battle and Renown sections, the menu's Renown panel, the pictures of what is unlocked, and the banner emblems painted on canvas |
 | `server/server.js` | Node server: serves the game and relays messages between players in a room |
 

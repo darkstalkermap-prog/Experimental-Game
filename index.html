@@ -14,7 +14,7 @@
     --ink: #2a1f14;
     --gold: #e0b44c;
     --wine: #5a1d12;
-    --panel: rgba(18, 14, 10, 0.7);
+    --panel: rgba(14, 11, 8, 0.84);   /* (dark enough that 14 px text reads over snow and sky) */
     --edge: rgba(224, 180, 76, 0.34);
     --muted: rgba(233, 220, 188, 0.7);
     --red: #c43c30;
@@ -99,7 +99,20 @@
   /* the setup rows: a label column on the left, compact choices on the right; their descriptions show when the panel's "?" is open */
   #menu .setup { display: flex; flex-direction: column; }
   #menu .setup .ph { order: 0; }
-  #objective { order: 1; } #heroWin { order: 2; } #mapsize { order: 3; } #landRow { order: 4; } #difficulty { order: 5; } #length { order: 6; } #decreeRow { order: 7; }
+  #objective { order: 1; } #heroWin { order: 2; } #mapsize { order: 3; } #landRow { order: 4; } #difficulty { order: 5; } #length { order: 6; } #decreeRow { order: 7; } #moreOpts { order: 8; }
+  /* "More options": a quiet fold at the foot of the setup card; its rows keep the card's look and order (the body is a column of its own) */
+  #moreOpts { margin-top: 2px; border-top: 1px dotted rgba(138,106,58,0.35); }
+  #moreOpts > summary { list-style: none; display: flex; align-items: baseline; gap: 10px; padding: 9px 0 6px 104px; position: relative; cursor: pointer; color: var(--wine); }
+  #moreOpts > summary::-webkit-details-marker { display: none; }
+  #moreOpts > summary::before { content: '▸'; position: absolute; left: 86px; top: 8px; font-size: 13px; transition: transform 0.15s; }
+  #moreOpts[open] > summary::before { transform: rotate(90deg); }
+  #moreOpts .mo-t { font: 700 13px Cinzel, Georgia, serif; letter-spacing: 0.08em; white-space: nowrap; }
+  #moreOpts .mo-sum { font-size: 13.5px; font-style: italic; color: #6a4a2a; }
+  #moreOpts[open] .mo-sum { display: none; }
+  #moreOpts > summary:hover .mo-t { text-decoration: underline; }
+  #moreOpts > summary:focus-visible { outline: 2px solid var(--wine); outline-offset: 2px; }
+  #moreOpts .more-body { display: flex; flex-direction: column; }
+  #moreOpts .more-body > .row:first-child { border-top: 1px dotted rgba(138,106,58,0.35); }
   #menu .setup .row { position: relative; justify-content: flex-start; align-items: center; gap: 5px; margin: 0; padding: 3px 0 3px 104px; min-height: 36px; }
   #menu .setup .row + .row { border-top: 1px dotted rgba(138,106,58,0.35); }
   #menu .setup .qlabel { position: absolute; left: 0; top: 11px; width: 94px; margin: 0; text-align: right; white-space: nowrap; font: 600 12px Cinzel, Georgia, serif; letter-spacing: 0.06em; color: #6a4a2a; }
@@ -130,16 +143,16 @@
   #crosshair.bow { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; }
   #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
   #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
-  kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 11px/1.4 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.35); color: #fff; }
+  kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 14px/1.2 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.45); color: #fff; }
   #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
   #prompt kbd { font-size: 14px; }
   /* the orders bar: only while soldiers march in your army (class noarmy on the HUD otherwise, see ui.update) */
-  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; font-size: 13px; padding: 5px 10px; white-space: nowrap; }
+  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; font-size: 14px; padding: 5px 10px; white-space: nowrap; }
   #hud.noarmy #command { display: none; }
   #command .orders { display: flex; gap: 4px; padding-left: 10px; border-left: 1px solid var(--edge); }
   #command .orders span { opacity: 0.6; padding: 1px 6px; border-radius: 3px; }
   #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.28); color: #fff; }
-  #command kbd { font-size: 10px; padding: 0 4px; }
+  #command kbd { padding: 0 4px; }
   #command b { font-weight: 600; color: var(--gold); }
   #command > .cg:last-child { padding-left: 10px; border-left: 1px solid var(--edge); opacity: 0.8; }
   @media (max-width: 1100px) { #command { bottom: 160px; } #toasts { bottom: 206px; } }
@@ -163,45 +176,45 @@
   @keyframes hm { from { opacity: 1; } to { opacity: 0; } }
 
   /* bottom left: the dock holds (from the top) the talent hint, the two abilities and the hero's own panel, so they stack whatever their heights */
-  #dock { position: absolute; left: 16px; bottom: 16px; width: 300px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  #dock { position: absolute; left: 16px; bottom: 16px; width: 324px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
   #status { position: relative; width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; padding: 8px 12px 9px; }
   #status > .bar { width: 100%; }
-  .bar { position: relative; height: 16px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); margin-bottom: 6px; border-radius: 3px; overflow: hidden; }
+  .bar { position: relative; height: 18px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); margin-bottom: 6px; border-radius: 3px; overflow: hidden; }
   .bar .fill { position: absolute; inset: 0; width: 100%; }
   #hpFill { background: linear-gradient(#d0463a, #8c1e16); }
   #stFill { background: linear-gradient(#d6c06a, #96803a); }
-  #hpText { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 15px; text-shadow: 0 1px 2px #000; }
+  #hpText { position: absolute; inset: 0; text-align: center; font-size: 14px; line-height: 17px; text-shadow: 0 1px 2px #000; }
   #stbar { height: 6px; margin-bottom: 4px; }
   #xpbar { height: 6px; margin-bottom: 6px; }
   #xpFill { background: linear-gradient(#b79bff, #6a47d6); width: 0; }
   #xpbar.max #xpFill { background: linear-gradient(#ffe08a, #d9a521); width: 100% !important; }
   #xpbar.glow { animation: xpglow 1.4s ease-out; }
   @keyframes xpglow { 0% { box-shadow: 0 0 14px 3px rgba(190,160,255,0.95); } 100% { box-shadow: 0 0 0 0 rgba(190,160,255,0); } }
-  #lvl { font-family: Cinzel, serif; font-size: 12.5px; color: #d9c9ff; }
+  #lvl { font-family: Cinzel, serif; font-size: 14px; color: #d9c9ff; }
   #xppops { position: absolute; left: 50%; top: calc(50% + 46px); width: 0; height: 0; }
   .xppop { position: absolute; left: 0; top: 0; transform: translateX(-50%); white-space: nowrap; color: #cbb6ff; font-family: Cinzel, serif; font-weight: 700; font-size: 15px; text-shadow: 0 1px 3px #000; animation: xpp 1.5s ease-out forwards; pointer-events: none; }
   @keyframes xpp { 0% { opacity: 0; transform: translate(-50%, 4px); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px); } }
   #banner.level h2 { color: #ffe08a; text-shadow: 0 0 18px rgba(255,214,102,0.8), 0 2px 6px #000; }
   #cls { order: -1; width: 100%; margin-bottom: 6px; font-family: Cinzel, serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
   #clsHint { display: none; }   /* (the key is in the hint line and the Controls; its words stay for whoever reads the element) */
-  #weapon { flex: 1 1 120px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; color: var(--muted); }
-  #potions { flex: none; margin-left: 10px; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
-  #army { width: 100%; margin-top: 2px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #weapon { flex: 1 1 120px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; color: var(--muted); }
+  #potions { flex: none; margin-left: 10px; font-size: 14px; color: var(--muted); white-space: nowrap; }
+  #army { width: 100%; margin-top: 2px; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* class abilities */
   #abilities { position: relative; display: flex; gap: 8px; align-items: flex-end; }
-  .abil { position: relative; width: 146px; height: 46px; padding: 4px 8px 4px 40px; background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
-  .abil .ic { position: absolute; left: 6px; top: 6px; font-size: 24px; line-height: 1; }
-  .abil kbd { position: absolute; left: 3px; bottom: 3px; margin: 0; min-width: 0; padding: 0 4px; font-size: 10px; }
-  .abil .nm { font-family: Cinzel, serif; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .abil .kind { font-size: 11px; opacity: 0.7; }
+  .abil { position: relative; width: 158px; height: 54px; padding: 4px 8px 4px 42px; background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+  .abil .ic { position: absolute; left: 7px; top: 5px; font-size: 24px; line-height: 1; }
+  .abil kbd { position: absolute; left: 4px; bottom: 3px; margin: 0; min-width: 0; padding: 0 5px; }
+  .abil .nm { font-family: Cinzel, serif; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .abil .kind { font-size: 14px; line-height: 1.1; opacity: 0.75; }
   .abil .cd { position: absolute; inset: 0; background: rgba(0,0,0,0.62); transform-origin: bottom; transform: scaleY(0); }
   .abil .sec { position: absolute; right: 6px; top: 4px; font-family: Cinzel, serif; font-size: 17px; color: #fff; text-shadow: 0 1px 3px #000; }
   .abil.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(224,180,76,0.35); }
   .abil.aiming { border-color: #8fe88a; box-shadow: 0 0 12px rgba(143,232,138,0.7); }
   #aimhint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 5px 14px; background: var(--panel); border: 1px solid #8fe88a; border-radius: 4px; font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; color: #d8ffd4; pointer-events: none; }
-  #buffs { position: absolute; left: calc(100% + 8px); bottom: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-  #buffs span { background: rgba(0,0,0,0.5); border-left: 3px solid var(--gold); border-radius: 0 3px 3px 0; padding: 1px 8px; white-space: nowrap; }
+  #buffs { position: absolute; left: calc(100% + 8px); bottom: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  #buffs span { background: rgba(0,0,0,0.66); border-left: 3px solid var(--gold); border-radius: 0 3px 3px 0; padding: 1px 8px; white-space: nowrap; }
 
   /* class picker (main menu and lobby) */
   .classes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0 4px; }
@@ -236,18 +249,28 @@
   #hill { position: absolute; left: 50%; top: 104px; transform: translateX(-50%); }   /* (the King of the Hill bar: its look is in src/hillbar.js) */
   #round { font-family: Cinzel, serif; font-size: 22px; color: var(--gold); }
   #phase { font-size: 15px; }
-  #war { font-size: 13px; opacity: 0.9; }
+  #war { font-size: 14px; opacity: 0.9; }
   #goldbox { position: absolute; right: 16px; top: 12px; font-family: Cinzel, serif; font-size: 22px; font-weight: 700; color: var(--gold); display: flex; align-items: center; gap: 8px; padding: 6px 14px; }
   .coin { color: var(--gold); }
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 64px; max-width: 280px; line-height: 1.4; font-size: 13px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.42); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
-  /* once the fighting has begun the key reminders step aside (they are in the game menu's Controls) */
-  #hud.inbattle #hint, #hud.inbattle #minimapWrap .mapHint { display: none; }
+  #hint { position: absolute; right: 16px; top: 64px; max-width: 300px; line-height: 1.4; font-size: 14px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.66); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
+  /* The key reminders: in a player's first two matches the full line shows while the castles prepare, and steps aside once the fighting has begun; after
+     that (class keysfew, see main.js) only a small "I keys" note stays. I shows or hides the full line at any time (class keysopen). */
+  #hud.inbattle #hint, #hud.inbattle #minimapWrap .mapHint, #hud.keysfew #hint, #hud.keysfew #minimapWrap .mapHint { display: none; }
+  #hud.keysopen #hint { display: block; }
+  #hud.keysopen #hint::after { content: ' · I: hide'; opacity: 0.75; }
+  #keysNote { position: absolute; right: 16px; top: 64px; display: none; padding: 2px 9px 3px 5px; font-size: 14px; color: var(--muted); background: rgba(0,0,0,0.5); border-radius: 4px; text-shadow: 0 1px 2px #000; }
+  #keysNote kbd { margin-right: 3px; }
+  #hud.inbattle #keysNote, #hud.keysfew #keysNote { display: block; }
+  #hud.keysopen #keysNote, #hud.war #keysNote, #hud.spectating #keysNote { display: none; }
+  #hud.hero #keysNote { top: 12px; }
+  @media (max-width: 1150px) { #hud.wage #keysNote { top: 100px; } }   /* (as the key line, below the wager badge: comeback.js) */
 
-  #factions { position: absolute; left: 16px; top: 12px; width: 350px; font-size: 13px; }
-  .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 38px; gap: 6px; align-items: center; padding: 2px 0; }
+  #factions { position: absolute; left: 16px; top: 12px; width: 340px; font-size: 14px; }
+  #factions:has(.hl) { width: 400px; }   /* (King of the Hill: each house's hill time beside its name) */
+  .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 42px; gap: 6px; align-items: center; padding: 2px 0; }
   .fac i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .fac .bar { height: 7px; margin: 0; }
   .fac .bar b { display: block; height: 100%; background: #b9a46a; }
@@ -255,25 +278,25 @@
   .fac .g, .fac .t, .fac .h { text-align: right; }
   .fac .n { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
   .fac .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .fac .hl { flex: none; font-style: normal; font-size: 11px; color: #e8d9a0; margin-left: 6px; opacity: 0.9; }
+  .fac .hl { flex: none; font-style: normal; font-size: 14px; color: #e8d9a0; margin-left: 6px; opacity: 0.9; }
 
   #minimapWrap { position: absolute; right: 16px; bottom: 16px; padding: 4px; z-index: 1; }   /* (above the big map's backdrop, so it can still be clicked while the mouse is free) */
   #minimap { display: block; width: 180px; height: 180px; image-rendering: auto; pointer-events: auto; cursor: crosshair; }
-  #minimapWrap .mapHint { position: absolute; right: 4px; top: -16px; font-size: 11px; opacity: 0.55; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
+  #minimapWrap .mapHint { position: absolute; right: 4px; top: -21px; font-size: 14px; opacity: 0.75; text-shadow: 0 1px 2px #000; pointer-events: none; white-space: nowrap; }
   /* the big map (M) */
   #bigmap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.3); pointer-events: auto; }
   #bigmap .panel { padding: 8px 10px 7px; }
   #bigmap header { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin-bottom: 5px; }
   #bigmap header b { font-family: Cinzel, serif; font-size: 17px; color: var(--gold); }
-  #bigmap header span { font-size: 12.5px; opacity: 0.85; }
+  #bigmap header span { font-size: 14px; opacity: 0.85; }
   #bigmapCanvas { display: block; width: min(76vh, 80vw); height: min(76vh, 80vw); cursor: crosshair; }
   .mapRow { display: flex; gap: 8px; align-items: flex-start; }
   #pingPalette { display: flex; flex-direction: column; gap: 5px; }
-  #pingPalette::before { content: 'Marker'; font: 600 11px Cinzel, serif; color: var(--gold); opacity: 0.85; }
-  #pingPalette button { display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px; font-size: 12px; letter-spacing: 0; white-space: nowrap; }
+  #pingPalette::before { content: 'Marker'; font: 600 14px Cinzel, serif; color: var(--gold); opacity: 0.85; }
+  #pingPalette button { display: flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px; font-size: 14px; letter-spacing: 0; white-space: nowrap; }
   #pingPalette button canvas { width: 22px; height: 22px; }
   @media (max-width: 900px) { .mapRow { flex-direction: column; } #pingPalette { flex-direction: row; flex-wrap: wrap; } #pingPalette::before { width: 100%; } }
-  #bigmapLegend { display: flex; flex-wrap: wrap; gap: 3px 16px; margin-top: 6px; font-size: 13px; max-width: min(76vh, 80vw); }
+  #bigmapLegend { display: flex; flex-wrap: wrap; gap: 3px 16px; margin-top: 6px; font-size: 14px; max-width: min(76vh, 80vw); }
   #bigmapLegend i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
   #bigmapLegend .sym { opacity: 0.8; }
 
@@ -282,15 +305,15 @@
   .pg { position: absolute; left: 0; top: 0; width: 0; height: 0; display: none; }
   .pg .pgI { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; filter: drop-shadow(0 1px 3px #000); }
   .pg .pgA { position: absolute; left: -6px; top: -8px; width: 0; height: 0; border-top: 8px solid transparent; border-bottom: 8px solid transparent; border-left: 13px solid #fff; filter: drop-shadow(0 1px 2px #000); }
-  .pg .pgD { position: absolute; left: -30px; top: 19px; width: 60px; text-align: center; font: 600 12px Cinzel, Georgia, serif; color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+  .pg .pgD { position: absolute; left: -40px; top: 19px; width: 80px; text-align: center; font: 600 14px Cinzel, Georgia, serif; color: #fff; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
   #pingWheel { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-  #pingWheel .pw { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    background: rgba(20,16,12,0.78); border: 2px solid var(--edge); font: 600 10px Cinzel, Georgia, serif; transition: transform 0.07s; }
+  #pingWheel .pw { position: absolute; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    background: rgba(20,16,12,0.78); border: 2px solid var(--edge); font: 600 14px Cinzel, Georgia, serif; transition: transform 0.07s; }
   #pingWheel .pw canvas { width: 32px; height: 32px; }
-  #pingWheel .pw.sel { transform: scale(1.22); border-color: var(--gold); box-shadow: 0 0 16px rgba(224,180,76,0.7); background: rgba(60,44,22,0.9); color: #fff; }
-  #pingWheel .hub { position: absolute; left: -52px; top: 18px; width: 104px; text-align: center; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
+  #pingWheel .pw.sel { transform: scale(1.12); border-color: var(--gold); box-shadow: 0 0 16px rgba(224,180,76,0.7); background: rgba(60,44,22,0.9); color: #fff; }
+  #pingWheel .hub { position: absolute; left: -60px; top: 18px; width: 120px; text-align: center; text-shadow: 0 1px 3px #000, 0 0 2px #000; }
   #pingWheel .hub b { display: block; font: 700 14px Cinzel, Georgia, serif; color: var(--gold); }
-  #pingWheel .hub small { display: block; font-size: 11px; opacity: 0.85; }
+  #pingWheel .hub small { display: block; font-size: 14px; opacity: 0.85; }
   #pingWheel .stick { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #000; opacity: 0.85; }
 
   #toasts { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
@@ -300,7 +323,7 @@
   .toast.bump { animation: toastbump 0.25s ease-out; }
   @keyframes toastbump { 0% { transform: scale(1.06); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
   #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
-  .kill { background: rgba(0,0,0,0.55); padding: 3px 10px; }
+  .kill { background: rgba(0,0,0,0.7); padding: 3px 10px; }
   .kill .x { opacity: 0.6; }
   #banner { position: absolute; left: 0; right: 0; top: 24%; text-align: center; opacity: 0; }
   #banner h2 { font-size: 54px; margin: 0; color: var(--gold); text-shadow: 0 3px 12px #000; letter-spacing: 0.08em; }
@@ -313,7 +336,7 @@
     font-size: 15px; line-height: 1.25; text-shadow: 0 1px 2px #000; animation: alertIn 0.28s ease-out; transition: opacity 0.7s, transform 0.7s; }
   .alert i { font-style: normal; font-size: 19px; flex: none; }
   .alert span { flex: 1; min-width: 0; }
-  .alert b { flex: none; font-family: Cinzel, serif; font-weight: 600; font-size: 12px; opacity: 0.85; white-space: nowrap; }
+  .alert b { flex: none; font-family: Cinzel, serif; font-weight: 600; font-size: 14px; opacity: 0.85; white-space: nowrap; }
   .alert.good { border-left-color: #6fcf6f; }
   .alert.warn { border-left-color: #ff9d3b; background: rgba(52,34,10,0.82); }
   .alert.danger { border-left-color: #e0473a; background: rgba(70,14,10,0.84); }
@@ -327,10 +350,10 @@
   #streak.show { animation: streak 2.6s ease-out forwards; }
   @keyframes streak { 0% { opacity: 0; transform: scale(0.6); } 12% { opacity: 1; transform: scale(1.14); } 22% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-12px); } }
   #tip { position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); width: max-content; max-width: clamp(240px, calc(100vw - 664px), 720px);
-    padding: 5px 16px 6px; background: rgba(0,0,0,0.55); border-radius: 14px; font-size: 15px; line-height: 1.3; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity 0.6s; }
+    padding: 5px 16px 6px; background: rgba(0,0,0,0.7); border-radius: 14px; font-size: 15px; line-height: 1.3; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity 0.6s; }
   #tip.show { opacity: 1; }
-  #tip b { font-family: Cinzel, serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--gold); margin-right: 9px; }
-  #tip kbd { font-size: 12px; margin: 0 1px; }
+  #tip b { font-family: Cinzel, serif; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); margin-right: 9px; }
+  #tip kbd { margin: 0 1px; }
   @media (max-width: 1100px) { #tip { bottom: 16px; } }
   @media (max-width: 900px) { #tip { left: auto; right: 16px; bottom: 214px; transform: none; max-width: 280px; text-align: left; } }
   @media (max-width: 760px) { #tip { bottom: 150px; } }
@@ -353,16 +376,32 @@
   #respawn h2 { font-size: 46px; margin: 0; color: #d55; text-shadow: 0 3px 10px #000; }
   #respawnT { font-size: 22px; text-shadow: 0 2px 6px #000; }
   #fps { position: absolute; right: 16px; bottom: 2px; font-size: 10px; opacity: 0.45; text-shadow: 0 1px 2px #000; }
-  /* big screens: the HUD grows with them instead of shrinking into the corners (zoom keeps each piece's offsets in proportion) */
-  @media (min-width: 1800px) and (min-height: 1000px) {
-    #dock, #factions, #goldbox, #hint, #killfeed, #alerts, #heroRoster, #command, #toasts, #tip, #top, #hill, #target, #heroTop, #pracStats, #prompt { zoom: 1.2; }
-    #minimap { width: 216px; height: 216px; }
-  }
+  /* The HUD's size: one scale, --hud-zoom = the screen's base size x the player's UI scale (Options, 80-140 %, main.js sets --ui-scale).
+     Big screens start a size up, so the HUD grows with them instead of shrinking into the corners; zoom keeps each piece's offsets in proportion. */
+  :root { --ui-scale: 1; --hud-base: 1; --hud-zoom: calc(var(--hud-base) * var(--ui-scale)); }
+  @media (min-width: 1800px) and (min-height: 1000px) { :root { --hud-base: 1.2; } }
+  #dock, #factions, #goldbox, #hint, #keysNote, #killfeed, #alerts, #heroRoster, #command, #toasts, #tip, #top, #hill, #target, #heroTop, #pracStats, #prompt,
+  #aimhint, #respawn, #streak, #banner, #away, #pingWheel, #warTop, #warCmd, #specBar, #wageBadge, #castleBar, #clickFight .cf-box { zoom: var(--hud-zoom); }
+  #minimap { width: calc(180px * var(--hud-zoom)); height: calc(180px * var(--hud-zoom)); }   /* (sized, not zoomed: the clicks on it are mapped by its box) */
+
+  /* "Click to fight": over the HUD, under the menus (z 20) and the shop (15 is under it, but the shop hides it: see main.js) */
+  #clickFight { position: fixed; inset: 0; z-index: 19; display: flex; align-items: center; justify-content: center; cursor: pointer;
+    background: radial-gradient(ellipse at center, rgba(10,8,6,0.25), rgba(10,8,6,0.72)); animation: cfIn 0.25s ease-out; }
+  #clickFight .cf-box { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 56px 18px; text-align: center;
+    background: rgba(18,14,10,0.78); border: 1px solid var(--gold); border-radius: 8px; box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+  #clickFight b { font: 700 46px Cinzel, Georgia, serif; letter-spacing: 0.08em; color: var(--gold); text-shadow: 0 3px 12px #000; animation: cfPulse 1.8s ease-in-out infinite; }
+  #clickFight span { font-size: 18px; color: var(--parch); }
+  #clickFight span:empty { display: none; }
+  #clickFight small { font-size: 15px; color: var(--muted); }
+  #clickFight kbd { font-size: 13px; }
+  #clickFight:hover .cf-box { border-color: #ffd36a; box-shadow: 0 10px 50px rgba(0,0,0,0.6), 0 0 22px rgba(224,180,76,0.35); }
+  @keyframes cfIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes cfPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.78; } }
 
   #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(840px, calc(100% - 32px)); max-width: calc(100% - 32px); max-height: calc(100% - 32px); overflow: auto;
     padding: 14px 18px; background: linear-gradient(rgba(36,28,18,0.96), rgba(22,17,11,0.96)); border-color: rgba(224,180,76,0.55); box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
   #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
-  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 11.5px; letter-spacing: 0.08em; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 10px 7px; white-space: nowrap; }
+  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 14px; letter-spacing: 0.04em; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 10px 7px; white-space: nowrap; }
   #scoreboard td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap; }
   #scoreboard tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.03); }
   #scoreboard td:first-child { font-family: Cinzel, serif; font-weight: 700; font-size: 14px; }
@@ -444,14 +483,14 @@
   .tnode.child.linked::before { background: var(--gold); box-shadow: 0 0 6px rgba(224,180,76,0.7); }
   .tnode.bought { animation: bought 0.45s ease-out; }
   .tnode.nope { animation: nope 0.3s ease-out; }
-  #talentHint { position: relative; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
+  #talentHint { position: relative; padding: 4px 12px; font-family: Cinzel, serif; font-size: 14px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
   /* ---------- practice courtyard ---------- */
   #hud:not(.practice) #pracStats, #hud:not(.practice) #dmgpops { display: none; }
   #hud.practice #factions, #hud.practice #goldbox, #hud.practice #hill, #hud.practice #army { display: none; }
   #practice .note { text-align: left; }
   #pracStats { position: absolute; left: 16px; top: 12px; width: min(400px, calc(50vw - 150px)); font-size: 14px; line-height: 1.5; }
   #pracStats b { color: var(--gold); font-family: Cinzel, serif; font-weight: 600; }
-  #pracStats span { opacity: 0.7; font-size: 12.5px; }
+  #pracStats span { opacity: 0.75; font-size: 14px; }
   #dmgpops { position: absolute; inset: 0; overflow: hidden; }
   .dmgpop { position: absolute; transform: translate(-50%, 0); color: #fff3cf; font-family: Cinzel, serif; font-weight: 700; font-size: 20px; text-shadow: 0 1px 3px #000, 0 0 8px rgba(0,0,0,0.6); animation: dpop 0.9s ease-out forwards; }
   .dmgpop.big { color: #ffd36a; font-size: 28px; }
@@ -571,14 +610,14 @@
   #hud.hero #heroTop { display: grid; }
   #hud.hero #heroRoster { display: block; }
   #hud.hero #hint { top: 12px; }                 /* (the gold box that sat above it is gone) */
-  #hud.hero #alerts { top: 152px; }              /* (below the roster) */
-  #heroTop { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 372px; padding: 6px 12px 5px; text-align: center;
-    grid-template-columns: 102px minmax(0, 1fr) 102px; gap: 0 8px; align-items: start; }
-  #heroTop .hside { display: grid; gap: 3px; font-family: Cinzel, serif; font-size: 12px; }
+  #hud.hero #alerts { top: 178px; }              /* (below the roster) */
+  #heroTop { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 440px; padding: 6px 12px 5px; text-align: center;
+    grid-template-columns: 124px minmax(0, 1fr) 124px; gap: 0 8px; align-items: start; }
+  #heroTop .hside { display: grid; gap: 3px; font-family: Cinzel, serif; font-size: 14px; }
   #heroTop .hn { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; white-space: nowrap; }
   #heroTop .hside.r .hn { flex-direction: row-reverse; }
   #heroTop .hn b { font-weight: 700; letter-spacing: 0.04em; }
-  #heroTop .hn span { font-family: 'EB Garamond', Georgia, serif; font-size: 11px; opacity: 0.85; }
+  #heroTop .hn span { font-family: 'EB Garamond', Georgia, serif; font-size: 14px; opacity: 0.85; }
   #heroTop .hbar { height: 8px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); overflow: hidden; }
   #heroTop .hbar.gate { height: 5px; }
   #heroTop .hbar i { display: block; height: 100%; width: 100%; transition: width 0.25s; }
@@ -586,20 +625,20 @@
   #heroTop .hbar.gate i { background: #b9a46a; }
   #heroTop .hsc { font-family: Cinzel, serif; font-size: 26px; line-height: 1; letter-spacing: 0.04em; white-space: nowrap; }
   #heroTop .hsc span { margin: 0 5px; opacity: 0.7; }
-  #heroTop #heroGoal { margin-top: 3px; font-size: 12px; opacity: 0.92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #heroTop .hline { grid-column: 1 / -1; margin-top: 4px; font-size: 13px; white-space: nowrap; }
+  #heroTop #heroGoal { margin-top: 3px; font-size: 14px; opacity: 0.92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #heroTop .hline { grid-column: 1 / -1; margin-top: 4px; font-size: 14px; white-space: nowrap; }
   #heroTop .hline .gold { color: var(--gold); }
-  #heroRoster { position: absolute; left: 16px; top: 12px; width: 286px; padding: 5px 8px 6px; font-size: 13px; }
-  #heroRoster .hr { display: grid; grid-template-columns: 20px minmax(0, 1fr) 30px 36px 58px; gap: 5px; align-items: center; height: 19px; padding: 0 4px 0 6px; border-left: 3px solid #888; line-height: 19px; overflow: hidden; }
-  #heroRoster .ic { font-size: 13px; line-height: 19px; height: 19px; overflow: hidden; }
+  #heroRoster { position: absolute; left: 16px; top: 12px; width: 330px; padding: 5px 8px 6px; font-size: 14px; }
+  #heroRoster .hr { display: grid; grid-template-columns: 20px minmax(0, 1fr) 36px 42px 66px; gap: 5px; align-items: center; height: 22px; padding: 0 4px 0 6px; border-left: 3px solid #888; line-height: 22px; overflow: hidden; }
+  #heroRoster .ic { font-size: 14px; line-height: 22px; height: 22px; overflow: hidden; }
   #heroRoster .hr.sep { margin-top: 5px; }
   #heroRoster .hr.me { background: rgba(224,180,76,0.28); }
   #heroRoster .hr.me .nm { color: #ffe08a; font-weight: 600; }
   #heroRoster .hr.down { opacity: 0.62; }
   #heroRoster .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #heroRoster .lv { font-family: Cinzel, serif; font-size: 11px; opacity: 0.9; }
+  #heroRoster .lv { font-family: Cinzel, serif; font-size: 14px; opacity: 0.9; }
   #heroRoster .kd { text-align: right; font-variant-numeric: tabular-nums; }
-  #heroRoster .st { font-size: 11.5px; text-align: right; white-space: nowrap; }
+  #heroRoster .st { font-size: 14px; text-align: right; white-space: nowrap; }
   #heroRoster .st.respawn { color: #ff9d8a; }
   #heroRoster .st .bar { display: block; height: 6px; margin: 0; }
   #heroRoster .st .bar b { display: block; height: 100%; background: linear-gradient(#d0463a, #8c1e16); }
@@ -664,10 +703,6 @@
     <div class="cols">
       <div class="col setup card-p">
         <div class="ph"><h3>Battle setup</h3><details class="help"><summary title="Explain these choices">?</summary></details></div>
-        <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
-          <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
-          <span id="mapDesc" class="mapdesc"></span>
-        </div>
         <div class="row" id="objective" role="group" aria-label="Game mode"><span class="qlabel">Mode</span>
           <button data-o="conquest" class="active">Conquest</button><button data-o="koth">King of the Hill</button><button data-o="hero">Hero Mode</button>
           <span id="objDesc" class="mapdesc"></span>
@@ -684,6 +719,17 @@
           <button data-l="standard" class="active">Standard<small></small></button><button data-l="short">Short<small></small></button>
           <span id="lengthDesc" class="mapdesc"></span>
         </div>
+        <!-- the rest of the setup, folded away for a new player (main.js moves the Castle, Others, Teams, Colour and Next battle rows in here; landui.js puts
+             the Land row after the Map row). Open or closed is remembered. -->
+        <details id="moreOpts">
+          <summary><span class="mo-t">More options</span><span class="mo-sum">castle · colour · map · land · next battle</span></summary>
+          <div class="more-body">
+            <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
+              <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
+              <span id="mapDesc" class="mapdesc"></span>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="col hero-col card-p">
         <div class="ph"><h3>Your hero</h3></div>
@@ -765,6 +811,7 @@
   <div id="dmgpops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
   <div id="hint">Esc: menu · B: shop · N: talents · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
+  <div id="keysNote"><kbd>I</kbd> keys</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
   <div id="banner"><h2></h2><p></p></div>
@@ -815,6 +862,11 @@
   </div>
   <div id="fps"></div>
   <div id="respawn" class="hidden"><h2>You have fallen</h2><div id="respawnT"></div><div id="respawnTip" class="tipline"></div></div>
+</div>
+
+<!-- the browser wants a click before it gives the game the mouse (the start of a match, or back from another window): the whole screen is the button -->
+<div id="clickFight" class="hidden">
+  <div class="cf-box"><b id="clickFightTitle">Click to fight</b><span id="clickFightNote"></span><small><kbd>Esc</kbd> game menu</small></div>
 </div>
 
 <div id="scoreboard" class="panel hidden">
@@ -885,6 +937,7 @@
       <h4 class="og">Mouse and view</h4>
       <label>Mouse sensitivity <input id="optSens" type="range" min="0" max="100"><output></output></label>
       <label>Field of view <input id="optFov" type="range" min="60" max="110"><output></output></label>
+      <label title="The size of the battle screen: its text, bars and panels">UI scale <input id="optUiScale" type="range" min="80" max="140" step="5"><output></output></label>
       <h4 class="og">Graphics</h4>
       <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Quality</span>
         <button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button><button data-q="ultra">Ultra</button>
@@ -897,6 +950,7 @@
       <label>Battle Decrees <input id="optDecrees" type="checkbox"><output></output></label>
     </div>
     <details class="help opt-help"><summary title="What these options do">?</summary>
+      <div class="note">UI scale: the size of the battle screen's text, bars and panels (a big screen starts a size up; this multiplies it).</div>
       <div class="note">Graphics: Auto picks a level for your machine and lowers the resolution a little whenever the frame rate drops. Low turns off shadows and grass for the smoothest play; Ultra adds the sharpest shadows and ambient occlusion.</div>
       <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then. Big finishes: the slow-motion ending when a keep falls. Battle Decrees: after each battle, one or two random rule changes are rolled for the next (you can reroll them or play a classic battle).</div>
       <div class="note">Named rival lords: every battle the other houses are led by lords with a name and a style of their own (a rusher, a turtler, a siege-lover, ...). Off: the old, plain lords. Takes effect at the next battle.</div>
@@ -952,6 +1006,7 @@
       <section class="cgrp">
       <h4 class="cg">The battle</h4>
       <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
+      <b>I</b><span>Show or hide the key reminders on the battle screen (after your first two battles only a small note stays)</span>
       <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
       <b>Enter</b><span>Ready: start the first wave now instead of waiting out the preparation (online: when everyone is ready)</span>
       <b>K</b><span>When a battle is decided: concede and start the next one (or finish a war you have won); press twice to confirm</span>

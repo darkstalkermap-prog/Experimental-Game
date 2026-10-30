@@ -40,14 +40,14 @@ body.war-on #scoreboard { display: none !important; }
 #warTop { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none; text-align: center; min-width: 340px; max-width: calc(100% - 420px); }
 #warTop .wt-main { display: inline-flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
 #warTop .wt-clock { font-family: Cinzel, Georgia, serif; font-size: 22px; color: var(--gold); letter-spacing: 0.05em; }
-#warTop .wt-clock small { font-size: 12px; color: var(--parch); opacity: 0.8; display: block; letter-spacing: 0.08em; text-transform: uppercase; }
-#warTop .wt-side { display: inline-flex; flex-direction: column; align-items: stretch; min-width: 92px; font-size: 13px; }
-#warTop .wt-side b { font-family: Cinzel, Georgia, serif; font-size: 13px; white-space: nowrap; }
+#warTop .wt-clock small { font-size: 14px; color: var(--parch); opacity: 0.8; display: block; letter-spacing: 0.08em; text-transform: uppercase; }
+#warTop .wt-side { display: inline-flex; flex-direction: column; align-items: stretch; min-width: 92px; font-size: 14px; }
+#warTop .wt-side b { font-family: Cinzel, Georgia, serif; font-size: 14px; white-space: nowrap; }
 #warTop .wt-side.out { opacity: 0.4; text-decoration: line-through; }
 #warTop .wt-bar { height: 5px; background: rgba(255,255,255,0.12); border-radius: 3px; margin-top: 3px; overflow: hidden; }
 #warTop .wt-bar i { display: block; height: 100%; }
 #warTop .wt-line { margin-top: 5px; font-size: 14px; }
-#warTop .wt-line kbd, #warPanel kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
+#warTop .wt-line kbd, #warPanel kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 #warTop .wt-fallen { color: #ff9a80; font-family: Cinzel, Georgia, serif; }
 #warPanel { position: fixed; top: 10px; right: 10px; bottom: 10px; width: 400px; max-width: calc(100% - 20px); z-index: 7; display: flex; flex-direction: column;
   background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,0.55); color: var(--parch); font-size: 14px; }
@@ -86,15 +86,15 @@ body.war-on #scoreboard { display: none !important; }
 #warCmd .wc-row { display: flex; gap: 5px; align-items: stretch; }
 #warCmd button { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 96px; padding: 4px 9px 5px; font-size: 14px; line-height: 1.15;
   font-family: Cinzel, Georgia, serif; letter-spacing: 0.03em; }
-#warCmd button kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); margin-right: 5px; }
-#warCmd button small { font-family: 'EB Garamond', Georgia, serif; font-size: 12.5px; opacity: 0.85; letter-spacing: 0; }
+#warCmd button kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); margin-right: 5px; }
+#warCmd button small { font-family: 'EB Garamond', Georgia, serif; font-size: 14px; opacity: 0.85; letter-spacing: 0; }
 #warCmd button.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset, 0 0 12px rgba(224,180,76,0.35); color: #fff; }
 #warCmd button.on { background: linear-gradient(rgba(224,180,76,0.34), rgba(224,180,76,0.12)); border-color: var(--gold); color: #fff; }
 #warCmd button.none { opacity: 0.45; }
 #warCmd .wc-orders { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
-#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 13px; color: var(--gold); min-width: 84px; text-align: right; padding-right: 4px; }
-#warCmd .wc-hint { font-size: 13px; opacity: 0.8; }
-#warCmd .wc-hint kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
+#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); min-width: 84px; text-align: right; padding-right: 4px; }
+#warCmd .wc-hint { font-size: 14px; opacity: 0.8; }
+#warCmd .wc-hint kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
 .go-war { margin: 10px auto 4px; max-width: 620px; }
 .go-war table { width: 100%; border-collapse: collapse; font-size: 15px; }

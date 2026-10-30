@@ -38,7 +38,6 @@ function style() {
 #castleBar .cp.low .cl b { color: #ff8a6a; }
 #castleBar .cp.gone .cl b { color: #ff8a6a; }
 #castleBar.fallen .cr { opacity: 0.55; }
-@media (min-width: 1800px) and (min-height: 1000px) { #castleBar { zoom: 1.2; } }
 @media (max-width: 760px) { #castleBar { width: 300px; } #castleBar .ch span { display: none; } }
 `;
   document.head.appendChild(s);

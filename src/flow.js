@@ -370,9 +370,9 @@ style.textContent = `
 #length button small:empty { display: none; }
 #lobbyLength { align-items: center; }
 #length.off { opacity: 0.55; }
-.flowrow { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; font-size: 13px; }
+.flowrow { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 6px; font-size: 14px; }
 .flowrow.hidden { display: none; }
-.flowrow button { pointer-events: auto; padding: 3px 12px; font-size: 13px; letter-spacing: 0.02em; }
+.flowrow button { pointer-events: auto; padding: 3px 12px; font-size: 14px; letter-spacing: 0.02em; }
 .flowrow button kbd { margin-right: 6px; }
 #offerRow { flex-wrap: wrap; }
 #offerBtn.armed { border-color: #ff9d8a; color: #fff; background: linear-gradient(#8a2a1c, #5a1710); }

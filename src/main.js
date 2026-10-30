@@ -20,6 +20,7 @@ import { initLandMenu, showLobbyLand } from './landui.js';
 import { progress, sanitizeLoadout } from './progress.js';
 import { endSound } from './endprogress.js';   // (the end screen's battle and Renown sections)
 import './wardrobe.js';       // (the Renown panel of the menu)
+import './whatsnew.js';       // (the What's new panel of the menu)
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
 import { pendingDecrees, hearDecrees } from './decrees.js';
 import { withRivals, lobbyRivals } from './rivalsui.js';
@@ -272,12 +273,24 @@ function begin(diff, setup = null, map = mapSize) {
   $('menu').classList.add('hidden');
   $('lobby').classList.add('hidden');
   ui.reset();   // (a rematch: nothing of the last match's screen is left)
+  ui.setKeyHints(countMatch(setup));
   ui.showHud();
   flow.beganAt = performance.now();
   flow.left = false;
   game.onRematch = guestRematch;   // (a guest follows the host back to the room's lobby, even from the middle of the ending: see ClientSync)
   game.start(diff, setup);
   input.lock();
+}
+
+// The key reminders on the HUD: the full line in a player's first KEY_HINT_MATCHES matches, then a small "I keys" note (ui.setKeyHints). A match is counted
+// when it starts (practice and watching are not matches); a player whose account already has finished matches (progress.js) is no beginner either.
+const KEY_HINT_MATCHES = 2;
+function countMatch(setup) {
+  if (setup && (setup.practice || setup.spectator)) return Number(stored('cw-matches', 0)) < KEY_HINT_MATCHES;
+  let before = Number(stored('cw-matches', 0)) || 0;
+  try { before = Math.max(before, progress.get().tot.matches || 0); } catch (e) { /* no account: the counter alone */ }
+  store('cw-matches', before + 1);
+  return before < KEY_HINT_MATCHES;
 }
 
 // The end screen is up: leave the finished world behind it for a moment (the ruins, the armies), then build the next one, so that Play Again only has to start.
@@ -326,6 +339,26 @@ function showSolo() {
     },
     size(n) { heroCount = heroSize(n); store('cw-herosize', heroCount); if (heroOn) $('objDesc').textContent = heroDesc(); afterSolo(); },
     color(id) { if (!isColorId(id)) return; myColor = id; store('cw-color', id); afterSolo(); },
+  });
+  foldMoreOptions();
+}
+// "More options" (a fold under Mode, Difficulty and Length): the rows a new player can leave alone go into it, in the order they show. lobbyui.js and
+// decrees.js build theirs beside the Difficulty row and find them again by id, so moving them once is enough.
+function foldMoreOptions() {
+  const body = document.querySelector('#moreOpts .more-body');
+  const ids = ['soloSeat', 'soloRivals', 'soloSize', 'soloColor'].filter((id) => $(id) && $(id).parentNode !== body);
+  body.prepend(...ids.map($));
+  const decree = $('decreeRow');
+  if (decree && decree.parentNode !== body) body.append(decree);
+}
+{
+  const more = $('moreOpts');
+  more.open = stored('cw-more', '0') === '1';
+  more.querySelector('summary').addEventListener('click', () => { more.dataset.asked = '1'; });
+  more.addEventListener('toggle', () => {
+    store('cw-more', more.open ? 1 : 0);
+    // (opened by a click on a short window: bring the rows into view; not when the page opens it on the remembered choice)
+    if (more.open && more.dataset.asked) more.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   });
 }
 // the world behind the menu is repainted in the new colours a moment later (as the Land row does)
@@ -742,6 +775,7 @@ let lastUnlockAt = -1e9;
 function openPause(hint = '') {
   if (game.state !== 'playing') return;
   game.paused = true;
+  pauseFromUnlock = false;
   $('pauseNote').textContent = game.mode === 'single' ? '' : 'The battle goes on while you are in the menu.';
   $('pauseHint').textContent = hint;
   $('quitConfirm').classList.add('hidden');
@@ -751,6 +785,7 @@ function openPause(hint = '') {
   if (offer) { $('pauseOffer').textContent = offer.label; $('offerConfirmText').textContent = offer.ask; $('offerYes').textContent = offer.yes; }
   ui.showPause(true);
   input.unlock();
+  syncClickFight();   // (Esc on "Click to fight": the menu replaces it)
 }
 function closePause() {
   $('options').classList.add('hidden');
@@ -772,6 +807,13 @@ $('quitBtn').addEventListener('click', () => $('quitConfirm').classList.remove('
 $('quitNo').addEventListener('click', () => $('quitConfirm').classList.add('hidden'));
 $('quitYes').addEventListener('click', () => { if (net) location.reload(); else toMenu(); });   // (an online game is left by starting the page afresh)
 
+// the UI scale (Options): one number the HUD's CSS multiplies its screen-size base by (index.html, --hud-zoom)
+function applyUiScale(v) {
+  const s = Math.min(140, Math.max(80, Number(v) || 100));
+  document.documentElement.style.setProperty('--ui-scale', String(s / 100));
+}
+applyUiScale(settings.uiscale);
+
 // sliders in the options panel
 const SLIDERS = [
   ['optMaster', 'master', (v) => audio.setVolume('master', v / 100), '%'],
@@ -779,6 +821,7 @@ const SLIDERS = [
   ['optSfx', 'sfx', (v) => audio.setVolume('sfx', v / 100), '%'],
   ['optSens', 'sens', (v) => { game.player.sensitivity = sensitivityOf(v); }, '%'],
   ['optFov', 'fov', (v) => { game.player.baseFov = v; }, '°'],
+  ['optUiScale', 'uiscale', (v) => applyUiScale(v), '%'],
 ];
 for (const [id, key, apply, unit] of SLIDERS) {
   const el = $(id), out = el.nextElementSibling;
@@ -800,9 +843,45 @@ for (const [id, key] of [['optAlerts', 'alerts'], ['optTips', 'tips'], ['optDynr
   el.addEventListener('change', () => { settings[key] = el.checked ? 1 : 0; show(); saveSettings(); });
 }
 
+// "Click to fight": the browser gives the game the mouse only from a click. When it refuses (the start of a match, Resume too soon after Esc) or takes the
+// mouse away without Esc (another window, alt-tab), the whole screen asks for that click instead of a menu. A single player's battle waits meanwhile.
+// It is shown while the game still wants the mouse (input.wantLock) and nothing else is open; any panel that frees the mouse (input.unlock) puts it away.
+let needClick = false, cfShown = false, cfPaused = false;
+function askClick() {
+  if (game.state !== 'playing') return;
+  needClick = true;
+  input.wantLock = true;   // (the next click captures the mouse; a grant that comes late is kept)
+  ui.showPause(false);
+  if (game.mode === 'single') { game.paused = true; cfPaused = true; }
+  syncClickFight();
+}
+// every frame, but only booleans unless the overlay is wanted or up
+function syncClickFight() {
+  if (!needClick && !cfShown) return;
+  const busy = ui.shopOpen || ui.mapOpen || ui.practiceOpen || (game.war && game.war.panelOpen) || shown('pause') || shown('gameover');
+  if (needClick && (game.state !== 'playing' || input.locked || !input.wantLock)) needClick = false;
+  const want = needClick && !busy;
+  if (want === cfShown) return;
+  cfShown = want;
+  if (want) {
+    $('clickFightTitle').textContent = game.spectator ? 'Click to watch' : 'Click to fight';
+    $('clickFightNote').textContent = game.mode === 'single' ? 'The battle waits for you' : 'The battle goes on';
+  } else if (cfPaused) {   // (put away by a panel or the capture: the pause was the overlay's own)
+    cfPaused = false;
+    if (!shown('pause') && game.state === 'playing') game.paused = false;
+  }
+  $('clickFight').classList.toggle('hidden', !want);
+}
+$('clickFight').addEventListener('mousedown', (e) => { if (e.button === 0) input.lock(); });   // (mousedown: the capture starts on the press, as on the field)
+addEventListener('blur', () => {
+  // the mouse was freed and the window lost focus at once: that was alt-tab, not Esc (whichever of the two events came first): ask for a click, not the menu
+  if (game.state === 'playing' && shown('pause') && pauseFromUnlock && performance.now() - lastUnlockAt < 500) askClick();
+});
+let pauseFromUnlock = false;
+
 input.onLockFail = () => {
   if (game.state !== 'playing' || ui.shopOpen) return;
-  openPause('Your browser needs one more click to capture the mouse. Press Resume.');
+  askClick();
 };
 input.onLockChange = (locked) => {
   if (game.state !== 'playing') return;
@@ -810,12 +889,17 @@ input.onLockChange = (locked) => {
     $('options').classList.add('hidden');
     $('controls').classList.add('hidden');
     game.paused = false;
+    cfPaused = false;
     ui.showPause(false);
+    syncClickFight();
     return;
   }
   lastUnlockAt = performance.now();
   game.player.cancelAim();   // a volley being placed is dropped when the menu comes up
-  if (!ui.shopOpen && !ui.mapOpen && !ui.practiceOpen && !(game.war && game.war.panelOpen)) openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up (War Mode's army panel frees it itself)
+  if (ui.shopOpen || ui.mapOpen || ui.practiceOpen || (game.war && game.war.panelOpen)) return;   // (those panels free the mouse themselves)
+  if (input.wantLock && (document.hidden || !document.hasFocus())) { askClick(); return; }   // another window took the focus (alt-tab): a click brings you back
+  openPause();   // Esc while playing: the browser frees the mouse, and the menu comes up
+  pauseFromUnlock = true;
 };
 
 $('shopClose').addEventListener('click', () => ui.toggleShop(false));
@@ -867,7 +951,9 @@ addEventListener('keydown', (e) => {
 
 addEventListener('keydown', (e) => {
   flowKey(e, game, ui);
-  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls') && !($('wardrobe') && shown('wardrobe'))) { e.preventDefault(); $('quickPlay').click(); }
+  // I: the full key line on the HUD, or back to the small note (not F1: in a war F1 is "follow me", in War Mode an order)
+  if (e.code === 'KeyI' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && game.state === 'playing' && !(e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) ui.toggleKeys();
+  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls') && !($('wardrobe') && shown('wardrobe')) && !($('whatsNew') && shown('whatsNew'))) { e.preventDefault(); $('quickPlay').click(); }
 });
 
 // Browsers only allow sound after a click or key press: the music starts with the first one.
@@ -891,6 +977,7 @@ function frame(ts) {
   try {
     game.update(dt);
     ui.update(dt);
+    syncClickFight();
   } catch (e) {
     if (!frameErrors++) console.error('Frame error (the game keeps running):', e);
   }

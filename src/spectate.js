@@ -31,19 +31,19 @@ function style() {
   styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#specBar { position: absolute; left: 16px; bottom: 16px; width: 330px; padding: 7px 12px 8px; font-size: 14px; line-height: 1.3; }
-#specBar .sb-out { font-family: Cinzel, Georgia, serif; font-size: 13px; color: #ffb39a; margin-bottom: 4px; }
+#specBar { position: absolute; left: 16px; bottom: 16px; width: 360px; padding: 7px 12px 8px; font-size: 14px; line-height: 1.3; }
+#specBar .sb-out { font-family: Cinzel, Georgia, serif; font-size: 14px; color: #ffb39a; margin-bottom: 4px; }
 #specBar .sb-out:empty { display: none; }
 #specBar .sb-who { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
-#specBar .sb-mode { flex-basis: 100%; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; }
+#specBar .sb-mode { flex-basis: 100%; font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.75; }
 #specBar .sb-name { font-family: Cinzel, Georgia, serif; font-size: 16px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #specBar .sb-name:empty { display: none; }
-#specBar .sb-sub { font-size: 13px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#specBar .sb-sub { font-size: 14px; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #specBar .sb-hp { height: 5px; margin: 5px 0 2px; background: rgba(0,0,0,0.45); border-radius: 3px; overflow: hidden; }
 #specBar .sb-hp i { display: block; height: 100%; width: 0; background: #c9443a; transition: width 0.15s linear; }
 #specBar.nohp .sb-hp { display: none; }
-#specBar .sb-keys { margin-top: 5px; font-size: 12px; opacity: 0.85; line-height: 1.6; }
-#specBar .sb-keys kbd { font-size: 10px; padding: 0 4px; margin-right: 2px; }
+#specBar .sb-keys { margin-top: 5px; font-size: 14px; opacity: 0.85; line-height: 1.6; }
+#specBar .sb-keys kbd { padding: 0 4px; margin-right: 2px; }
 #hud.spectating #dock, #hud.spectating #crosshair, #hud.spectating #drawbar, #hud.spectating #hitmarker, #hud.spectating #respawn, #hud.spectating #prompt,
 #hud.spectating #target, #hud.spectating #aimhint, #hud.spectating #hint, #hud.spectating #vignette { display: none !important; }
 #hud.spectator #goldbox, #hud.spectator #goldpops, #hud.spectator #xppops, #hud.spectator #command, #hud.spectator #war, #hud.spectator .flowrow,
