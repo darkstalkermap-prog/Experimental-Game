@@ -621,8 +621,7 @@ export class Castle {
     const near = fin.active && fin.focus === this;
     switch (ev.k) {
       case 'blast':
-        fx.flash(p, _gold, 16, 0.6, 1);
-        fx.shock(_cq.copy(p).setY(this.center.y + 0.5), 2, 26, _gold, 0.7, 0.8);
+        fx.flash(p, _gold, 16, 0.6, 1);   // (no shock ring: it faces the camera, so from up high it hangs behind the keep like a halo; the dust bank is the shock wave)
         dustBank(fx, _cq.copy(p).setY(this.center.y + 0.3), 7, 42, 16);
         for (let i = 0; i < 6; i++) fx.smoke(_cq.copy(p).add(_cv.set((Math.random() - 0.5) * 8, 4 + Math.random() * 3, (Math.random() - 0.5) * 8)));
         if (host) { fx.dust(_cq.copy(p).setY(this.center.y + 0.3), 46, 8, 'stone'); g.audio.play('collapse', p); g.audio.play('boom', p); }
