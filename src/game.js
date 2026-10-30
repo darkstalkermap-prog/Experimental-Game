@@ -3,7 +3,7 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, HOUSE_NAMES, HOUSE_LORDS, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
   UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
@@ -227,7 +227,7 @@ export class Game {
       const empty = !human && !setup.hero && Array.isArray(setup.empty) && setup.empty.includes(i);   // (a castle closed in the lobby: nobody holds it, seats.js)
       const rival = human || empty || this.practice || setup.hero ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
       return {
-        team: i, name: TEAM_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : LORD_NAMES[i], rival, isPlayer: !!human, player: human, castle: c,
+        team: i, name: i === lp.team ? TEAM_NAMES[0] : HOUSE_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : HOUSE_LORDS[i], rival, isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: empty, empty, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
@@ -1510,7 +1510,7 @@ export class Game {
     f.isPlayer = false;
     f.player = null;
     f.rival = this.practice || this.hero ? null : rivalInfo(this.options.rivals[f.team]);
-    f.lord = f.rival ? f.rival.name : LORD_NAMES[f.team];
+    f.lord = f.rival ? f.rival.name : HOUSE_LORDS[f.team];
     f.hero = null;
     if (!f.eliminated && !f.castle.fallen) {
       this.spawnLord(f);

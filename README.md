@@ -528,7 +528,7 @@ and the end screen adds a "Comeback" ribbon when they did something for your hou
 
 Every battle the three rival houses are led by **named lords with a style of their own** instead of three copies of the same AI: "Lord Varric
 the Reckless" does not play like "Lady Morwen the Patient", so each match asks for a new plan. The lords are drawn at random when a match starts
-(never two alike, and no house gets the lord it had last time); the house keeps its colour and its name (House Varr is the red one whoever leads it).
+(never two alike, and no house gets the lord it had last time); the house keeps its castle and its name (House Varr is castle 2 whoever leads it).
 
 | Lord | Style | How to meet him |
 | --- | --- | --- |
