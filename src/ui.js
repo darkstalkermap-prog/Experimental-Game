@@ -19,6 +19,7 @@ import { updateHud as updateFlowHud, resetHud as resetFlowHud } from './flow.js'
 import { updateDecreeHud, showPauseDecrees } from './decrees.js';
 import { showPauseLand } from './landui.js';
 import { updateComebackHud } from './comeback.js';
+import { rivalTagHtml, houseRival, lobbyRivalName } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -674,7 +675,7 @@ export class UI {
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;
   }
 
-  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest', length = 'standard') {
+  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest', length = 'standard', rivals = null) {
     const clsName = (p) => (CLASSES[p.cls] ? ` · ${CLASSES[p.cls].icon} ${CLASSES[p.cls].name}` : '');
     $('lobbyMode').textContent = coop
       ? (players.length >= 4
@@ -690,7 +691,7 @@ export class UI {
     const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
     $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
       <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) + (lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + '</i>'}</span></li>`).join('');
+      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) + (lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + (lobbyRivalName(t, rivals) ? ' · ' + esc(lobbyRivalName(t, rivals)) : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {
@@ -913,7 +914,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${rivalTagHtml(g, f)}${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
@@ -1200,6 +1201,14 @@ export class UI {
         ctx.strokeText(label, cx, cz - s / 2 - 9);
         ctx.fillStyle = '#fff';
         ctx.fillText(label, cx, cz - s / 2 - 9);
+        const rv = houseRival(g, f);
+        if (rv) {   // (the named lord who leads the house, above its name)
+          ctx.font = 'italic 600 12px Cinzel, Georgia, serif';
+          ctx.lineWidth = 3;
+          ctx.strokeText(rv.name, cx, cz - s / 2 - 25);
+          ctx.fillStyle = '#e8d9a0';
+          ctx.fillText(rv.name, cx, cz - s / 2 - 25);
+        }
       }
     }
     // King of the Hill: the hill in the middle, shaded in the colour of the house that holds it, red while it is contested
@@ -1298,11 +1307,11 @@ export class UI {
     if (!this.bigBg) this.bigBg = this.buildMapBg(cv.width, true);
     this.paintMap(cv.getContext('2d'), cv.width, this.bigBg, true);
     const g = this.game;
-    const key = g.factions.map((f) => `${f.name}${f.castle.fallen}`).join('|') + g.localTeam;
+    const key = g.factions.map((f) => `${f.name}${f.lord}${f.castle.fallen}`).join('|') + g.localTeam;
     if (key !== this.legendKey) {
       this.legendKey = key;
       $('bigmapLegend').innerHTML = g.factions.map((f) =>
-        `<span><i style="background:${TEAM_CSS[f.team]}"></i>${esc(f.name)}${f.team === g.localTeam ? ' (you)' : ''}${f.castle.fallen ? ' · fallen' : ''}</span>`).join('')
+        `<span><i style="background:${TEAM_CSS[f.team]}"></i>${esc(f.name)}${houseRival(g, f) ? ' · ' + esc(houseRival(g, f).short) : ''}${f.team === g.localTeam ? ' (you)' : ''}${f.castle.fallen ? ' · fallen' : ''}</span>`).join('')
         + '<span class="sym">▲ you · ■ heroes · ▪ soldiers (white edge: your army) · ▣ siege engines · ◯ gates · dashed line: where each house marches</span>';
     }
   }

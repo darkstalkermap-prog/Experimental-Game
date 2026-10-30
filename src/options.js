@@ -5,7 +5,8 @@
 //   biome     'meadow' | 'snow' | 'marsh' | 'desert'      how the land looks, and its small rule twists (the world is built for it)
 //   seed      0..999999                                   varies the land inside a biome; 0 is the classic layout
 //   decrees   string[] (at most 4)                        ids of the Battle Decrees in force this match
-//   rivals    string[4]                                   the personality id of the rival lord of each house (index = team); '' = the classic lord
+//   rivals    string[4]                                   the personality id of the rival lord of each house (index = team); '' or 'classic' = the classic lord; ids are
+//                                                         those of rivals.js ('rusher', or 'rusher3' for the fourth name of its pool); the menu rolls them when all four are empty
 // Each feature validates its own field below; the shape stays flat and JSON-safe because it travels in a network message and in localStorage.
 import { BIOME_IDS } from './biomes.js';
 

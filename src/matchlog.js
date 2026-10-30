@@ -26,6 +26,8 @@
 //   event   timeup { winner }  the clock of a Short war ran out and the war was decided on points (Game.timeUp; winner = the house ahead, -1 for a draw)
 //   counter conceded           1 when the local lord conceded or left (not for a won war that was finished early)
 //   counter prepSkipped        seconds of the first preparation that Ready skipped (what was left on the timer when the last lord pressed it)
+//   event 'rival' { team, id }          a house is led by a named rival lord (id as in options.rivals), at the start; 'rivalFell' { team } when his castle falls;
+//                                       'push' { team, target, men } when he sends an army at a castle (rivals.js, ai.js)
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

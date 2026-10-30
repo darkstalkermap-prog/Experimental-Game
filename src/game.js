@@ -43,6 +43,8 @@ import { progress } from './progress.js';
 import { highlights } from './highlights.js';
 import { Finale } from './finale.js';
 import { warmCollapse } from './castlecollapse.js';
+import { rivalInfo, tuneWave } from './rivals.js';
+import { introduceRivals } from './rivalsui.js';
 import { mods } from './mods.js';
 import { sanitizeOptions } from './options.js';
 import { Weather } from './weather.js';
@@ -221,8 +223,9 @@ export class Game {
     for (const c of this.castles) c.setBanner(((this.humans.find((h) => h.team === c.team) || {}).cos || {}).banner);   // (a lord's banner on their castle; AI houses keep theirs)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
+      const rival = human || this.practice || setup.hero ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
       return {
-        team: i, name: TEAM_NAMES[i], lord: human ? human.name : LORD_NAMES[i], isPlayer: !!human, player: human, castle: c,
+        team: i, name: TEAM_NAMES[i], lord: human ? human.name : rival ? rival.name : LORD_NAMES[i], rival, isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
         eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
@@ -233,6 +236,7 @@ export class Game {
       // in online games the human houses are named after their lords
       for (const f of this.factions) if (f.isPlayer) f.name = `House ${f.lord}`;
     }
+    for (const f of this.factions) if (f.rival) matchlog.record('rival', { team: f.team, id: this.options.rivals[f.team] });   // (who leads the rival houses: the end screen tells)
     for (const h of this.humans) {
       const c = this.castles[h.team];
       h.spawn(c.spawnPoint, c.rot);
@@ -267,6 +271,7 @@ export class Game {
     for (let v = 0; v < 6; v++) {
       for (let team = 0; team < 4; team++) for (const t of factionTypes) this.warmQueue.push([t, team, v]);
     }
+    introduceRivals(this);   // (a card naming the rival lords and how they play, when the match has any: none in the yard or the Hero Game Mode)
     if (this.practice) {
       this.phaseT = 1e9;   // (nothing marches in the yard)
       this.court.begin();
@@ -877,10 +882,12 @@ export class Game {
   waveList(f) {
     const w = this.round;
     // four soldiers at first, one more every two waves, in a steady mix of swordsmen, spearmen and archers
-    const mix = ['swordsman', 'swordsman', 'spearman', 'archer', 'archer', 'swordsman', 'spearman', 'archer'];
+    const style = f.ai && f.ai.P;   // (a rival lord with a style of his own has his own mix and his elites: see rivals.js)
+    const mix = (style && style.wave && style.wave.mix) || ['swordsman', 'swordsman', 'spearman', 'archer', 'archer', 'swordsman', 'spearman', 'archer'];
     const n = Math.min(14, 4 + Math.floor((w - 1) / 2));
     const list = [];
     for (let i = 0; i < n; i++) list.push(mix[i % mix.length]);
+    if (style && style.wave && style.wave.elite) tuneWave(list, w, style.wave.elite);
     if (w >= 7 && w % 2 === 1) list.push('horseman');
     if (w >= 12 && w % 2 === 0) list.push('knight');
     // upgrades: bigger barracks send more men, elite levies add knights and riders
@@ -1037,7 +1044,8 @@ export class Game {
     this.units.push(u);
     this.audio.play('roar', p);
     const tName = target ? this.factions[target.team].name : 'the enemy';
-    this.announce((v) => (v === f.team ? `Your giant rises and lumbers toward ${tName}!` : v === (target && target.team) ? `${f.name} has summoned a GIANT, and it is coming for you!` : `${f.name} has summoned a giant!`), f.team, target ? target.team : -99);
+    const who = f.rival ? f.lord : f.name;   // (a named lord is named)
+    this.announce((v) => (v === f.team ? `Your giant rises and lumbers toward ${tName}!` : v === (target && target.team) ? `${who} has summoned a GIANT, and it is coming for you!` : `${who} has summoned a giant!`), f.team, target ? target.team : -99);
     return u;
   }
 
@@ -1495,7 +1503,8 @@ export class Game {
     p.removeBody();
     f.isPlayer = false;
     f.player = null;
-    f.lord = LORD_NAMES[f.team];
+    f.rival = this.practice || this.hero ? null : rivalInfo(this.options.rivals[f.team]);
+    f.lord = f.rival ? f.rival.name : LORD_NAMES[f.team];
     f.hero = null;
     if (!f.eliminated && !f.castle.fallen) {
       this.spawnLord(f);

@@ -22,6 +22,7 @@ import { endSound } from './endprogress.js';   // (the end screen's battle and R
 import './wardrobe.js';       // (the Renown panel of the menu)
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
 import { pendingDecrees } from './decrees.js';
+import { withRivals, lobbyRivals } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -131,7 +132,7 @@ selectMap(mapSize);
 // the match options besides map, mode, difficulty and class (length, biome, decrees, rival lords: see options.js), remembered per browser. The menu pieces
 // that choose them change fields of this object; every start below sends a sanitized copy and remembers it
 let options = loadOptions();
-const matchOptions = () => { options = sanitizeOptions({ ...options, biome: land.biome, seed: land.seed, decrees: pendingDecrees() }); saveOptions(options); return options; };   // (the land comes from biomes.js and the Battle Decrees from decrees.js: the end screen rolls both)
+const matchOptions = (humans) => { options = sanitizeOptions({ ...options, biome: land.biome, seed: land.seed, decrees: pendingDecrees() }); saveOptions(options); return withRivals(options, humans); };   // (the land comes from biomes.js and the Battle Decrees from decrees.js: the end screen rolls both)
 // Between matches the stored options are the truth: the end screen's sections roll the next battle into them (land, rivals) and save, so a rematch reads them
 // afresh (the decrees are asked from decrees.js at every start, above). The menu pieces change `options` in memory and the next start saves them.
 const refreshOptions = () => { options = loadOptions(); };
@@ -421,7 +422,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
   lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout() }];
-  const broadcast = () => { ui.renderLobby(lobby, 0, coop, objective, options.length); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, len: options.length, land: { biome: land.biome, seed: land.seed } }); };
+  const broadcast = () => { const rv = lobbyRivals(); ui.renderLobby(lobby, 0, coop, objective, options.length, rv); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, len: options.length, land: { biome: land.biome, seed: land.seed }, rv }); };
   lobbyBroadcast = broadcast;
   // guests report the class they pick
   const looks = new Map();   // what guests said they wear (a guest may speak before the host has seated it)
@@ -458,7 +459,7 @@ $('hostBtn').addEventListener('click', async () => {
 });
 
 $('startOnline').addEventListener('click', () => {
-  const opts = matchOptions();
+  const opts = matchOptions(lobby.map((p) => p.team));
   net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective, opts });
   begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective, options: opts });
 });
@@ -473,7 +474,7 @@ $('joinBtn').addEventListener('click', async () => {
   guestData = ({ d }) => {
     if (d.k === 'rematch') guestRematch();
     if (d.k === 'lobby') {
-      ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.len);
+      ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.len, d.rv);
       const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)
       showLobbyLand(false, { biome: l.biome, seed: l.seed });
     }

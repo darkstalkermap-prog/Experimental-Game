@@ -523,6 +523,42 @@ All three rules are decided by the host and apply to the AI lords exactly as to 
 The log (`matchlog`, see its header) records `decrees` and `comeback` events (`underdog`, `gate`, `last_stand`, `stand_held`),
 and the end screen adds a "Comeback" ribbon when they did something for your house.
 
+## Rival lords
+
+Every battle the three rival houses are led by **named lords with a style of their own** instead of three copies of the same AI: "Lord Varric
+the Reckless" does not play like "Lady Morwen the Patient", so each match asks for a new plan. The lords are drawn at random when a match starts
+(never two alike, and no house gets the lord it had last time); the house keeps its colour and its name (House Varr is the red one whoever leads it).
+
+| Lord | Style | How to meet him |
+| --- | --- | --- |
+| **the Reckless** (Rusher) | Strikes at about 2:30 with swords and riders, guards the castle thinly and mends it late. | Hold the gate through the first push, then hit back at the thin walls. |
+| **the Patient** (Turtler) | Raises walls, gate and towers first (its masons work cheap), calls the army home when a host stands at the gate, marches after about 8:30 with a big army. | Do not feed an army to the walls: break the others first, or bring engines. |
+| **the Breaker** (Siege-lover) | Buys rams and catapults from about 2:30 on (its engineers work cheap), keeps spearmen with them and does not march without an engine. | Kill the engines before they reach the gate (riders and archers do it best). |
+| **the Swift** (Raider) | Fast riders raid the field again and again, never for long, and leave the waves on their lanes. | Archers on the wall and riders of your own: raiders flee a fight they cannot win. |
+| **the Gilded** (Merchant) | Invests before it fights: Elite Levies, Drill Sergeants, a bigger barracks and thick walls first; marches after about 8 minutes, with waves that are better trained than yours. | Hit early, before the levies pay off. |
+| **the Vengeful** (Zealot) | Every wave, engine, giant and push marches on the human houses and nobody else. | Stand your gate: the other houses are left in peace. |
+| **the Ironclad** (Warlord) | Few soldiers but knights and veterans, promoted early, the lord at their head. | Archers and engines hurt plate best; stay out of the open. |
+| **the Giantsworn** (Giant-caller) | Saves every coin for a giant (its retinue pays two fifths), keeps a thin guard and calls the next one when the last has fallen: one every few minutes. | Kill the giant (600 gold) or hit the thin guard while the next one is paid for. |
+| **the Cunning** (Opportunist) | Drills its men and waits until a castle is broken (a gate down, a keep burning), then pounces on the wreck. | Do not leave your gate broken or your keep burning. |
+
+Each lord has six names (three Lords, three Ladies) to go with the epithet. They are shown wherever a lord is named: a **card at the start of the
+match** with each rival and how he plays, a small tag next to every house in the top-left list ("House Elden  Patient"), the **Rival lords** list in the
+game menu (Esc) with a plan against each, the scoreboard (**Tab**), the big map (**M**) under each castle, the announcements ("Lord Varric the Reckless
+charges out against House Elden!", "Lord Brokk the Breaker sends a battering ram against ..."), the kill feed, and the online lobby's AI slots. The end screen
+has a **Rivals next battle** row (with *Draw other lords*) and says how the rivals fared this time; **Play Again** starts with exactly the lords it showed.
+
+**Options -> Named rival lords** (On by default, remembered in this browser) switches them off: every house then has the plain old lord ("Lord Varr", "Lady
+Elden", "Lord Sol") whose numbers are the ones the AI always had. The difficulty stays the strength scale (Easy, Normal, Hard make every lord slower or
+quicker to attack, in the same way); the lords differ in style, not in cheating (the Patient's masons, the Breaker's engineers and the Giantsworn's retinue
+each pay a share of what their plan buys, which is what keeps those plans a match for the others). Bot-versus-bot matches were used to tune them so that no lord
+is far ahead of or behind the rest. Online, the host draws the lords and sends the ids in the start message
+(`options.rivals`), the guests only show them; a player who leaves is replaced by the plain lord. Hero Game Mode and the practice courtyard have no rival
+lords.
+
+For modders: a personality is a table of parameters in `src/rivals.js` (the key list is in its header; `CLASSIC` is the old lord), played by `LordAI` in
+`src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
+his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees. The match log records `rival`, `push` and `rivalFell` events.
+
 ## Hero Game Mode
 
 Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
@@ -819,7 +855,8 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/combat.js` | Shared rules for attack and guard directions |
 | `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |
 | `src/grass.js` | Wind-swept grass that grows around the camera |
-| `src/ai.js` | Rival lord strategy: spending, repairs and pushes |
+| `src/ai.js` | Rival lord strategy: spending, repairs and pushes, in the style of the lord's personality (the classic lord's numbers are the old ones) |
+| `src/rivals.js`, `src/rivalsui.js` | The rival lords: the nine personalities (a table of parameters each, their names and plans), the roll, and what the player sees (the card at the start, the game menu list, the HUD tag, the end-screen row, the Options switch) |
 | `src/teams.js` | Who fights whom: co-op sides |
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/decrees.js`, `src/comeback.js` | Battle Decrees (the catalogue, the roll, the end-screen "Next battle" panel) and the comeback rules (underdog's wage, cheaper gate, Last Stand); both work through `src/mods.js` |
