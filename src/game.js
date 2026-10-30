@@ -1383,14 +1383,17 @@ export class Game {
     for (const h of this.humans) {
       if (h.isBot) continue;
       of++;
-      if (this.readyTeams.has(h.team)) { n++; mask |= 1 << h.team; }
+      if (this.readyTeams.has(this.readyKey(h.team, h))) { n++; mask |= 1 << h.team; }
     }
     return [n, of, mask];
   }
 
-  setReady(team) {
+  // who has pressed Ready: a house, or in the Hero Game Mode (several people to a castle) a hero, by seat
+  readyKey(team, who) { return this.hero && who && who.hid !== undefined ? `h${who.hid}` : team; }
+
+  setReady(team, who = null) {
     if (!this.readyLive || !this.simulating) return;
-    this.readyTeams.add(team);
+    this.readyTeams.add(this.readyKey(team, who));
     this.checkReady();
   }
 
@@ -1412,7 +1415,7 @@ export class Game {
       this.net.toHost({ a: 'ready' });
       return;
     }
-    this.setReady(this.localTeam);
+    this.setReady(this.localTeam, this.player);
   }
 
   // ---------------- ending a decided battle early ----------------

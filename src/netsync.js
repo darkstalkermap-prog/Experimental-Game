@@ -125,7 +125,7 @@ export class HostSync {
         break;
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
-      case 'ready': g.setReady(p.team); break;
+      case 'ready': g.setReady(p.team, p); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;

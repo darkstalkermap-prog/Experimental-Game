@@ -52,11 +52,11 @@ export function readyView(g) {
   let n = 0, of = 0, mine = false;
   if (g.mode === 'client') {
     const r = g.readyInfo;
-    if (r) { n = r[0]; of = r[1]; mine = !!(r[2] & (1 << g.localTeam)); }
+    if (r) { n = r[0]; of = r[1]; mine = !g.hero && !!(r[2] & (1 << g.localTeam)); }   // (Hero Game Mode: a castle holds several people, each ready for themselves)
     mine = mine || !!g.readySent;
   } else {
     [n, of] = g.readyState();
-    mine = g.readyTeams.has(g.localTeam);
+    mine = g.readyTeams.has(g.readyKey(g.localTeam, g.player));
   }
   return { n, of, mine, alone: of <= 1 };
 }
