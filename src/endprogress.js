@@ -123,15 +123,19 @@ const herosCounters = (s) => {
   return out;
 };
 
+// a War Mode match (its world's key says so: main.js)
+const isWar = (s) => /\+war/.test(s.map || '');
+
 // ---------------------------------------------------------------- the match is folded into the account once
 onMatchEnd((s) => {
   const gone = document.getElementById('goStats');
   if (gone) gone.classList.remove('cwe-gone');
   if (s.progress || /practice/.test(s.map || '')) return;   // (counted already, or the courtyard: it grants nothing)
-  const c = herosCounters(s);
+  const c = herosCounters(s), war = isWar(s);
+  // (War Mode counts towards the same bests and Renown: its kills, damage, streak, army kills, time and wins; it has no waves and earns no gold)
   const m = {
-    time: s.time, waves: s.waves, kills: s.kills, won: s.won, difficulty: s.difficulty, cls: s.cls, events: s.events,
-    stats: { streak: c.streak, dmg: c.dmg, armyKills: s.hero ? 0 : s.armyKills, gold: s.hero ? 0 : s.goldEarned, breaches: c.breaches },
+    time: s.time, waves: war ? 0 : s.waves, kills: s.kills, won: s.won, difficulty: s.difficulty, cls: s.cls, events: s.events,
+    stats: { streak: c.streak, dmg: c.dmg, armyKills: s.hero ? 0 : s.armyKills, gold: s.hero || war ? 0 : s.goldEarned, breaches: c.breaches },
   };
   const { account, result } = applyMatch(loadAccount(), m);
   result.saved = saveAccount(account);
@@ -161,7 +165,7 @@ function recordText(r, hero) {
 function battleSection(s) {
   const r = s.progress;
   if (!r) return null;
-  const c = herosCounters(s), hero = !!s.hero;
+  const c = herosCounters(s), hero = !!s.hero, war = isWar(s);
   const box = el('div', 'cwe cwe-battle');
   const h = el('h4', '', 'Your battle');
   box.append(h);
@@ -197,8 +201,9 @@ function battleSection(s) {
   add('kills', 'Kills', s.kills, num, 'Your kills');
   if (c.streak > 0) add('streak', 'Streak', c.streak, num, 'Most kills in a row without falling');
   add('dmg', 'Damage', Math.round(c.dmg), num, 'Damage you dealt to foes');
-  add('waves', hero ? 'Rounds' : 'Waves', s.waves, num, hero ? 'Rounds fought' : 'Waves that marched');
-  if (!hero) { add('armyKills', 'Army', s.armyKills, num, 'Kills by your army'); add('gold', 'Gold', Math.round(s.goldEarned), num, 'Gold earned'); }
+  if (!war) add('waves', hero ? 'Rounds' : 'Waves', s.waves, num, hero ? 'Rounds fought' : 'Waves that marched');
+  if (!hero) add('armyKills', 'Army', s.armyKills, num, 'Kills by your army');
+  if (!hero && !war) add('gold', 'Gold', Math.round(s.goldEarned), num, 'Gold earned');
   add('', 'Deaths', s.deaths, num, 'Times you fell');
   add('time', 'Time', Math.round(s.time), clockText, 'Time fought (your longest is the best)');
   if (c.breaches > 0) add('breaches', 'Breaches', c.breaches, num, 'Gates and walls you broke');

@@ -307,7 +307,7 @@ if (typeof document !== 'undefined') {
 }
 
 registerEndSection('decrees', 50, (s) => {
-  if (s.hero || s.practice) return null;
+  if (s.hero || s.practice || /\+war/.test(s.map || '')) return null;   // (War Mode has no decrees: game.js)
   injectCss();
   const el = mk('div', 'nb-row nb-decrees');
   paint(el, s);

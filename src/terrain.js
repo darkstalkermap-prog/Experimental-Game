@@ -12,7 +12,7 @@ import { forestDensity } from './landscape.js';
 import { terrainMaterial, setRoads, setBiomeLook } from './terrainmat.js';
 import { Q } from './quality.js';
 import { active } from './biomes.js';
-import { BOWL } from './warmap.js';
+import { FIELD, hillDistance } from './warmap.js';
 
 const CHUNK = 64;   // cells per chunk side (128 m)
 // far rings: cell size and how wide the ring is (each ring starts where the last ended, snapped to the next cell size)
@@ -73,6 +73,7 @@ export function grassBase(nz, x, z, h, base) {
 // Everything the ground colour depends on, for one spot. Fills `o` ({ base, all: Color, mask: [castle, hill, sand or patch, forest] }).
 // slope is the gradient |grad h|. `roadDist` comes from world.js.
 export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
+  if (physics.war) h = physics.dressHeight(x, z, h);   // (War Mode: the hills are meadow, see warmap.js)
   const { fbm } = nz, C = colours(), B = active.def;
   const sx = x + active.ox, sz = z + active.oz;   // (where the dressing noise is read: a seed moves it, seed 0 does not)
   const n1 = fbm(sx * 0.02, sz * 0.02, 3) * 0.5 + 0.5;
@@ -92,8 +93,9 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   // the same layers as masks, for the shader
   let castle = 0, hill = 0, sandW = 0, patchW = 0;
   if (!o.far) {   // (beyond the play area there are no castles, hill or yard)
-    if (physics.war) {   // War Mode's bowl: no castles or hill; the floor is trampled bare in patches where the armies stand and fight
-      castle = (1 - smoothstep(BOWL.floor * 0.6, BOWL.floor * 0.95, Math.hypot(x, z))) * smoothstep(0.45, 0.8, n2) * 0.6;
+    if (physics.war) {   // War Mode's field: no castles or hill; the ground is trampled bare in patches where the armies muster (the hilltops) and fight (the field)
+      const worn = Math.max(1 - smoothstep(FIELD.floor * 0.8, FIELD.front, Math.hypot(x, z)), 1 - smoothstep(0, 6, hillDistance(x, z)));
+      castle = worn * smoothstep(0.45, 0.8, n2) * 0.6;
     } else {
       for (const s of CASTLE_SITES) {
         const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));

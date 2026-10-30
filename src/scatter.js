@@ -5,7 +5,7 @@
 import { WORLD, CASTLE, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { roadDist } from './roads.js';
-import { bowlPropOk } from './warmap.js';
+import { fieldPropOk } from './warmap.js';
 import { forestDensity } from './landscape.js';
 import { active, landRng } from './biomes.js';
 
@@ -14,7 +14,7 @@ export function okForProp(x, z, physics) {
     if (Math.max(Math.abs(x - s.x), Math.abs(z - s.z)) < CASTLE.H + 30) return false;
   }
   if (roadDist(x, z) < 7) return false;
-  if (!bowlPropOk(x, z)) return false;   // (War Mode: the bowl's floor and lower slope stay open)
+  if (!fieldPropOk(x, z)) return false;   // (War Mode: the field, the hills and their slopes stay open)
   if (Math.hypot(x, z) < 44) return false;
   if (physics.practice && Math.abs(x - physics.practice.x) < PRACTICE.hw + 16 && Math.abs(z - physics.practice.z) < PRACTICE.hd + 16) return false;   // the practice yard
   return true;

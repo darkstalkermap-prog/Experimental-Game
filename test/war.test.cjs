@@ -56,3 +56,46 @@ test('War Mode keeps only a few cosmetic effects in a snapshot', async () => {
   assert.equal(n('toast'), 1);
   assert.equal(n('banner'), 1);
 });
+
+test('War Mode: a hill for every side, walkable slopes, each army on its hilltop', async () => {
+  const { WORLD, setMapSize, setWarWorld } = await load('src/config.js');
+  const { FIELD, layoutField, fieldProfile, sideSpot } = await load('src/warmap.js');
+  for (const size of ['small', 'medium', 'large']) {
+    for (const hills of [2, 3, 4]) {
+      setMapSize(size);
+      setWarWorld(hills);
+      layoutField();
+      assert.equal(FIELD.hills, hills);
+      let steepest = 0;
+      for (let side = 0; side < hills; side++) {
+        const s = sideSpot(side, hills);
+        // the front rank stands on the flat top, the middle of the map is the low field
+        assert.ok(fieldProfile(s.x, s.z) > FIELD.height - 0.5, `${size}/${hills}: side ${side} on its hilltop`);
+        assert.ok(fieldProfile(s.x - s.fx * 20, s.z - s.fz * 20) > FIELD.height - 0.5, 'the ranks behind it too');
+        for (let d = 0; d < FIELD.front + 10; d += 0.5) {
+          const a = fieldProfile(s.x + s.fx * d, s.z + s.fz * d), b = fieldProfile(s.x + s.fx * (d + 0.5), s.z + s.fz * (d + 0.5));
+          steepest = Math.max(steepest, Math.abs(a - b) / 0.5);
+        }
+      }
+      const deg = (Math.atan(steepest) * 180) / Math.PI;
+      assert.ok(fieldProfile(0, 0) < 1, `${size}/${hills}: the middle is low`);
+      assert.ok(deg < 28, `${size}/${hills}: slopes ${deg.toFixed(1)} degrees`);
+      assert.ok(FIELD.front + FIELD.hd * 2 < WORLD.playHalf, 'the hills lie inside the play area');
+    }
+  }
+  setWarWorld(0);
+  setMapSize('medium');
+});
+
+test('War Mode: the sides of a match and the hills its world needs', async () => {
+  const { warSides, warHills } = await load('src/warmap.js');
+  assert.deepEqual(warSides('duel', [0], [0, 1, 2, 3], false).sides, [[0], [1]]);
+  assert.deepEqual(warSides('teams', [0], [0, 1, 2, 3], false).sides, [[0, 2], [1, 3]]);
+  assert.equal(warSides('ffa', [0], [0, 1, 2, 3], false).sides.length, 4);
+  assert.deepEqual(warSides('ffa', [0, 1], [0, 1, 2, 3], true).sides, [[0, 1], [2, 3]]);
+  assert.equal(warHills({ players: [{ team: 0 }], war: { format: 'ffa' } }), 4);
+  assert.equal(warHills({ players: [{ team: 0 }], war: { format: 'ffa' }, empty: [3] }), 3);
+  assert.equal(warHills({ players: [{ team: 0 }], war: { format: 'duel' } }), 2);
+  assert.equal(warHills({ players: [{ team: 0 }, { team: 1 }], coop: true, war: { format: 'ffa' } }), 2);
+  assert.equal(warHills({ players: [{ team: 0 }], war: { format: '__proto__' } }), 4);
+});

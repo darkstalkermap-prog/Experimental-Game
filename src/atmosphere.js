@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { Q, usesPost } from './quality.js';
 import { skyLightGLSL } from './skylight.js';
 import { active } from './biomes.js';
+import { WAR, WAR_WORLD } from './config.js';
 
 // the sun stands still: a warm afternoon, about 30 degrees above the horizon (everything that needs it reads this one vector)
 export const SUN_DIR = new THREE.Vector3(-0.55, 0.42, 0.45).normalize();
@@ -485,7 +486,7 @@ export function createAtmosphere(scene, renderer = null) {
       mat.uniforms.uTime.value = this.time;
       const clouds = Q.clouds | 0;
       if (mat.defines.CLOUDS !== clouds) { mat.defines.CLOUDS = clouds; mat.needsUpdate = true; }
-      scene.fog.far = (1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog;   // (the shader takes it as the density: see the fog chunk)
+      scene.fog.far = (1 / 400) * (1000 / Math.max(300, Q.viewDist)) * air.fog * (WAR_WORLD.on ? WAR.haze : 1);   // (the shader takes it as the density: see the fog chunk; War Mode's own: config.js)
       if (direct !== !usesPost()) { direct = !usesPost(); setTint(); }
     },
   };

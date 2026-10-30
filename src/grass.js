@@ -243,7 +243,7 @@ export class Grass {
           if (sl > 2.2) continue;
           if (job.n >= this.max) continue;
           const size = (job.t === 0 ? 0.8 : 1.35) * (0.8 + hash(i, j, 4) * 0.5) * (1 - 0.5 * smoothstep(1.2, 2.2, sl));
-          grassBase(this.physics.noise, x, z, y, col);
+          grassBase(this.physics.noise, x, z, this.physics.war ? this.physics.dressHeight(x, z, y) : y, col);   // (War Mode's hills: warmap.js)
           const v = 0.82 + hash(i, j, 7) * 0.4, k = job.n * 4;
           st.a[k] = x; st.a[k + 1] = y - 0.02; st.a[k + 2] = z; st.a[k + 3] = hash(i, j, 5) * 6.2832;
           st.t[k] = col.r * v * 1.12; st.t[k + 1] = col.g * v * (0.96 + hash(i, j, 8) * 0.12) * 1.12; st.t[k + 2] = col.b * v * 0.95; st.t[k + 3] = size;
