@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { CASTLE } from './config.js';
 import { allied } from './teams.js';
+import { GATE_OPEN } from './physics.js';
 
 const H = CASTLE.H;
 const TC = H + CASTLE.towerOff;        // corner tower centres
@@ -75,10 +76,18 @@ export function avoidCastles(game, pos, goal, mem = null) {
   return goal;
 }
 
+// Can someone of `team` go through this castle's gate now? A broken gate, an open one (for anybody: an enemy who
+// finds it open walks straight in) or, for its own side, one that will swing open for them.
+export function gatePassable(castle, team) {
+  const g = castle.gate;
+  if (!g.alive) return true;
+  if (castle.gateLocked) return false;
+  return allied(g.team, team) || g.openAmt >= GATE_OPEN;
+}
+
 export function entriesFor(castle, team) {
   const list = [];
-  const g = castle.gate;
-  if (!g.alive || (allied(g.team, team) && !castle.gateLocked)) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
+  if (gatePassable(castle, team)) list.push({ out: castle.gateOut, in: castle.gateIn, gate: true });
   for (const w of castle.walls) if (!w.alive) list.push({ out: w.outPt, in: w.inPt });
   return list;
 }
@@ -94,7 +103,8 @@ export function navigate(game, unit, goal) {
   if (nav) {
     nav.t += 0.3;
     if (nav.phase === 'enter') {
-      if (nav.t > 9 || nav.castle.isInside(pos, -1.5) || d2(pos, nav.entry.in) < 2) unit.nav = null;
+      // (an enemy gate that was open when the walk in began may have swung shut since: think again)
+      if (nav.t > 9 || nav.castle.isInside(pos, -1.5) || d2(pos, nav.entry.in) < 2 || (nav.entry.gate && !gatePassable(nav.castle, unit.team))) unit.nav = null;
       else return nav.entry.in;
     } else {
       if (nav.t > 9 || !nav.castle.inFootprint(pos, 1.5) || d2(pos, nav.entry.out) < 2) unit.nav = null;

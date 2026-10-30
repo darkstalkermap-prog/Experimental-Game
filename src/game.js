@@ -595,8 +595,8 @@ export class Game {
   // assault) and have reached it: a command to march out is obeyed, besieged or not.
   gateShouldOpen(castle) {
     if (this.state !== 'playing') return false;
-    let friend = false, foe = false, hold = false;
-    const p = castle.gatePos;
+    let friend = false, foe = false, hold = false, wedged = false;
+    const p = castle.gatePos, gate = castle.gate;
     this.grid.query(p.x, p.z, 9, (u) => {
       if (!u.alive) return;
       const d = Math.hypot(u.pos.x - p.x, u.pos.z - p.z);
@@ -605,13 +605,15 @@ export class Game {
         if (d < 8) friend = true;
         if (u.isHero && d < 6) hold = true;
         else if (!u.isPlayer && d < 4.5 && (u.order === 'assault' || u.order === 'charge')) hold = true;   // ordered out: the gate yields
-        else if (d < 3) {
-          const l = castle.toLocal(u.pos.x, u.pos.z);   // standing in the gateway itself
-          if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) hold = true;
-        }
       } else if (d < 5.5) foe = true;
+      if (d < 3 && gate.openAmt > 0.05 && u.pos.y - castle.center.y < 3) {
+        // nobody, friend or foe, has an open gate shut on them while standing in the gateway: an enemy who got in
+        // while it stood open keeps it open until he is through (or dead)
+        const l = castle.toLocal(u.pos.x, u.pos.z);
+        if (Math.abs(l.x) < CASTLE.gateW / 2 + 0.5 && l.z > CASTLE.H - CASTLE.wallT - 0.1 && l.z < CASTLE.H + 0.1) wedged = true;
+      }
     });
-    return friend && (hold || !foe);
+    return wedged || (friend && (hold || !foe));
   }
 
   pushOutOfWalls(castle) {
