@@ -81,8 +81,9 @@ let heroOnSolo = () => false;   // (the Mode row below says)
 // (begin); the menu shows the single player's.
 let palette = soloPalette();
 
-// the key of a world: its map size, the practice yard, the land it is dressed as and the colours of its houses (any other is another world, built again)
-const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed)) + '|' + paletteKey(palette);
+// the key of a world: its map size, the practice yard and the land it is dressed as (a different land is another world, built again; so are other colours,
+// kept beside it in game.paletteBuilt)
+const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed));
 
 function buildGame(size, practice = false, landOpts = null) {
   const o = sanitizeOptions(landOpts);
@@ -93,6 +94,7 @@ function buildGame(size, practice = false, landOpts = null) {
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
   game.mapBuiltFor = worldKey(size, practice, o);
+  game.paletteBuilt = paletteKey(palette);
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
   window.__gfx = gfx;
@@ -226,7 +228,7 @@ const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : objective);
 // engines and upgrades are all dirty afterwards), so the next one is built as soon as a match ends (freshWorldSoon) and starting it is then instant.
 function ensureMap(size, practice = false, landOpts = null) {
   const o = sanitizeOptions(landOpts);
-  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o)) return;
+  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o) && game.paletteBuilt === paletteKey(palette)) return;
   const net0 = game.net;
   game.dispose();
   buildGame(size, practice, o);
