@@ -596,6 +596,8 @@ biome never makes the war easier to read or harder to reach.
 | Marsh | mud, standing water and reeds, dead and mossy trees, green-grey mist that hides the far hills | **Fens**: the mist cuts archers' range by 20%, and soldiers wading through a pond (the dark water you can see) march 22% slower |
 | Desert | sand and bands of dunes, red sandstone mountains, palms, cacti and dry shrubs, a hot orange haze and a long clear sight, drifting dust | **Scorching sun**: a hero's sprint drains stamina 50% faster and it returns 35% slower |
 
+The opening banner names the twist, and the Esc menu keeps it in view (a box above the Battle Decrees in force).
+
 **Seeds** (0 to 999999) move the trees, the rocks, the forest on the mountains and the colour patches and ponds of the ground. Seed 0 is each biome's classic
 arrangement; a random seed gives a new arrangement every time. Nothing is placed on a road, in a castle's yard or on the hill, whatever the seed
 (`okForProp` in `src/scatter.js`), and the same biome and seed always build the same world: nothing in a build uses `Math.random`, so the host and its guests
