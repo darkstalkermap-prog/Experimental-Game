@@ -628,8 +628,8 @@
   #heroTop #heroGoal { margin-top: 3px; font-size: 14px; opacity: 0.92; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #heroTop .hline { grid-column: 1 / -1; margin-top: 4px; font-size: 14px; white-space: nowrap; }
   #heroTop .hline .gold { color: var(--gold); }
-  #heroRoster { position: absolute; left: 16px; top: 12px; width: 330px; padding: 5px 8px 6px; font-size: 14px; }
-  #heroRoster .hr { display: grid; grid-template-columns: 20px minmax(0, 1fr) 36px 42px 66px; gap: 5px; align-items: center; height: 22px; padding: 0 4px 0 6px; border-left: 3px solid #888; line-height: 22px; overflow: hidden; }
+  #heroRoster { position: absolute; left: 16px; top: 12px; width: 336px; padding: 5px 8px 6px; font-size: 14px; }
+  #heroRoster .hr { display: grid; grid-template-columns: 20px minmax(0, 1fr) 36px 42px 72px; gap: 5px; align-items: center; height: 22px; padding: 0 4px 0 6px; border-left: 3px solid #888; line-height: 22px; overflow: hidden; }
   #heroRoster .ic { font-size: 14px; line-height: 22px; height: 22px; overflow: hidden; }
   #heroRoster .hr.sep { margin-top: 5px; }
   #heroRoster .hr.me { background: rgba(224,180,76,0.28); }
@@ -642,11 +642,15 @@
   #heroRoster .st.respawn { color: #ff9d8a; }
   #heroRoster .st .bar { display: block; height: 6px; margin: 0; }
   #heroRoster .st .bar b { display: block; height: 100%; background: linear-gradient(#d0463a, #8c1e16); }
-  @media (max-width: 900px) {
-    #hud.hero #hint { display: none; }
-    #heroRoster { top: 96px; width: 250px; }
-    #hud.hero #alerts { top: 236px; }
-  }
+  /* A window too narrow for the roster, the score panel and the key line side by side at this UI scale (UI.fitHero measures it on a resize, a
+     new UI scale or the start of a hero match): the roster and the key line drop below the score panel (its bottom is 94 px), the kill feed below
+     the key line. The callouts under the roster keep only the newest ones that fit above the abilities (data-alerts, also measured). */
+  #hud.heronarrow #heroRoster, #hud.heronarrow #hint { top: 104px; }
+  #hud.heronarrow #killfeed { top: 176px; }
+  #hud.heronarrow #alerts { top: 268px; }
+  #hud[data-alerts="1"] #alerts .alert:nth-last-child(n+2), #hud[data-alerts="2"] #alerts .alert:nth-last-child(n+3),
+  #hud[data-alerts="3"] #alerts .alert:nth-last-child(n+4) { display: none; }
+  @media (max-width: 900px) { #hud.hero #hint { display: none; } }
   #shop.hero .tabs, #shop.hero .stat { display: none; }
   #shop.hero #shopGrid { padding-top: 12px; }
   #scoreboard.hero { min-width: min(620px, calc(100% - 32px)); }
