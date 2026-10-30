@@ -10,6 +10,7 @@ import { Q } from './quality.js';
 import { getShape, shapeGeo, SHAPES } from './shapes.js';
 import { unitMaterial, unitMaterials } from './unitmat.js';
 import { unitTextures } from './unittex.js';
+import { SKIRT } from './modelkit.js';
 
 export { unitMaterial };
 
@@ -100,7 +101,8 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
     weaponPart = add(weapon, 'weapon.' + wk);
   }
   if (desc.bow) bowPart = add(elL, desc.bow, desc.weapon === 'bow');
-  if (desc.cape) add(joint(torso, 0, 0.42, -0.125), desc.cape);
+  const cape = desc.cape ? joint(torso, 0, 0.42, -0.125) : null;
+  if (cape) add(cape, desc.cape);
   if (desc.quiver) add(torso, 'quiver');
   const kit = add(torso, 'kit.torso', false);
   const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
@@ -110,7 +112,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const ranged = desc.weapon === 'bow';
   const look = lookFor(variant + 1);
   const m = {
-    kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon,
+    kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, cape,
     weaponTilt: WEAPON_TILT[wk] ?? -1, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart,
     kitArms, kitShield, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
   };
@@ -345,6 +347,26 @@ export function poseSoldier(m, st) {
     T.rotation.x = 0.12;
   }
   m.inst[13] = Math.min(1, sp / 7);
+  settleCloth(m);
+}
+
+// The cloth that hangs from the rig, once the joints are set: the skirt is told how far up the thighs are (unitmat.js bends it), and the
+// cape hangs toward the ground, but never into the back of the hips: a man leaning or kneeling has it hang straight down behind him, one
+// lying on his face has it lie along his back.
+const CAPE_SEAT = [-0.25, -0.14];   // (in the pelvis frame: where the cape passes behind the seat, y and z; standing, it hangs as built)
+function settleCloth(m) {
+  const a = Math.min(0, (m.hipL.rotation.x + m.hipR.rotation.x) * 0.5);
+  m.inst[11] = Math.max(-7.99, a) - 8 * Math.round(Math.max(0, m.hipL.position.z) * 100);
+  const c = m.cape;
+  if (!c) return;
+  // how far back of the pelvis's down the cape points: toward the ground, not inside the line from the shoulders past the seat,
+  // and not far behind the back (a man on his back lies on it)
+  const t = m.torso.rotation.x, ct = Math.cos(t), st = Math.sin(t);
+  const py = 0.1 + 0.42 * ct + 0.125 * st, pz = 0.42 * st - 0.125 * ct;
+  const seat = Math.atan2(pz - CAPE_SEAT[1], py - CAPE_SEAT[0]);
+  const down = -(m.body.rotation.x + m.pelvis.rotation.x);
+  const back = Math.min(Math.max(down, seat), Math.max(seat, t) + 0.1);
+  c.rotation.x = back - t;
 }
 
 // A death: `t` seconds in. kind 0 falls backwards, 1 drops to the knees and pitches forward, 2 crumples to one side (side is +-1).
@@ -380,6 +402,8 @@ export function poseDeath(m, t, kind, side = 1) {
     J(m.shR, -0.6 * e1 - 0.2 * e2, 0, 0.5 * e2); J(m.elR, -0.9 * e1, 0, 0);
   }
   if (m.weapon) m.weapon.rotation.x = m.weaponTilt - 0.4 * e1;
+  m.inst[13] = kind === 1 ? -e2 : 0;   // (no wind of his running left in the cape; face down, it sags over his legs: unitmat.js)
+  settleCloth(m);
 }
 // a fallen horse: down on its side, the legs folded
 export function poseHorseDead(h, t) {
@@ -409,8 +433,9 @@ function bakePart(geo, M, bits, inst) {
   }
   g.setIndex(keep);
   g.applyMatrix4(M);
-  const sg = g.attributes.aSurf;
+  const sg = g.attributes.aSurf, fx = g.attributes.aFx;
   for (let i = 0; i < sg.count; i++) sg.setW(i, 0);   // (what is left is always shown)
+  for (let i = 0; i < fx.count; i++) if (fx.getX(i) >= SKIRT) fx.setX(i, fx.getX(i) - SKIRT);   // (moved out of the pelvis frame: a skirt stays as baked)
   if (inst) {
     const col = g.attributes.color, sf = g.attributes.aSurf;
     for (let i = 0; i < col.count; i++) {

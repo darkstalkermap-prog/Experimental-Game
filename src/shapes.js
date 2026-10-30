@@ -6,7 +6,7 @@
 // 3 gold gorget and band (tier 3+), 4 gold pauldrons and helm wings (tier 4+), 5 long cloak and gilded plate (tier 5), 6 beard,
 // 7 8 9 hair cuts, 12 gilded shield rim (tier 3+).
 import * as THREE from 'three';
-import { Builder, PAT } from './modelkit.js';
+import { Builder, PAT, SKIRT } from './modelkit.js';
 
 export const SHAPES = new Map();
 function def(name, make, open = false) { SHAPES.set(name, { name, make, open, geo: [null, null, null, null] }); }
@@ -172,8 +172,8 @@ function belt(b, extras) {
 function tabardSkirt(b, hem, w) {
   const prof = [[0.252, hem], [0.2, 0.06]];
   for (const arc of [[-0.62, 1.24], [PI - 0.62, 1.24]]) {
-    b.lathe(prof, [0, 0, 0], { arc, sc: [1, 1, 0.78], ...cloth, w: [w, 0], a: [0.8, 1], seg: b.pick(8, 6, 4) });
-    if (b.level < 2) b.lathe([[0.256, hem], [0.25, hem + 0.04]], [0, 0, 0], { arc, sc: [1, 1, 0.78], c: K.trim, m: 'cloth', w: [w, w * 0.9], seg: b.pick(8, 6, 4) });
+    b.lathe(prof, [0, 0, 0], { arc, sc: [1, 1, 0.78], ...cloth, w: [SKIRT + w, SKIRT], a: [0.8, 1], seg: b.pick(8, 6, 4) });
+    if (b.level < 2) b.lathe([[0.256, hem], [0.25, hem + 0.04]], [0, 0, 0], { arc, sc: [1, 1, 0.78], c: K.trim, m: 'cloth', w: [SKIRT + w, SKIRT + w * 0.9], seg: b.pick(8, 6, 4) });
   }
 }
 function scabbard(b) {
@@ -190,7 +190,7 @@ const hips = (b, o) => {
 def('pelvis.mail', (b) => {
   hips(b, LEG.cloth);
   belt(b, true);
-  b.lathe([[0.255, -0.3], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], ...mailM, a: [0.65, 1], seg: b.pick(20, 12, 8) });
+  b.lathe([[0.255, -0.3], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], ...mailM, w: SKIRT, a: [0.65, 1], seg: b.pick(20, 12, 8) });
   tabardSkirt(b, -0.34, 0.9);
   if (b.level < 1) scabbard(b);
 }, true);
@@ -198,21 +198,21 @@ def('pelvis.plate', (b) => {
   hips(b, LEG.cloth);
   belt(b, true);
   const ys = b.level < 2 ? [0.0, -0.09, -0.18] : [-0.05];
-  ys.forEach((y, i) => b.lathe([[0.215 + i * 0.016, y - 0.1], [0.19 + i * 0.012, y + 0.05]], [0, 0, 0], { sc: [1, 1, 0.8], ...plate, a: [0.7, 1], seg: b.pick(20, 12, 8) }));
-  if (b.level < 2) for (const sx of [-1, 1]) b.rbox([sx * 0.085, -0.17, 0.155], [0.14, 0.22, 0.04], { ...plate, e: 0.3, rot: [0.12, 0, sx * 0.08] });
+  ys.forEach((y, i) => b.lathe([[0.215 + i * 0.016, y - 0.1], [0.19 + i * 0.012, y + 0.05]], [0, 0, 0], { sc: [1, 1, 0.8], ...plate, w: SKIRT, a: [0.7, 1], seg: b.pick(20, 12, 8) }));
+  if (b.level < 2) for (const sx of [-1, 1]) b.rbox([sx * 0.085, -0.17, 0.155], [0.14, 0.22, 0.04], { ...plate, w: SKIRT, e: 0.3, rot: [0.12, 0, sx * 0.08] });
   tabardSkirt(b, -0.38, 0.9);
   if (b.level < 1) scabbard(b);
 }, true);
 def('pelvis.gambeson', (b) => {
   hips(b, LEG.cloth);
   belt(b, true);
-  b.lathe([[0.24, -0.24], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], c: K.gamb, m: 'cloth', p: PAT.quilt, a: [0.7, 1], seg: b.pick(18, 12, 8) });
+  b.lathe([[0.24, -0.24], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], c: K.gamb, m: 'cloth', p: PAT.quilt, w: SKIRT, a: [0.7, 1], seg: b.pick(18, 12, 8) });
   if (b.level < 2) b.rod([-0.13, 0.0, 0.1], [-0.15, -0.14, 0.12], 0.015, 0.012, { c: K.steel, m: 'steel' });
 }, true);
 def('pelvis.leather', (b) => {
   hips(b, LEG.cloth);
   belt(b, true);
-  b.lathe([[0.235, -0.4], [0.2, 0.06]], [0, 0, 0], { arc: [-0.8, 1.6], sc: [1, 1, 0.78], c: K.leatherLt, m: 'leather', p: PAT.leather, a: [0.7, 1], seg: b.pick(10, 8, 5) });
+  b.lathe([[0.235, -0.4], [0.2, 0.06]], [0, 0, 0], { arc: [-0.8, 1.6], sc: [1, 1, 0.78], c: K.leatherLt, m: 'leather', p: PAT.leather, w: SKIRT, a: [0.7, 1], seg: b.pick(10, 8, 5) });
   if (b.level < 2) {
     b.rod([0.17, 0.0, 0.05], [0.2, -0.34, 0.05], 0.022, 0.022, { ...wood });
     b.rbox([0.205, -0.38, 0.05], [0.12, 0.07, 0.07], { ...iron, e: 0.3 });
@@ -221,7 +221,7 @@ def('pelvis.leather', (b) => {
 def('pelvis.fur', (b) => {
   hips(b, { c: K.fur, m: 'fur', p: PAT.fur });
   b.torus([0, 0.05, 0], 0.18, 0.022, { rot: [PI / 2, 0, 0], sc: [1, 0.72, 1], c: K.leatherLt, m: 'leather', seg: b.pick(18, 12, 8) });
-  for (const arc of [[-0.8, 1.6], [PI - 0.8, 1.6]]) b.lathe([[0.25, -0.34], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.furLt, m: 'fur', p: PAT.fur, w: [0.8, 0], a: [0.7, 1], seg: b.pick(8, 6, 4) });
+  for (const arc of [[-0.8, 1.6], [PI - 0.8, 1.6]]) b.lathe([[0.25, -0.34], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.furLt, m: 'fur', p: PAT.fur, w: [SKIRT + 0.8, SKIRT], a: [0.7, 1], seg: b.pick(8, 6, 4) });
 }, true);
 
 // the surcoat over a torso: front and back panels, the front carrying the house emblem

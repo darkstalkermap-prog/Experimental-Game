@@ -19,8 +19,11 @@ const DECODE = `
 #endif
 `;
 
-// hide a part whose gate bit is not set, and sway cloth (weights 0..0.99 hang, 1..2 are capes that stream out behind a runner)
-const poseCloth = (normal) => `
+// hide a part whose gate bit is not set, and sway cloth (weights 0..0.99 hang, 1..2 are capes that stream out behind a runner).
+// A skirt (weight + 2, see SKIRT in modelkit.js) follows the thighs when they come up (a crouch, a kneel): the front lies along them,
+// pulled in to their tops, the back flares a little behind. cC.w is minus the mean thigh angle (radians, forward) plus 8 x the hips'
+// shift forward in cm (see legsForSkirt in models.js); 0 is standing. The pivot is the hip joints' height in the pelvis frame.
+const poseCloth = (normal, fixNormal) => `
 float cGate = aSurf.w;
 if (cGate != 0.0) {
   int cBits = int(cA.w + 0.5);
@@ -29,16 +32,41 @@ if (cGate != 0.0) {
   if (!cOn) transformed = vec3(0.0);
 }
 float cW = aFx.x;
+float cSk = step(2.0, cW);
+cW -= 2.0 * cSk;
+if (cSk > 0.0 && cC.w < -0.001) {
+  float sV = -cC.w, sA = -mod(sV, 8.0), sHz = floor(sV / 8.0) * 0.01;
+  float sF = smoothstep(-0.03, 0.09, transformed.z);
+  float sLow = smoothstep(0.07, -0.05, transformed.y);
+  float sK = clamp(sA / -1.45, 0.0, 1.0) * sLow;
+  float sAng = sLow * sA * mix(-0.12, 0.92, sF);
+  float sc = cos(sAng), ss = sin(sAng);
+  vec3 sQ = transformed - vec3(0.0, -0.02, 0.0);
+  sQ.z *= 1.0 - 0.5 * sF * sK;
+  // (the sides, between a thigh and the seat, gather up out of the way; the back is shortened a little: it bunches over the heels)
+  sQ.y *= 1.0 - sK * (2.4 * sF * (1.0 - sF) + 0.2 * (1.0 - sF));
+  transformed = vec3(sQ.x, sQ.y * sc - sQ.z * ss - 0.02, sQ.y * ss + sQ.z * sc + sHz * sF * sLow);${fixNormal ? `
+  #ifndef FLAT_SHADED
+  vec3 sN = vec3(objectNormal.x, objectNormal.y * sc - objectNormal.z * ss, objectNormal.y * ss + objectNormal.z * sc);
+  #ifdef USE_INSTANCING
+  mat3 sIm = mat3(instanceMatrix);
+  sN = sIm * (sN / vec3(dot(sIm[0], sIm[0]), dot(sIm[1], sIm[1]), dot(sIm[2], sIm[2])));
+  #endif
+  vNormal = normalize(normalMatrix * sN);
+  #endif` : ''}
+}
 if (cW > 0.0) {
   float cape = step(1.0, cW);
   float wt = cW - cape;
   float amp = wt * wt;
   float ph = uTime * 2.6 + cD.x * 6.2831 + transformed.y * 6.0 + transformed.x * 9.0;
-  float bil = cD.y;
+  float bil = max(cD.y, 0.0);
   float rip = (0.5 + 0.5 * sin(ph)) * (0.014 + 0.03 * bil + 0.012 * uWind);
   transformed += ${normal} * (amp * rip * 2.0 * (1.0 - cape * 0.5));
   transformed.z -= cape * amp * (0.3 * bil + 0.025 * uWind * (0.6 + 0.4 * sin(ph * 0.6)));
   transformed.y += cape * amp * 0.05 * bil;
+  // a cape on a man lying on his face sags over the backs of his legs (cD.y below 0: how far he is down, see poseDeath)
+  transformed.z += cape * max(-cD.y, 0.0) * 0.13 * smoothstep(-0.4, -0.95, transformed.y);
 }
 `;
 
@@ -169,7 +197,7 @@ vSurf = vec4(aSurf.x, aSurf.y, cPat, cPat > 7.5 ? mod(cB.w, 8.0) : floor(cB.w / 
 vFx = vec4(aFx.zw, cD.z, cD.w);
 vHair = cC.rgb;
 vObj = position;`)
-    .replace('#include <begin_vertex>', `#include <begin_vertex>${poseCloth('normalize(objectNormal)')}`);
+    .replace('#include <begin_vertex>', `#include <begin_vertex>${poseCloth('normalize(objectNormal)', true)}`);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>${FRAG_PARS}`)
     .replace('#include <color_fragment>', `#include <color_fragment>${FRAG_PATTERNS}`)
@@ -182,7 +210,7 @@ function depthShader(shader) {
   Object.assign(shader.uniforms, crowdUniforms);
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', `#include <common>${VERT_PARS}`)
-    .replace('#include <begin_vertex>', `#include <begin_vertex>${DECODE}${poseCloth('vec3(0.0)')}`);
+    .replace('#include <begin_vertex>', `#include <begin_vertex>${DECODE}${poseCloth('vec3(0.0)', false)}`);
 }
 
 let mats = null;
