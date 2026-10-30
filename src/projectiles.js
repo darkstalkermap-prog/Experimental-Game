@@ -235,7 +235,6 @@ export class Projectiles {
             if (p.power || (p.pierce && p.through < p.pierce.length)) {
               (p.hitSet || (p.hitSet = new Set())).add(hit);
               p.through++;
-              if (!p.power) p.vel.multiplyScalar(0.85);   // (each body it goes through slows it a little)
               p.pos.copy(next);
               continue;
             }

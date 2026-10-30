@@ -216,7 +216,8 @@ export class Upgrades {
     this.clear(this.towerMeshes);
     this.archerMesh = null;   // (it was one of them)
     this.flames.length = 0;
-    this.archers = [];   // (one entry per archer: where he stands; all of them are drawn as one mesh)
+    this.spots = [];     // (every place an archer can stand, in towerarchers.js's order)
+    this.archers = [];   // (the archers standing there now: all of them are drawn as one mesh)
     const fire = [];
     c.fire.set('tower', fire);
     if (!L) return;
@@ -244,7 +245,7 @@ export class Upgrades {
         m.position.set(sx * ax, towerH, sz * az);
         m.rotation.y = east ? (sx > 0 ? Math.PI / 2 : -Math.PI / 2) : (sz > 0 ? 0 : Math.PI);
         m.updateMatrix();
-        this.archers.push(m);
+        this.spots.push(m);
       }
       if (L >= 2) {
         // a ballista on the roof deck, aimed out over the north wall
@@ -297,7 +298,8 @@ export class Upgrades {
       if (i >= 0) this.towerMeshes.splice(i, 1);
       this.archerMesh = null;
     }
-    const up = archersOf(c).filter((a) => a.alive).map((a) => this.archers[a.tower * ARCHER_SPOTS.length + a.slot]).filter(Boolean);
+    const up = archersOf(c).filter((a) => a.alive).map((a) => this.spots[a.tower * ARCHER_SPOTS.length + a.slot]).filter(Boolean);
+    this.archers = up;   // (the ones standing there now)
     if (!up.length) return;
     const base = this.archerGeo();
     const mesh = new THREE.Mesh(mergeGeometries(up.map((o) => base.clone().applyMatrix4(o.matrix))), unitMaterial());
