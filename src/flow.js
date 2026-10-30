@@ -24,7 +24,7 @@ export const flow = {
 
 // ---------------------------------------------------------------- what the last match was set up with
 const LAST_KEY = 'cw-last';
-const MODES = ['conquest', 'koth', 'hero'];
+const MODES = ['conquest', 'koth', 'hero', 'war'];
 export function loadLast() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(LAST_KEY)); } catch (e) { /* storage unavailable or garbage */ }
@@ -39,9 +39,9 @@ export function saveLast(diff, mode) {
 export function setupLine({ cls, mode, heroWin, map, diff, length }) {
   const hero = mode === 'hero';
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-  const parts = [CLASSES[cls] ? CLASSES[cls].name : 'Knight', hero ? `Hero Mode: ${HERO.modes[heroWin] ? HERO.modes[heroWin].name : 'Hero kills'}` : (OBJECTIVES[mode] || OBJECTIVES.conquest).name,
+  const parts = [CLASSES[cls] ? CLASSES[cls].name : 'Knight', hero ? `Hero Mode: ${HERO.modes[heroWin] ? HERO.modes[heroWin].name : 'Hero kills'}` : mode === 'war' ? 'War Mode' : (OBJECTIVES[mode] || OBJECTIVES.conquest).name,
     (MAP_SIZES[map] || MAP_SIZES.medium).name, cap(diff)];
-  if (!hero && length === 'short') parts.push('Short');
+  if (!hero && mode !== 'war' && length === 'short') parts.push('Short');
   return parts.join(' · ');
 }
 
@@ -104,6 +104,12 @@ export function offerFor(g) {
   if (g.state !== 'playing' || g.practice || g.hero || !g.factions.length) return null;
   const me = g.localFaction;
   if (!me) return null;
+  if (g.war) {   // War Mode: a lord whose army is gone may leave the battle to the others (warmode.js)
+    if (!me.eliminated) return null;
+    if (g.mode === 'client') return { kind: 'leave', text: 'Your army has fallen.', label: 'Leave · Next battle', ask: 'Leave this battle? It goes on without you and you can start the next one.', yes: 'Leave' };
+    if (g.mode === 'host' && g.humans.some((h) => h !== g.player && !h.isBot)) return null;
+    return { kind: 'concede', text: 'Your army has fallen.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
+  }
   if (g.mode === 'client') {
     if (me.eliminated || (me.castle.fallen && !g.player.alive)) return { kind: 'leave', text: 'You are out of the battle.', label: 'Leave · Next battle', ask: 'Leave this battle? The war goes on without you and you can start the next one.', yes: 'Leave' };
     return null;

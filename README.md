@@ -26,6 +26,9 @@ Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** 
 - **Hero Game Mode**: three heroes against three, out of one castle each, with nothing to control but your hero and its
   talents while the armies march by themselves, round after round tougher. Win by 25 hero kills, by destroying the enemy
   keep, or by the most hero kills in 20 minutes (see **Hero Game Mode** below). Single player for now.
+- **War Mode**: no castles, one great battle in a bowl-shaped arena. Two minutes to buy an army with 6000 gold (up to
+  200 footmen, fewer of the stronger soldiers) and set it out, then the armies fight to the last man; your hero fights too.
+  Single player against AI generals or online with 2 to 4 players (see **War Mode** below).
 
 ## Play
 
@@ -623,6 +626,45 @@ movement, swing, shot and ability paths as a person); `Game.start` switches the 
 `hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
 controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handleInput`).
 
+## War Mode
+
+Pick **War Mode** in the Mode row of the menu (or of the lobby). There are no castles, waves, upgrades or income: the map is a
+**bowl**, a wide, nearly flat floor ringed by slopes that steepen into high rims, dressed in the chosen land's colours, with
+the forest on the heights. The armies start at opposite edges of the floor. The Armies row picks how they are set against
+each other: **Free-for-all** (four armies), **Two against two** (Blue and Green against Red and Gold) or **One against one**.
+Online, Co-op in the lobby puts the players on one side against the AI; houses nobody plays are led by AI generals.
+
+**The timer.** The two minutes are the **army-building phase** (`WAR.buildTime` in `src/config.js`): a countdown in the bar at
+the top and in the army panel. When it runs out, or as soon as every player has pressed **Ready** (Enter), the battle begins
+and is fought to the end: the **last army standing wins** (allies win together). Heroes fight in it and do not rise again
+once they fall (the camera then circles the battle, and a lord whose army is gone may concede from the game menu). A fight
+still going after six minutes is decided on the worth of what each side has left. Nobody can be hurt during the build.
+
+**The army panel** (open during the build; B closes it to walk among your soldiers and opens it again) shows the view over
+your army and sells soldiers for gold (6000 to start; the AI generals get more or less with the difficulty). Each type has a
+cap that falls with its power, and an army has at most 200 soldiers (150 each when four armies take the field, so that the
+biggest battle keeps its frame rate):
+
+| Soldier | Gold | Cap |  | Soldier | Gold | Cap |
+| --- | --- | --- | --- | --- | --- | --- |
+| Footman | 30 | 200 |  | Knight | 100 | 50 |
+| Spearman | 35 | 150 |  | Cavalry | 120 | 40 |
+| Archer | 45 | 100 |  | Lancer | 170 | 20 |
+| Longbowman | 70 | 50 |  | Giant | 1500 | 1 |
+
+Soldiers appear in their places at once; −1 / −10 dismiss them for a full refund. Three **formations**: Battle line
+(infantry in front, archers behind, cavalry on the wings), Wedge (an arrowhead of infantry with the knights at the tip) and
+Archers behind (a deep infantry block, the archers on a long line well behind it, the riders held back). The **battle plan**
+says what infantry, archers and cavalry do when the battle begins: Charge, Hold (stay and fight what comes; archers shoot
+from where they stand) or Follow me. In the battle F1 / F2 / F3 (follow, hold here, charge) and G (the group) give orders
+as in the war modes.
+
+Online the host decides everything: a guest's purchases, formation and plan go to the host and come back in the snapshots
+(nothing a guest sends is trusted: types and counts are checked). With hundreds of soldiers the snapshot's soldiers are
+packed into a short string (15 characters a soldier, `src/warnet.js`) instead of the war modes' JSON arrays, and only a few
+blood and sound effects ride in each snapshot, so 600 soldiers make about 9 KB. The end screen has a table of the armies
+(mustered, standing, lost, kills, the lord) above the usual sections; Play Again starts War Mode again on a fresh bowl.
+
 ## Biomes and seeds
 
 The same battlefield (castle sites, roads, the hill in the middle, the valley and every height) can be dressed four ways, each with one small rule twist. The
@@ -890,6 +932,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/fx.js`, `src/particles.js`, `src/fxtex.js`, `src/groundfx.js`, `src/camfx.js` | Effects: GPU particles and ground marks, the ability glyphs, and the camera (shake, kicks, field-of-view punch, colour drain on low health, death fade) |
 | `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js`, `src/quality.js`, `src/shaderhook.js` | The renderer: sky, fog and the tone curve, the two shadow cascades, the HDR post passes, the frame path and adaptive resolution, the quality tunables `Q`, and the helper that lets several modules extend one material's shader |
 | `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
+| `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warnet.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the AI generals, the win), the bowl (its ground and the places of the armies), what is on screen (menu and lobby rows, the army panel, the top bar, the cameras, the end-screen table) and the packed snapshot of its soldiers |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/flow.js` | The gap between matches: what Quick Play starts, the end screen's actions (Play Again, Change class, Rematch), Ready, and the offer to concede or finish a decided war |
@@ -922,6 +965,9 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   in chunks, and trees, rocks, arrows and grass are instanced. Crowds, engines and the first-person kit cast shadows
   into the near shadow map only, drawn there as their plainest model. The profiler overlay (backquote) shows where a
   frame goes.
+- War Mode's biggest battles (two armies of 200, or four of 150: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine:
+  the simulation of 400 soldiers in melee takes about 8 to 12 ms a frame and of 600 about 5 to 9 ms (it falls as they fall); the crowd draws them in
+  about 75 to 85 draw calls.
 - Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
   models are prepared in the background during the preparation minute, so nothing stutters on first use.
 - Online, other players and soldiers are interpolated between the host's updates for smooth movement, and
