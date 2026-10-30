@@ -17,14 +17,14 @@ const CSS = `
 .cwe h4 { margin: 0 0 4px; font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; display: flex; justify-content: space-between; align-items: baseline; }
 .cwe h4 small { font: italic 13px 'EB Garamond', Georgia, serif; letter-spacing: 0; text-transform: none; color: #4a3a22; }
 .cwe-new { font-family: Cinzel, serif; font-size: 21px; font-weight: 700; color: #7a1414; text-align: center; margin: 0 0 6px; text-shadow: 0 1px 0 rgba(255,255,255,0.5); }
-.cwe-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(74px, 1fr)); gap: 5px; }
-.cwe-tile { position: relative; text-align: center; padding: 3px 2px 3px; border: 1px solid rgba(90,60,20,0.3); border-radius: 4px; background: rgba(255,255,255,0.3); min-width: 0; }
-.cwe-tile b { display: block; font-family: Cinzel, serif; font-size: 19px; line-height: 1.15; white-space: nowrap; }
+.cwe-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 4px; }
+.cwe-tile { position: relative; text-align: center; padding: 6px 2px 3px; border: 1px solid rgba(90,60,20,0.3); border-radius: 4px; background: rgba(255,255,255,0.3); min-width: 0; }
+.cwe-tile b { display: block; font-family: Cinzel, serif; font-size: 18px; line-height: 1.15; white-space: nowrap; }
 .cwe-tile span { display: block; font-size: 12.5px; line-height: 1.15; white-space: nowrap; }
 .cwe-tile small { display: block; font-size: 11.5px; font-style: italic; opacity: 0.75; line-height: 1.2; white-space: nowrap; }
 .cwe-tile.rec { border: 2px solid #b8862a; background: linear-gradient(#fff6d2, #efd88f); box-shadow: 0 0 12px rgba(224,180,76,0.75); }
 .cwe-tile.rec small { color: #7a1414; font-style: normal; font-weight: 600; opacity: 1; }
-.cwe-tile.rec::after { content: 'NEW BEST'; position: absolute; top: -8px; right: -5px; font: 700 9px/1 Cinzel, serif; letter-spacing: 0.06em; padding: 3px 4px 2px; background: #8c1f24; color: #f6e8c0; border-radius: 2px; transform: rotate(5deg); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+.cwe-tile.rec::after { content: 'NEW BEST'; position: absolute; top: -9px; right: -4px; font: 700 8.5px/1 Cinzel, serif; letter-spacing: 0.05em; padding: 3px 4px 2px; background: #8c1f24; color: #f6e8c0; border-radius: 2px; transform: rotate(5deg); box-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 .cwe-mastery { margin-top: 7px; display: grid; gap: 4px; }
 .cwe-mrow { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 1px 10px; align-items: center; }
 .cwe-seal { position: relative; grid-row: 1 / span 2; width: 32px; height: 32px; border-radius: 50%; border: 3px solid var(--c, #8a6a3a); background: radial-gradient(#fff6d6, #e6cf94); display: grid; place-items: center; font: 700 13px Cinzel, serif; color: #3a2a12; }
@@ -96,6 +96,7 @@ const cheer = (r, name, when) => {
 
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 const num = (n) => Math.round(n).toLocaleString('en-US');
+const tnum = (n) => (n >= 10000 ? `${(n / 1000).toFixed(n >= 100000 ? 0 : 1)}k` : num(n));   // (a tile is small: 12.3k, not 12,345)
 const pct = (f) => `${Math.round(Math.max(0, Math.min(1, f)) * 1000) / 10}%`;
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
 
@@ -176,7 +177,7 @@ function battleSection(s) {
   // the numbers, each with its best beside it
   const tiles = el('div', 'cwe-tiles');
   const recKeys = new Map(r.records.map((x) => [x.key, x])), firstKeys = new Set(r.firsts.map((x) => x.key));
-  const add = (key, label, value, show = num, title = '') => {   // `show` says a number the way this tile reads (a clock, a count)
+  const add = (key, label, value, show = tnum, title = '') => {   // `show` says a number the way this tile reads (a clock, a count)
     const t = el('div', 'cwe-tile');
     t.dataset.stat = key || '';
     t.title = title || label;

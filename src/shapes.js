@@ -527,9 +527,21 @@ def('cape.cloak', (b) => {
 }, true);
 
 // ---- the cloaks a lord can earn with Renown (unlocks.js): the colours are fixed, so they never take the house colour. They hang where the others do.
-const hang = (b, w, h, o, bend = 0.08) => b.sheet([0, -h / 2, -0.03], w, h, b.pick(8, 5, 3), b.pick(12, 8, 4), { ...o, w: [1.95, 1.0], dz: (x) => -bend * (x / (w / 2)) ** 2, a: [0.7, 1] });
+// (a cloak hangs from the shoulders and flares toward the hem: `w` is its width at the neck, the hem is `flare` wider)
+const FLARE = 0.3;
+const hang = (b, w, h, o, bend = 0.08) => {
+  const g = new THREE.PlaneGeometry(w, h, b.pick(8, 5, 3), b.pick(12, 8, 4));
+  const pa = g.attributes.position;
+  for (let i = 0; i < pa.count; i++) {
+    const x = pa.getX(i), k = 1 + FLARE * (h / 2 - pa.getY(i)) / h;   // 1 at the neck, 1 + FLARE at the hem
+    pa.setX(i, x * k);
+    pa.setZ(i, -bend * (x / (w / 2)) ** 2 * k);
+  }
+  g.computeVertexNormals();
+  return b.place(g, [0, -h / 2, -0.03], [0, 0, 0], 1, { ...o, w: [1.95, 1.0], a: [0.7, 1] });
+};
 // a band along the hem (swaying with the cloth) or the collar (still)
-const hem = (b, w, h, y, o, bend = 0.08) => b.sheet([0, y, -0.034], w, 0.05, b.pick(8, 5, 3), 1, { ...o, w: [1.95, 1.9], dz: (x) => -bend * (x / (w / 2)) ** 2 });
+const hem = (b, w, h, y, o, bend = 0.08) => b.sheet([0, y, -0.034], w * (1 + FLARE), 0.05, b.pick(8, 5, 3), 1, { ...o, w: [1.95, 1.9], dz: (x) => -bend * (x / (w * (1 + FLARE) / 2)) ** 2 * (1 + FLARE) });
 const collar = (b, w, hgt, o, bend = 0.07) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(8, 5, 3), 1, { ...o, dz: (x) => -bend * (x / (w / 2)) ** 2 });
 def('cape.crimson', (b) => {   // deep red wool, a gold hem and collar, a gold clasp
   hang(b, 0.58, 1.0, { c: 0x8c1f24, m: 'wool', p: PAT.weave });
@@ -548,7 +560,7 @@ def('cape.wolfpelt', (b) => {   // grey wool under a deep collar and shoulders o
   hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', p: PAT.weave }, 0.07);
   hem(b, 0.6, 0.9, -0.89, fur, 0.07);
   collar(b, 0.7, 0.17, fur, 0.07);
-  for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, -0.045], [0.11, 0.06, 0.09], { ...fur, seg: [8, 6] });
+  for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, -0.045], [0.11, 0.06, 0.09], { ...fur, seg: [b.pick(8, 6, 4), b.pick(6, 4, 3)] });
 }, true);
 def('cape.midnight', (b) => {   // dark blue silk edged in silver
   const silver = { c: 0xc8ced8, m: 'steel' };
