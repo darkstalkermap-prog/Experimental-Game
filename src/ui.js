@@ -645,9 +645,7 @@ export class UI {
     // the invite link opens the game with the code filled in; inside claude.ai the page can't see its own
     // share link, so friends get the code and open the same game link
     const viaRoom = this.game.net && this.game.net.viaRoom;
-    // (the desktop app's own address means nothing to a friend: its invite points at the website, where the code works the same)
-    const site = window.cwDesktop && window.cwDesktop.site;
-    const link = viaRoom ? '' : `${site || location.origin + location.pathname}?join=${code}`;
+    const link = viaRoom ? '' : `${location.origin}${location.pathname}?join=${code}`;
     $('inviteLink').value = viaRoom ? `Join my Castle Wars game with code ${code}` : link;
     $('inviteHelp').textContent = viaRoom
       ? 'Send friends this game\'s link and the code. They press Multiplayer, enter it and press Join.'

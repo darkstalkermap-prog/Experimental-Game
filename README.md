@@ -7,8 +7,6 @@ stands. The armies meet in the field, fight, and push on to the enemy gates, whi
 a hero of one of six classes, spend gold on your army, castle and siege engines, and break the other lords'
 gates, walls and keeps.
 
-**Desktop app:** `desktop/` packages the game for Windows, macOS and Linux (see `desktop/README.md`): its own window, the fast GPU, no slowdown when the window is in the background.
-
 ## Game modes
 
 Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** is the main one.
