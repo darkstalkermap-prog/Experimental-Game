@@ -140,7 +140,7 @@ export const TALENTS = [
     desc: `+${pc(R.speed)} speed, and the bow draws ${pc(R.draw)} faster.`, mods: { mul: { speed: 1 + R.speed, draw: 1 - R.draw } } },
   { id: 'rg_jaws', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '🦷', name: 'Iron Jaws',
     desc: `The Snare Trap holds ${R.trapRoot} s longer and bites for ${R.trapDmg} damage.`, fx: { trapRoot: R.trapRoot, trapDmg: R.trapDmg } },
-  { id: 'rg_mark', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_jaws', icon: '🎯', name: "Hunter's Mark",
+  { id: 'rg_mark', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_jaws', icon: '📍', name: "Hunter's Mark",
     desc: `A foe caught in your trap is Marked: arrows hit them ${pc(R.mark.dmg - 1)} harder for ${R.mark.time} s.`, fx: { trapMark: R.mark } },
 
   // ---------- Mage: Fireball | Frost Ward (the capstone is under Glacial Burst) ----------
