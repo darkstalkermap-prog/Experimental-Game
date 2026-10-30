@@ -53,6 +53,7 @@ const lancer = (gold, stage, p) => ({ type: 'lancer', gold, stage, p });
 export const PERSONAS = [
   {
     id: 'rusher', kind: 'Rusher', epithet: 'the Reckless', tag: 'Reckless',
+    line: 'strikes early, guards thinly',
     blurb: 'Strikes early with swords and riders, guards the castle thinly.',
     plan: 'Hold the gate through the first push, then hit back at the thin walls.',
     names: ['Lord Varric', 'Lord Garrick', 'Lord Rodric', 'Lady Kestra', 'Lady Brenna', 'Lady Sigrid'],
@@ -73,6 +74,7 @@ export const PERSONAS = [
   },
   {
     id: 'turtler', kind: 'Turtler', epithet: 'the Patient', tag: 'Patient',
+    line: 'builds first, marches late',
     blurb: 'Raises walls, gate and towers, then marches late with a huge host.',
     plan: 'Do not waste an army on the walls: break the others first, or arrive with engines.',
     names: ['Lady Morwen', 'Lady Eleanor', 'Lady Anselma', 'Lord Osric', 'Lord Aldous', 'Lord Benedict'],
@@ -99,6 +101,7 @@ export const PERSONAS = [
   },
   {
     id: 'breaker', kind: 'Siege-lover', epithet: 'the Breaker', tag: 'Breaker',
+    line: 'engines first, spearmen to guard them',
     blurb: 'Rams and catapults roll out first, with spearmen to guard them.',
     plan: 'Kill the engines before they reach the gate: riders and archers do it best.',
     names: ['Lord Brokk', 'Lord Ulfgar', 'Lord Thrain', 'Lady Hilda', 'Lady Gudrun', 'Lady Ragna'],
@@ -119,6 +122,7 @@ export const PERSONAS = [
   },
   {
     id: 'raider', kind: 'Raider', epithet: 'the Swift', tag: 'Swift',
+    line: 'riders raid again and again',
     blurb: 'Fast riders raid the weakest house again and again.',
     plan: 'Keep archers on the wall and your own riders at hand: raiders flee from a fight they cannot win.',
     names: ['Lord Corvin', 'Lord Tarn', 'Lord Wulfric', 'Lady Sable', 'Lady Rhiannon', 'Lady Ysmay'],
@@ -140,6 +144,7 @@ export const PERSONAS = [
   },
   {
     id: 'merchant', kind: 'Merchant', epithet: 'the Gilded', tag: 'Gilded',
+    line: 'invests first, marches late',
     blurb: 'Out-earns every house and spends it on elite levies and drills.',
     plan: 'Hit early, before the levies and drills pay off: patience favours the Gilded.',
     names: ['Lady Thessaly', 'Lady Marguerite', 'Lady Odalys', 'Lord Cosimo', 'Lord Florian', 'Lord Benno'],
@@ -161,6 +166,7 @@ export const PERSONAS = [
   },
   {
     id: 'zealot', kind: 'Zealot', epithet: 'the Vengeful', tag: 'Vengeful',
+    line: 'every army marches on you',
     blurb: 'Every army, engine and giant marches on you. The other houses are forgotten.',
     plan: 'Keep your gate strong: every army of this lord comes for you, and none for the other houses.',
     names: ['Lord Draven', 'Lord Aldric', 'Lord Mordain', 'Lady Isolde', 'Lady Sigrun', 'Lady Vanya'],
@@ -176,6 +182,7 @@ export const PERSONAS = [
   },
   {
     id: 'warlord', kind: 'Warlord', epithet: 'the Ironclad', tag: 'Ironclad',
+    line: 'knights and veterans, the lord in front',
     blurb: 'Few soldiers, but knights and veterans, with the lord at their head.',
     plan: 'Archers and engines hurt plate best; do not meet the iron host in the open.',
     names: ['Lord Gorm', 'Lord Hadrian', 'Lord Roland', 'Lady Brunhild', 'Lady Ingrid', 'Lady Matilda'],
@@ -192,6 +199,7 @@ export const PERSONAS = [
   },
   {
     id: 'titan', kind: 'Giant-caller', epithet: 'the Giantsworn', tag: 'Giantsworn',
+    line: 'saves for giants, thin guard',
     blurb: 'Saves every coin for giants: a thin guard, then a monster at your gate.',
     plan: 'Kill the giant for 600 gold, or hit the thin guard while the next one is paid for.',
     names: ['Lord Orm', 'Lord Bjorn', 'Lord Thorgest', 'Lady Skadi', 'Lady Hrolla', 'Lady Jarla'],
@@ -206,6 +214,7 @@ export const PERSONAS = [
   },
   {
     id: 'opportunist', kind: 'Opportunist', epithet: 'the Cunning', tag: 'Cunning',
+    line: 'waits for a broken castle, then pounces',
     blurb: 'Waits until a castle is broken, then pounces on the wreck.',
     plan: 'Do not leave your gate broken or your keep burning: the Cunning sees it first.',
     names: ['Lord Ulrich', 'Lord Reynard', 'Lord Matthias', 'Lady Vesper', 'Lady Seraphine', 'Lady Morgause'],
@@ -228,7 +237,8 @@ for (const p of PERSONAS) p.params = Object.freeze({ ...CLASSIC, ...p.params });
 
 const cache = new Map();
 // Who is this? `id` is an option value ('' and 'classic' are the old lord, which has no name of its own: null). The result is shared, do not change it.
-//   { id, n, persona, params, title ('Lord'), first ('Varric'), name ('Lord Varric the Reckless'), short ('Varric the Reckless'), tag, kind, blurb, plan }
+//   { id, n, persona, params, title ('Lord'), first ('Varric'), name ('Lord Varric the Reckless'), short ('Varric the Reckless'), tag, kind, blurb, line (a few
+//     words of his style), plan }
 export function rivalInfo(id) {
   if (typeof id !== 'string' || !id || id === 'classic') return null;
   if (cache.has(id)) return cache.get(id);
@@ -241,7 +251,7 @@ export function rivalInfo(id) {
     info = {
       id: persona.id, n, persona, params: persona.params, title, first,
       name: `${title} ${first} ${persona.epithet}`, short: `${first} ${persona.epithet}`,
-      tag: persona.tag, kind: persona.kind, blurb: persona.blurb, plan: persona.plan,
+      tag: persona.tag, kind: persona.kind, blurb: persona.blurb, line: persona.line, plan: persona.plan,
     };
   }
   cache.set(id, info);

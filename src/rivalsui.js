@@ -6,7 +6,6 @@
 import { TEAM_CSS, TEAM_NAMES } from './config.js';
 import { rivalInfo, rollRivals } from './rivals.js';
 import { registerEndSection } from './endscreen.js';
-import { clockText } from './matchlog.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -55,7 +54,7 @@ css.textContent = `
     border-right: 3px solid var(--gold); border-radius: 4px; opacity: 0; animation: rvcard 13s ease-out forwards; }
   #rivalsCard h3 { margin: 0 0 6px; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
   #rivalsCard .rv { display: grid; grid-template-columns: 12px 1fr; gap: 0 9px; margin: 7px 0 0; }
-  #rivalsCard .rv i, .rvrow i, .nb-rivals .rv i { width: 10px; height: 10px; border-radius: 2px; margin-top: 5px; display: inline-block; }
+  #rivalsCard .rv i, .rvrow i { width: 10px; height: 10px; border-radius: 2px; margin-top: 5px; display: inline-block; }
   #rivalsCard b { font-family: Cinzel, serif; font-size: 15px; font-weight: 700; color: #f4e6c4; }
   #rivalsCard span { display: block; font-size: 14px; line-height: 1.25; color: #d9c9a2; }
   #rivalsCard small { font-size: 12px; opacity: 0.75; margin-left: 5px; font-family: Cinzel, serif; letter-spacing: 0.04em; }
@@ -65,15 +64,17 @@ css.textContent = `
   #factions em.rv { flex: none; font-style: normal; font-size: 10px; line-height: 13px; color: #e8d9a0; border: 1px solid rgba(232,217,160,0.5); border-radius: 3px;
     padding: 0 3px; margin-left: 6px; letter-spacing: 0.03em; }
   #pauseRivals { margin: 16px auto 4px; max-width: 540px; text-align: left; }
-  #pauseRivals h3, .nb-rivals h4 { margin: 0 0 6px; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a1d12; text-align: center; }
-  .rvrow, .nb-rivals .rv { display: grid; grid-template-columns: 12px 1fr; gap: 0 10px; margin: 8px 0; }
-  .rvrow b, .nb-rivals .rv b { font-family: Cinzel, serif; font-size: 16px; color: #3b120b; }
-  .rvrow em, .nb-rivals .rv em { font-style: normal; font-size: 13px; opacity: 0.7; margin-left: 6px; }
-  .rvrow span, .nb-rivals .rv span { display: block; font-size: 15px; line-height: 1.3; }
+  #pauseRivals h3 { margin: 0 0 6px; font-size: 15px; letter-spacing: 0.1em; text-transform: uppercase; color: #5a1d12; text-align: center; }
+  .rvrow { display: grid; grid-template-columns: 12px 1fr; gap: 0 10px; margin: 8px 0; }
+  .rvrow b { font-family: Cinzel, serif; font-size: 16px; color: #3b120b; }
+  .rvrow em { font-style: normal; font-size: 13px; opacity: 0.7; margin-left: 6px; }
+  .rvrow span { display: block; font-size: 15px; line-height: 1.3; }
   .rvrow .plan { font-style: italic; opacity: 0.8; }
-  .nb-rivals { background: rgba(255,255,255,0.28); border: 1px solid rgba(138,106,58,0.6); border-radius: 4px; padding: 10px 16px 12px; text-align: left; }
-  .nb-rivals .fate { text-align: center; font-size: 14px; font-style: italic; opacity: 0.8; margin: 8px 0 0; }
-  .nb-rivals .again { display: block; margin: 8px auto 0; padding: 5px 14px; font-size: 13px; }
+  .nb-rvlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  .nb-rvlist li { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 9px; line-height: 1.35; }
+  .nb-rvlist i { flex: none; width: 10px; height: 10px; border-radius: 2px; align-self: center; }
+  .nb-rvlist b { font: 700 16px Cinzel, Georgia, serif; color: #3b120b; }
+  .nb-rvlist span { font-size: 15.5px; }
   .opt-rivals-note { text-align: center; font-size: 14.5px; opacity: 0.85; margin: 8px 0; }
 `;
 document.head.appendChild(css);
@@ -158,31 +159,39 @@ if (pauseEl) new MutationObserver(() => { if (!pauseEl.classList.contains('hidde
   grid.after(note);
 })();
 
-// ---------------- the end screen: how the rivals fared, and who leads next battle ----------------
+// ---------------- the end screen: who leads the houses next battle ----------------
+// One compact row of the shared "Next battle" panel (class nb-row, see decrees.js): a head with the button, and one short line per lord.
+const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 function section(summary) {
   if (summary.hero || !on) return null;
   const events = summary.events || [];
-  const had = events.filter((e) => e.type === 'rival').map((e) => ({ team: e.team, r: rivalInfo(e.id) })).filter((x) => x.r);
+  const had = events.filter((e) => e.type === 'rival').map((e) => e.team);
   // the houses that were led by AI lords this time have an AI lord next time too (the others are people)
-  const houses = had.length ? had.map((x) => x.team) : summary.mode === 'single' ? [1, 2, 3] : [];
+  const houses = had.length ? had : summary.mode === 'single' ? [1, 2, 3] : [];
   if (!houses.length) return null;
-  const el = document.createElement('div');
-  el.className = 'nb-row nb-rivals';
+  const el = mk('div', 'nb-row nb-rivals');
   const draw = () => {
     const ids = upcomingRivals();
-    const fate = had.map((x) => {
-      const ev = events.find((e) => e.type === 'rivalFell' && e.team === x.team);   // (only the host's AI notes the time; a guest can still see the ruin)
-      const ruin = current && current.castles[x.team] && current.castles[x.team].fallen;
-      return `${x.r.short} ${ev ? 'fell at ' + clockText(ev.t) : ruin ? 'fell' : 'held out'}`;
-    }).join(' · ');
-    el.innerHTML = `<h4>Rivals next battle</h4>
-      ${houses.map((t) => {
-        const r = rivalInfo(ids[t]);
-        return r ? `<div class="rv"><i style="background:${TEAM_CSS[t]}"></i><div><b>${esc(r.name)}</b><em>${esc(TEAM_NAMES[t])}</em><span>${esc(r.blurb)}</span></div></div>` : '';
-      }).join('')}
-      <button class="again" type="button">Draw other lords</button>
-      ${fate ? `<div class="fate">This battle: ${esc(fate)}.</div>` : ''}`;
-    el.querySelector('.again').addEventListener('click', () => { rerollRivals(); draw(); });
+    el.textContent = '';
+    const head = mk('div', 'nb-head'), title = mk('div', 'nb-ttl'), acts = mk('div', 'nb-acts');
+    title.append(mk('span', 'nb-title', 'Next battle'), mk('span', 'nb-sub', 'Rival lords'));
+    const again = mk('button', 'quiet', '\u2684 Draw other lords');
+    again.type = 'button';
+    again.addEventListener('click', () => { rerollRivals(); draw(); });
+    acts.append(again);
+    head.append(title, acts);
+    const list = mk('ul', 'nb-rvlist');
+    for (const t of houses) {
+      const r = rivalInfo(ids[t]);
+      if (!r) continue;
+      const li = mk('li');
+      const dot = mk('i');
+      dot.style.background = TEAM_CSS[t];
+      dot.title = TEAM_NAMES[t];
+      li.append(dot, mk('b', '', r.name), mk('span', '', r.line));
+      list.append(li);
+    }
+    el.append(head, list);
   };
   draw();
   return el;

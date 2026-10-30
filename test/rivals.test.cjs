@@ -15,6 +15,7 @@ test('the roster: at least eight personalities, six names each, three Lords and 
     assert.equal(p.names.filter((n) => n.startsWith('Lady ')).length, 3);
     assert.match(p.epithet, /^the [A-Z]/);
     assert.ok(p.blurb && p.plan && p.tag && p.kind);
+    assert.ok(p.line && p.line.length < 48, p.id);   // (the end screen's row gives each lord one short line)
   }
   const firsts = PERSONAS.flatMap((p) => p.names.map((n) => n.split(' ')[1]));
   assert.equal(new Set(firsts).size, firsts.length);
