@@ -255,8 +255,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
     spin for a second and cut everyone around you three times. **R Blood Rage**: for 7 s you heal for half the
     damage you deal, can't be staggered and hit 25% harder.
-  - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter. An arrow in the **head** (the top sixth
-    of a body) deals double damage, 1.5x into a hero, with its own sharp sound and a skull over the cross. **Piercing
+  - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter: her bow makes the most of **headshots**
+    (any hero's arrow in the top sixth of a body deals double damage, 1.5x into a hero, with its own sharp sound and a
+    skull over the cross: every class's bow does it, but the Ranger hits hardest and Eagle Eye adds more). **Piercing
     Shots**: a fully drawn arrow goes on through the first body into up to two more behind it (70%, then 50%). Ranger
     arrows hit engineers, siege crews and engines 50% harder, and an arrow comes back to the quiver every 4 s.
     **Q Power Shot**: the bow is drawn to the full and held (half a second, walking slowly), then a heavy arrow flies

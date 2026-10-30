@@ -35,7 +35,7 @@ export const CLASSES = {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
     blurb: 'A sharpshooter: arrows in the head, through whole ranks and into siege crews. Fragile when caught in melee.',
     mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8, marksman: 1 },
-    passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Headshots deal double damage (1.5x to heroes), arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
+    passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
     q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
     r: { id: 'trap', icon: '🕸', name: 'Snare Trap', cd: 14, desc: 'Throw a snare trap where you look (up to 15 m). The first enemy to step in it is rooted for 2 s, and the enemies around it are slowed.' },
   },
@@ -67,7 +67,7 @@ export const CLASSES = {
 
 // The Ranger's numbers (the talents that change them are in talents.js; the arrows themselves fly in projectiles.js).
 export const RANGER = {
-  headshot: 2, headshotHero: 1.5,   // an arrow in the head deals this much (into a hero's, the second)
+  headshot: 2, headshotHero: 1.5,   // a hero's arrow in the head deals this much (into a hero's, the second): every class's bow, not only the Ranger's
   headZone: 0.17,                   // the top share of a body's height that is its head
   pierce: [0.7, 0.5],               // Piercing Shots: the share of the damage dealt to the second and the third body a fully drawn arrow goes into
   pierceDraw: 0.97,                 // how full a draw that takes

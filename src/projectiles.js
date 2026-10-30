@@ -340,15 +340,15 @@ export class Projectiles {
     if (changed) this.stuckMesh.instanceMatrix.needsUpdate = true;
   }
 
-  // An arrow strikes a body. The Ranger's do more: double in the head (less in a hero's), more into siege crews; and every arrow hits
-  // a foe Marked by a Ranger's trap harder. A Power Shot throws a soldier back and staggers a hero.
+  // An arrow strikes a body. Any hero's arrow (every class can take up the bow) does double in the head (less in a hero's); the
+  // Ranger's do more into siege crews (and Eagle Eye adds to her headshots); and every arrow hits a foe Marked by a Ranger's trap harder. A Power Shot throws a soldier back and staggers a hero.
   arrowHit(p, hit, at) {
     const g = this.game, o = p.owner, marks = !!(o && o.mods && o.mods.marksman);
     g.audio.play('arrowHit', at);
     if (!g.simulating) return;   // (a guest's copy of the arrow only shows the flight)
     let dmg = p.dmg;
     if (p.through > 0 && !p.power) dmg *= p.pierce[p.through - 1];
-    const head = marks && p.ability !== 'Arrow Volley' && at.y > hit.pos.y + hit.height * (1 - RANGER.headZone);
+    const head = !!(o && o.isHero) && p.ability !== 'Arrow Volley' && at.y > hit.pos.y + hit.height * (1 - RANGER.headZone);
     if (head) {
       const big = hit.isPlayer || hit.isHero || hit.isGiant || (hit.def && hit.def.boss);
       dmg *= (big ? RANGER.headshotHero : RANGER.headshot) + talentFx(o, big ? 'headshotHero' : 'headshot', 0);

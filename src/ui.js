@@ -234,7 +234,7 @@ export class UI {
     else this.toggleShop(true);
   }
 
-  // head: a headshot (the Ranger's): a skull over the cross, bigger and pale gold, so it reads apart from an ordinary hit
+  // head: a headshot (any hero's arrow in the head): a skull over the cross, bigger and pale gold, so it reads apart from an ordinary hit
   hitMarker(head = false) {
     const h = $('hitmarker');
     h.classList.remove('show');
