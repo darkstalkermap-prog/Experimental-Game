@@ -87,10 +87,12 @@ export const DECIDED = {
   ahead: { theirKeep: 0.4, myKeep: 0.75, army: 1.6 },
   aheadGate: { myKeep: 0.75, army: 2.5 },
 };
-// Where the numbers come from: bot-vs-bot wars (tools: feat/F1/node/calib_node.mjs). The last castle of a war falls in its final minute: its gate goes first, its
-// soldiers dwindle to a handful while the winner's army stays at 60 to 70, and once the keep starts to go it is gone within half a minute. In those wars a house
-// with a broken gate against two and a half times its soldiers (and in the other rule, a keep at 40% or less against an army of 1.6 times) was beaten every time,
-// so these are the points where the rest is only a matter of time. An engine counts as four soldiers.
+// Where the numbers come from: bot-vs-bot wars (feat/F1/node/calib_node.mjs: the lords play every house, the player's house is led by the same AI with a head start).
+// The last castle of a war falls in its final minute: its gate goes first, its soldiers dwindle to a handful while the winner's army stays at 60 to 70, and once the
+// keep starts to go it is gone within half a minute. In the 7 wars that came down to two castles, "Finish the war" first fired between 18 and about 200 seconds before
+// the end (63 s at the median) and was right every time (a house with a broken gate against two and a half times its soldiers never came back); the keep rule alone
+// would have fired about 2 seconds before the end, which is why the gate rule is there. "Concede" is the mirror of that rule: no war in the sims put the player's house
+// among the last two while it was losing, so its numbers are the same ones turned round and are cautious rather than measured. An engine counts as four soldiers.
 
 function houseNumbers(g, f) {
   const c = f.castle;

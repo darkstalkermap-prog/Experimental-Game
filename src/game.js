@@ -1380,7 +1380,8 @@ export class Game {
   }
 
   // How the sides stand: a side is a house, or the houses that fight together (co-op). A war that runs out of time is decided on, in this order: the castles that
-  // still stand, the health of their keeps, the soldiers alive, the kills. (Keeps within half a percent count as equal.)
+  // still stand, the health of their keeps, the kills, the soldiers alive. (Keeps within half a percent count as equal. In King of the Hill the seconds held on the
+  // hill count before all of that.)
   warStandings() {
     const groups = [];
     const seen = new Set();
@@ -1390,7 +1391,8 @@ export class Game {
       const fs = teams.map((t) => this.factions[t]);
       const standing = fs.filter((f) => !f.castle.fallen);
       return {
-        teams, castles: standing.length,
+        teams, held: this.objective === 'koth' ? (this.hill.held[teams[0]] || 0) : 0,   // (King of the Hill is played for the hill: the seconds on it come first)
+        castles: standing.length,
         keeps: standing.reduce((a, f) => a + f.castle.keep.hp / f.castle.keep.maxHp, 0),
         troops: fs.reduce((a, f) => a + this.troopCount(f.team), 0),
         kills: fs.reduce((a, f) => a + f.kills, 0),
@@ -1399,9 +1401,9 @@ export class Game {
     }).sort(Game.standsAbove);
   }
   // > 0 when side b stands above side a (what decided it is told by whyAhead)
-  static standsAbove(a, b) { return (b.castles - a.castles) || (Math.abs(b.keeps - a.keeps) > 0.005 ? b.keeps - a.keeps : 0) || (b.troops - a.troops) || (b.kills - a.kills); }
+  static standsAbove(a, b) { return (Math.abs(b.held - a.held) > 1 ? b.held - a.held : 0) || (b.castles - a.castles) || (Math.abs(b.keeps - a.keeps) > 0.005 ? b.keeps - a.keeps : 0) || (b.kills - a.kills) || (b.troops - a.troops); }
   static whyAhead(a, b) {
-    return a.castles > b.castles ? `the most castles (${a.castles})` : a.keeps - b.keeps > 0.005 ? 'the strongest keeps' : a.troops > b.troops ? 'the biggest army' : 'the most kills';
+    return a.held - b.held > 1 ? 'the longest hold on the hill' : a.castles > b.castles ? `the most castles (${a.castles})` : a.keeps - b.keeps > 0.005 ? 'the strongest keeps' : a.kills > b.kills ? 'the most kills' : 'the biggest army';
   }
 
   // The clock has run out: the war is decided on points. No show: nothing falls, the horn sounds and the screen comes up.

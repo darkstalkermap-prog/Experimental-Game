@@ -64,7 +64,7 @@ export const WAVES = {
 
 // Match length (options.length, see options.js). A Short match is a TIMED war: its tempo is faster (a shorter preparation, a wave every 21 seconds instead of 30,
 // soldiers and engines that grow tougher a quarter quicker: a source of rule modifiers, src/mods.js, put in by Game.start for the war modes) and after `limit`
-// seconds of play the war is decided on points (castles standing, then the health of the keeps, then soldiers, then kills; Game.timeUp), so that it is over in
+// seconds of play the war is decided on points (castles standing, then the health of the keeps, then kills, then soldiers; Game.timeUp), so that it is over in
 // about ten to twelve minutes whatever happens. Why a clock and not only a tempo: in bot-vs-bot wars (the lords play every house) a faster tempo makes the early war
 // quicker (the first castle falls at about half the time) but not the end of it: nobody takes the last keep, with or without the pace. A person does, by spending the
 // surplus gold on a giant and engines and leading the siege, but how long that takes cannot be measured without people. Standard sets nothing: the war as it was.

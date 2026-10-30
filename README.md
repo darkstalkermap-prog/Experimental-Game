@@ -577,7 +577,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 - **Match length** (Standard / Short, a row under the difficulty and in the host's lobby, `options.length`). Short is a
   **timed war**. Its tempo is faster, by a `mods` source named `length`: a shorter preparation (36 s), a wave every 21 s
   instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
-  wins**: the castles that still stand, then the health of their keeps, then the soldiers alive, then the kills (a dead heat is
+  wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
   a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
   of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
   `src/config.js`) a faster pace makes the first castle fall in about half the time, but the lords never finish a war by
