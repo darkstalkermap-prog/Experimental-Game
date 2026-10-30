@@ -50,9 +50,9 @@ function injectCss() {
 const rows = [];       // every land row on screen (the menu's and the lobby's): they show the same thing
 let onChange = () => {};
 
-const describe = (biome) => {
+const describe = (biome, seed = 0) => {
   const d = biomeOf(biome);
-  return d.twist ? `${d.short} ${d.twist.name}: ${d.twist.text}` : `${d.short} No rule twist: the classic land.`;
+  return d.twist ? `${d.short} ${d.twist.name}: ${d.twist.text}` : `${d.short} No rule twist${seed ? '.' : ': the classic land.'}`;   // (the classic land is seed 0)
 };
 
 function refreshRows() {
@@ -121,7 +121,7 @@ function buildRow(id) {
     desc.textContent = '';
     const head = document.createElement('b');
     head.textContent = random ? `Next battle: ${landName(land.biome, land.seed)}. ` : `${d.name}${land.seed ? ` · seed ${land.seed}. ` : '. '}`;
-    desc.append(head, describe(land.biome));
+    desc.append(head, describe(land.biome, land.seed));
   };
   rows.push({ el: row, refresh });
   refresh();
@@ -152,7 +152,7 @@ export function showLobbyLand(isHost, shown = land) {
   if (row) row.classList.toggle('hidden', !isHost);
   if (note) {
     note.classList.toggle('hidden', isHost);
-    note.textContent = `Land: ${landName(shown.biome, shown.seed)}. ${describe(shown.biome)}`;
+    note.textContent = `Land: ${landName(shown.biome, shown.seed)}. ${describe(shown.biome, shown.seed)}`;
   }
   refreshRows();
 }
@@ -266,7 +266,7 @@ registerEndSection('land', 51, (summary) => {
       body.append(pic);
       const d = biomeOf(land.biome), desc = mk('div', 'nb-desc');
       if (d.twist) desc.append(d.short + ' ', mk('b', 'nb-twist', d.twist.name + ':'), ' ' + d.twist.text);   // (the twist's name in bold, as the decrees' are)
-      else desc.append(describe(land.biome));
+      else desc.append(describe(land.biome, land.seed));
       text.append(mk('b', 'nb-name', landName(land.biome, land.seed)), desc);
     }
     const o = summary.options;
