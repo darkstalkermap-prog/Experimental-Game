@@ -232,7 +232,7 @@ export const PERSONAS = [
   },
 ];
 
-export const PERSONA_BY_ID = Object.fromEntries(PERSONAS.map((p) => [p.id, p]));
+export const PERSONA_BY_ID = Object.assign(Object.create(null), Object.fromEntries(PERSONAS.map((p) => [p.id, p])));   // (no prototype: an id from a start message may be 'constructor')
 for (const p of PERSONAS) p.params = Object.freeze({ ...CLASSIC, ...p.params });
 
 const cache = new Map();

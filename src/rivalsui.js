@@ -162,7 +162,7 @@ if (pauseEl) new MutationObserver(() => { if (!pauseEl.classList.contains('hidde
 // One compact row of the shared "Next battle" panel (class nb-row, see decrees.js): a head with the button, and one short line per lord.
 const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
 function section(summary) {
-  if (summary.hero || !on) return null;
+  if (summary.hero || !on || summary.mode === 'client') return null;   // (the host draws the next battle's lords: a guest sees them in the room's lobby)
   const events = summary.events || [];
   const had = events.filter((e) => e.type === 'rival').map((e) => e.team);
   // the houses that were led by AI lords this time have an AI lord next time too (the others are people)

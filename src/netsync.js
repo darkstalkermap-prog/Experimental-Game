@@ -50,8 +50,8 @@ export class HostSync {
     // (the audio object belongs to the page, not to this world: its own play is kept once, so that the sync of a rematch replaces this wrapper instead of
     // wrapping it again, and the finished world is not kept alive by a chain of them)
     if (!g.audio.rawPlay) g.audio.rawPlay = g.audio.play.bind(g.audio);
-    g.audio.play = (n, p = null) => {
-      g.audio.rawPlay(n, p);
+    g.audio.play = (n, p = null, when = 0) => {
+      g.audio.rawPlay(n, p, when);   // (the third argument is the delay of a sound that is timed to the end screen)
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
