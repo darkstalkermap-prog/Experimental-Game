@@ -12,6 +12,8 @@ import { buildPracticePanel, refreshPractice, updatePracticeHud, damagePop } fro
 import { HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
+import { updateDecreeHud, showPauseDecrees } from './decrees.js';
+import { updateComebackHud } from './comeback.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -603,8 +605,11 @@ export class UI {
       const cost = Math.round(c.item.cost(g, f));
       const desc = c.item.desc(g, f);
       if (c.p.textContent !== desc) c.p.textContent = desc;
-      const label = can !== true ? can : `Buy · <b>${cost}</b> <span class="coin">●</span>`;
+      const base = c.item.baseCost ? Math.round(c.item.baseCost(g, f)) : cost;   // (what a decree or a comeback rule changed shows beside the price)
+      const label = can !== true ? can : `Buy · ${base !== cost ? `<s class="was">${base}</s> ` : ''}<b>${cost}</b> <span class="coin">●</span>`;
       if (c.last !== label) { c.btn.innerHTML = can !== true ? esc(can) : label; c.last = label; }
+      c.btn.classList.toggle('cut', base > cost);
+      c.btn.classList.toggle('dear', base < cost);
       c.btn.classList.toggle('unavailable', can !== true);
       c.btn.classList.toggle('poor', can === true && f.gold < cost);
     }
@@ -687,7 +692,7 @@ export class UI {
   // ---------- menus ----------
   showPause(show) {
     $('pause').classList.toggle('hidden', !show);
-    if (show) this.toggleMap(false);
+    if (show) { this.toggleMap(false); showPauseDecrees(this.game); }
   }
 
   gameOver(won, winner = -1, reason = '') {
@@ -756,6 +761,8 @@ export class UI {
       this.hudT = 0.12;
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
+      updateDecreeHud(this, g);     // (the decrees in force, the underdog's wage, the Last Stand: see decrees.js and comeback.js)
+      updateComebackHud(this, g);
       $('round').textContent = g.round ? `Wave ${g.round}` : 'Preparation';
       if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
@@ -878,7 +885,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam ? 'You' : f.name)}</span>${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
