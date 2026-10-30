@@ -94,6 +94,7 @@ export class HillBar {
     const nm = (t) => (t === me ? 'You' : me >= 0 && allied(t, me) ? `Ally ${short(g.factions[t].name)}` : short(g.factions[t].name));
     let head, color;
     if (h.contested) { head = 'Contested: nobody scores'; color = '#ff8a6a'; }
+    else if (hold >= 0 && take >= 0 && take !== hold) { head = `${nm(h.capturer)} taking it from ${h.owner === me ? 'you' : nm(h.owner)} · ${Math.round(h.progress * 100)}%`; color = TEAM_CSS[take]; }
     else if (hold >= 0) {
       head = `${h.owner === me ? 'You hold it' : `${nm(h.owner)} holds it`} · ${clock(HILL.target - h.held[hold])} to win`;
       color = TEAM_CSS[hold];
