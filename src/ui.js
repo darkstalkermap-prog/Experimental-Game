@@ -744,6 +744,13 @@ export class UI {
     resetFlowHud();
   }
 
+  // the key reminders (index.html): `full` in a player's first matches, else only the small "I keys" note; I opens and closes the full line
+  setKeyHints(full) {
+    $('hud').classList.toggle('keysfew', !full);
+    $('hud').classList.remove('keysopen');
+  }
+  toggleKeys() { $('hud').classList.toggle('keysopen'); }
+
   showHud() {
     $('hud').classList.remove('hidden');
     $('hud').classList.toggle('practice', !!(this.game && this.game.practice));
