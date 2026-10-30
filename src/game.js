@@ -183,6 +183,7 @@ export class Game {
     const byTeam = new Map(setup.players.map((p) => [p.team, p]));
     lp.name = byTeam.get(lp.team)?.name || 'You';
     lp.st = blankStats();             // (what the end screen counts: stats.js)
+    lp.bwave = null;
     lp.cos = progress.loadout();      // (what this browser's account wears and has earned: progress.js)
     lp.setClass(byTeam.get(lp.team)?.cls || 'knight');
     lp.rebuildWeapons();
