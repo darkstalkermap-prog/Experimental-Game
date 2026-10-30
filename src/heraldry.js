@@ -78,14 +78,18 @@ export function armsCanvas(a, house, team = 0, w = 40, h = 48) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   const ctx = c.getContext('2d');
-  // the heater: straight top, sides down to the middle, then curving in to a point
-  ctx.beginPath(); ctx.moveTo(w * 0.06, h * 0.04); ctx.lineTo(w * 0.94, h * 0.04); ctx.lineTo(w * 0.94, h * 0.46);
-  ctx.quadraticCurveTo(w * 0.92, h * 0.82, w * 0.5, h * 0.98); ctx.quadraticCurveTo(w * 0.08, h * 0.82, w * 0.06, h * 0.46); ctx.closePath();
+  // the heater: straight top, sides down to the middle, then curving in to a point (traced again for its edge: the sigil leaves its own path behind)
+  const heater = () => {
+    ctx.beginPath(); ctx.moveTo(w * 0.06, h * 0.04); ctx.lineTo(w * 0.94, h * 0.04); ctx.lineTo(w * 0.94, h * 0.46);
+    ctx.quadraticCurveTo(w * 0.92, h * 0.82, w * 0.5, h * 0.98); ctx.quadraticCurveTo(w * 0.08, h * 0.82, w * 0.06, h * 0.46); ctx.closePath();
+  };
+  heater();
   ctx.save(); ctx.clip();
   paintField(ctx, 0, 0, w, h, a, house, 0.42);
   ctx.translate(w / 2, h * 0.42);
   paintSigil(ctx, a.sig ? a : { ...a, sig: HOUSE_SIGILS[team] || HOUSE_SIGILS[0] }, house, w * 0.34);
   ctx.restore();
+  heater();
   ctx.lineWidth = Math.max(1, w * 0.05); ctx.strokeStyle = '#2a1f14'; ctx.stroke();
   return c;
 }
