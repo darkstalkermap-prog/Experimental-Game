@@ -4,7 +4,7 @@
 // crash), and without storage the account lives in memory for the visit and play goes on.
 //
 // This file is the maths and the storage and nothing else (no page, no game), so that the tests can run it as it is. unlocks.js has the catalogue.
-import { ITEMS, ITEM_BY_KEY, BANNERS, CLOAKS, unlockId } from './unlocks.js';
+import { ITEMS, ITEM_BY_KEY, CLOAKS, FREE_SIGILS, SIGIL_IDS, DIVISION_IDS, TINT_IDS, unlockId } from './unlocks.js';
 
 export const VERSION = 1;
 export const KEY = 'cw-progress';
@@ -45,7 +45,7 @@ const FASTEST_WIN_MIN = 120;   // a victory shorter than this (seconds) does not
 // ---------------------------------------------------------------- the account
 export function freshAccount() {
   return {
-    v: VERSION, renown: 0, carry: 0, unlocked: [], equipped: { banner: '', cloak: '' }, seen: 0,
+    v: VERSION, renown: 0, carry: 0, unlocked: [], equipped: { banner: '', cloak: '', div: 'plain', tint: 'argent' }, seen: 0,
     mastery: Object.fromEntries(MASTERY_CLASSES.map((c) => [c, 0])),
     best: Object.fromEntries(BESTS.map((b) => [b.key, 0])),
     tot: { matches: 0, wins: 0, secs: 0, kills: 0 },
@@ -76,7 +76,9 @@ export function sanitizeAccount(raw) {
   const nx = nextItem(a);
   if (nx && a.carry >= nx.cost) a.carry = nx.cost - 1;   // (the bar never sits above its end)
   const eq = raw.equipped && typeof raw.equipped === 'object' ? raw.equipped : {};
-  if (typeof eq.banner === 'string' && a.unlocked.includes(unlockId('banner', eq.banner))) a.equipped.banner = eq.banner;
+  if (typeof eq.banner === 'string' && sigilOpen(a, eq.banner)) a.equipped.banner = eq.banner;
+  if (DIVISION_IDS.includes(eq.div)) a.equipped.div = eq.div;
+  if (TINT_IDS.includes(eq.tint)) a.equipped.tint = eq.tint;
   if (typeof eq.cloak === 'string' && a.unlocked.includes(unlockId('cloak', eq.cloak))) a.equipped.cloak = eq.cloak;
   a.seen = Math.min(count(raw.seen), a.unlocked.length);
   if (raw.mastery && typeof raw.mastery === 'object') for (const c of MASTERY_CLASSES) a.mastery[c] = count(raw.mastery[c]);
@@ -241,30 +243,43 @@ export function renownTo(a, key) {
   return 0;
 }
 
-// What the hero wears and may choose: { banner, cloak, alts: [talent ids] } (ids only; this is what travels in the lobby)
+// May this account bear sigil `id`? The free ones always, the Renown banners once unlocked ('' is the house's own emblem)
+export function sigilOpen(a, id) {
+  return id === '' || FREE_SIGILS.some((s) => s.id === id) || a.unlocked.includes(unlockId('banner', id));
+}
+// What the hero wears and may choose: { banner (the sigil), cloak, div, tint, alts: [talent ids] } (ids only; this is what travels in the lobby)
 export function loadout(a) {
-  return { banner: a.equipped.banner, cloak: a.equipped.cloak, alts: ITEMS.filter((it) => it.kind === 'capstone' && a.unlocked.includes(it.key)).map((it) => it.id) };
+  return { banner: a.equipped.banner, cloak: a.equipped.cloak, div: a.equipped.div, tint: a.equipped.tint, alts: ITEMS.filter((it) => it.kind === 'capstone' && a.unlocked.includes(it.key)).map((it) => it.id) };
 }
 // whatever a lobby entry says about a player's look, made safe (known ids only)
 export function sanitizeLoadout(o) {
-  const out = { banner: '', cloak: '', alts: [] };
+  const out = { banner: '', cloak: '', div: 'plain', tint: 'argent', alts: [] };
   if (!o || typeof o !== 'object') return out;
-  if (typeof o.banner === 'string' && BANNERS.some((b) => b.id === o.banner)) out.banner = o.banner;
+  if (typeof o.banner === 'string' && SIGIL_IDS.includes(o.banner)) out.banner = o.banner;
+  if (DIVISION_IDS.includes(o.div)) out.div = o.div;
+  if (TINT_IDS.includes(o.tint)) out.tint = o.tint;
   if (typeof o.cloak === 'string' && CLOAKS.some((c) => c.id === o.cloak)) out.cloak = o.cloak;
   if (Array.isArray(o.alts)) out.alts = [...new Set(o.alts.filter((id) => typeof id === 'string' && ITEM_BY_KEY[unlockId('capstone', id)]))].slice(0, 12);
   return out;
 }
-export const noLoadout = () => ({ banner: '', cloak: '', alts: [] });
+export const noLoadout = () => ({ banner: '', cloak: '', div: 'plain', tint: 'argent', alts: [] });
 
 // ---------------------------------------------------------------- the account as this page uses it
 export const progress = {
   get() { return loadAccount(); },
   loadout() { return loadout(loadAccount()); },
-  // put on (or take off, with '') a banner or a cloak you have unlocked
+  // put on (or take off, with '') a sigil (kind 'banner': a free one or one unlocked) or a cloak you have unlocked; or choose how the field is
+  // divided ('div') and its second tint ('tint')
   equip(kind, id) {
     const a = loadAccount();
+    if (kind === 'div' || kind === 'tint') {
+      if (!(kind === 'div' ? DIVISION_IDS : TINT_IDS).includes(id)) return a;
+      a.equipped[kind] = id;
+      saveAccount(a);
+      return a;
+    }
     if (kind !== 'banner' && kind !== 'cloak') return a;
-    if (id && !a.unlocked.includes(unlockId(kind, id))) return a;
+    if (id && (kind === 'banner' ? !sigilOpen(a, id) : !a.unlocked.includes(unlockId(kind, id)))) return a;
     a.equipped[kind] = id || '';
     saveAccount(a);
     return a;

@@ -125,9 +125,130 @@ const PAINT = {
     for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU - Math.PI / 2 + TAU / 10; ctx.beginPath(); ctx.arc(Math.cos(a) * 9, Math.sin(a) * 9, 10.5, 0, TAU); ctx.stroke(); }   // the inner petals
     ctx.fillStyle = '#e0b44c'; disc(ctx, 0, 0, 7.5);
   },
+
+  // ---- the sigils every lord may bear from the start (unlocks.js FREE_SIGILS)
+  // a lion rampant, facing the hoist: raised forepaws, a shaggy mane and its tail curled up behind
+  lion(ctx, ink) {
+    ctx.save(); ctx.translate(-12, -28);   // the mane: a ragged ring round the head
+    path(ctx, Array.from({ length: 18 }, (_, i) => { const a = (i / 18) * TAU, r = i % 2 ? 13 : 18; return [Math.cos(a) * r, Math.sin(a) * r]; })); ctx.fill();
+    ctx.restore();
+    disc(ctx, -14, -28, 11);
+    ellipse(ctx, -25, -24, 8, 6, 0.2);                                                                                   // the muzzle
+    path(ctx, [[-8, -40], [-3, -48], [-1, -37]]); ctx.fill();                                                           // an ear
+    ellipse(ctx, 2, 4, 14, 27, -0.42);                                                                                   // the body
+    ctx.strokeStyle = ctx.fillStyle;
+    stroke(ctx, [[-6, -12], [-24, -14], [-36, -24]], 9); stroke(ctx, [[-2, -2], [-24, 4], [-38, -4]], 8);              // the forelegs, raised
+    stroke(ctx, [[12, 18], [-2, 34], [-14, 46]], 10); stroke(ctx, [[16, 22], [26, 38], [16, 49]], 9);                  // the hind legs
+    for (const [x, y] of [[-38, -26], [-40, -5], [-17, 47], [13, 50]]) disc(ctx, x, y, 6);                             // paws
+    stroke(ctx, [[18, 16], [34, 10], [40, -8], [32, -26]], 4.5);                                                        // the tail
+    path(ctx, [[28, -24], [34, -40], [38, -24]]); ctx.fill();
+    ctx.fillStyle = ink; disc(ctx, -17, -31, 2.2);
+    ctx.strokeStyle = ink; stroke(ctx, [[-31, -20], [-22, -19]], 2); stroke(ctx, [[-4, -6], [8, 10]], 2);
+    for (const [x, y] of [[-42, -28], [-44, -6], [-20, 50], [10, 53]]) stroke(ctx, [[x, y], [x - 3, y + 2]], 1.6);    // claws
+  },
+  // an eagle displayed: wings spread, head turned to the hoist, a fanned tail and talons
+  eagle(ctx, ink) {
+    for (const s of [-1, 1]) {
+      path(ctx, [[s * 8, -12], [s * 24, -28], [s * 46, -40], [s * 44, -27], [s * 52, -22], [s * 43, -14], [s * 50, -6], [s * 40, -2], [s * 43, 8], [s * 28, 6], [s * 10, 10]]); ctx.fill();
+      ctx.save(); ctx.strokeStyle = ctx.fillStyle; stroke(ctx, [[s * 6, 20], [s * 14, 30], [s * 20, 34]], 4); ctx.restore();   // a leg and its talons
+      path(ctx, [[s * 18, 30], [s * 26, 32], [s * 22, 38]]); ctx.fill();
+    }
+    ellipse(ctx, 0, 4, 12, 22);                                                                                         // the body
+    path(ctx, [[-9, 20], [-17, 46], [-6, 39], [0, 48], [6, 39], [17, 46], [9, 20]]); ctx.fill();                         // the tail
+    disc(ctx, 0, -24, 9);                                                                                                // the head
+    path(ctx, [[-7, -28], [-20, -22], [-8, -19]]); ctx.fill();                                                          // the beak
+    ctx.fillStyle = ink; disc(ctx, -2, -26, 2.2);
+    ctx.strokeStyle = ink;
+    for (const s of [-1, 1]) { stroke(ctx, [[s * 14, -10], [s * 38, -28]], 2); stroke(ctx, [[s * 16, -2], [s * 42, -12]], 2); stroke(ctx, [[s * 16, 6], [s * 38, 2]], 2); }
+    stroke(ctx, [[0, 24], [0, 40]], 1.8);
+  },
+  // a round tower: battlements, an arched door and a window slit
+  tower(ctx, ink) {
+    path(ctx, [[-20, -28], [20, -28], [22, 38], [-22, 38]]); ctx.fill();
+    for (const x of [-22, -6, 10]) { path(ctx, [[x, -44], [x + 12, -44], [x + 12, -27], [x, -27]]); ctx.fill(); }
+    path(ctx, [[-28, 36], [28, 36], [28, 46], [-28, 46]]); ctx.fill();
+    ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.moveTo(-8, 38); ctx.lineTo(-8, 22); ctx.arc(0, 22, 8, Math.PI, 0); ctx.lineTo(8, 38); ctx.closePath(); ctx.fill();
+    path(ctx, [[-2.5, -14], [2.5, -14], [2.5, 4], [-2.5, 4]]); ctx.fill();
+    ctx.strokeStyle = ink; stroke(ctx, [[-20, -24], [20, -24]], 2);
+  },
+  // two swords crossed in saltire, points up
+  swords(ctx, ink) {
+    for (const a of [-0.68, 0.68]) {
+      ctx.save(); ctx.rotate(a);
+      path(ctx, [[-4, -42], [0, -54], [4, -42], [4, 20], [-4, 20]]); ctx.fill();                                          // the blade
+      path(ctx, [[-15, 20], [15, 20], [15, 26], [-15, 26]]); ctx.fill();                                                  // the guard
+      path(ctx, [[-3, 26], [3, 26], [3, 40], [-3, 40]]); ctx.fill();                                                      // the grip
+      disc(ctx, 0, 44, 5.5);                                                                                              // the pommel
+      ctx.strokeStyle = ink; stroke(ctx, [[0, -40], [0, 14]], 1.6);                                                       // the fuller
+      ctx.restore();
+    }
+  },
+  // a cross pattee: four arms flaring from a narrow middle
+  cross(ctx, ink) {
+    for (let i = 0; i < 4; i++) {
+      ctx.save(); ctx.rotate((i * TAU) / 4);
+      ctx.beginPath(); ctx.moveTo(-7, -6); ctx.lineTo(-19, -46); ctx.quadraticCurveTo(0, -40, 19, -46); ctx.lineTo(7, -6); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    path(ctx, [[-8, -8], [8, -8], [8, 8], [-8, 8]]); ctx.fill();
+    ctx.fillStyle = ink; disc(ctx, 0, 0, 3.5);
+  },
+  // a sun in splendour: a round face and sixteen rays, straight and flaming by turns
+  sun(ctx, ink) {
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * TAU, r = i % 2 ? 40 : 50, w = i % 2 ? 0.13 : 0.16;
+      path(ctx, [[Math.cos(a - w) * 20, Math.sin(a - w) * 20], [Math.cos(a) * r, Math.sin(a) * r], [Math.cos(a + w) * 20, Math.sin(a + w) * 20]]); ctx.fill();
+    }
+    disc(ctx, 0, 0, 23);
+    ctx.fillStyle = ink; disc(ctx, -8, -5, 2.6); disc(ctx, 8, -5, 2.6);
+    ctx.strokeStyle = ink; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.arc(0, 2, 10, 0.5, Math.PI - 0.5); ctx.stroke();
+    ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(0, 0, 19, 0, TAU); ctx.stroke();
+  },
+  // a crescent, horns up
+  crescent(ctx) {
+    ctx.beginPath(); ctx.arc(0, 6, 40, -0.6175, Math.PI + 0.6175, false); ctx.arc(0, -8, 33, Math.PI + 0.2525, -0.2525, true); ctx.closePath(); ctx.fill();
+  },
+  // a fleur-de-lis: a tall middle petal, two curling side petals, a band and the foot below it
+  fleur(ctx, ink) {
+    ctx.beginPath(); ctx.moveTo(0, -52); ctx.bezierCurveTo(14, -36, 16, -14, 6, 4); ctx.lineTo(-6, 4); ctx.bezierCurveTo(-16, -14, -14, -36, 0, -52); ctx.fill();
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(s * 7, 4); ctx.bezierCurveTo(s * 10, -18, s * 26, -32, s * 40, -28); ctx.bezierCurveTo(s * 50, -24, s * 50, -8, s * 40, -4);
+      ctx.bezierCurveTo(s * 42, -14, s * 36, -18, s * 30, -14); ctx.bezierCurveTo(s * 20, -8, s * 18, 0, s * 18, 6); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(s * 4, 14); ctx.bezierCurveTo(s * 10, 24, s * 22, 26, s * 28, 36); ctx.bezierCurveTo(s * 18, 34, s * 10, 32, s * 2, 24); ctx.closePath(); ctx.fill();
+    }
+    path(ctx, [[0, 14], [7, 26], [0, 44], [-7, 26]]); ctx.fill();
+    path(ctx, [[-22, 2], [22, 2], [22, 13], [-22, 13]]); ctx.fill();                                                     // the band
+    ctx.strokeStyle = ink; stroke(ctx, [[-22, 7.5], [22, 7.5]], 1.6); stroke(ctx, [[0, -40], [0, -6]], 1.6);
+  },
+  // a five-pointed star (a mullet)
+  star(ctx, ink) {
+    path(ctx, Array.from({ length: 10 }, (_, i) => { const a = (i / 10) * TAU - Math.PI / 2, r = i % 2 ? 20 : 50; return [Math.cos(a) * r, Math.sin(a) * r + 4]; })); ctx.fill();
+    ctx.strokeStyle = ink; ctx.lineWidth = 1.6;
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * TAU - Math.PI / 2; stroke(ctx, [[0, 4], [Math.cos(a) * 36, Math.sin(a) * 36 + 4]], 1.6); }
+  },
+  // an oak: a round crown of leaves on a stout trunk, its roots spread
+  oak(ctx, ink) {
+    path(ctx, [[-6, 4], [6, 4], [9, 36], [20, 46], [-20, 46], [-9, 36]]); ctx.fill();
+    for (const [x, y, r] of [[0, -16, 24], [-22, -4, 17], [22, -4, 17], [-13, -34, 16], [13, -34, 16], [0, -40, 14]]) disc(ctx, x, y, r);
+    ctx.strokeStyle = ink;
+    stroke(ctx, [[0, 30], [0, 8], [-12, -6]], 2.2); stroke(ctx, [[0, 8], [12, -8]], 2.2);
+    ctx.lineWidth = 1.6; for (const [x, y] of [[-20, -16], [16, -28], [-8, -36], [24, 4], [-26, 6]]) { ctx.beginPath(); ctx.arc(x, y, 5, 0.3, 2.6); ctx.stroke(); }
+  },
+  // a skull (the raiders' house)
+  skull(ctx, ink) {
+    ctx.beginPath(); ctx.arc(0, -8, 30, Math.PI * 0.8, Math.PI * 0.2); ctx.lineTo(16, 22); ctx.lineTo(-16, 22); ctx.closePath(); ctx.fill();
+    path(ctx, [[-14, 20], [14, 20], [12, 36], [-12, 36]]); ctx.fill();
+    ctx.fillStyle = ink;
+    ellipse(ctx, -12, -6, 8, 9); ellipse(ctx, 12, -6, 8, 9);
+    path(ctx, [[0, 4], [5, 14], [-5, 14]]); ctx.fill();
+    for (const x of [-7, 0, 7]) { path(ctx, [[x - 1.2, 24], [x + 1.2, 24], [x + 1.2, 35], [x - 1.2, 35]]); ctx.fill(); }
+  },
 };
 
 export const EMBLEM_IDS = Object.keys(PAINT);
+// the emblem each house flies when its lord bears no arms of their own (the same ones its soldiers wear, unittex.js), by castle
+export const HOUSE_SIGILS = ['tower', 'swords', 'oak', 'sun', 'skull'];
 
 // Paint emblem `id` centred on (0, 0) in a circle of radius `R` (the painters are drawn for R = 50). Returns false when there is no such emblem.
 export function paintEmblem(ctx, id, R, fill = '#efe2b3', ink = '#2a1f14') {

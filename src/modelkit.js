@@ -13,7 +13,7 @@ export const SLOT = { fixed: 0, cloth: 1, skin: 2, hair: 3, clothDark: 4, clothL
 // added to the sway weight of the parts of a skirt (hanging from the pelvis): they follow the thighs up in a crouch (unitmat.js)
 export const SKIRT = 2;
 // surface patterns drawn in the fragment shader
-export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11 };
+export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11, badge: 12 };
 // [roughness, metalness]
 export const MAT = {
   cloth: [0.92, 0], wool: [0.97, 0], silk: [0.55, 0], leather: [0.6, 0.02], skin: [0.58, 0], hair: [0.78, 0], fur: [1, 0], wood: [0.74, 0], bone: [0.5, 0],

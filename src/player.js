@@ -148,7 +148,7 @@ export class Player {
   // ---------- third-person body for other people's heroes ----------
   buildBody() {
     const cloak = CLOAKS.find((c) => c.id === this.cos.cloak);   // (the cloak the account behind this hero wears, if any)
-    this.body = buildHeroBody(this.classId, this.team, 2, cloak ? cloak.shape : null);
+    this.body = buildHeroBody(this.classId, this.team, 2, cloak ? cloak.shape : null, this.armsCell ?? -1);   // (the arms the account bears: heraldry.js)
     this.bodyClass = this.classId;
     this.bodyCloak = this.cos.cloak;
     this.game.scene.add(this.body.root);

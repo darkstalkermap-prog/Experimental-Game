@@ -4,7 +4,8 @@
 // can point at the white margin and take only their vertex colour.
 import * as THREE from 'three';
 import { TEAM_COLORS } from './config.js';
-import { paintEmblem } from './emblems.js';
+import { paintEmblem, HOUSE_SIGILS } from './emblems.js';
+import { armsColors, armsKey, isCustom, paintField, paintSigil, css } from './heraldry.js';
 
 export const FACE_PX = 480, ATLAS_PX = 512;
 const cache = new Map();
@@ -138,22 +139,36 @@ function wear(ctx, w, h, kind, seed) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
 }
 
-// The emblem of the lord's banner (progress.js) as a small plaque near the top of the face: a dark roundel in a gold ring
-function plaque(ctx, shape, emblem) {
+// The sigil of the lord's arms (heraldry.js) as a small plaque near the top of the face: a dark roundel in a gold ring
+function plaque(ctx, shape, arms, house) {
   const r = shape.w * 0.16, x = shape.w / 2, y = shape.h * (shape.kind === 'round' ? 0.2 : 0.14);
   ctx.save();
   ctx.translate(x, y);
   disc(ctx, 0, 0, r, '#17110a');
   ring(ctx, 0, 0, r * 0.95, r * 0.12, GOLD);
   ring(ctx, 0, 0, r * 0.8, r * 0.025, GOLD_D);
-  paintEmblem(ctx, emblem, r * 0.7, '#efe2b3', '#17110a');
+  const ch = armsColors(arms, house).charge, dark = ((ch >> 16) & 255) + ((ch >> 8) & 255) + (ch & 255) < 240;
+  paintEmblem(ctx, arms.sig, r * 0.7, dark ? '#efe2b3' : css(ch), '#17110a');   // (a dark sigil would vanish on the dark roundel)
   ctx.restore();
+}
+// The Knight's kite painted with the whole of the lord's arms: the field divided as they say, the sigil large on the upper part, a gold edge
+function knightArms(ctx, shape, arms, house, team) {
+  const { w, h } = shape, cy = 0.36;
+  paintField(ctx, 0, 0, w, h, arms, house, cy);
+  const g = ctx.createLinearGradient(0, 0, w * 0.4, h); g.addColorStop(0, 'rgba(255,255,255,0.14)'); g.addColorStop(1, 'rgba(0,0,0,0.16)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  ctx.save(); ctx.translate(w / 2, h * cy);
+  paintSigil(ctx, arms.sig ? arms : { ...arms, sig: HOUSE_SIGILS[team] || HOUSE_SIGILS[0] }, house, w * 0.36);
+  ctx.restore();
+  ctx.strokeStyle = GOLD; ctx.lineWidth = w * 0.03; ctx.strokeRect(w * 0.05, h * 0.03, w * 0.9, h * 0.94);
 }
 
 // The atlas texture of a class's shield in a house colour. shape: { kind: 'round' | 'kite', w, h } in metres (bounding box of the face).
-// `emblem`: the banner the account wears ('' for none), which adds a plaque to the face.
-export function shieldFace(cls, team, shape, emblem = '') {
-  const key = `${cls}:${team}:${TEAM_COLORS[team] ?? 0}:${shape.kind}${emblem ? ':' + emblem : ''}`;   // (the colour too: a match may paint the house another one, teams.js)
+// `arms`: the arms the account bears (heraldry.js; null or the house's own for none). The Knight's kite is painted with them whole; the other
+// classes keep their own design and show the sigil on a plaque.
+export function shieldFace(cls, team, shape, arms = null) {
+  const own = arms && isCustom(arms) ? arms : null;
+  const key = `${cls}:${team}:${TEAM_COLORS[team] ?? 0}:${shape.kind}:${shape.h}${own ? ':' + armsKey(own) : ''}`;   // (the colour too: a match may paint the house another one, teams.js)
   if (cache.has(key)) return cache.get(key);
   const c = document.createElement('canvas');
   c.width = c.height = ATLAS_PX;
@@ -163,8 +178,12 @@ export function shieldFace(cls, team, shape, emblem = '') {
   ctx.save();
   ctx.beginPath(); ctx.rect(0, 0, FACE_PX, FACE_PX); ctx.clip();
   ctx.scale(FACE_PX / shape.w, FACE_PX / shape.h);
-  (DESIGN[cls] || DESIGN.knight)(ctx, shape.w, shape.h, TEAM_COLORS[team] ?? TEAM_COLORS[0], shape.kind);
-  if (emblem) plaque(ctx, shape, emblem);
+  const house = TEAM_COLORS[team] ?? TEAM_COLORS[0];
+  if (own && cls === 'knight' && shape.kind === 'kite') knightArms(ctx, shape, own, house, team);
+  else {
+    (DESIGN[cls] || DESIGN.knight)(ctx, shape.w, shape.h, house, shape.kind);
+    if (own && own.sig) plaque(ctx, shape, own, house);
+  }
   wear(ctx, shape.w, shape.h, shape.kind, key.length * 131 + team);
   ctx.restore();
   const tex = new THREE.CanvasTexture(c);

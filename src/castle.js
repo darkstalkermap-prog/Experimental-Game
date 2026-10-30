@@ -12,6 +12,7 @@ import { Cloth, clothMaterial, updateWind, FireSet, dustBank, fireBurst } from '
 import * as G from './castlegeo.js';
 import { populate } from './props.js';
 import { customBanner } from './textures.js';
+import { armsKey, isCustom } from './heraldry.js';
 import { highlights } from './highlights.js';
 import { Collapse } from './castlecollapse.js';
 
@@ -62,14 +63,14 @@ export class Castle {
     });
   }
 
-  // The emblem this house flies, from its lord's account ('' is the house's own, as it always was): the hanging banners, the flags and the standards.
-  // The field stays the house colour, so the houses can still be told apart.
-  setBanner(id) {
-    id = id || '';
+  // The arms this house flies, from its lord's account (heraldry.js: the sigil, the division of the field, the second tint; nothing is the house's
+  // own, as it always was): the hanging banners, the flags and the standards. The field keeps the house colour, so the houses can still be told apart.
+  setBanner(arms) {
+    const a = arms && isCustom(arms) ? arms : null, id = a ? armsKey(a) : '';
     if (this.bannerId === id) return;
     this.bannerId = id;
     const base = this.mats.banners[this.team];
-    const map = id ? customBanner(TEAM_COLORS[this.team], this.team, id) : base.map;
+    const map = a ? customBanner(TEAM_COLORS[this.team], this.team, a) : base.map;
     this.clothMat.map = map;
     if (id) { this.flagMat = base.clone(); this.flagMat.map = map; } else this.flagMat = base;
   }

@@ -40,6 +40,7 @@ import { HeroMode, HERO } from './herogame.js';
 import { matchlog } from './matchlog.js';
 import { stats, blankStats } from './stats.js';
 import { progress } from './progress.js';
+import { assignArms } from './heraldry.js';
 import { highlights } from './highlights.js';
 import { Finale } from './finale.js';
 import { warmCollapse } from './castlecollapse.js';
@@ -236,7 +237,7 @@ export class Game {
       this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
     }
 
-    for (const c of this.castles) c.setBanner(((this.humans.find((h) => h.team === c.team) || {}).cos || {}).banner);   // (a lord's banner on their castle; AI houses keep theirs)
+    assignArms(this);   // (a lord's arms on their castle, their soldiers and their hero; AI houses keep theirs: heraldry.js)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
       const empty = !human && !setup.hero && Array.isArray(setup.empty) && setup.empty.includes(i);   // (a castle closed in the lobby: nobody holds it, seats.js)

@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { PAT, SKIRT } from './modelkit.js';
 import { SHAPES, getShape } from './shapes.js';
+import { emblemCell, setRigEmblem } from './unittex.js';
 
 export const GIANT_SCALE = 3.2;
 export const GIANT_TILT = -0.2;   // the hammer's angle in the fist, at rest (the head down by his feet)
@@ -269,7 +270,8 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
   setColor(m.inst, 8, BEARD[(variant + 1) % 4]);
   m.baseBits = 0;
   m.inst[3] = 0;
-  m.inst[7] = (teamId > 4 ? 0 : teamId) + 8 * FACE[v];
+  m.faceIdx = FACE[v];
+  setRigEmblem(m, emblemCell(teamId));
   m.inst[12] = (variant * 0.37 + teamId * 0.11) % 1;
   root.userData.rig = m;
   return m;

@@ -9,7 +9,7 @@ import { UNIT_TYPES, TEAM_COLORS, RAIDER_TEAM } from './config.js';
 import { Q } from './quality.js';
 import { getShape, shapeGeo, SHAPES } from './shapes.js';
 import { unitMaterial, unitMaterials } from './unitmat.js';
-import { unitTextures } from './unittex.js';
+import { unitTextures, emblemCell, setRigEmblem } from './unittex.js';
 import { SKIRT } from './modelkit.js';
 import { buildGiant, poseGiant, poseGiantDead } from './giantmodel.js';
 
@@ -44,13 +44,13 @@ const BODY_PARTS = {
 function descFor(type) {
   const t = UNIT_TYPES[type], bp = BODY_PARTS[t.body];
   return {
-    ...bp, head: 'head.' + t.helmet, shield: t.shield || null, weapon: t.weapon, bow: t.weapon === 'bow' ? (type === 'longbowman' ? 'bow.long' : 'bow') : null,
+    ...bp, head: 'head.' + t.helmet, shield: t.shield === 'kite' && (type === 'knight' || type === 'lord') ? 'kiteL' : t.shield || null,   // (knights carry the tall kite) weapon: t.weapon, bow: t.weapon === 'bow' ? (type === 'longbowman' ? 'bow.long' : 'bow') : null,
     scale: t.scale || 1, cape: t.cape ? 'cape.long' : null, quiver: t.weapon === 'bow', giant: !!t.giant, mounted: !!t.mounted, plate: t.body === 'plate',
   };
 }
 // the six hero classes (the third-person bodies of other people's heroes, and bots)
 const HERO_DESC = {
-  knight: { ...BODY_PARTS.plate, head: 'head.great', shield: 'kite', weapon: 'sword', scale: 1.06, plate: true },
+  knight: { ...BODY_PARTS.plate, head: 'head.great', shield: 'kiteL', weapon: 'sword', scale: 1.06, plate: true },
   berserker: { ...BODY_PARTS.fur, head: 'head.horned', shield: null, weapon: 'greataxe', scale: 1.08, arm: 'skin' },
   ranger: { ...BODY_PARTS.gambeson, arm: 'cloth', head: 'head.hood', shield: null, weapon: 'sword', bow: 'bow.long', quiver: true, cape: 'cape.cloak', scale: 1 },
   mage: { ...BODY_PARTS.leather, arm: 'leather', head: 'head.hood', shield: null, weapon: 'staff', scale: 1, cape: 'cape.cloak' },
@@ -128,13 +128,15 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   setColor(m.inst, 8, look.hair);
   m.baseBits = (look.beard ? bitOf(6) : 0) | bitOf(7 + look.style);
   m.inst[3] = m.baseBits;
-  m.inst[7] = (team > 4 ? 0 : team) + 8 * face;
+  m.faceIdx = face;
+  setRigEmblem(m, opts && opts.cell >= 0 ? opts.cell : emblemCell(team));   // (the house's emblem, or its lord's arms: heraldry.js)
   m.inst[12] = (variant * 0.37 + team * 0.11) % 1;
   root.userData.rig = m;
   if (tier) rigSetTier(m, tier);
   return m;
 }
-export function buildHeroBody(classId, team, variant = 2, cape = null) { return buildSoldier('lord', team, variant, 0, { hero: classId, cape }); }
+// (`cell`: the emblem cell of the arms the hero's lord bears, heraldry.js; -1 for the house's own)
+export function buildHeroBody(classId, team, variant = 2, cape = null, cell = -1) { return buildSoldier('lord', team, variant, 0, { hero: classId, cape, cell: cell >= 0 ? cell : team > 4 || team < 0 ? 0 : team }); }
 
 // Better training, better kit: tier 1 steel pauldrons, 2 a cloak, 3 gold at the throat and on the shield, 4 gold pauldrons and wings on the
 // helm, 5 a gilded breastplate and a long cloak.

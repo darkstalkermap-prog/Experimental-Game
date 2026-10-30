@@ -1,15 +1,15 @@
 // The one material every soldier, horse and hero is drawn with (see crowd.js), plus its shadow-pass twin. It is MeshStandardMaterial with
 // the shader extended (through shaderhook.js) to read what modelkit.js bakes into the vertices and what crowd.js writes per instance:
 //   per vertex    aSurf (roughness, metalness, colour slot, gate)   aFx (sway weight, pattern, u, v)   color (shade or colour)
-//   per instance  iA cloth rgb + flag bits    iB skin rgb + team + 8 * face    iC hair rgb    iD phase, sway, hit flash, fade-out
+//   per instance  iA cloth rgb + flag bits    iB skin rgb + emblem cell + 16 * face (unittex.js)    iC hair rgb    iD phase, sway, hit flash, fade-out
 // Slots pick the instance colour a part wears (house cloth, skin, hair...); gates hide small parts (tier kit, beard, hair styles) by
 // collapsing them; cloth sways in the vertex shader; patterns (weave, quilting, mail, leather, faces, heraldry) are drawn in the fragment
 // shader. Without instancing (a baked static mesh) the vertex colours are used as they are.
 import * as THREE from 'three';
 import { patchMaterial } from './shaderhook.js';
-import { faceAtlas, emblemAtlas } from './unittex.js';
+import { faceAtlas, emblemAtlas, armsUniforms, LORDS } from './unittex.js';
 
-export const crowdUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uFace: { value: null }, uEmblem: { value: null } };
+export const crowdUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uFace: { value: null }, uEmblem: { value: null }, uArmsTint: { value: armsUniforms.tint }, uArmsInk: { value: armsUniforms.ink } };
 
 const DECODE = `
 #ifdef USE_INSTANCING
@@ -90,6 +90,8 @@ varying vec3 vObj;
 varying vec3 vHair;
 uniform sampler2D uFace;
 uniform sampler2D uEmblem;
+uniform vec3 uArmsTint[${LORDS}];
+uniform vec3 uArmsInk[${LORDS}];
 float cHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 float cNoise(vec2 p) {
   vec2 i = floor(p), f = fract(p);
@@ -138,13 +140,20 @@ if (pat > 0.5) {
     c = mix(c, vec3(0.7, 0.66, 0.6), f.b);
     c = mix(c, vec3(0.04, 0.03, 0.025), f.a);
     diffuseColor.rgb = c;
-  } else if (pat < 8.5) {
+  } else if (pat < 8.5 || pat > 11.5) {
+    // the emblem (8: a surcoat or shield, the whole of the arms; 12: a badge on a cloak of fixed colours, the sigil only)
     vec2 euv = clamp(vFx.xy, 0.0, 1.0);
-    vec4 e = texture2D(uEmblem, vec2((euv.x + vSurf.w) * 0.125, euv.y));
+    vec4 e = texture2D(uEmblem, vec2((euv.x + vSurf.w) * 0.0625, euv.y));
     vec3 ink = mix(vec3(0.84, 0.78, 0.6), vec3(0.12, 0.09, 0.06), step(2.5, vSurf.w) * step(vSurf.w, 3.5));
+    if (vSurf.w > 7.5) {   // a lord's own arms (unittex.js): the tinted part of the field, and the colour of the sigil
+      int k = int(vSurf.w - 7.5);
+      if (pat < 8.5) diffuseColor.rgb = mix(diffuseColor.rgb, uArmsTint[k] * 0.85, e.b);
+      ink = uArmsInk[k];
+    }
+    if (pat > 11.5) diffuseColor.rgb *= 1.0 + 0.08 * sin(q.x * 300.0) * sin((q.y + q.z) * 300.0) * aa;   // (the weave of the cloth)
     diffuseColor.rgb = mix(diffuseColor.rgb, ink, e.r);
     diffuseColor.rgb *= 1.0 - 0.45 * e.g;
-  } else if (pat > 10.5) {
+  } else if (pat > 10.5 && pat < 11.5) {
     // skin: blotches of colour (a little ruddier here, paler there) and a fine grain in the sheen
     float n = cNoise(q.xy * 34.0 + q.z * 27.0);
     diffuseColor.rgb *= mix(vec3(0.96, 0.98, 1.0), vec3(1.05, 0.98, 0.95), n);
@@ -164,7 +173,7 @@ const FRAG_RIM = `
   float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
   float rim = pow(1.0 - nv, 3.0);
   // (skin lets light through at its edges, warm, where cloth and steel catch a cool sky rim)
-  float flesh = step(6.5, vSurf.z) * step(vSurf.z, 7.5) + step(10.5, vSurf.z);
+  float flesh = step(6.5, vSurf.z) * step(vSurf.z, 7.5) + step(10.5, vSurf.z) * step(vSurf.z, 11.5);
   totalEmissiveRadiance += diffuseColor.rgb * rim * mix(vec3(0.17, 0.19, 0.21), vec3(0.42, 0.17, 0.1), flesh);
   totalEmissiveRadiance += vec3(1.0, 0.8, 0.55) * vFx.z * 0.9;
   if (vSurf.z > 9.5 && vSurf.z < 10.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
@@ -193,7 +202,7 @@ if (cSlot > 0.5) {
   vColor = tint * color;
 }
 float cPat = aFx.y;
-vSurf = vec4(aSurf.x, aSurf.y, cPat, cPat > 7.5 ? mod(cB.w, 8.0) : floor(cB.w / 8.0));
+vSurf = vec4(aSurf.x, aSurf.y, cPat, cPat > 7.5 ? mod(cB.w, 16.0) : floor(cB.w / 16.0));
 vFx = vec4(aFx.zw, cD.z, cD.w);
 vHair = cC.rgb;
 vObj = position;`)
