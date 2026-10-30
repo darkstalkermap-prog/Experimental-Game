@@ -4,7 +4,7 @@
 // rebuilt only when a level changes (or a wall falls or is rebuilt).
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
-import { CASTLE } from './config.js';
+import { CASTLE, TEAM_COLORS } from './config.js';
 import { box } from './materials.js';
 import { buildSoldier, poseSoldier, bakedMesh, unitMaterial } from './models.js';
 
@@ -294,12 +294,13 @@ export class Upgrades {
   // one archer drawing his bow, baked into a single static geometry (shared by every tower of the house)
   archerGeo() {
     const c = this.c;
-    let geo = ARCHER_GEO.get(c.team);
+    const key = `towerArcher:${c.team}:${TEAM_COLORS[c.team]}`;   // (the house colour is baked in: a match may paint the house another one, teams.js)
+    let geo = ARCHER_GEO.get(key);
     if (!geo) {
       const m = buildSoldier('archer', c.team, 1);
       poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: 0.34, attackDir: 'over', stagger: 0, mounted: false });
-      geo = bakedMesh(`towerArcher:${c.team}`, m.root).geometry;
-      ARCHER_GEO.set(c.team, geo);
+      geo = bakedMesh(key, m.root).geometry;
+      ARCHER_GEO.set(key, geo);
     }
     return geo;
   }

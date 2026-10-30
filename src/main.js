@@ -23,6 +23,10 @@ import './wardrobe.js';       // (the Renown panel of the menu)
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
 import { pendingDecrees, hearDecrees } from './decrees.js';
 import { withRivals, lobbyRivals } from './rivalsui.js';
+import { setPalette, sanitizeColors, assignColors, paletteKey, isColorId, COLOR_IDS } from './teams.js';
+import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, nextState, canTakeSlot, canTakeSeat, firstFreeSlot, firstFreeSeat,
+  warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse, isSlotState } from './seats.js';
+import { drawLobby, drawSolo } from './lobbyui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,12 +63,31 @@ audio.vol.master = settings.master / 100;
 audio.vol.music = settings.music / 100;
 audio.vol.sfx = settings.sfx / 100;
 
-// the key of a world: its map size, the practice yard and the land it is dressed as (a different land is another world, built again)
-const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed));
+// ---------------- one player's seat and colour (remembered per browser) ----------------
+// the castle you play in a war (0..3) and what the other three are (an AI lord, or empty), your side in the Hero Game Mode, how many a side, your colour
+const stored = (key, fallback) => { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } };
+const store = (key, v) => { try { localStorage.setItem(key, String(v)); } catch (e) { /* ignore */ } };
+let myColor = stored('cw-color', 'blue');
+if (!isColorId(myColor)) myColor = 'blue';
+let soloSlot = Number(stored('cw-slot', 0));
+if (!(soloSlot >= 0 && soloSlot < 4)) soloSlot = 0;
+let soloSlots = cleanSlots(String(stored('cw-slots', '')).split(','));
+let soloSide = Number(stored('cw-side', 0)) === 1 ? 1 : 0;
+let heroCount = heroSize(Number(stored('cw-herosize', 3)));
+const soloPalette = () => assignColors(heroOnSolo() ? [soloSide === 0 ? myColor : null, soloSide === 1 ? myColor : null, null, null] : [0, 1, 2, 3].map((t) => (t === soloSlot ? myColor : null)));
+let heroOnSolo = () => false;   // (the Mode row below says)
+
+// The houses' colours of the world being built (teams.js): the world is built in them, so a different set is another world. A match brings its own
+// (begin); the menu shows the single player's.
+let palette = soloPalette();
+
+// the key of a world: its map size, the practice yard, the land it is dressed as and the colours of its houses (any other is another world, built again)
+const worldKey = (size, practice, o) => size + (practice ? '+practice' : '') + (practice ? '' : landKey(o.biome, o.seed)) + '|' + paletteKey(palette);
 
 function buildGame(size, practice = false, landOpts = null) {
   const o = sanitizeOptions(landOpts);
   setMapSize(size);
+  setPalette(palette);   // (before anything of the world is made: castles, banners, soldiers and heroes take their colours as they are built)
   setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
   setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
@@ -161,7 +184,8 @@ let heroOn = false;
 let heroWin = 'kills';
 try { heroWin = localStorage.getItem('cw-herowin') || 'kills'; } catch (e) { /* storage unavailable */ }
 if (!HERO.modes[heroWin]) heroWin = 'kills';
-const HERO_DESC = 'Three heroes against three, out of one castle each: you and two bot heroes against three. You control only your hero and its talents; the armies march by themselves, every round tougher.';
+const NUM = ['', 'one', 'two', 'three', 'four'];
+const heroDesc = () => `${NUM[heroCount][0].toUpperCase() + NUM[heroCount].slice(1)} heroes against ${NUM[heroCount]}, out of one castle each: you and ${NUM[heroCount - 1]} bot hero${heroCount > 2 ? 'es' : ''} against ${NUM[heroCount]}. You control only your hero and its talents; the armies march by themselves, every round tougher. Online, friends take the bots' seats.`;
 function showHeroWin(id) {
   heroWin = id;
   document.querySelectorAll('#heroWin button').forEach((b) => b.classList.toggle('active', b.dataset.w === id));
@@ -187,16 +211,12 @@ function selectObjective(o) {
   if (!hero) objective = o;
   document.querySelectorAll('#objective button').forEach((b) => b.classList.toggle('active', b.dataset.o === o));
   document.querySelectorAll('#lobbyObjective button').forEach((b) => b.classList.toggle('active', b.dataset.o === objective));
-  $('objDesc').textContent = hero ? HERO_DESC : OBJECTIVES[o].desc;
+  $('objDesc').textContent = hero ? heroDesc() : OBJECTIVES[o].desc;
   $('lobbyObjDesc').textContent = OBJECTIVES[objective].desc;
   $('heroWin').classList.toggle('hidden', !hero);
-  $('heroNote').classList.toggle('hidden', !hero);
   $('menu').classList.toggle('hero', hero);
   showLength();   // (the length row is for the war modes: in Hero Mode it says so)
-  // online play is for the war modes this round: the lobby cannot start a hero match
-  $('mpBtn').disabled = hero;
-  $('mpBtn').title = hero ? 'Hero Game Mode is single player for now' : '';
-  if (hero) { $('online').classList.add('hidden'); $('offlineNote').classList.add('hidden'); $('mpBtn').classList.remove('active'); }
+  showSolo();
 }
 document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => { selectObjective(b.dataset.o); rememberLast(); }));
 const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : objective);
@@ -227,6 +247,7 @@ initLandMenu({
 
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
+  palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
   ensureMap(map, !!(setup && setup.practice), setup && setup.options);
   if (net) game.net = net;
   audio.init();
@@ -274,6 +295,30 @@ const rememberClass = (id) => {
 };
 renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 
+// the menu's Castle, Others, Teams and Colour rows: one player's seat (lobbyui.js draws them, seats.js says what may be)
+heroOnSolo = () => heroOn;
+function showSolo() {
+  drawSolo({ hero: heroOn, slot: soloSlot, side: soloSide, slots: soloSlots, size: heroCount, color: myColor }, {
+    slot(t) { soloSlot = t; soloSlots[t] = 'open'; store('cw-slot', t); store('cw-slots', soloSlots.join()); afterSolo(); },
+    side(s) { soloSide = s ? 1 : 0; store('cw-side', soloSide); afterSolo(); },
+    state(t) {   // an AI lord or nobody (a war needs two houses: the last AI lord stays)
+      const next = soloSlots.slice();
+      next[t] = next[t] === 'empty' ? 'open' : 'empty';
+      if (warProblem(next, [{ team: soloSlot }], false)) return;
+      soloSlots = next; store('cw-slots', soloSlots.join()); afterSolo();
+    },
+    size(n) { heroCount = heroSize(n); store('cw-herosize', heroCount); if (heroOn) $('objDesc').textContent = heroDesc(); afterSolo(); },
+    color(id) { if (!isColorId(id)) return; myColor = id; store('cw-color', id); afterSolo(); },
+  });
+}
+// the world behind the menu is repainted in the new colours a moment later (as the Land row does)
+function afterSolo() {
+  showSolo();
+  refreshQuick();
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land); } }, 350);
+}
+
 // the line under Quick Play (and under Play Again): what a click will start
 const currentSetupLine = () => setupLine({ cls: heroClass, mode: heroOn ? 'hero' : objective, heroWin, map: mapSize, diff: difficulty, length: options.length });
 function refreshQuick() {
@@ -295,7 +340,8 @@ function toMenu() {
   if (net) { location.reload(); return; }   // an online game is left by starting the page afresh
   clearTimeout(freshTimer);
   refreshOptions();
-  ensureMap(mapSize, false, land);   // (the menu shows the picked land behind it)
+  palette = soloPalette();
+  ensureMap(mapSize, false, land);   // (the menu shows the picked land behind it, in the single player's colours)
   ui.reset();
   ui.hideHud();
   showLength();
@@ -319,24 +365,34 @@ flow.bind({
   inRoom, rematch: hostRematch, leaveRoom,
 });
 
-// Single Player, Quick Play and Play Again all start this: a match of one lord against three, with what the menu says (which the last match left there)
+// Single Player, Quick Play and Play Again all start this: a match of one lord against the others, with what the menu says (which the last match left
+// there): your castle and colour, the castles left empty, or your side and the size of the sides in the Hero Game Mode
 function startSolo() {
   rememberLast();
-  begin(difficulty, heroOn
-    ? { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], hero: { win: heroWin }, options: matchOptions() }
-    : { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], objective, options: matchOptions() });
+  if (heroOn) {
+    const me = { team: soloSide, hs: soloSide * 4 + Math.floor((heroCount - 1) / 2), name: 'You', cls: heroClass, col: myColor, me: true };
+    begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], hero: { win: heroWin, size: heroCount, seats: freshSeats() }, colors: assignColors(colorWants([me], true)), options: matchOptions() });
+    return;
+  }
+  const me = { team: soloSlot, name: 'You', cls: heroClass, col: myColor, me: true }, empty = emptyTeams(soloSlots, [me]);
+  begin(difficulty, { mode: 'single', localTeam: me.team, players: [me], objective, empty, colors: assignColors(colorWants([me], false)), options: matchOptions([me.team, ...empty]) });
 }
 $('play').addEventListener('click', startSolo);
 $('quickPlay').addEventListener('click', startSolo);
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
-$('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass }], practice: true }, 'small'));
+$('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass, me: true }], practice: true, colors: assignColors([myColor, null, null, null]) }, 'small'));
 
 // ---------------- online play ----------------
 let net = null;
-let lobby = [];      // [{ team, name, netId, cls, cos }]   (cos: the banner, cloak and capstones the account behind the player wears: progress.js)
+// [{ team, hs, name, netId, cls, cos, col }]   team: the castle held in a war; hs: the seat in a hero match (seats.js); cos: the banner, cloak and capstones
+// the account behind the player wears (progress.js); col: the colour they fly (teams.js: no two people the same)
+let lobby = [];
 let coop = false;    // lobby game mode chosen by the host
+// the host's seating of the room (seats.js): the four castles of a war, the hero seats and how many a side
+const room = { slots: freshSlots(), seats: freshSeats(), size: 3 };
 let lobbyBroadcast = null;
 let guestData = null;   // a guest's handler of the host's messages while in the lobby (a match replaces it with the sync's; a rematch puts it back)
+let guestView = null;   // a guest: the host's last word on the room (what the lobby shows)
 
 // the class buttons in the lobby: the host updates the list itself, a guest tells the host
 function showLobbyClassPicker() {
@@ -417,52 +473,130 @@ async function connect() {
   });
 }
 
+// ---------------- the room's seating (the host decides; seats.js has the rules) ----------------
+const heroRoom = () => (heroOn ? { win: heroWin, size: room.size, seats: room.seats } : null);
+// why the host cannot start the battle yet (null: it can)
+const startProblem = () => (heroOn ? heroProblem(room.seats, room.size, lobby) : warProblem(room.slots, lobby, coop));
+// what everybody's lobby shows (the host sends it as it is; a guest draws what it is sent)
+const roomView = () => ({ players: lobby, coop, obj: objective, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
+// the first colour nobody in the room flies (`wish` when it is free)
+const freeColor = (wish, who = null) => {
+  const taken = new Set(lobby.filter((p) => p !== who).map((p) => p.col));
+  return isColorId(wish) && !taken.has(wish) ? wish : COLOR_IDS.find((c) => !taken.has(c));
+};
+
+// the host moves `p` to castle / seat n (its own click, or a guest's ask, checked here)
+function hostTake(p, n) {
+  if (!p || !Number.isInteger(n)) return false;
+  if (heroOn) { if (!canTakeSeat(room.seats, room.size, lobby, p, n)) return false; p.hs = n; }
+  else { if (!canTakeSlot(room.slots, lobby, p, n)) return false; p.team = n; }
+  return true;
+}
+function hostColor(p, id) {
+  if (!p || !isColorId(id) || freeColor(id, p) !== id || p.col === id) return false;
+  p.col = id;
+  return true;
+}
+// the host's own clicks on the room's rows
+const hostActions = {
+  take(n) { if (hostTake(lobby.find((p) => p.netId === null), n)) lobbyBroadcast(); },
+  state(n) {   // a free castle or seat: open -> an AI (a bot) -> nobody -> open
+    if (heroOn) { if (seatInUse(n, room.size) && !lobby.some((p) => p.hs === n)) room.seats[n] = nextState(room.seats[n]); }
+    else if (n >= 0 && n < 4 && !lobby.some((p) => p.team === n)) room.slots[n] = nextState(room.slots[n]);
+    lobbyBroadcast();
+  },
+  move(netId) {   // Hero Mode: a guest to the other side (a free seat there, opened for them if it was closed)
+    const p = lobby.find((x) => x.netId !== null && String(x.netId) === String(netId));
+    if (!p || !heroOn) return;
+    const other = 1 - sideOfSeat(p.hs);
+    let s = firstFreeSeat(room.seats, room.size, lobby, other);
+    if (s < 0 || sideOfSeat(s) !== other) {
+      s = [0, 1, 2, 3].map((i) => other * 4 + i).find((x) => seatInUse(x, room.size) && !lobby.some((q) => q.hs === x)) ?? -1;
+      if (s < 0) return;   // (the other side is full of people)
+      room.seats[s] = 'open';
+    }
+    p.hs = s;
+    lobbyBroadcast();
+  },
+  color(id) { const me = lobby.find((p) => p.netId === null); if (hostColor(me, id)) { myColor = id; store('cw-color', id); lobbyBroadcast(); } },
+  size(n) { if (!HERO_SIZES.includes(n) || lobby.length > 2 * n) return; room.size = n; heroCount = n; store('cw-herosize', n); reseat(lobby, room.slots, room.seats, room.size); lobbyBroadcast(); },
+  win(id) { if (HERO.modes[id]) { showHeroWin(id); try { localStorage.setItem('cw-herowin', id); } catch (e) { /* ignore */ } lobbyBroadcast(); } },
+  mode(o) { selectObjective(o); reseat(lobby, room.slots, room.seats, room.size); lobbyBroadcast(); },
+};
+// a guest's clicks: asks for the host
+const guestActions = {
+  take(n) { net.toHost({ k: guestView && guestView.hero ? 'hseat' : 'seat', n }); },
+  color(id) { if (isColorId(id)) { myColor = id; store('cw-color', id); net.toHost({ k: 'col', col: id }); } },
+  state() {}, move() {}, size() {}, win() {}, mode() {},
+};
+function showRoom(v, isHost) {
+  ui.renderLobby(v.players, v.coop, v.obj, v.len);
+  drawLobby({ ...v, me: isHost ? null : net.id, host: isHost, problem: isHost ? startProblem() : null }, isHost ? hostActions : guestActions);
+}
+
+// What a guest says in the room (in the lobby, and on the end screen before a rematch): its class, what it wears, its castle or seat, its colour.
+// `looks`: what guests said they wear and which colour they want before the host had seated them.
+const looks = new Map(), wishes = new Map();
+function hostHears({ from, d }) {
+  if (!d) return;
+  const p = lobby.find((x) => x.netId === from);
+  if (d.k === 'cos') {   // a guest's banner, cloak and capstones
+    const look = sanitizeLoadout(d.cos), same = JSON.stringify(look) === JSON.stringify(looks.get(from));
+    looks.set(from, look);
+    if (p && !(same && JSON.stringify(p.cos) === JSON.stringify(look))) { p.cos = look; lobbyBroadcast(); }   // (a guest repeating itself does not make the host redraw the room)
+    return;
+  }
+  if (d.k === 'col') {
+    if (isColorId(d.col)) wishes.set(from, d.col);
+    if (hostColor(p, d.col)) lobbyBroadcast();
+    return;
+  }
+  if (d.k === 'seat' || d.k === 'hseat') {   // (asked in the other mode than the room's now: the host has switched meanwhile, and the ask is dropped)
+    if ((d.k === 'hseat') === heroOn && hostTake(p, Number(d.n))) lobbyBroadcast();
+    return;
+  }
+  if (d.k !== 'cls' || !isClassId(d.cls)) return;
+  if (p && p.cls !== d.cls) { p.cls = d.cls; lobbyBroadcast(); }
+}
+
 $('hostBtn').addEventListener('click', async () => {
   rememberName();
   ui.lobbyError('');
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  lobby = [{ team: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout() }];
-  const broadcast = () => { const rv = lobbyRivals(); ui.renderLobby(lobby, 0, coop, objective, options.length, rv); net.toAll({ k: 'lobby', players: lobby, coop, obj: objective, len: options.length, land: { biome: land.biome, seed: land.seed }, rv }); };
-  lobbyBroadcast = broadcast;
-  // guests report the class they pick
-  const looks = new Map();   // what guests said they wear (a guest may speak before the host has seated it)
-  net.on('data', ({ from, d }) => {
-    if (d && d.k === 'cos') {   // a guest's banner, cloak and capstones
-      const look = sanitizeLoadout(d.cos), same = JSON.stringify(look) === JSON.stringify(looks.get(from));
-      looks.set(from, look);
-      const q = lobby.find((x) => x.netId === from);
-      if (q && !(same && JSON.stringify(q.cos) === JSON.stringify(look))) { q.cos = look; broadcast(); }   // (a guest repeating itself does not make the host redraw the room)
-      return;
-    }
-    if (!d || d.k !== 'cls' || !isClassId(d.cls)) return;
-    const p = lobby.find((x) => x.netId === from);
-    if (p && p.cls !== d.cls) { p.cls = d.cls; broadcast(); }
-  });
+  room.size = heroCount;
+  lobby = [{ team: 0, hs: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout(), col: myColor }];
+  reseat(lobby, room.slots, room.seats, room.size);
+  lobbyBroadcast = () => { const v = roomView(); showRoom(v, true); net.toAll({ k: 'lobby', ...v }); };
+  net.on('data', hostHears);
   for (const b of document.querySelectorAll('#lobbyModes button')) {
-    b.onclick = () => { coop = b.dataset.mode === 'coop'; broadcast(); };
-  }
-  for (const b of document.querySelectorAll('#lobbyObjective button')) {
-    b.onclick = () => { selectObjective(b.dataset.o); broadcast(); };
+    b.onclick = () => { coop = b.dataset.mode === 'coop'; lobbyBroadcast(); };
   }
   for (const b of document.querySelectorAll('#lobbyLength button')) {
-    b.onclick = () => { selectLength(b.dataset.l); broadcast(); };
+    b.onclick = () => { selectLength(b.dataset.l); lobbyBroadcast(); };
   }
-  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); broadcast(); });
+  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); lobbyBroadcast(); });
   net.on('peer', (m) => {
-    const used = new Set(lobby.map((p) => p.team));
-    const team = [1, 2, 3].find((t) => !used.has(t));
-    if (team === undefined) return;
-    lobby.push({ team, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null) });
-    broadcast();
+    if (lobby.some((p) => p.netId === m.id)) return;
+    const team = firstFreeSlot(room.slots, lobby), hs = firstFreeSeat(room.seats, room.size, lobby);
+    if (heroOn ? hs < 0 : team < 0) { net.toClient(m.id, { k: 'full' }); return; }   // (the host has closed every free place)
+    lobby.push({ team, hs, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null), col: freeColor(wishes.get(m.id)) });
+    lobbyBroadcast();
   });
-  net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); broadcast(); });
+  net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); lobbyBroadcast(); });
   net.create(playerName());
 });
 
 $('startOnline').addEventListener('click', () => {
-  const opts = matchOptions(lobby.map((p) => p.team));
-  net.toAll({ k: 'start', diff: difficulty, players: lobby, map: mapSize, coop, obj: objective, opts });
-  begin(difficulty, { mode: 'host', localTeam: 0, players: lobby, coop, objective, options: opts });
+  if (startProblem()) return;
+  const hero = heroOn ? { win: heroWin, size: room.size, seats: room.seats.slice() } : null;
+  reseat(lobby, room.slots, room.seats, room.size);   // (nobody without a place)
+  const players = lobby.map((p) => ({ ...p, team: hero ? sideOfSeat(p.hs) : p.team }));   // (in a hero match a player's house is their side's)
+  const colors = assignColors(colorWants(players, !!hero));
+  const empty = hero ? [] : emptyTeams(room.slots, players);
+  const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
+  net.toAll({ k: 'start', diff: difficulty, players, map: mapSize, coop, obj: objective, opts, hero, empty, colors });
+  const me = players.find((p) => p.netId === null);
+  begin(difficulty, { mode: 'host', localTeam: me.team, players: players.map((p) => ({ ...p, me: p === me })), coop: !hero && coop, objective, hero, empty, colors, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -471,19 +605,31 @@ $('joinBtn').addEventListener('click', async () => {
   const code = $('joinCode').value.trim().toUpperCase();
   if (code.length !== 4) { ui.lobbyError('Enter the 4-letter room code from the host.'); return; }
   try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); });
+  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); net.toHost({ k: 'col', col: myColor }); });
   guestData = ({ d }) => {
+    if (!d) return;
     if (d.k === 'rematch') guestRematch();
     if (d.k === 'decrees') hearDecrees(d.ids);   // (the host's roll for the next battle: it comes after the match, when this handler is back: see roomAfterMatch)
-    if (d.k === 'lobby') {
-      ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.len, d.rv);
+    if (d.k === 'full') {   // (every free place of the room is closed)
+      ui.lobbyError('That game has no free place: the host has closed them.');
+      try { net.close(); } catch (e) { /* already gone */ }
+      $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden');
+      return;
+    }
+    if (d.k === 'lobby' && Array.isArray(d.players)) {
+      guestView = { players: d.players, coop: !!d.coop, obj: OBJECTIVES[d.obj] ? d.obj : 'conquest', len: d.len, rv: d.rv, slots: cleanSlots(d.slots),
+        hero: d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null };
+      showRoom(guestView, false);
       const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)
       showLobbyLand(false, { biome: l.biome, seed: l.seed });
     }
-    if (d.k === 'start') {
+    if (d.k === 'start' && Array.isArray(d.players)) {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos) })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
+      const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
+      const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
+      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);
@@ -511,18 +657,7 @@ function roomAfterMatch(s) {
   lobby = lobby.filter((p) => p.netId === null || here.has(p.netId));
   const me = lobby.find((p) => p.netId === null);
   if (me) { me.cls = heroClass; me.cos = progress.loadout(); }   // (the match may have earned a banner, a cloak or a capstone)
-  net.on('data', ({ from, d }) => {   // (guests may change class on their end screens, and tell what they wear now)
-    if (!d) return;
-    const p = lobby.find((x) => x.netId === from);
-    if (!p) return;
-    if (d.k === 'cos') {
-      const look = sanitizeLoadout(d.cos);
-      if (JSON.stringify(look) !== JSON.stringify(p.cos)) { p.cos = look; if (lobbyBroadcast) lobbyBroadcast(); }
-      return;
-    }
-    if (d.k !== 'cls' || !isClassId(d.cls)) return;
-    if (p.cls !== d.cls) { p.cls = d.cls; if (lobbyBroadcast) lobbyBroadcast(); }
-  });
+  net.on('data', hostHears);   // (guests may change class on their end screens, and tell what they wear now)
   net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); if (lobbyBroadcast) lobbyBroadcast(); });
 }
 

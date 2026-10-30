@@ -1,0 +1,188 @@
+// The seats and colours of a battle, on the screen: the room's list of castles (or of hero seats) with Take, Open / AI / Empty and Switch side, the
+// Hero Game Mode's rows in the room (how to win, how many a side), the colour swatches, and the same choices for one player on the main menu.
+// Only drawing and clicks: who may sit where is seats.js, and the room's host decides (main.js).
+import { CLASSES } from './classes.js';
+import { HERO } from './herogame.js';
+import { PALETTE, COLOR_IDS, assignColors } from './teams.js';
+import { HERO_SIZES, sideOfSeat, placeOfSeat, colorWants } from './seats.js';
+import { lookText } from './unlocks.js';
+import { lobbyRivalName } from './rivalsui.js';
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const css = (id) => (PALETTE[id] || PALETTE.blue).css;
+
+let styled = false;
+function style() {
+  if (styled) return;
+  styled = true;
+  const s = document.createElement('style');
+  s.textContent = `
+#lobbyList li.seat { align-items: center; }
+#lobbyList li.seat .who { flex: 1; text-align: right; }
+#lobbyList li.seat.me { background: rgba(255,255,255,0.6); }
+#lobbyList li.seat.closed .who { opacity: 0.7; }
+#lobbyList li.seat.side2 { margin-top: 8px; }
+#lobbyList li.seat .act { display: flex; gap: 4px; }
+#lobbyList li.seat .act button { font-size: 12px; padding: 2px 8px; }
+.swatches { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: center; }
+.swatches button.sw { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(0,0,0,0.45); background: var(--c) !important; box-shadow: none; }
+.swatches button.sw.active { border-color: #fff; box-shadow: 0 0 0 2px #5a1d12 !important; }
+.swatches button.sw:disabled { opacity: 0.25; }
+.seatrow { align-items: center; }
+.seatrow .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+.seatrow button { padding: 5px 12px; font-size: 13px; }
+.seatrow button i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: -1px; }
+.seatrow button small { opacity: 0.75; margin-left: 4px; }
+`;
+  document.head.appendChild(s);
+}
+
+// a row of colour swatches: `mine` is the chosen one, `taken` maps a colour to who holds it (they cannot be picked)
+function swatches(el, mine, taken, onPick) {
+  el.className = 'swatches';
+  el.innerHTML = COLOR_IDS.map((id) => {
+    const who = taken.get(id);
+    return `<button class="sw${id === mine ? ' active' : ''}" data-c="${id}" style="--c:${css(id)}" title="${esc(PALETTE[id].name)}${who ? ` (${esc(who)})` : ''}" aria-label="${esc(PALETTE[id].name)}"${who ? ' disabled' : ''}></button>`;
+  }).join('');
+  for (const b of el.querySelectorAll('button')) b.onclick = () => onPick(b.dataset.c);
+}
+
+// a row of buttons under a label, made once in `parent` before `before` (or at the end)
+function row(id, label, parent, before = null) {
+  let el = $(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.className = 'row seatrow';
+    if (before && before.parentNode === parent) parent.insertBefore(el, before); else parent.appendChild(el);
+  }
+  el.dataset.label = label;
+  return el;
+}
+function buttons(el, label, items, onPick, disabled = false) {
+  el.innerHTML = `<span class="qlabel">${esc(label)}</span>` + items.map((it) => `<button data-v="${esc(it.v)}"${it.active ? ' class="active"' : ''}${disabled || it.off ? ' disabled' : ''}${it.title ? ` title="${esc(it.title)}"` : ''}>${it.html}</button>`).join('');
+  for (const b of el.querySelectorAll('button')) b.onclick = () => onPick(b.dataset.v);
+}
+
+// ---------------- the room ----------------
+// v: { players: [{ team, hs, name, netId, cls, cos, col }], me (this page's netId: null on the host), host, hero: null | { size, seats, win }, slots,
+//      coop, rv (the rival lords), problem (why the battle cannot start, or null) }
+// on: { take(n), state(n), move(netId), color(id), size(n), win(id) }   (n: a castle in a war, a seat in the Hero Game Mode)
+export function drawLobby(v, on) {
+  style();
+  const hero = v.hero, players = v.players || [];
+  const mine = players.find((p) => p.netId === v.me) || null;
+  const house = assignColors(colorWants(players, !!hero));   // (the colours the battle will fly: an AI house takes what is left)
+  // the mode row: Hero Mode joins Conquest and King of the Hill
+  const objRow = $('lobbyObjective');
+  if (objRow && !objRow.querySelector('[data-o=hero]')) {
+    const b = document.createElement('button');
+    b.dataset.o = 'hero';
+    b.textContent = 'Hero Mode';
+    objRow.appendChild(b);
+  }
+  if (objRow) {
+    for (const b of objRow.querySelectorAll('button')) {
+      b.classList.toggle('active', hero ? b.dataset.o === 'hero' : b.dataset.o === v.obj);
+      b.disabled = !v.host;
+      b.onclick = v.host && on.mode ? () => on.mode(b.dataset.o) : null;
+    }
+  }
+  if (hero) $('lobbyObjDesc').textContent = `Hero Mode: ${hero.size} heroes against ${hero.size}, out of castles 1 and 2. You play only your hero; the armies march by themselves. A seat nobody takes is a hero bot.`;
+  for (const id of ['lobbyModes', 'lobbyMode', 'lobbyLength']) { const el = $(id); if (el) el.classList.toggle('hidden', !!hero); }
+  // the Hero Game Mode's rows: how to win and how many a side
+  const parent = objRow ? objRow.parentNode : $('lobbyList').parentNode;
+  const after = $('lobbyObjDesc') ? $('lobbyObjDesc').nextSibling : null;
+  const win = row('lobbyHeroWin', 'Win by', parent, after), size = row('lobbyHeroSize', 'Teams', parent, win.nextSibling);
+  win.classList.toggle('hidden', !hero); size.classList.toggle('hidden', !hero);
+  if (hero) {
+    buttons(win, 'Win by', Object.entries(HERO.modes).map(([id, m]) => ({ v: id, html: esc(m.name), active: id === hero.win, title: m.desc })), (id) => on.win(id), !v.host);
+    buttons(size, 'Teams', HERO_SIZES.map((n) => ({ v: n, html: `${n} v ${n}`, active: n === hero.size, off: players.length > 2 * n })), (n) => on.size(Number(n)), !v.host);
+  }
+
+  // the list: one line per castle, or per hero seat
+  const lines = [];
+  const holder = (p) => `${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
+  const acts = (n, p, state, free) => {
+    const a = [];
+    if (!p && free && state === 'open' && mine) a.push(`<button data-take="${n}" title="Sit here">Take</button>`);
+    if (!p && v.host) a.push(`<button data-state="${n}" title="Who sits here when nobody does: open for a player, an AI, or nobody">${state === 'open' ? 'Open' : state === 'ai' ? (hero ? 'Bot' : 'AI') : 'Empty'}</button>`);
+    if (p && v.host && hero && p.netId !== null) a.push(`<button data-move="${esc(p.netId)}" title="Move to the other side">Switch side</button>`);
+    return a.length ? `<span class="act">${a.join('')}</span>` : '';
+  };
+  if (!hero) {
+    const twoTeams = v.coop && players.length >= 4;
+    for (let t = 0; t < 4; t++) {
+      const p = players.find((q) => q.team === t) || null, state = v.slots[t];
+      const c = css(house[t]);
+      const who = p ? holder(p)
+        : state === 'empty' ? '<i>Empty castle · closed</i>'
+          : `<i>AI lord${v.coop ? ' (enemy)' : ''}${lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}${state === 'open' ? ' · open' : ' · closed'}</i>`;
+      lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">Castle ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b><span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
+    }
+  } else {
+    for (const side of [0, 1]) {
+      const c = css(house[side]);
+      for (let i = 0; i < hero.size; i++) {
+        const s = side * 4 + i, p = players.find((q) => q.hs === s) || null, state = hero.seats[s];
+        const who = p ? holder(p) : state === 'empty' ? '<i>Nobody · closed</i>' : `<i>Hero bot · ${state === 'open' ? 'open' : 'closed'}</i>`;
+        lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}${side && !i ? ' side2' : ''}" style="border-left-color:${c}"><b style="color:${c}">${esc(PALETTE[house[side]].name)} · ${placeOfSeat(s) + 1}</b><span class="who">${who}</span>${acts(s, p, state, true)}</li>`);
+      }
+    }
+  }
+  const list = $('lobbyList');
+  list.innerHTML = lines.join('');
+  for (const b of list.querySelectorAll('[data-take]')) b.onclick = () => on.take(Number(b.dataset.take));
+  for (const b of list.querySelectorAll('[data-state]')) b.onclick = () => on.state(Number(b.dataset.state));
+  for (const b of list.querySelectorAll('[data-move]')) b.onclick = () => on.move(b.dataset.move);
+
+  // your colour: the ones other players fly cannot be picked
+  let sw = $('lobbyColors');
+  if (!sw) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<h3 class="section">Your colour</h3><div id="lobbyColors"></div><div class="note" id="lobbyColorNote"></div>';
+    $('lobbyClassInfo').after(wrap);
+    sw = $('lobbyColors');
+  }
+  const taken = new Map(players.filter((p) => p !== mine && p.col).map((p) => [p.col, p.name]));
+  swatches(sw, mine && mine.col, taken, (id) => on.color(id));
+  const note = $('lobbyColorNote');
+  if (note) {
+    const lead = hero && mine && mine.hs >= 0 ? players.filter((p) => p.hs >= 0 && sideOfSeat(p.hs) === sideOfSeat(mine.hs)).sort((a, b) => a.hs - b.hs)[0] : null;
+    note.textContent = lead && lead !== mine ? `In Hero Mode a side flies one colour: yours is ${lead.name}'s (${PALETTE[house[sideOfSeat(mine.hs)]].name}).` : '';
+  }
+  const pr = $('lobbyProblem') || (() => { const d = document.createElement('div'); d.id = 'lobbyProblem'; d.className = 'note'; $('lobbyHostCtl').before(d); return d; })();
+  pr.textContent = v.problem || '';
+  const start = $('startOnline');
+  if (start) start.disabled = !!v.problem;
+}
+
+// ---------------- the main menu (one player) ----------------
+// v: { hero (bool), slot (your castle in a war), side (your side in a hero match), slots (the war's castles: 'open' | 'ai' | 'empty'), size, color }
+// on: { slot(t), side(s), state(t), size(n), color(id) }
+export function drawSolo(v, on) {
+  style();
+  const anchor = $('difficulty');
+  if (!anchor) return;
+  const parent = anchor.parentNode;
+  const play = row('soloSeat', 'Castle', parent, anchor);
+  const rivals = row('soloRivals', 'Others', parent, anchor);
+  const size = row('soloSize', 'Teams', parent, anchor);
+  const col = row('soloColor', 'Colour', parent, anchor);
+  const wants = [null, null, null, null];
+  wants[v.hero ? v.side : v.slot] = v.color;
+  const house = assignColors(wants);
+  const chip = (t, extra = '') => `<i style="--c:${css(house[t])}"></i>${t + 1}${extra}`;
+  if (v.hero) {
+    buttons(play, 'Side', [0, 1].map((s) => ({ v: s, html: chip(s, s === v.side ? '<small>you</small>' : ''), active: s === v.side, title: `Fight for castle ${s + 1}` })), (s) => on.side(Number(s)));
+    buttons(size, 'Teams', HERO_SIZES.map((n) => ({ v: n, html: `${n} v ${n}`, active: n === v.size, title: `${n} heroes a side: you and ${n - 1} bot${n > 2 ? 's' : ''} against ${n}` })), (n) => on.size(Number(n)));
+  } else {
+    buttons(play, 'Castle', [0, 1, 2, 3].map((t) => ({ v: t, html: chip(t, t === v.slot ? '<small>you</small>' : ''), active: t === v.slot, title: `Play castle ${t + 1}` })), (t) => on.slot(Number(t)));
+    buttons(rivals, 'Others', [0, 1, 2, 3].filter((t) => t !== v.slot).map((t) => ({ v: t, html: chip(t, `<small>${v.slots[t] === 'empty' ? 'empty' : 'AI lord'}</small>`), active: v.slots[t] !== 'empty', title: v.slots[t] === 'empty' ? `Castle ${t + 1} stands empty: click to give it an AI lord` : `An AI lord holds castle ${t + 1}: click to leave it empty` })), (t) => on.state(Number(t)));
+  }
+  rivals.classList.toggle('hidden', !!v.hero);
+  size.classList.toggle('hidden', !v.hero);
+  col.innerHTML = '<span class="qlabel">Colour</span><span></span>';
+  swatches(col.lastChild, v.color, new Map(), (id) => on.color(id));
+}

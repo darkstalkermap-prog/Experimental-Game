@@ -183,7 +183,7 @@ export class Game {
     this.timeLimit = length && length.limit && !setup.hero && !setup.practice ? length.limit : 0;   // seconds of play after which a Short war is decided on points
     this.timeWarned = 0;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
-    this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
+    this.hero = setup.hero ? new HeroMode(this, { ...setup.hero, mirror: setup.mode === 'client' }) : null;   // (a guest's only mirrors the host's: herogame.js)
     this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
     this.hill.reset();
     this.pings.reset();
@@ -208,27 +208,29 @@ export class Game {
     const lp = this.player;
     lp.team = setup.localTeam;
     this.humans = [lp];
-    const byTeam = new Map(setup.players.map((p) => [p.team, p]));
-    lp.name = byTeam.get(lp.team)?.name || 'You';
+    // (the local player's entry: marked `me`, or the one of its castle. In the Hero Game Mode several players share a castle: they are told apart by `me`)
+    const mine = setup.players.find((p) => p.me) || setup.players.find((p) => p.team === lp.team);
+    lp.name = mine?.name || 'You';
     lp.st = blankStats();             // (what the end screen counts: stats.js)
     lp.bwave = null;
     lp.cos = progress.loadout();      // (what this browser's account wears and has earned: progress.js)
-    lp.setClass(byTeam.get(lp.team)?.cls || 'knight');
+    lp.setClass(mine?.cls || 'knight');
     lp.rebuildWeapons();
     for (const p of setup.players) {
-      if (p.team === lp.team) continue;
+      if (p === mine) continue;
       this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
     }
 
     for (const c of this.castles) c.setBanner(((this.humans.find((h) => h.team === c.team) || {}).cos || {}).banner);   // (a lord's banner on their castle; AI houses keep theirs)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
-      const rival = human || this.practice || setup.hero ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
+      const empty = !human && !setup.hero && Array.isArray(setup.empty) && setup.empty.includes(i);   // (a castle closed in the lobby: nobody holds it, seats.js)
+      const rival = human || empty || this.practice || setup.hero ? null : rivalInfo(this.options.rivals[i]);   // (the named lord of this house, if the match has any: see rivals.js)
       return {
-        team: i, name: TEAM_NAMES[i], lord: human ? human.name : rival ? rival.name : LORD_NAMES[i], rival, isPlayer: !!human, player: human, castle: c,
+        team: i, name: TEAM_NAMES[i], lord: human ? human.name : empty ? 'Nobody' : rival ? rival.name : LORD_NAMES[i], rival, isPlayer: !!human, player: human, castle: c,
         gold: START_GOLD, spent: 0, earned: 0, troopCap: TROOP_CAP.start, training: 0,
         hero: human, heroDeaths: 0, respawnT: 0,
-        eliminated: false, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
+        eliminated: empty, empty, kills: 0, siegeTarget: null, formation: 'line', levies: 0,
         recruitRole: 'garrison', armyOrder: null,
       };
     });
@@ -247,17 +249,18 @@ export class Game {
 
     if (this.simulating && !this.practice && !this.hero) {
       for (const f of this.factions) {
-        if (f.isPlayer) continue;
+        if (f.isPlayer || f.empty) continue;
         this.spawnLord(f);
         f.ai = new LordAI(this, f);
       }
       for (const f of this.factions) {
+        if (f.empty) continue;
         for (const t of ['swordsman', 'swordsman', 'spearman', 'archer', 'archer']) this.recruit(f, t);
       }
       // King of the Hill: the rival lords send a few of their first men up to the hill at once, so nobody can camp on it unopposed
       if (this.hill.live) {
         for (const f of this.factions) {
-          if (f.isPlayer) continue;
+          if (f.isPlayer || f.empty) continue;
           this.units.filter((u) => u.team === f.team && !u.isHero).slice(0, HILL.squad).forEach((u) => this.hill.sendSquad(u));
         }
       }
@@ -460,7 +463,7 @@ export class Game {
     if (this.hero) return this.hero.target(f);   // (Hero Game Mode: always the other keep)
     if (f.siegeTarget && !f.siegeTarget.fallen && !allied(f.siegeTarget.team, f.team)) return f.siegeTarget;
     f.siegeTarget = null;
-    const open = (c) => c && !c.fallen && !allied(c.team, f.team);
+    const open = (c) => c && !c.fallen && !allied(c.team, f.team) && !this.factions[c.team].eliminated;   // (nobody marches on a castle that stands empty)
     const partner = this.lanePartner(f);
     if (open(partner)) return partner;
     let best = null, bd = Infinity;
@@ -1496,6 +1499,7 @@ export class Game {
 
   // A remote player left an online game: their house is taken over by an AI lord.
   dropHuman(p) {
+    if (this.hero) { this.hero.toBot(p); this.checkReady(); return; }   // (Hero Game Mode: a hero bot takes over their hero)
     const f = this.factions[p.team];
     if (p.drive) this.leaveEngine(p);
     this.humans = this.humans.filter((h) => h !== p);

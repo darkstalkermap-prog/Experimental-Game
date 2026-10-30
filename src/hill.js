@@ -12,7 +12,7 @@ import { band, curtain, fade, SEG } from './aimring.js';
 
 const NEUTRAL = new THREE.Color(0xb9c4d6);   // nobody's: a cool, pale steel
 const CLASH = new THREE.Color(0xff6a4a);
-const COLORS = TEAM_COLORS.map((c) => new THREE.Color(c));
+const COLORS = TEAM_COLORS.map((c) => new THREE.Color(c));   // (the houses' colours of this match: reset() reads them again, teams.js setPalette)
 
 // the first house on a side stands for it (a side's houses share one score)
 const leader = (team) => [0, 1, 2, 3].find((t) => allied(t, team));
@@ -26,6 +26,8 @@ export class Hill {
   }
 
   reset() {
+    COLORS.forEach((c, i) => c.setHex(TEAM_COLORS[i]));
+    this.lastKey = '';
     this.owner = -1;        // the house holding it (-1: nobody yet)
     this.capturer = -1;     // the house taking it, and how far it has got
     this.progress = 0;

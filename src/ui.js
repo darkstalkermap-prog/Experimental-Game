@@ -14,12 +14,11 @@ import { matchlog } from './matchlog.js';
 import { buildSummary, renderEndScreen } from './endscreen.js';
 import { active } from './biomes.js';
 import { progress, rankOf } from './progress.js';
-import { lookText } from './unlocks.js';
 import { updateHud as updateFlowHud, resetHud as resetFlowHud } from './flow.js';
 import { updateDecreeHud, showPauseDecrees } from './decrees.js';
 import { showPauseLand } from './landui.js';
 import { updateComebackHud } from './comeback.js';
-import { rivalTagHtml, houseRival, lobbyRivalName } from './rivalsui.js';
+import { rivalTagHtml, houseRival } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -37,6 +36,8 @@ const pct = (x) => `${Math.round(x * 100)}%`;
 const heroGoal = (h) => (h.win === 'castle' ? 'Destroy the enemy keep'
   : h.win === 'timed' ? `Most hero kills in ${Math.round((h.timeLimit || HERO.timeLimit) / 60)} min`
   : `First to ${h.killTarget || HERO.killTarget} hero kills`);
+// a Hero Game Mode side by name: its colour (herogame.js)
+const sideName = (h, t) => (h && h.sides && h.sides[t] ? h.sides[t].name : t === 0 ? 'Blue' : 'Red');
 
 // Six hero-class buttons plus a panel describing the chosen class (main menu and lobby).
 export function renderClassPicker(root, info, selected, onPick) {
@@ -675,11 +676,11 @@ export class UI {
     for (const b of document.querySelectorAll('#lobbyModes button')) b.disabled = !isHost;
   }
 
-  renderLobby(players, myTeam = -1, coop = false, objective = 'conquest', length = 'standard', rivals = null) {
-    const clsName = (p) => (CLASSES[p.cls] ? ` · ${CLASSES[p.cls].icon} ${CLASSES[p.cls].name}` : '');
+  // the room's rows of choices (the list of castles and seats, and the colours, are lobbyui.js)
+  renderLobby(players, coop = false, objective = 'conquest', length = 'standard') {
     $('lobbyMode').textContent = coop
       ? (players.length >= 4
-        ? 'Co-op: four players make two teams of two: Blue + Red against Green + Gold.'
+        ? 'Co-op: four players make two teams of two: castles 1 + 2 against castles 3 + 4.'
         : 'Co-op: all players are allies against the AI lords.')
       : 'Versus: every castle for itself.';
     for (const b of document.querySelectorAll('#lobbyModes button')) b.classList.toggle('active', (b.dataset.mode === 'coop') === coop);
@@ -687,11 +688,6 @@ export class UI {
     for (const b of document.querySelectorAll('#lobbyObjective button')) b.classList.toggle('active', b.dataset.o === obj);
     $('lobbyObjDesc').textContent = `${OBJECTIVES[obj].name}: ${OBJECTIVES[obj].desc}`;
     for (const b of document.querySelectorAll('#lobbyLength button')) b.classList.toggle('active', b.dataset.l === (length === 'short' ? 'short' : 'standard'));
-    const slots = [0, 1, 2, 3].map((t) => players.find((p) => p.team === t));
-    const twoTeams = coop && players.length >= 4;   // four players: Blue + Red against Green + Gold
-    $('lobbyList').innerHTML = slots.map((p, t) => `<li style="border-left-color:${TEAM_CSS[t]}">
-      <b style="color:${TEAM_CSS[t]}">${esc(['Blue', 'Red', 'Green', 'Gold'][t])} castle${twoTeams ? ` <small>· team ${t < 2 ? 1 : 2}</small>` : ''}</b>
-      <span>${p ? esc(p.name) + (p.team === myTeam ? ' (you)' : '') + (t === 0 ? ' · host' : '') + esc(clsName(p)) + (lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : '') : '<i>AI lord' + (coop ? ' (enemy)' : '') + (lobbyRivalName(t, rivals) ? ' · ' + esc(lobbyRivalName(t, rivals)) : '') + '</i>'}</span></li>`).join('');
   }
 
   lobbyError(msg) {
@@ -960,6 +956,8 @@ export class UI {
     $('heroBarKR').firstElementChild.style.background = TEAM_CSS[1];
     $('heroTop').querySelector('.hside.b .hn b').style.color = TEAM_CSS[0];
     $('heroTop').querySelector('.hside.r .hn b').style.color = TEAM_CSS[1];
+    $('heroTop').querySelector('.hside.b .hn b').textContent = sideName(h, 0);   // (the sides fly the colours their lords chose: teams.js)
+    $('heroTop').querySelector('.hside.r .hn b').textContent = sideName(h, 1);
     if (g.state === 'playing') {   // (instead of the war modes' "Prepare for battle")
       const prep = h.prepLeft > 0 ? h.prepLeft : g.phaseT;
       this.banner('Hero Game Mode', `${heroGoal(h)}. The armies march in ${clock(prep)} and every ${WAVES.interval} seconds after. N: talents · M: map · Q / R: abilities · Enter: ready, start now.`);
@@ -982,7 +980,7 @@ export class UI {
     set('heroGoal', heroGoal(h));
     set('heroClock', h.remaining != null ? `Time left ${clock(h.remaining)}` : `Battle ${clock(h.clock || 0)}`);
     set('heroRound', h.prepLeft > 0 ? `Prepare: ${Math.ceil(h.prepLeft)} s` : `Round ${g.round} · next army in ${Math.ceil(Math.max(0, g.phaseT))} s`);
-    for (const [t, k, name] of [[0, 'B', 'Blue'], [1, 'R', 'Red']]) {
+    for (const [t, k, name] of [[0, 'B', sideName(h, 0)], [1, 'R', sideName(h, 1)]]) {
       const c = g.castles[t];
       if (!c) continue;
       const keep = c.fallen ? 0 : Math.max(0, Math.min(1, c.keep.hp / c.keep.maxHp));
@@ -1011,7 +1009,7 @@ export class UI {
   heroTable(rows, withStatus) {
     return rows.map((r) => {
       const c = CLASSES[r.cls] || { icon: '', name: String(r.cls || '') };
-      const side = r.team === 0 ? 'Blue' : 'Red';
+      const side = sideName(this.game.hero, r.team);
       return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${esc(r.name)}${r.mine ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
     }).join('');
   }
@@ -1021,7 +1019,7 @@ export class UI {
     const g = this.game, h = g.hero;
     const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
     const mode = HERO.modes[h.win] ? HERO.modes[h.win].name : '';
-    $('heroScoreTop').innerHTML = `<span style="color:${TEAM_CSS[0]}">Blue ${kills(0)}</span><i>:</i><span style="color:${TEAM_CSS[1]}">${kills(1)} Red</span>`;
+    $('heroScoreTop').innerHTML = `<span style="color:${TEAM_CSS[0]}">${esc(sideName(h, 0))} ${kills(0)}</span><i>:</i><span style="color:${TEAM_CSS[1]}">${kills(1)} ${esc(sideName(h, 1))}</span>`;
     $('heroScoreSub').textContent = `${mode ? mode + ': ' : ''}${heroGoal(h)} · ${h.remaining != null ? `time left ${clock(h.remaining)}` : `battle ${clock(h.clock || 0)}`} · round ${g.round}`;
     $('heroScoreRows').innerHTML = this.heroTable(typeof h.roster === 'function' ? h.roster() : [], true);
   }
@@ -1034,10 +1032,10 @@ export class UI {
     const kills = (t) => (h.sides && h.sides[t] ? h.sides[t].kills : 0) || 0;
     $('goTitle').textContent = draw ? 'A draw' : won ? 'Victory!' : 'Defeat';
     $('goTitle').className = draw ? '' : won ? 'win' : 'lose';
-    $('goText').textContent = res.reason || reason || (draw ? 'Neither side won the day.' : won ? 'Blue wins the battle.' : 'Red wins the battle.');
+    $('goText').textContent = res.reason || reason || (draw ? 'Neither side won the day.' : `${sideName(h, w)} wins the battle.`);
     $('goStats').innerHTML = `
-      <div><b style="color:${TEAM_CSS[0]}">${kills(0)}</b><span>Blue hero kills</span></div>
-      <div><b style="color:${TEAM_CSS[1]}">${kills(1)}</b><span>Red hero kills</span></div>
+      <div><b style="color:${TEAM_CSS[0]}">${kills(0)}</b><span>${esc(sideName(h, 0))} hero kills</span></div>
+      <div><b style="color:${TEAM_CSS[1]}">${kills(1)}</b><span>${esc(sideName(h, 1))} hero kills</span></div>
       <div><b>${clock(h.clock || 0)}</b><span>of battle</span></div>
       <div><b>${g.round}</b><span>rounds</span></div>`;
     $('goHeroes').innerHTML = `<table class="herotbl"><thead><tr><th>Side</th><th>Hero</th><th>Class</th><th>Level</th><th>Kills</th><th>Deaths</th></tr></thead><tbody>${this.heroTable(typeof h.roster === 'function' ? h.roster() : [], false)}</tbody></table>`;

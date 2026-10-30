@@ -77,12 +77,13 @@ The yard is part of the world, so entering and leaving it rebuilds the map (the 
 The game picks the first connection that works: your own **Castle Wars server** when the page was served by
 one (Render or `npm start`, below), the **claude.ai live room** when the game is opened as a claude.ai
 artifact, and otherwise **browser to browser** when it is plain static files (GitHub Pages). All three
-use the same host, invite code and lobby. Before the battle starts, the host picks a mode in the lobby:
+use the same host, invite code and lobby. Before the battle starts, the host picks a mode in the lobby (Conquest, King of
+the Hill or Hero Mode, below) and:
 
 - **Versus**: every castle for itself. (In Conquest the last castle and hero standing wins.)
 - **Co-op** (2 to 4 players): the human players are allies. With 2 or 3 players everyone fights on one side
   against the AI lords that hold the empty castles. With 4 players there are no AI lords, so the lobby makes
-  **two teams of two: Blue + Red against Green + Gold**. Allied troops, towers, arrows and spells never hurt
+  **two teams of two: castles 1 + 2 against castles 3 + 4**. Allied troops, towers, arrows and spells never hurt
   each other, allied gates open for each other, and armies never march on an allied castle. Allies are marked
   **ally** in the castle list. A side wins when every rival house has fallen, and loses when every allied
   castle has fallen.
@@ -559,12 +560,46 @@ For modders: a personality is a table of parameters in `src/rivals.js` (the key 
 `src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
 his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees. The match log records `rival`, `push` and `rivalFell` events.
 
+## Castles, seats and colours
+
+**Castles (the lobby).** The room's list has a line per castle (1 to 4). A free castle is **open**: anybody may press **Take**
+to move there, and when nobody does an AI lord holds it. The host can close a free castle with the button on its line, which
+cycles **Open → AI → Empty**: *AI* keeps people out and gives it to an AI lord, *Empty* leaves the castle standing with nobody
+in it (no lord, no soldiers, no waves; nobody marches on it; it counts as out of the war from the start). A war needs two
+houses, and co-op needs an enemy: the host's **Start the Battle** stays off and says why until it has them. Somebody who joins
+gets the first open castle; when the host has closed every free one, they are told the game has no free place. A guest's
+Take goes to the host, who checks it (the castle must be open and free); the host's lobby message carries the castles' states.
+
+**One player** picks the same on the main menu: the **Castle** row (which of the four you play) and the **Others** row (each
+of the other castles holds an AI lord or stands empty; the last AI lord stays). All of it is remembered in the browser.
+
+**Colours.** Everybody picks a colour from eight (Blue, Red, Green, Gold, Purple, Orange, Teal, Rose) under the class in the
+lobby, or in the **Colour** row of the menu; it is remembered in the browser. No two people fly the same one (the host keeps
+the first who asked; a taken swatch is greyed); the AI houses keep their usual colour when it is free and otherwise take one
+nobody flies. The colour is the house's everywhere: banners, the soldiers' tabards and the heroes' cloth, the engines, the
+shield in first person, the minimap, the castle and hero lists, the kill feed, the hill and the end screen. The start message
+carries the four colours, so every page builds the same; a world is built in its colours (`teams.js` `setPalette` changes the
+shared `TEAM_COLORS` / `TEAM_CSS` and repaints the shared banner and cloth materials before the world is built, and the world's
+key carries the colours, so a match in other colours builds its world again).
+
+The rules of who may sit where are `src/seats.js` (pure functions, with unit tests in `test/seats.test.cjs`), the drawing is
+`src/lobbyui.js`, the colours are `src/teams.js`, and the host's decisions are in `src/main.js`.
+
 ## Hero Game Mode
 
-Three heroes against three, fought out of **one castle each**: Blue (yours) against Red. You play one hero; your two
-Blue team mates and the three Red heroes are bots (`src/herobot.js`), each a full hero with a class, levels, talents and
-abilities. The other two castles of the map stand empty: no lords, no soldiers, no waves. This round the mode is single
-player only: with Hero Mode chosen, the Multiplayer button is disabled and says so.
+Two sides of **2, 3 or 4 heroes** (2 v 2, 3 v 3, 4 v 4: the **Teams** row; 3 v 3 at first), fought out of **one castle
+each**: castle 1 against castle 2, each side named after its colour. Alone, you play one hero (the **Side** row picks the castle)
+and the others are bots (`src/herobot.js`), each a full hero with a class, levels, talents and abilities. The other two castles
+of the map stand empty: no lords, no soldiers, no waves.
+
+**Online.** Pick *Hero Mode* in the lobby: the room shows two columns of seats (one line each) and the host chooses how to
+win and the team size. People take free seats (**Take**), the host moves a guest to the other side (**Switch side**) and can
+close a free seat (**Bot**: a hero bot always, **Empty**: nobody, so the sides can be uneven); every other seat gets a hero bot.
+Up to 4 people (the room's limit, below), so 4 v 4 is up to four people and four bots. A side flies the colour of its first
+person (by seat). The host runs the rules and the bots; a guest's `HeroMode` is a mirror filled from the snapshots: every hero
+of the match travels with its seat, hero kills, deaths, bot flag and respawn timer (five numbers at the end of the hero entry,
+left off in a war), plus one score line (kills and deaths of both sides, the clock). A guest who leaves is replaced by a hero bot
+where they stand. The end screen, Rematch (back to the lobby, still Hero Mode: change the size there) and Leave work as in a war.
 
 Everything but your hero is taken away. There is no gold, no shop, no castle upgrades, no army and no orders, and you
 cannot change class. You move, strike, guard, shoot, use **Q** and **R**, drink, ride, climb, duck, look at the map, ping
@@ -857,7 +892,8 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/grass.js` | Wind-swept grass that grows around the camera |
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes, in the style of the lord's personality (the classic lord's numbers are the old ones) |
 | `src/rivals.js`, `src/rivalsui.js` | The rival lords: the nine personalities (a table of parameters each, their names and plans), the roll, and what the player sees (the card at the start, the game menu list, the HUD tag, the end-screen row, the Options switch) |
-| `src/teams.js` | Who fights whom: co-op sides |
+| `src/teams.js` | Who fights whom (co-op sides) and in which colours (the palette, `setPalette`) |
+| `src/seats.js`, `src/lobbyui.js` | Who sits where (castles, hero seats, open/AI/empty, colour wishes) and its drawing in the lobby and the menu |
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/decrees.js`, `src/comeback.js` | Battle Decrees (the catalogue, the roll, the end-screen "Next battle" panel) and the comeback rules (underdog's wage, cheaper gate, Last Stand); both work through `src/mods.js` |
 | `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |
@@ -911,6 +947,10 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Sun shadows read five samples of the soft filter where a pixel is clearly in light or shadow, and all of them only near a shadow edge.
 
 ## Current limits
+
+- A room holds 4 people. Raising it would cost every transport: the relay server and the browser-to-browser host send every
+  snapshot once per guest, and the claude.ai room is built for a host and three guests (its presence pieces and outbox). The
+  Hero Game Mode's 4 v 4 fills the seats nobody takes with bots.
 
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.

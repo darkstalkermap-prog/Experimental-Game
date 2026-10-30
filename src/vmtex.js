@@ -153,7 +153,7 @@ function plaque(ctx, shape, emblem) {
 // The atlas texture of a class's shield in a house colour. shape: { kind: 'round' | 'kite', w, h } in metres (bounding box of the face).
 // `emblem`: the banner the account wears ('' for none), which adds a plaque to the face.
 export function shieldFace(cls, team, shape, emblem = '') {
-  const key = `${cls}:${team}:${shape.kind}${emblem ? ':' + emblem : ''}`;
+  const key = `${cls}:${team}:${TEAM_COLORS[team] ?? 0}:${shape.kind}${emblem ? ':' + emblem : ''}`;   // (the colour too: a match may paint the house another one, teams.js)
   if (cache.has(key)) return cache.get(key);
   const c = document.createElement('canvas');
   c.width = c.height = ATLAS_PX;

@@ -271,5 +271,5 @@ export function buildEngine(type, team) {
 // the mesh that carries the house colours of an engine (also for one that has changed hands): the whole frame, once per house
 export function flagGeometry(kind, team) {
   const d = detailNow();
-  return part(`${kind}:frame:${team}:${d}`, () => (kind === 'ram' ? ramFrame(team, d) : catapultFrame(team, d)), [0, 0, 0]);
+  return part(`${kind}:frame:${team}:${TEAM_COLORS[team] ?? 0}:${d}`, () => (kind === 'ram' ? ramFrame(team, d) : catapultFrame(team, d)), [0, 0, 0]);
 }

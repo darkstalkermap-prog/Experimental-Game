@@ -12,6 +12,7 @@ import { stats, absorbStats } from './stats.js';
 import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
 import { standFor } from './comeback.js';
+import { placeOfSeat } from './seats.js';
 export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
@@ -174,6 +175,8 @@ export class HostSync {
         wage: f.wage || 0,   // the underdog's wage in gold a minute, and whether the Last Stand is spent (comeback.js)
         stand: f.stand ? 1 : 0,
       })),
+      // (Hero Game Mode: one score line, and every hero of the match below with its seat, score and respawn timer: herogame.js)
+      hm: g.hero ? [g.hero.sides[0].kills, g.hero.sides[1].kills, g.hero.sides[0].deaths, g.hero.sides[1].deaths, r1(g.hero.clock), r1(g.hero.prepLeft)] : undefined,
       h: g.humans.map((h) => packHero({
         team: h.team,
         x: r2(h.pos.x),
@@ -203,12 +206,17 @@ export class HostSync {
         driving: h.drive ? 1 : 0,
         movementFlags: (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0),
         level: h.level,
+        hid: g.hero ? h.hid : undefined,
+        heroKills: g.hero ? h.heroKills || 0 : undefined,
+        deaths: g.hero ? h.deaths || 0 : undefined,
+        bot: g.hero ? (h.isBot ? 1 : 0) : undefined,
+        respawnT: g.hero && !h.alive ? r1(Math.max(0, h.respawnT || 0)) : undefined,
       })),
       ev: this.shared,
     };
     this.shared = [];
     for (const h of g.humans) {
-      if (!h.remote) continue;
+      if (!h.remote || h.netId === null || h.netId === undefined) continue;   // (a hero bot has nobody to send to)
       const me = {
         hp: r1(h.hp), maxHp: h.maxHp, alive: h.alive ? 1 : 0, arrows: h.arrows, potions: h.potions, lv: h.lv,
         bf: h.buffs.list(), drv: h.drive ? h.drive.id : 0,
@@ -244,7 +252,11 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') { if (d.st) absorbStats(d.st[this.g.net.id]); this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null, quick: !!d.q }); }
+    else if (d.k === 'end') {
+      if (d.st) absorbStats(d.st[this.g.net.id]);
+      if (this.g.hero && !this.g.hero.result) this.g.hero.result = { winner: d.winner, reason: d.reason || '', draw: !(d.winner >= 0) };   // (the hero end screen reads it)
+      this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null, quick: !!d.q });
+    }
     else if (d.k === 'rematch' && this.g.onRematch) this.g.onRematch();   // (the host took the room back to its lobby: main.js)
   }
 
@@ -355,16 +367,35 @@ export class ClientSync {
       }
     });
 
-    // other people's heroes
+    // Hero Game Mode: the score and the clock
+    const hm = g.hero && Array.isArray(s.hm) ? s.hm : null;
+    if (hm) {
+      const [k0, k1, d0, d1, clock, prep] = hm, sd = g.hero.sides;
+      sd[0].kills = k0 | 0; sd[1].kills = k1 | 0; sd[0].deaths = d0 | 0; sd[1].deaths = d1 | 0;
+      g.hero.clock = +clock || 0; g.hero.prepLeft = +prep || 0;
+    }
+
+    // other people's heroes (in the Hero Game Mode every hero of the match: allies too, and the bots, each known by its seat)
     for (const a of s.h) {
       const state = unpackHero(a);
       const team = state.team;
-      if (team === g.localTeam) continue;
-      let h = g.humans.find((o) => o.team === team);
+      const seat = g.hero && Number.isInteger(state.hid) ? state.hid : null;
+      if (seat !== null && seat === g.player.hid) {   // (my own: the host's word on my score and my respawn)
+        g.player.heroKills = state.heroKills || 0;
+        g.player.respawnT = state.respawnT || 0;
+        continue;
+      }
+      if (seat === null && team === g.localTeam) continue;
+      if (seat === null && g.hero) continue;   // (a hero without a seat: an old host)
+      let h = seat !== null ? g.humans.find((o) => o.hid === seat) : g.humans.find((o) => o.team === team);
       if (!h) {
         h = new Player(g, null, { remote: true, team, name: state.name, cls: CLASS_IDS[state.classId] });
         g.humans.push(h);
-        g.factions[team].player = h; g.factions[team].isPlayer = true;
+        if (seat !== null) { h.hid = seat; h.heroSlot = placeOfSeat(seat); g.hero.adopt(h); }
+        else { g.factions[team].player = h; g.factions[team].isPlayer = true; }
+      }
+      if (seat !== null) {
+        h.isBot = !!state.bot; h.heroKills = state.heroKills || 0; h.deaths = state.deaths || 0; h.respawnT = state.respawnT || 0;
       }
       if (CLASS_IDS[state.classId] && CLASS_IDS[state.classId] !== h.classId) h.adoptClass(CLASS_IDS[state.classId]);   // they changed class
       if (state.level && state.level !== h.level) { h.level = state.level; if (h.body) h.buildTag(); }               // or reached a new level
@@ -430,7 +461,7 @@ export class ClientSync {
       }
       if (me.alive && (me.seq !== p.spawnSeq || !p.alive)) {
         const c = g.castles[p.team];
-        p.spawn(c.spawnPoint, c.rot);
+        p.spawn(g.hero ? g.hero.slotPos(p) : c.spawnPoint, c.rot);   // (a hero rises at their own place in the courtyard: herogame.js)
         p.hp = me.hp;
         p.spawnSeq = me.seq;
       }
