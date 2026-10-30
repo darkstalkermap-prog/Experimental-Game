@@ -562,6 +562,7 @@
   <div class="scroll wide">
     <h1>CASTLE WARS</h1>
     <div class="sub">Four lords. Four castles. Armies that never stop marching.</div>
+    <div class="quick"><button id="quickPlay">Quick Play</button><div id="quickInfo" class="quickinfo"></div></div>
     <div class="cols">
       <div class="col">
         <div class="howto">
@@ -587,6 +588,10 @@
           <button data-d="normal" class="active">Normal</button>
           <button data-d="hard">Hard</button>
         </div>
+        <div class="row" id="length" role="group" aria-label="Match length"><span class="qlabel">Length</span>
+          <button data-l="standard" class="active">Standard<small></small></button><button data-l="short">Short<small></small></button>
+          <span id="lengthDesc" class="mapdesc"></span>
+        </div>
       </div>
       <div class="col">
         <h3 class="section" style="margin-top:0">Choose your hero</h3>
@@ -594,9 +599,11 @@
         <div class="classinfo" id="classInfo"></div>
       </div>
     </div>
-    <div class="row"><button id="play">Single Player</button><button id="mpBtn">Multiplayer</button><button id="practiceBtn" title="A walled yard with training dummies: try any hero class, level and talents, and every kind of soldier by rank and tier">Practice Courtyard</button></div>
-    <div id="heroNote" class="note hidden">Hero Game Mode is single player for now. Choose Conquest or King of the Hill to play online.</div>
-    <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
+    <div class="menu-actions">
+      <div class="row"><button id="play">Single Player</button><button id="mpBtn">Multiplayer</button><button id="practiceBtn" title="A walled yard with training dummies: try any hero class, level and talents, and every kind of soldier by rank and tier">Practice Courtyard</button></div>
+      <div id="heroNote" class="note hidden">Hero Game Mode is single player for now. Choose Conquest or King of the Hill to play online.</div>
+      <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
+    </div>
     <div id="online" class="hidden">
       <h3 class="section">Multiplayer (up to 4 players)</h3>
       <div id="inviteBanner" class="note hidden"></div>
@@ -625,6 +632,7 @@
         <div class="note" id="lobbyMode">Versus: every castle for itself.</div>
         <div class="row" id="lobbyObjective"><button data-o="conquest" class="active">Conquest</button><button data-o="koth">King of the Hill</button></div>
         <div class="note" id="lobbyObjDesc"></div>
+        <div class="row" id="lobbyLength" role="group" aria-label="Match length"><span class="qlabel">Length</span><button data-l="standard" class="active">Standard</button><button data-l="short">Short</button></div>
         <ul id="lobbyList"></ul>
         <div class="note">Empty castles are held by AI lords. Map size and difficulty come from the host's menu choices.</div>
       </div>
@@ -634,9 +642,11 @@
         <div class="classinfo" id="lobbyClassInfo"></div>
       </div>
     </div>
-    <div class="row" id="lobbyHostCtl"><button id="startOnline">Start the Battle</button></div>
-    <div class="row hidden" id="lobbyWait"><span>Waiting for the host to start…</span></div>
-    <div class="row"><button id="leaveLobby">Leave</button></div>
+    <div class="menu-actions">
+      <div class="row" id="lobbyHostCtl"><button id="startOnline">Start the Battle</button></div>
+      <div class="row hidden" id="lobbyWait"><span>Waiting for the host to start…</span></div>
+      <div class="row"><button id="leaveLobby">Leave</button></div>
+    </div>
   </div>
 </div>
 
@@ -657,7 +667,10 @@
     <div class="hside r"><div class="hn"><b>Red</b><span id="heroKeepR"></span></div><div class="hbar" id="heroBarKR"><i></i></div><div class="hbar gate" id="heroBarGR"><i></i></div></div>
     <div class="hline"><span id="heroClock"></span> · <span id="heroRound"></span></div>
   </div>
-  <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div></div>
+  <div id="top" class="panel"><div id="round">Preparation</div><div id="phase"></div><div id="war"></div>
+    <div id="readyRow" class="flowrow hidden"><button id="readyBtn" tabindex="-1" title="Start the battle now"><kbd>Enter</kbd> Ready</button><span id="readyNote"></span></div>
+    <div id="offerRow" class="flowrow hidden"><span id="offerText"></span><button id="offerBtn" tabindex="-1"><kbd>K</kbd> <span id="offerLabel">Concede</span></button></div>
+  </div>
   <div id="hill" class="panel hidden"></div>
   <div id="goldbox" class="panel"><span class="coin">●</span><span id="gold">0</span></div>
   <div id="goldpops"></div>
@@ -733,6 +746,7 @@
     <header>
       <h3 id="shopTitle">Quartermaster</h3>
       <div class="stat"><span class="coin">●</span> <span id="shopGold">0</span> &nbsp; ⚔ <span id="shopTroops"></span></div>
+      <button id="shopReady" class="hidden" title="Start the battle now (Enter)">Ready</button>
       <button id="shopClose">Close</button>
     </header>
     <div class="tabs">
@@ -757,7 +771,12 @@
       <button id="resume">Resume</button>
       <button id="pauseOptions">Options</button>
       <button id="pauseControls">Controls</button>
+      <button id="pauseOffer" class="hidden">Concede · Next battle</button>
       <button id="quitBtn">Quit to Main Menu</button>
+    </div>
+    <div id="offerConfirm" class="hidden">
+      <div class="note" id="offerConfirmText">Concede this battle? You will see the results and can start the next one.</div>
+      <div class="row"><button id="offerYes">Concede</button><button id="offerNo">Keep fighting</button></div>
     </div>
     <div id="quitConfirm" class="hidden">
       <div class="note">Leave this battle? Your progress will be lost.</div>
@@ -817,6 +836,9 @@
       <b>L</b><span>Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same)</span>
       <b>R (end screen)</b><span>Roll the next battle's Battle Decrees again</span></div>
       <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
+      <b>Enter</b><span>Ready: start the first wave now instead of waiting out the preparation (online: when everyone is ready)</span>
+      <b>K</b><span>When a battle is decided: concede and start the next one (or finish a war you have won); press twice to confirm</span>
+      <b>Space / Enter</b><span>On the end screen: Play Again (online, the host's Rematch). On the main menu Enter is Quick Play</span>
       <b>P</b><span>Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies)</span>
       <b>M</b><span>Big battle map (the battle goes on; the mouse is free while it is up; press again to close)</span>
       <b>Middle click</b><span>Ping what you look at: foes red (attack), your castle and allies blue (defend), ground gold (go here); allies see it</span>
@@ -837,7 +859,7 @@
       <b>Your side</b><span>Three heroes against three, out of one castle each: you and two bot heroes (Blue) against three bot heroes (Red)</span>
       <b>The armies</b><span>Both castles send a wave every 30 s by themselves, each round tougher. No gold, no shop, no army, no orders</span>
       <b>B or N</b><span>Talents, the only panel there is (press again to close)</span>
-      <b>Switched off</b><span>O, F1-F4, Z, X, V, T, Y, G, F and changing class do nothing in this mode</span>
+      <b>Switched off</b><span>O, F1-F4, Z, X, V, T, Y, G, F, K and changing class do nothing in this mode (Enter is Ready, as in the war modes)</span>
       <b>Still yours</b><span>Move, strike, guard, bow, Q / R, H, E, C, climbing, M (map) and pings</span>
       <b>Fountain</b><span>Near your own keep you mend quickly; a fallen hero rises there after a few seconds</span>
       <b>Tab</b><span>The score and the six heroes: class, level, kills, deaths</span>
@@ -855,7 +877,6 @@
     <div id="goHeroes" class="hidden"></div>
     <div id="goSections"></div>
     <div class="tipline" id="goTip"></div>
-    <div class="row"><button id="again">Play Again</button></div>
   </div>
 </div>
 

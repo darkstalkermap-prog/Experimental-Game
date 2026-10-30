@@ -22,6 +22,10 @@
 //             brought down. (The 'hero' in each name keeps them apart from the counters that highlights.js makes of the events: gates, walls, keeps, engines ...
 //             are everybody's; kills, deaths and gold are the hero's and the house's own fields: see buildSummary in endscreen.js)
 //   event     'class' { cls, from }                                 the hero on this screen took up another class (progress.js shares class mastery by time)
+//   event   concede { kind }   a battle ended early on purpose (src/flow.js: 'concede' a defeat, 'finish' a won war, 'leave' a guest who was out leaving the room)
+//   event   timeup { winner }  the clock of a Short war ran out and the war was decided on points (Game.timeUp; winner = the house ahead, -1 for a draw)
+//   counter conceded           1 when the local lord conceded or left (not for a won war that was finished early)
+//   counter prepSkipped        seconds of the first preparation that Ready skipped (what was left on the timer when the last lord pressed it)
 export const matchlog = {
   t: 0,            // seconds of match played
   events: [],      // [{ t, type, ...data }]

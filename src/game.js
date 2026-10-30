@@ -3,7 +3,7 @@
 // 'client' (this browser mirrors the host's battle and controls one hero).
 import * as THREE from 'three';
 import {
-  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
+  PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, LORD_NAMES, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
   UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
@@ -175,6 +175,11 @@ export class Game {
     this.finale.reset();
     mods.reset();
     applyBiomeRules(this);   // (the land's small rule twist: biometwist.js)
+    // the match length is a source of rule modifiers (the war modes only: the Hero Game Mode and the practice courtyard keep their own pace)
+    const length = LENGTHS[this.options.length];
+    if (length && length.mods && !setup.hero && !setup.practice) mods.set(`length:${this.options.length}`, length.mods);   // ('length:short')
+    this.timeLimit = length && length.limit && !setup.hero && !setup.practice ? length.limit : 0;   // seconds of play after which a Short war is decided on points
+    this.timeWarned = 0;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.decrees = this.hero || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
@@ -189,9 +194,13 @@ export class Game {
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
     this.state = 'playing';
+    this.quickEnd = false;      // set when the battle ends early on purpose (a concession, a won war finished, the clock of a Short war): no ending show
+    this.readyTeams = new Set();   // houses that pressed Ready in the first preparation (see readyLive)
+    this.readySent = false;
+    this.readyInfo = null;
     this.round = 0;
     this.phase = 'prep';
-    this.phaseT = WAVES.firstPrep;
+    this.phaseT = Math.round(WAVES.firstPrep * mods.mul('prep'));
     this.spawnQueue = [];
 
     const lp = this.player;
@@ -273,7 +282,7 @@ export class Game {
       return;
     }
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
-    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(WAVES.firstPrep)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities.${twistLine(this)}`);
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(this.phaseT)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine}${this.timeLimit ? ` A short war: at ${clock(this.timeLimit)} the strongest house wins.` : ''} B: shop and roster · M: map · Q / R: your abilities · Enter: ready, start now.${twistLine(this)}`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -323,7 +332,7 @@ export class Game {
     const u = new Unit(this, type, f.team, p, { hp: Math.round(t.hp * k), dmg: t.dmg * k });
     u.homeCastle = c;
     u.lane = !!lane;
-    if (lane) u.structMult *= 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 1);   // later armies break gates faster
+    if (lane) u.structMult *= 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * mods.mul('siegeGrowth') * Math.max(0, this.round - 1);   // later armies break gates faster
     u.slot = this.units.filter((o) => o.team === f.team && !o.isHero).length;
     u.setOrder('defend');
     this.units.push(u);
@@ -466,7 +475,7 @@ export class Game {
     const c = f.castle;
     const p = c.gateOut.clone().add(c.dirToWorld(0, 4));
     p.x += (Math.random() - 0.5) * 4;
-    const grow = 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * Math.max(0, this.round - 3);   // engines built later hit harder
+    const grow = 1 + (this.hero ? HERO.siegeGrowth : WAVES.siegeGrowth) * mods.mul('siegeGrowth') * Math.max(0, this.round - 3);   // engines built later hit harder
     const d = SIEGE_TYPES[type];
     const s = new SiegeEngine(this, type, f.team, p, this.siegeTarget(f), { dmg: Math.round(d.dmg * grow), hp: Math.round(d.hp * Math.min(2, 1 + 0.015 * this.round)) });
     this.siege.push(s);
@@ -862,7 +871,7 @@ export class Game {
 
   // how tough this house's wave soldiers are: drill upgrades, and a little more with every wave
   waveScale(f) {
-    return this.trainMult(f) * (1 + (this.hero ? HERO.waveGrowth : WAVES.growth) * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
+    return this.trainMult(f) * (1 + (this.hero ? HERO.waveGrowth : WAVES.growth) * mods.mul('growth') * Math.max(0, this.round - 1)) * (f.isPlayer ? 1 : this.diff.enemyStat);
   }
 
   waveList(f) {
@@ -1352,6 +1361,119 @@ export class Game {
     this.buyForPlayer('summon_' + down[0].team);
   }
 
+  // ---------------- Ready: ending the first preparation early ----------------
+  // While the first preparation runs (before wave 1) everybody who plays can press Ready. When ALL of them have, the timer is cut to zero and the first wave
+  // marches by the same path as when it runs out (updateWaves -> startWave). A bot hero is always ready and a human who leaves counts as ready. Online a guest
+  // tells the host ('ready' in netsync.js) and sees "Ready 2/3" from the snapshots (readyInfo = [ready, of, mask of ready teams]). The practice courtyard has
+  // no preparation; the Hero Game Mode does (its 30 seconds), and Ready works there too.
+  get readyLive() { return this.state === 'playing' && !this.practice && this.phase === 'prep' && this.round === 0 && this.phaseT > 1.5; }
+
+  readyState() {
+    let n = 0, of = 0, mask = 0;
+    for (const h of this.humans) {
+      if (h.isBot) continue;
+      of++;
+      if (this.readyTeams.has(h.team)) { n++; mask |= 1 << h.team; }
+    }
+    return [n, of, mask];
+  }
+
+  setReady(team) {
+    if (!this.readyLive || !this.simulating) return;
+    this.readyTeams.add(team);
+    this.checkReady();
+  }
+
+  checkReady() {
+    if (!this.readyLive || !this.simulating) return;
+    const [n, of] = this.readyState();
+    if (of > 0 && n >= of) {
+      matchlog.add('prepSkipped', Math.round(this.phaseT));   // (seconds of preparation the lords chose not to wait for)
+      this.phaseT = 0;
+    }
+  }
+
+  // the local lord presses Ready
+  localReady() {
+    if (!this.readyLive) return;
+    if (this.mode === 'client') {
+      if (this.readySent) return;
+      this.readySent = true;
+      this.net.toHost({ a: 'ready' });
+      return;
+    }
+    this.setReady(this.localTeam);
+  }
+
+  // ---------------- ending a decided battle early ----------------
+  // flow.js offers it when the battle is decided and the lord says yes (never forced). 'concede' is a defeat and 'finish' a victory (a lord on their own, or
+  // the host once the friends have gone); 'leave' is a guest who is out leaving for the next battle: only its own screen ends. It is not a fight to the last
+  // keep, so the ending skips its show (`quickEnd`, and the `{ quick: true }` option of finish()).
+  endEarly(kind, reason) {
+    if (this.state !== 'playing' || this.practice || this.hero) return false;
+    if (kind !== 'leave' && this.mode === 'client') return false;
+    if (this.mode === 'host' && this.humans.some((h) => h !== this.player && !h.isBot)) return false;   // (the host does not end it for friends who are still in it)
+    this.quickEnd = true;
+    matchlog.record('concede', { kind });
+    if (kind !== 'finish') matchlog.add('conceded');
+    // (nobody else is in it, so nobody is told; the third argument says "no show": a finish() that has no show ignores it)
+    this.finish(kind === 'finish' ? this.localTeam : -1, reason, { quick: true });
+    return true;
+  }
+
+  // ---------------- a timed war (the Short length) ----------------
+  // Seconds of play left on the clock of a timed war (0 when the war has no clock).
+  get timeLeft() { return this.timeLimit ? Math.max(0, this.timeLimit - matchlog.t) : 0; }
+
+  // The host (or a single lord) watches the clock: a word of warning three minutes and one minute before, then the verdict.
+  updateClock() {
+    if (this.state !== 'playing') return;
+    const left = this.timeLimit - matchlog.t;
+    if (left <= 0) { this.timeUp(); return; }
+    if (this.timeWarned < 1 && left < 180) { this.timeWarned = 1; this.announce('Three minutes left on the clock: the strongest house wins at the horn.', -1, 'all'); }
+    if (this.timeWarned < 2 && left < 60) { this.timeWarned = 2; this.announce('One minute left: castles and keeps decide it.', -1, 'all'); this.audio.play('horn', this.camera.position); }
+  }
+
+  // How the sides stand: a side is a house, or the houses that fight together (co-op). A war that runs out of time is decided on, in this order: the castles that
+  // still stand, the health of their keeps, the kills, the soldiers alive. (Keeps within half a percent count as equal. In King of the Hill the seconds held on the
+  // hill count before all of that.)
+  warStandings() {
+    const groups = [];
+    const seen = new Set();
+    for (const side of this.sides) { groups.push(side.slice()); for (const t of side) seen.add(t); }
+    for (const f of this.factions) if (!seen.has(f.team)) groups.push([f.team]);
+    return groups.map((teams) => {
+      const fs = teams.map((t) => this.factions[t]);
+      const standing = fs.filter((f) => !f.castle.fallen);
+      return {
+        teams, held: this.objective === 'koth' ? (this.hill.held[teams[0]] || 0) : 0,   // (King of the Hill is played for the hill: the seconds on it come first)
+        castles: standing.length,
+        keeps: standing.reduce((a, f) => a + f.castle.keep.hp / f.castle.keep.maxHp, 0),
+        troops: fs.reduce((a, f) => a + this.troopCount(f.team), 0),
+        kills: fs.reduce((a, f) => a + f.kills, 0),
+        name: fs.length === 1 ? fs[0].name : 'The alliance',
+      };
+    }).sort(Game.standsAbove);
+  }
+  // > 0 when side b stands above side a (what decided it is told by whyAhead)
+  static standsAbove(a, b) { return (Math.abs(b.held - a.held) > 1 ? b.held - a.held : 0) || (b.castles - a.castles) || (Math.abs(b.keeps - a.keeps) > 0.005 ? b.keeps - a.keeps : 0) || (b.kills - a.kills) || (b.troops - a.troops); }
+  static whyAhead(a, b) {
+    return a.held - b.held > 1 ? 'the longest hold on the hill' : a.castles > b.castles ? `the most castles (${a.castles})` : a.keeps - b.keeps > 0.005 ? 'the strongest keeps' : a.kills > b.kills ? 'the most kills' : 'the biggest army';
+  }
+
+  // The clock has run out: the war is decided on points. No show: nothing falls, the horn sounds and the screen comes up.
+  timeUp() {
+    const [best, next] = this.warStandings();
+    const draw = Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
+    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.`;
+    const winner = draw ? -1 : best.teams[0];
+    matchlog.record('timeup', { winner });
+    this.audio.play('horn', this.camera.position);
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates(), true);
+    this.quickEnd = true;
+    this.finish(winner, reason, { quick: true });
+  }
+
   endGame(winner, reason = '') {
     if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates());
     this.finish(winner, reason);
@@ -1380,6 +1502,7 @@ export class Game {
       f.ai = new LordAI(this, f);
     }
     this.announce(`${p.name} left. An AI lord takes over ${f.name}.`, f.team);
+    this.checkReady();   // (a lord who leaves counts as ready: the others may be waiting for them)
   }
 
   // How tense the music should be: calm while preparing, building as enemies come close.
@@ -1472,6 +1595,7 @@ export class Game {
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       if (this.hero) this.hero.update(dt);
       else this.updateHeroes(dt);
+      if (this.timeLimit) this.updateClock();
       // trickle income while the castle stands
       if (!this.hero) {
         const trickle = dt * TRICKLE * mods.mul('income');

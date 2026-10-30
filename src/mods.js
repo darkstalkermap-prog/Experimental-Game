@@ -14,6 +14,8 @@
 //   mul  respawn       seconds until a fallen hero or lord rises  sum  startGold     gold at the start of the match
 //   mul  offroadSpeed  march speed of soldiers away from the roads (snow)          mul  mudSpeed      march speed of soldiers wading through a pond (marsh)
 //   mul  archerRange   range of archers (the marsh's mist)                          mul  staminaDrain / staminaRegen   a hero's sprint stamina: how fast it drains and returns (desert)
+//   mul  prep          seconds of preparation before the first wave        mul  growth       how much tougher every wave's soldiers get (WAVES.growth)
+//   mul  siegeGrowth   how much harder later waves and engines hit gates and walls (WAVES.siegeGrowth)    [source 'length:short': the Short match, see config.js LENGTHS]
 export const mods = {
   version: 0,
   sources: new Map(),

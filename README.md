@@ -157,9 +157,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 
 - **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a
   warhorse. Before the battle you pick one of six **hero classes** (below).
-- **Preparation**: every match opens with a locked 1:00 countdown and 500 gold to recruit and upgrade before the
-  first wave. Nobody can skip or shorten it, online or off. In single player, time stops while the shop or the
-  game menu is open.
+- **Preparation**: every match opens with a 1:00 countdown (0:36 in a Short match) and 500 gold to recruit and upgrade
+  before the first wave. It is no longer locked: press **Enter** (Ready) and the first wave marches at once; online it
+  marches when every lord has pressed Ready, or when the countdown runs out (see "Between matches"). In single player,
+  time stops while the shop or the game menu is open.
 - **Map size**: choose Small, Medium or Large in the menu. Small puts castles close for early clashes, and
   Large leaves long marches through more forest. Online, the host's choice applies to everyone.
 - **Waves**: when preparation ends, every castle that still stands sends a new army out of its gate every
@@ -566,7 +567,9 @@ comes 5 minutes before): then it is decided as the timed mode is, on hero kills,
 **Controls.** **B** or **N** open the **Talents** panel and nothing else: the shop with only its Talents tab, no gold and no
 other tabs. In single player the world waits while it is open, and closing it gives the mouse back as usual. **O**, **F1-F4**,
 **Z**, **X**, **V**, **T**, **Y**, **G**, **F** and the class switch do nothing, and the key hints and the Controls sheet leave
-them out and list the Hero Game Mode keys. **M** (the map), pings, **Tab** and **Esc** work as usual.
+them out and list the Hero Game Mode keys. **M** (the map), pings, **Tab** and **Esc** work as usual, and **Enter** is Ready:
+the 30 seconds before the first round can be skipped like the war modes' minute. There is nothing to concede here (a keep that
+falls ends the match) and the Short / Standard length does not apply.
 
 **The HUD.** The orders bar, the army line, the gold box, the castle list and the hill box are gone. A panel at the top centre
 shows the score (Blue's hero kills : Red's), the goal of the chosen mode, the battle clock (the time left in the timed mode), the
@@ -722,10 +725,13 @@ Bots and AI houses keep the default look. Your account is yours alone: nothing i
 | Y | King of the Hill: army takes the hill in the middle and holds it |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
+| Enter | Ready: end the first preparation now (online: when everybody has pressed it). On the main menu: Quick Play |
+| K | When the battle is decided (offered in the HUD and the game menu): concede and start the next one, or finish a war you have won. Press twice to confirm |
+| Space / Enter (end screen) | Play Again (online, the host's Rematch) |
 | Esc | Game menu: resume, options, controls, quit (closes the shop or a panel first) |
 
 In **Hero Game Mode** (below) only some of these work: B and N both open the Talents panel (and nothing else), and O, F1-F4,
-Z, X, V, T, Y, G and F do nothing.
+Z, X, V, T, Y, G, F and K do nothing (Enter is still Ready).
 
 **Pings and markers.** Team mates can call out targets and places. A **ping** is a quick middle click on whatever the
 crosshair is on and lasts about 6 seconds; a **marker** (the held-button wheel, or a click on a map) lasts 45 seconds,
@@ -746,6 +752,46 @@ breach, not while ducking; trying on someone else's wall tells you so), a "Space
 work, and other players see the climb. Holding **C** ducks: the head and the hitbox
 drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
 walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
+
+## Between matches
+
+The gap between two matches is as short as it can be: nothing reloads, and what you chose last time is what starts next.
+
+- **Quick Play** is the big gold button on the main menu. One click starts a single-player match with your last class, mode
+  (Conquest, King of the Hill or Hero Mode), map size, difficulty and length; the small line under it says what that is
+  ("Knight · Conquest · Medium · Normal"). Enter on the main menu does the same. Difficulty and mode are remembered in
+  `cw-last`, the class in `cw-class`, the map in `cw-map`, the length in `cw-options`; a first visit opens on the defaults.
+- **Play Again** is the biggest button on the end screen (Space or Enter also press it), with a small **Change class**
+  beside it that opens the class picker right there (the choice is remembered and the next match uses it) and a quiet
+  **Main menu** link. The page does not reload: a world is built for one match only (castles, soldiers, engines and upgrades
+  are all spent by the end), so the next one is built while the end screen is up, a couple of seconds after the match ends,
+  and Play Again only has to start it. Menu to match and end screen to match are both a single click. After a finishing
+  show the world waits for the show, and the keys of the end screen for the moment it comes into view (the key that skips the
+  show is never also Play Again). The row of buttons sticks to the bottom of the end card, however many sections it has.
+  `src/flow.js` and `ensureMap` / `freshWorldSoon` in `src/main.js`.
+- **Online**, the host's end screen has **Rematch**: everybody who is still in the room goes back to its lobby (same room,
+  same lords; the room stays locked, so nobody new can join), picks classes again and the host starts the next battle.
+  Guests see "Waiting for the host…" with **Change class** (sent to the host) and **Leave the room**.
+- **Ready** (Enter, the button in the top panel or in the shop) ends the first preparation early by the same path as the
+  timer running out. Online every lord has to press it ("Ready 2/3" shows in the panel); a lord who leaves counts as
+  ready, a bot hero always is, and the timer still ends the preparation by itself. The Hero Game Mode's 30 seconds can be
+  skipped the same way; the practice courtyard has no preparation.
+- **Concede / Next battle** (K, twice to confirm, or the button in the game menu) is offered, never forced, when a battle is
+  decided: your keep has fallen; or you are one of the last two castles and the other is clearly winning (the rule and the
+  numbers are `DECIDED` in `src/flow.js`; not while your Last Stand can still be called, that comes first); or, the other way round, you are clearly winning, and the button says **Finish
+  the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
+  Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
+  for friends who are still in it. None of this applies to the Hero Game Mode, whose match ends when a keep falls.
+- **Match length** (Standard / Short, a row under the difficulty and in the host's lobby, `options.length`). Short is a
+  **timed war**. Its tempo is faster, by a `mods` source named `length:short`: a shorter preparation (36 s), a wave every 21 s
+  instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
+  wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
+  a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
+  of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
+  `src/config.js`) the lords hold out, with the comeback rules even more than before: the first castle of a Standard war fell
+  after about 12 minutes and only two wars in six were over within 30, while in Short wars the clock decided all six. A
+  faster pace brings the early war forward but not the end of it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
+  The Hero Game Mode (its own timed match) and the practice courtyard keep their own pace.
 
 ## Code layout
 
@@ -789,6 +835,7 @@ walking at half pace; a ducked hero can't sprint or jump. Other players see the 
 | `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
+| `src/flow.js` | The gap between matches: what Quick Play starts, the end screen's actions (Play Again, Change class, Rematch), Ready, and the offer to concede or finish a decided war |
 | `src/settings.js` | Volume, sensitivity, field-of-view and alerts/tips settings, kept in the browser |
 | `src/alerts.js` | Callouts, kill streaks, tips, the idle nudge, the away log and the background ticker for hidden tabs; `raise(key, {...})` is the way in |
 | `src/alertsounds.js` | The sounds of the alerts (bells, brass, ticks, heartbeat), added to the registry in `audio.js` |

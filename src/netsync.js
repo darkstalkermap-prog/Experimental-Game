@@ -47,9 +47,11 @@ export class HostSync {
       const orig = g.fx[name].bind(g.fx);
       g.fx[name] = (p, ...a) => { orig(p, ...a); this.shared.push({ k: 'fx', f: name, p: v3(p), a }); };
     }
-    const play = g.audio.play.bind(g.audio);
+    // (the audio object belongs to the page, not to this world: its own play is kept once, so that the sync of a rematch replaces this wrapper instead of
+    // wrapping it again, and the finished world is not kept alive by a chain of them)
+    if (!g.audio.rawPlay) g.audio.rawPlay = g.audio.play.bind(g.audio);
     g.audio.play = (n, p = null) => {
-      play(n, p);
+      g.audio.rawPlay(n, p);
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
@@ -122,6 +124,7 @@ export class HostSync {
         break;
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
+      case 'ready': g.setReady(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
       case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
@@ -139,7 +142,7 @@ export class HostSync {
     this.t = 0;
     const g = this.g;
     const shared = {
-      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(),
+      tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(), rd: g.readyLive ? g.readyState() : 0,
       u: g.units.map((u) => {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
@@ -219,10 +222,12 @@ export class HostSync {
   }
 
   // (each guest is also sent its own numbers for the end screen: the host is the only one that sees every blow)
-  sendEnd(winner, reason = '', hl = null) {
+  // hl: the notable moments of the match, for the guests' highlight line (highlights.js) · quick: no keep fell for this ending (the clock of a Short war ran out),
+  // so the guests' screens come up at once instead of looking for a falling keep (finale.js)
+  sendEnd(winner, reason = '', hl = null, quick = false) {
     const st = {};
     for (const h of this.g.humans) if (h.netId !== null && h.netId !== undefined && h.st) st[h.netId] = stats.pack(h);
-    this.g.net.toAll({ k: 'end', winner, reason, hl, st });   // (hl: the notable moments of the match, for the guests' highlight line: see highlights.js)
+    this.g.net.toAll({ k: 'end', winner, reason, hl, q: quick ? 1 : 0, st });
   }
 }
 
@@ -239,7 +244,8 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') { if (d.st) absorbStats(d.st[this.g.net.id]); this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null }); }
+    else if (d.k === 'end') { if (d.st) absorbStats(d.st[this.g.net.id]); this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null, quick: !!d.q }); }
+    else if (d.k === 'rematch' && this.g.onRematch) this.g.onRematch();   // (the host took the room back to its lobby: main.js)
   }
 
   apply(d) {
@@ -247,6 +253,7 @@ export class ClientSync {
     if (g.net.snapDelay) setInterpDelay(g.net.snapDelay);
     const s = d.s;
     g.round = s.r; g.phase = s.ph; g.phaseT = s.pt;
+    g.readyInfo = s.rd || null;   // [ready, of, mask]: who has pressed Ready in the first preparation
     g.spawnQueue.length = s.ql;
     g.hill.applyNet(s.hl);
 
