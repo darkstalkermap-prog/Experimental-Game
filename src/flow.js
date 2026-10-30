@@ -342,6 +342,15 @@ style.textContent = `
 .scroll #quickPlay:hover:not(:disabled) { background: linear-gradient(#f5d172, #cd972e 55%, #b58120); border-color: #2f1b02; }
 .scroll #quickPlay:focus-visible { outline: 3px solid #5a1d12; outline-offset: 3px; }
 .quickinfo { margin-top: 6px; font-size: 16px; font-style: italic; }
+/* the menu and the lobby grow with every row the features add: their buttons stay in view at the bottom of the card, whatever the window's height */
+#menu .scroll, #lobby .scroll { padding-bottom: 0; scroll-padding-bottom: 150px; }
+.menu-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -44px; padding: 6px 44px 14px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }
+@media (max-height: 700px) {
+  .menu-actions { margin: 0 -30px; padding: 2px 30px 8px; }
+  .quick { margin: 0 0 6px; }
+  .scroll #quickPlay { font-size: 22px; padding: 7px 56px; }
+  .quickinfo { margin-top: 3px; font-size: 14px; }
+}
 #length { align-items: center; }
 #length .qlabel, #lobbyLength .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
 #length button, #lobbyLength button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 14px; font-size: 13px; }
