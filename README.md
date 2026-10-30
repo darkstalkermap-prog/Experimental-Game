@@ -567,7 +567,7 @@ his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees
 ## Castles, seats and colours
 
 **Castles (the lobby).** The room's list has a line per castle (1 to 4). A free castle is **open**: anybody may press **Take**
-to move there, and when nobody does an AI lord holds it. The host can close a free castle with the button on its line, which
+to move there, and when nobody does an AI lord holds it. Each line tags a free castle *open seat* or *closed*. The host can close a free castle with the **Seat:** button on its line, which
 cycles **Open → AI → Empty**: *AI* keeps people out and gives it to an AI lord, *Empty* leaves the castle standing with nobody
 in it (no lord, no soldiers, no waves; nobody marches on it; it counts as out of the war from the start). A war needs two
 houses, and co-op needs an enemy: the host's **Start the Battle** stays off and says why until it has them. Somebody who joins
