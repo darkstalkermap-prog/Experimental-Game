@@ -84,7 +84,7 @@ export const PERSONAS = [
       elites: [knight(300, 2, 0.45)],
       siege: { stage: 6, gold: 900, max: 2, p: 0.5, ram: 0.4 },
       giant: { stage: 5, gold: 1900 },
-      repair: { gate: 0.5, keep: 0.6, walls: 0.4 },
+      repair: { gate: 0.5, keep: 0.85, walls: 0.4 },   // (at or above recallKeep: a keep that calls the army home is mended, or this lord never marches again)
       goals: [
         { id: 'fortify_walls', lv: 1 }, { id: 'towers', lv: 1 }, { id: 'reinforce_gate', lv: 1 }, { id: 'barracks', lv: 1 },
         { id: 'fortify_walls', lv: 2 }, { id: 'towers', lv: 2 }, { id: 'reinforce_gate', lv: 2 }, { id: 'barracks', lv: 2 },
@@ -145,7 +145,7 @@ export const PERSONAS = [
   {
     id: 'merchant', kind: 'Merchant', epithet: 'the Gilded', tag: 'Gilded',
     line: 'invests first, marches late',
-    blurb: 'Out-earns every house and spends it on elite levies and drills.',
+    blurb: 'Invests in elite levies, drills and a bigger barracks before it fights.',
     plan: 'Hit early, before the levies and drills pay off: patience favours the Gilded.',
     names: ['Lady Thessaly', 'Lady Marguerite', 'Lady Odalys', 'Lord Cosimo', 'Lord Florian', 'Lord Benno'],
     params: {
@@ -160,7 +160,7 @@ export const PERSONAS = [
       garrison: 0.4,
       warStage: 8, rush: 1, cooldown: [100, 60], jitter: [0.95, 0.1],
       minTroops: 14, troopStep: 3, minAttackers: 4, maxPush: 260, failWait: 70,
-      recallKeep: 0.6, hero: 0.2,
+      recallKeep: 0.6, hero: 0.2, repair: { gate: 0.45, keep: 0.65, walls: 0.4 },   // (the keep is mended above the recall line)
       verbs: { push: 'sends a bought army against', levies: 'hires elite levies for {house}', training: 'pays drill sergeants for {house}' },
     },
   },

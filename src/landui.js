@@ -284,6 +284,7 @@ registerEndSection('land', 51, (summary) => {
       rollLand(land.mode === 'fixed');
       fill(); refreshRows(); onChange(land);
       dice.classList.remove('roll'); void dice.offsetWidth; dice.classList.add('roll');
+      btn.blur();   // (Space and Enter play again, not roll once more)
     });
     acts.append(btn);
   }

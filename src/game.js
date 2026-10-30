@@ -808,11 +808,12 @@ export class Game {
 
   onUnitKilled(u, attacker) {
     const by = attacker && attacker.team !== undefined ? attacker.team : -1;
-    const bounty = (u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10)) * mods.mul('bounty');
+    const base = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
+    const bounty = base * mods.mul('bounty');   // (the gold decrees change the gold, not how fast soldiers rank up: experience reads the base)
     if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;
     if (attacker && attacker.st && by >= 0 && !allied(by, u.team)) stats.kill(attacker);   // (the run of kills)
-    if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + bounty * 0.8);
+    if (attacker && attacker.gainXp && !attacker.isPlayer && by !== u.team) attacker.gainXp(5 + base * 0.8);
     if (by >= 0 && !allied(by, u.team)) this.heroXp(attacker, killXp(u), u.pos);
     if (by >= 0 && by <= 3) this.factions[by].kills++;
     highlights.kill(this, u, attacker, this.lastHit);

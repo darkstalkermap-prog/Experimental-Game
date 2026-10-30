@@ -154,8 +154,7 @@ export function confirmOffer(g, ui) {
   const o = offerFor(g);
   if (!o) return false;
   armedUntil = 0;
-  ui.showPause(false); g.paused = false;
-  if (ui.shopOpen) ui.toggleShop(false);
+  ui.showPause(false); g.paused = false;   // (the shop is closed by the end screen itself, which leaves the pointer free)
   if (o.kind === 'leave') flow.left = true;   // (the room is left with the battle: the end screen offers the menu, not a rematch)
   g.endEarly(o.kind, offerReason(g, o));
   if (o.kind === 'leave' && flow.api) flow.api.leaveRoom();

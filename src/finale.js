@@ -136,7 +136,7 @@ export class Finale {
       injectStyle();
       if (go) go.classList.add('finale-wait');
     }
-    if (ui.shopOpen) ui.toggleShop(false);
+    // (ui.gameOver closes the shop itself, without taking the pointer back)
     // the end screen is built at once, behind the show
     try { ui.gameOver(won, winner, reason); } catch (e) { if (go) go.classList.remove('finale-wait'); throw e; }
     this.highlight = ui.lastSummary ? ui.lastSummary.highlight || null : pickHighlight(g, null);

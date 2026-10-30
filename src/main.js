@@ -822,7 +822,7 @@ addEventListener('keydown', (e) => {
 
 addEventListener('keydown', (e) => {
   flowKey(e, game, ui);
-  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls')) { e.preventDefault(); $('quickPlay').click(); }
+  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls') && !($('wardrobe') && shown('wardrobe'))) { e.preventDefault(); $('quickPlay').click(); }
 });
 
 // Browsers only allow sound after a click or key press: the music starts with the first one.

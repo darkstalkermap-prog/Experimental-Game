@@ -268,8 +268,8 @@ export class UI {
       g.paused = false;
       this.renderShop();
       g.input.unlock();
-    } else {
-      g.input.lock();
+    } else if (g.state === 'playing') {
+      g.input.lock();   // (not after the match: the end screen needs the pointer)
     }
   }
 
