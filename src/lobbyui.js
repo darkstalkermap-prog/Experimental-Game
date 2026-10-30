@@ -24,8 +24,10 @@ function style() {
 #lobbyList li.seat.me { background: rgba(255,255,255,0.6); }
 #lobbyList li.seat.closed .who { opacity: 0.7; }
 #lobbyList li.seat.side2 { margin-top: 8px; }
-#lobbyList li.seat.watchers { margin-top: 8px; border-left-color: rgba(90,29,18,0.35); background: transparent; font-size: 14px; }
-#lobbyList li.seat.watchers b { font-weight: 600; opacity: 0.8; }
+#lobbyWatchers { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; padding: 4px 10px; border-left: 4px solid rgba(90,29,18,0.35); font-size: 14px; text-align: left; }
+#lobbyWatchers b { font-weight: 600; opacity: 0.8; }
+#lobbyWatchers .who { flex: 1 1 160px; }
+#lobbyWatchers .act button { font-size: 12px; padding: 2px 8px; }
 #lobbyList li.seat .act { display: flex; gap: 4px; margin-left: auto; }   /* (on a narrow row the buttons take a line of their own, at the right) */
 #lobbyList li.seat .who i { display: block; line-height: 1.2; }
 #lobbyList li.seat .st { display: inline-block; margin-top: 3px; font-style: normal; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 6px; border-radius: 3px; background: rgba(0,0,0,0.12); white-space: nowrap; }
@@ -150,10 +152,13 @@ export function drawLobby(v, on) {
   // who watches, and the switch for this page (a quiet line under the places)
   const watching = all.filter((p) => p.watch);
   const watchBtn = !mine ? '' : mine.watch ? '<button data-watch="0" title="Take a free place and play">Play instead</button>' : '<button data-watch="1" title="Hold no castle or hero: watch the battle with the spectator cameras">Watch instead</button>';
-  lines.push(`<li class="seat watchers"><b>Watching</b> <span class="who">${watching.length ? watching.map((p) => `${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}`).join(', ') : '<i>nobody</i>'}</span>${watchBtn ? ` <span class="act">${watchBtn}</span>` : ''}</li>`);
   const list = $('lobbyList');
   list.innerHTML = lines.join('');
-  for (const b of list.querySelectorAll('[data-watch]')) b.onclick = () => on.watch && on.watch(b.dataset.watch === '1');
+  // (a line of its own under the list, not one of its places)
+  let wl = $('lobbyWatchers');
+  if (!wl) { wl = document.createElement('div'); wl.id = 'lobbyWatchers'; wl.className = 'seat watchers'; list.after(wl); }
+  wl.innerHTML = `<b>Watching</b> <span class="who">${watching.length ? watching.map((p) => `${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}`).join(', ') : '<i>nobody</i>'}</span>${watchBtn ? ` <span class="act">${watchBtn}</span>` : ''}`;
+  for (const b of wl.querySelectorAll('[data-watch]')) b.onclick = () => on.watch && on.watch(b.dataset.watch === '1');
   for (const b of list.querySelectorAll('[data-take]')) b.onclick = () => on.take(Number(b.dataset.take));
   for (const b of list.querySelectorAll('[data-state]')) b.onclick = () => on.state(Number(b.dataset.state));
   for (const b of list.querySelectorAll('[data-move]')) b.onclick = () => on.move(b.dataset.move);
