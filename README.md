@@ -826,7 +826,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | Key | Action |
 | --- | --- |
 | WASD / Shift / Space | Move / sprint / jump |
-| Space (at a castle wall) | Jump at a castle wall from outside, or at the edge of the wall walk from its courtyard, to climb up and over the battlements onto the wall walk (a prompt shows when you can; an enemy's wall is slower and costs more stamina) |
+| Space (at a castle wall) | Jump at a castle wall from outside, or at the edge of the wall walk from its courtyard, to climb up and over the battlements onto the wall walk; on the wall walk or a tower roof, jump at the battlements to mantle up onto the top of the wall (a prompt shows when you can; an enemy's wall is slower and costs more stamina) |
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
@@ -885,7 +885,12 @@ own (or an ally's) walls it takes about a second and 20 stamina. An **enemy's** 
 1.7 times as long and 35 stamina (`BODY.enemyClimb` in `src/config.js`), and the defenders get their chance: a solid hit (a
 heavy blow, or an arrow or blow worth more than 8% of your health) knocks a climber off any wall until they are over the top.
 Not on a breach, not while ducking or mounted. A "Space: Climb onto the wall walk" (or "Climb the enemy wall") prompt shows
-when it will work, and other players see the climb. Holding **C** ducks: the head and the hitbox
+when it will work, and other players see the climb. **Up on top of the wall:** on the wall walk (or a tower roof), walk up to
+the battlements and press Space facing them: the hero mantles up onto the top of the nearest merlon (1.3 m, a little more than a
+jump) in under half a second for 8 stamina (an enemy's: slower and 14). From there you can look out, step back down, walk along
+the top (between merlons you drop back into the crenel and onto the walk, never off the outside) or jump off the wall. A jump
+that runs into a merlon lands on top of it too. "Space: Climb onto the battlements" shows when you can (`BODY.mantle*`).
+Holding **C** ducks: the head and the hitbox
 drop from 1.8 m to 1.2 m, so an arrow aimed at head height flies over and a merlon (1.3 m) covers the whole hero, at the cost of
 walking at half pace; a ducked hero can't sprint or jump. Other players see the crouch on the hero's body.
 

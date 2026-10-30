@@ -183,8 +183,11 @@ export const PLAYER = {
 export const BODY = {
   height: 1.8, eye: 1.68,
   duckHeight: 1.2, duckEye: 1.08, duckSpeed: 0.5,
-  climbMin: 2.0,      // a ledge this much higher than your feet is climbed rather than jumped (a jump gets you ~1.9 m)
+  climbMin: 2.0,      // a ledge this much higher than your feet is climbed rather than jumped (a jump lifts the feet ~1.3 m)
   climbMax: 9.6,
+  // the battlements: from the wall walk (or a tower roof) a jump at a merlon mantles up onto its top, a short haul for a
+  // share of the stamina of a climb
+  mantleMin: 0.9, mantleTime: 0.45, mantleShare: 0.4,
   climbReach: 1.1,    // you must be this close to the wall face (from your edge)
   climbStamina: 20,
   climbCooldown: 0.7,

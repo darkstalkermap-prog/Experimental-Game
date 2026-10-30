@@ -109,12 +109,19 @@ export class Castle {
       const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
       const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
       const a = this.toWorld(lx - hx, lz - hz), b = this.toWorld(lx + hx, lz + hz);
-      list.push(this.game.physics.addShotBlocker({
+      list.push(this.game.physics.addMerlon({
         minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
         top: this.center.y + wallH + MERLON_H, bottom: this.center.y + wallH - 0.05, kind: 'merlon', team: this.team, ref,
       }, this.bucket));
     }
     return list;
+  }
+
+  // a battlement rail's inward side (castle-local lx, lz), in world terms: someone who ends up inside the rail (dropping into a
+  // crenel from the top of a merlon) is put back on that side, onto the walk, never pushed out over the wall (Physics.pushOut)
+  inward(lx, lz) {
+    const d = this.dirToWorld(lx, lz);
+    return { inX: Math.round(d.x), inZ: Math.round(d.z) };
   }
 
   addCollider(lx0, lx1, lz0, lz1, top, extra = {}) {
@@ -171,7 +178,7 @@ export class Castle {
       // (the rail stops at the inner face of the side walls: the tower takes over from there)
       const px0 = alongX ? Math.max(x0, -(H - T)) : nx > 0 ? x1 - PT : x0, px1 = alongX ? Math.min(x1, H - T) : nx > 0 ? x1 : x0 + PT;
       const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
-      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
+      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(-nx, -nz) });
       seg.merlons = this.addMerlons(cx, cz, len, alongX, outer, seg, atCorner);
       seg.takeDamage = (amt, attacker, cause) => this.damageWall(seg, amt, attacker, cause);
       this.walls.push(seg);
@@ -195,7 +202,7 @@ export class Castle {
 
     // ---- gate lintel ----
     this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
-    this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05 });
+    this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(0, -1) });
     this.addMerlons(0, H - T / 2, gateW, true, T / 2 - 0.25, null);
 
     // ---- gate ----
@@ -471,7 +478,7 @@ export class Castle {
           const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
           const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
           const a = this.toWorld(sx * (lx - hx), sz * (lz - hz)), b = this.toWorld(sx * (lx + hx), sz * (lz + hz));
-          this.game.physics.addShotBlocker({
+          this.game.physics.addMerlon({
             minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
             top: cy + towerH + MERLON_H, bottom: cy + towerH - 0.05, kind: 'merlon', team: this.team, ref: null,
           }, this.bucket);
@@ -492,11 +499,11 @@ export class Castle {
       col(F0, F0 + W, H, F1, towerH, { kind: 'tower' });
       col(H, F1, F0, F0 + W, towerH, { kind: 'tower' });
       col(F0 + W, F1 - W - 2, B0, F1 - W, towerH, { kind: 'walk', bottom: cy + towerH - 0.4, noProjectile: true, team: this.team });   // the roof deck
-      const rail = (x0, x1, z0, z1) => col(x0, x1, z0, z1, towerH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: cy + towerH - 0.05 });
-      rail(F1 - 0.55, F1, F0, F1);                                           // keeps you on the roof
-      rail(F0, F1, F1 - 0.55, F1);
-      rail(F0, F0 + 0.55, H, F1);
-      rail(H, F1, F0, F0 + 0.55);
+      const rail = (x0, x1, z0, z1, ix, iz) => col(x0, x1, z0, z1, towerH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: cy + towerH - 0.05, ...this.inward(sx * ix, sz * iz) });
+      rail(F1 - 0.55, F1, F0, F1, -1, 0);                                    // keeps you on the roof
+      rail(F0, F1, F1 - 0.55, F1, 0, -1);
+      rail(F0, F0 + 0.55, H, F1, 1, 0);
+      rail(H, F1, F0, F0 + 0.55, 0, 1);
       // the two flights
       const climb = (lo, hi, along) => (x, z) => {
         const l = this.toLocal(x, z);

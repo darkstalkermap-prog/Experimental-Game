@@ -63,6 +63,7 @@ class Collider {
     this.passTeam = c.passTeam === undefined ? -1 : c.passTeam;
     this.kind = c.kind; this.ref = c.ref; this.team = c.team;
     this.noWalk = c.noWalk; this.noProjectile = c.noProjectile; this.heightFn = c.heightFn;
+    this.inX = c.inX || 0; this.inZ = c.inZ || 0;   // a battlement rail: the side of it that is the walk (see pushOut)
     for (const k in c) if (!(k in this)) this[k] = c[k];   // (anything else a module hangs on its colliders)
   }
 }
@@ -137,6 +138,15 @@ export class Physics {
   addShotBlocker(c, bucket) {
     c = new Collider(c);
     bucket.shots.push(c);
+    return c;
+  }
+
+  // A merlon: it stops arrows and spells like any shot blocker (the side it belongs to shoots past it: it is in no projectile
+  // test of the movement list), and its top is somewhere to stand: a hero mantles up onto it from the wall walk (see ledge).
+  // In the movement list it also stops a body below its top, as the battlement rail it stands in already does.
+  addMerlon(c, bucket) {
+    c = this.addShotBlocker({ ...c, noProjectile: true }, bucket);
+    bucket.list.push(c);
     return c;
   }
 
@@ -284,6 +294,10 @@ export class Physics {
         const d = Math.sqrt(d2);
         pos.x = qx + (dx / d) * radius;
         pos.z = qz + (dz / d) * radius;
+      } else if (c.inX || c.inZ) {
+        // centre inside a battlement rail (dropped into a crenel from the top of a merlon): back onto the walk it guards
+        if (c.inX) pos.x = c.inX > 0 ? c.maxX + radius : c.minX - radius;
+        else pos.z = c.inZ > 0 ? c.maxZ + radius : c.minZ - radius;
       } else {
         // centre inside the box: push out along the shallowest axis
         const l = pos.x - c.minX, r = c.maxX - pos.x, b = pos.z - c.minZ, f = c.maxZ - pos.z;
@@ -313,28 +327,44 @@ export class Physics {
   // decides what an enemy's wall costs, see Player.tryClimb). From outside the hero goes over the battlements through a
   // crenel (the gap between two merlons), never through the stone. Returns null when there is nothing to climb: nothing
   // within reach, not facing it, a wall that has been broken down, a deck overhead, or no room to stand on top.
+  // From the wall walk or a tower roof, the same jump at the battlements mantles the hero up onto the top of a merlon (the
+  // nearest one in front: standing at a crenel, the one beside it), so they can stand on top of the wall and look or jump
+  // over. Those returns carry low: true.
   ledge(x, z, footY, radius, fx, fz, height = 1.8, team = -99) {
     if (this.covered(x, z, footY, height)) return null;
     let best = null, bd = Infinity;
     for (const c of this.near(x, z, radius + BODY.climbReach + 1)) {
-      if (!LEDGE_KINDS.has(c.kind) || !c.active) continue;
+      const low = c.kind === 'merlon';
+      if ((!low && !LEDGE_KINDS.has(c.kind)) || !c.active) continue;
       if (team !== null && (c.team !== undefined ? c.team : c.ref && c.ref.team) !== team) continue;
       const rise = c.top - footY;
-      if (rise < BODY.climbMin || rise > BODY.climbMax) continue;
+      if (low ? rise < BODY.mantleMin || rise >= BODY.climbMin : rise < BODY.climbMin || rise > BODY.climbMax) continue;
       const dx = x - clamp(x, c.minX, c.maxX), dz = z - clamp(z, c.minZ, c.maxZ);
-      const d = Math.hypot(dx, dz);
-      if (d < 0.05 || d - radius > BODY.climbReach) continue;       // under it, or too far off
-      // the face we stand against: the side we are furthest outside of, and alongside it, not off its corner
-      const alongX = Math.abs(dz) >= Math.abs(dx);
+      // the face we stand against: the side we are furthest outside of, and alongside it, not off its corner (a merlon:
+      // up to a crenel's width off its side)
+      // (a merlon is small and seen from a crenel, off its corner: of the two sides we are outside of, the one we look at)
+      const alongX = low && dx && dz ? Math.abs(fz) >= Math.abs(fx) : Math.abs(dz) >= Math.abs(dx);
+      const across = alongX ? Math.abs(dz) : Math.abs(dx), off = alongX ? Math.abs(dx) : Math.abs(dz);
+      if (across < 0.05 || across - radius > BODY.climbReach) continue;   // under it, or too far off
+      if (off > (low ? 0.95 : 0.05)) continue;
       const nx = alongX ? 0 : Math.sign(dx), nz = alongX ? Math.sign(dz) : 0;
-      if ((alongX ? Math.abs(dx) : Math.abs(dz)) > 0.05) continue;
       if (-(fx * nx + fz * nz) < 0.5) continue;                     // not looking at it
+      const d = across + off * 0.5;
       if (d >= bd) continue;
       bd = d;
-      best = { c, nx, nz };
+      best = { c, nx, nz, low };
     }
     if (!best) return null;
     const { c, nx, nz } = best;
+    const owner = c.team !== undefined ? c.team : c.ref && c.ref.team;
+    if (best.low) {
+      // onto the middle of the merlon's top, if nothing else stands there (a tower wall beside it, say)
+      const land = { x: (c.minX + c.maxX) / 2, z: (c.minZ + c.maxZ) / 2 };
+      const probe = { x: land.x, z: land.z };
+      if (this.resolve(probe, Math.min(radius, 0.3), c.top, height, -99)) return null;
+      if (this.groundHeight(land.x, land.z, c.top) < c.top - 0.05) return null;
+      return { c, owner, top: c.top, nx, nz, hang: { x, z }, land, low: true };
+    }
     // the face, and where along it we are (kept off the very ends, where a tower stands)
     const alongX = nz !== 0;
     const face = nx > 0 ? c.maxX : nx < 0 ? c.minX : nz > 0 ? c.maxZ : c.minZ;
@@ -352,7 +382,7 @@ export class Physics {
       probe.x = p.x; probe.z = p.z;
       if (this.resolve(probe, radius, c.top, height, -99)) continue;
       if (this.groundHeight(p.x, p.z, c.top) < c.top - 0.05) continue;
-      return { c, owner: c.team !== undefined ? c.team : c.ref && c.ref.team, top: c.top, nx, nz, hang: at(radius + 0.04), land: p };
+      return { c, owner, top: c.top, nx, nz, hang: at(radius + 0.04), land: p };
     }
     return null;
   }

@@ -191,7 +191,7 @@ export class UI {
         if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
         else if (e) text = e.abandoned ? `Take over the abandoned ${e.name.toLowerCase()}` : `Take the controls of your ${e.name.toLowerCase()}`;
         else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
-        else if (p.climbHint) { text = p.climbHint === 'foe' ? 'Climb the enemy wall' : 'Climb onto the wall walk'; promptKey = 'Space'; }
+        else if (p.climbHint) { text = p.climbTop ? (p.climbHint === 'foe' ? 'Climb onto the enemy battlements' : 'Climb onto the battlements') : p.climbHint === 'foe' ? 'Climb the enemy wall' : 'Climb onto the wall walk'; promptKey = 'Space'; }
       }
     }
     if (text !== this.lastPrompt || promptKey !== this.lastPromptKey) {
