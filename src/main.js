@@ -29,7 +29,7 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
   warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
-import { sanitizeWar, warHills } from './warmode.js';
+import { sanitizeWar, warHills, menuPlan } from './warmode.js';
 import { FramePacer } from './framepace.js';
 
 const $ = (id) => document.getElementById(id);
@@ -189,8 +189,8 @@ let objective = 'conquest';
 // setup (`hero: { win }`) and its own row of three ways to win, the last one remembered per browser.
 let heroOn = false;
 let warOn = false;   // War Mode (warmode.js): a mode of its own, like Hero Mode, but online too
-// the War Mode world the menu shows behind it: two hills face to face, or four round the field for a free-for-all (begin builds the match's own)
-const menuWar = () => (warOn ? (warSetup().format === 'ffa' ? 4 : 2) : false);
+// the War Mode world the menu shows behind it: a hill for each army of the format (begin builds the match's own)
+const menuWar = () => (warOn ? menuPlan(warSetup().format) : false);
 let heroWin = 'kills';
 try { heroWin = localStorage.getItem('cw-herowin') || 'kills'; } catch (e) { /* storage unavailable */ }
 if (!HERO.modes[heroWin]) heroWin = 'kills';

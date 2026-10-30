@@ -1,11 +1,12 @@
 // War Mode on screen: the menu and lobby rows, the army panel of the build phase (the War Mode shop, Repeat last army, the formation, the battle plan,
-// Ready), the bar across the top (the countdown, then every side's soldiers), the command bar of the fight (1 / 2 / 3 / 4 choose a group, F1 to F4 or a
-// click give it an order), the cameras (the view over your army while the panel is open; the view over the battle once your hero has fallen) and the
+// Ready), the bar across the top (the countdown, then every side's soldiers), the command bar of the fight (1 / 2 / 3 / 4 choose a group, F1 to F4, T
+// and G or a click give it an order, F or a click its formation; the chosen soldiers are marked in the world: warmarks.js), the cameras (the view over your army while the panel is open; the view over the battle once your hero has fallen) and the
 // end screen's section. N opens the Talents panel (the shop with only its Talents tab, as in Hero Mode). The rules are in warmode.js; this file only
 // shows them and passes on clicks.
 import { WAR, TEAM_CSS, UNIT_TYPES, clock } from './config.js';
 import { pressReady, readyView, offerFor } from './flow.js';
 import { registerEndSection, onMatchEnd } from './endscreen.js';
+import { warMarks, aimGround } from './warmarks.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,7 +14,10 @@ const TYPES = Object.keys(WAR.units);
 const GROUPS = [['inf', 'Infantry'], ['arch', 'Archers'], ['cav', 'Cavalry']];
 // the command bar: the groups (key, id, name) and the orders (key, id); the order names are WAR.orders'
 const BAR_GROUPS = [['1', 'inf', 'Infantry'], ['2', 'arch', 'Archers'], ['3', 'cav', 'Cavalry'], ['4', 'all', 'Everyone']];
-const BAR_ORDERS = [['F1', 'charge'], ['F2', 'hold'], ['F3', 'forward'], ['F4', 'follow']];
+// (Bannerlord's order: F1 move here, F2 follow me, F3 charge, F4 hold; a step forward or back on T and G, above and below each other)
+const BAR_ORDERS = [['F1', 'move', 'F1'], ['F2', 'follow', 'F2'], ['F3', 'charge', 'F3'], ['F4', 'hold', 'F4'], ['T', 'forward', 'KeyT'], ['G', 'back', 'KeyG']];
+const FORMS = Object.keys(WAR.formations);
+const PLAN_ORDERS = Object.keys(WAR.orders).filter((k) => WAR.orders[k].plan);
 const GROUP_NAME = { inf: 'Infantry', arch: 'Archers', cav: 'Cavalry', all: 'Everyone' };
 const groupOfUnit = (u) => (u.isGiant ? 'inf' : UNIT_TYPES[u.type].kind === 'archer' ? 'arch' : UNIT_TYPES[u.type].kind === 'cavalry' ? 'cav' : 'inf');
 // the army each lord led last time, per format (Repeat last army): { counts: { type: n }, preset, plan }
@@ -37,6 +41,7 @@ export const WAR_DESC = `No castles: each army musters on a hill of its own, and
 const CSS = `
 #hud.war #factions, #hud.war #top, #hud.war #goldbox, #hud.war #army, #hud.war #clsHint, #hud.war #hill, #hud.war #hint, #hud.war #command, #hud.war #respawn { display: none !important; }
 body.war-on #scoreboard { display: none !important; }
+body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warTop { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none; text-align: center; min-width: 340px; max-width: calc(100% - 420px); }
 #warTop .wt-main { display: inline-flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
 #warTop .wt-clock { font-family: Cinzel, Georgia, serif; font-size: 22px; color: var(--gold); letter-spacing: 0.05em; }
@@ -91,8 +96,11 @@ body.war-on #scoreboard { display: none !important; }
 #warCmd button.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset, 0 0 12px rgba(224,180,76,0.35); color: #fff; }
 #warCmd button.on { background: linear-gradient(rgba(224,180,76,0.34), rgba(224,180,76,0.12)); border-color: var(--gold); color: #fff; }
 #warCmd button.none { opacity: 0.45; }
-#warCmd .wc-orders { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
-#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); min-width: 84px; text-align: right; padding-right: 4px; }
+#warCmd .wc-orders, #warCmd .wc-forms { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
+#warCmd .wc-orders button { min-width: 0; padding: 4px 7px 5px; font-size: 14px; white-space: nowrap; }
+#warCmd .wc-forms button { min-width: 0; padding: 3px 10px; font-size: 14px; white-space: nowrap; }
+#warCmd .wc-label kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
+#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); text-align: right; padding-right: 4px; white-space: nowrap; }
 #warCmd .wc-hint { font-size: 14px; opacity: 0.8; }
 #warCmd .wc-hint kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
@@ -234,7 +242,7 @@ export class WarUI {
         <span class="ds">${esc(d.desc)} ${T.hp} health${T.ranged ? `, ${T.range} m` : ''}.</span></div>`;
     }).join('');
     const presets = Object.entries(WAR.presets).map(([k, v]) => `<button data-preset="${k}" title="${esc(v.desc)}">${esc(v.name)}</button>`).join('');
-    const plans = GROUPS.map(([k, n]) => `<div class="wp-plan"><span>${n}</span>${Object.entries(WAR.orders).map(([o, v]) => `<button data-plan="${k}" data-o="${o}" title="${esc(v.desc)}">${esc(v.name)}</button>`).join('')}</div>`).join('');
+    const plans = GROUPS.map(([k, n]) => `<div class="wp-plan"><span>${n}</span>${PLAN_ORDERS.map((o) => `<button data-plan="${k}" data-o="${o}" title="${esc(WAR.orders[o].desc)}">${esc(WAR.orders[o].name)}</button>`).join('')}</div>`).join('');
     p.innerHTML = `<header><h3>Muster your army <span id="wpClock"></span></h3>
         <div class="wp-sub">When the timer runs out, or everybody is Ready, the armies fight to the last man.</div>
         <div class="wp-stat"><span><span class="coin">●</span> <span id="wpGold"></span> gold</span><span>⚔ <span id="wpArmy"></span></span></div></header>
@@ -242,7 +250,8 @@ export class WarUI {
         <h4>Soldiers <button class="wp-rep" data-act="repeat" title="Buy the army you led in your last War Mode battle of this kind, as much as the gold and the caps allow">↻ Repeat last army</button></h4>${units}
         <h4>Formation</h4><div class="wp-row">${presets}</div><div class="wp-note" id="wpPresetDesc"></div>
         <h4>Battle plan</h4>${plans}
-        <div class="wp-note">In the battle, the command bar: <kbd>1</kbd> infantry · <kbd>2</kbd> archers · <kbd>3</kbd> cavalry · <kbd>4</kbd> everyone, then <kbd>F1</kbd> charge · <kbd>F2</kbd> hold · <kbd>F3</kbd> move forward (${WAR.forward} m, then hold) · <kbd>F4</kbd> follow me. The mouse wheel or <kbd>X</kbd> switches sword and bow; <kbd>N</kbd> talents.</div>
+        <div class="wp-note">What each group does when the battle begins. Hold: they stay where they stand until you give an order, and you are free to walk the field.</div>
+        <div class="wp-note">In the battle: <kbd>1</kbd> infantry · <kbd>2</kbd> archers · <kbd>3</kbd> cavalry · <kbd>4</kbd> everyone, then <kbd>F1</kbd> move here (where you look) · <kbd>F2</kbd> follow me · <kbd>F3</kbd> charge · <kbd>F4</kbd> hold · <kbd>T</kbd> advance · <kbd>G</kbd> fall back · <kbd>F</kbd> formation. The mouse wheel or <kbd>X</kbd> switches sword and bow; <kbd>N</kbd> talents.</div>
       </div>
       <footer><button id="wpClose" data-act="close" title="Walk among your soldiers (B brings the panel back)">Look around <kbd>B</kbd></button>
         <button id="wpReady" data-act="ready">Ready <kbd>Enter</kbd></button><span class="rd" id="wpReadyN"></span></footer>`;
@@ -260,14 +269,16 @@ export class WarUI {
       bar.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && liveWar) { b.blur(); liveWar.ui.clickBar(b); } });
     }
     bar.classList.add('hidden');
-    bar.innerHTML = `<div class="wc-row wc-groups">${BAR_GROUPS.map(([k, id, n]) => `<button data-g="${id}" title="${n} (${k})"><span><kbd>${k}</kbd>${n}</span><small></small></button>`).join('')}</div>
-      <div class="wc-row wc-orders hidden"><span class="wc-label"></span>${BAR_ORDERS.map(([k, id]) => `<button data-c="${id}" title="${esc(WAR.orders[id].desc)}"><span><kbd>${k}</kbd>${esc(WAR.orders[id].name)}</span></button>`).join('')}</div>
-      <div class="wc-hint">Choose a group with <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> to give it orders</div>`;
+    bar.innerHTML = `<div class="wc-row wc-groups">${BAR_GROUPS.map(([k, id, n]) => `<button data-g="${id}" title="Choose ${id === 'all' ? 'the whole army' : n.toLowerCase()} (${k}): gold arrows mark them"><span><kbd>${k}</kbd>${n}</span><small></small></button>`).join('')}</div>
+      <div class="wc-row wc-orders hidden">${BAR_ORDERS.map(([k, id]) => `<button data-c="${id}" title="${esc(WAR.orders[id].desc)}"><span><kbd>${k}</kbd>${esc(WAR.orders[id].name)}</span></button>`).join('')}</div>
+      <div class="wc-row wc-forms hidden"><span class="wc-label">Formation <kbd>F</kbd></span>${FORMS.map((id) => `<button data-f="${id}" title="${esc(WAR.formations[id].desc)}"><span>${esc(WAR.formations[id].name)}</span></button>`).join('')}</div>
+      <div class="wc-hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> choose a group, then <kbd>F1</kbd> move here · <kbd>F2</kbd> follow · <kbd>F3</kbd> charge · <kbd>F4</kbd> hold · <kbd>T</kbd> / <kbd>G</kbd> advance / fall back · <kbd>F</kbd> formation</div>`;
     this.el.bar = bar;
     this.el.barGroups = [...bar.querySelectorAll('[data-g]')].map((b) => ({ b, id: b.dataset.g, small: b.querySelector('small'), txt: '' }));
     this.el.barOrders = [...bar.querySelectorAll('[data-c]')];
+    this.el.barForms = [...bar.querySelectorAll('[data-f]')];
     this.el.barOrderRow = bar.querySelector('.wc-orders');
-    this.el.barLabel = bar.querySelector('.wc-label');
+    this.el.barFormRow = bar.querySelector('.wc-forms');
     this.el.barHint = bar.querySelector('.wc-hint');
     this.shown = {};
   }
@@ -279,41 +290,53 @@ export class WarUI {
   }
   order(cmd) {
     if (!this.sel) this.sel = 'all';   // (an order before any group was chosen goes to everyone)
-    this.w.local('cmd', this.sel, cmd);
-    const say = { charge: 'charge!', hold: 'hold where you stand!', forward: `forward ${WAR.forward} m, then hold!`, follow: 'follow me!' }[cmd];
+    const at = cmd === 'move' ? aimGround(this.g) : null;
+    if (!this.w.localCommand(this.sel, cmd, at && [at[0], at[2]])) return;
+    const say = { move: 'move there and hold!', charge: 'charge!', hold: 'hold where you stand!', forward: `advance ${WAR.forward} m and hold!`, back: `fall back ${WAR.forward} m and hold!`, follow: 'follow me!' }[cmd];
     this.g.ui.toast(`${GROUP_NAME[this.sel]}: ${say}`);
+    this.t = 0;
+  }
+  // a formation for the chosen group (F: the next one after its own; everyone: after the infantry's)
+  form(id) {
+    if (!this.sel) this.sel = 'all';
+    const f = this.g.localFaction;
+    if (!f || !f.war) return;
+    if (!id) id = FORMS[(FORMS.indexOf(f.war.form[this.sel === 'all' ? 'inf' : this.sel]) + 1) % FORMS.length];
+    if (!this.w.localFormation(this.sel, id)) return;
+    this.g.ui.toast(`${GROUP_NAME[this.sel]}: ${WAR.formations[id].name.toLowerCase()}`);
     this.t = 0;
   }
   clickBar(b) {
     if (this.g.state !== 'playing' || !this.w.fighting) return;
     if (b.dataset.g) this.select(b.dataset.g);
     else if (b.dataset.c) this.order(b.dataset.c);
+    else if (b.dataset.f) this.form(b.dataset.f);
   }
   refreshBar() {
     const g = this.g, w = this.w, f = g.localFaction, el = this.el;
-    const show = w.fighting && g.state === 'playing' && !!f && !!f.war && !f.eliminated;
+    const show = w.fighting && g.state === 'playing' && !g.spectator && !!f && !!f.war && !f.eliminated;
     if (this.shown.bar !== show) { this.shown.bar = show; el.bar.classList.toggle('hidden', !show); }
     if (!show) return;
     const n = this.barN || (this.barN = { inf: 0, arch: 0, cav: 0, all: 0 });
     n.inf = n.arch = n.cav = 0;
     for (const u of g.units) if (u.alive && u.team === f.team && !u.isHero && !u.isCrew) n[groupOfUnit(u)]++;
     n.all = n.inf + n.arch + n.cav;
-    const plan = f.war.plan;
+    const plan = f.war.plan, fm = f.war.form;
     const same = plan.inf === plan.arch && plan.arch === plan.cav ? plan.inf : null;
+    const sameF = fm.inf === fm.arch && fm.arch === fm.cav ? fm.inf : null;
     for (const o of el.barGroups) {
-      const cur = o.id === 'all' ? same : plan[o.id];
-      const txt = `${n[o.id]} · ${cur ? WAR.orders[cur].name : 'mixed orders'}`;
+      const cur = o.id === 'all' ? same : plan[o.id], cf = o.id === 'all' ? sameF : fm[o.id];
+      const txt = `${n[o.id]} · ${cur ? WAR.orders[cur].name : 'mixed orders'}${o.id === 'all' && !cf ? '' : ' · ' + WAR.formations[cf].name}`;
       if (o.txt !== txt) { o.txt = txt; o.small.textContent = txt; }
       o.b.classList.toggle('sel', this.sel === o.id);
       o.b.classList.toggle('none', !n[o.id]);
     }
     const on = !!this.sel;
-    if (this.shown.barOn !== on) { this.shown.barOn = on; el.barOrderRow.classList.toggle('hidden', !on); el.barHint.classList.toggle('hidden', on); }
+    if (this.shown.barOn !== on) { this.shown.barOn = on; el.barOrderRow.classList.toggle('hidden', !on); el.barFormRow.classList.toggle('hidden', !on); el.barHint.classList.toggle('hidden', on); }
     if (!on) return;
-    const cur = this.sel === 'all' ? same : plan[this.sel];
+    const cur = this.sel === 'all' ? same : plan[this.sel], curF = this.sel === 'all' ? sameF : fm[this.sel];
     for (const b of el.barOrders) b.classList.toggle('on', b.dataset.c === cur);
-    const label = `${GROUP_NAME[this.sel]}:`;
-    if (this.shown.label !== label) { this.shown.label = label; el.barLabel.textContent = label; }
+    for (const b of el.barForms) b.classList.toggle('on', b.dataset.f === curF);
   }
 
   // ---- Repeat last army ----
@@ -399,7 +422,7 @@ export class WarUI {
     }
     if (i.hit('KeyB')) {
       if (g.ui.shopOpen) { g.ui.toggleShop(false); if (!w.fighting) this.setPanel(true); return; }
-      if (w.fighting) g.ui.toast('The armies are set: 1 / 2 / 3 / 4 choose a group, F1 to F4 give it an order');
+      if (w.fighting) g.ui.toast('The armies are set: 1 / 2 / 3 / 4 choose a group, then F1 move here · F2 follow · F3 charge · F4 hold · T / G advance / fall back · F formation');
       else this.setPanel(!w.panelOpen);
       return;
     }
@@ -408,13 +431,15 @@ export class WarUI {
     if (g.ui.mapOpen || !w.fighting) return;
     // the command bar (the hero's weapon is on the wheel or X in War Mode: player.js)
     for (const [k, id] of BAR_GROUPS) if (i.hit('Digit' + k)) this.select(id);
-    for (const [k, id] of BAR_ORDERS) if (i.hit(k)) this.order(id);
+    for (const [, id, code] of BAR_ORDERS) if (i.hit(code)) this.order(id);
+    if (i.hit('KeyF')) this.form(null);
   }
 
   // ---- every frame ----
   frame(dt) {
     const g = this.g, w = this.w;
     if (g.state !== 'playing') {
+      if (this.mk) this.mk.hide();
       if (w.panelOpen) { w.panelOpen = false; this.el.panel.classList.add('hidden'); $('hud').classList.remove('warpanel'); }
       if (this.shown.bar) this.refreshBar();
       if (g.state === 'over' && !this.left) { this.left = true; leaveHud(); }
@@ -422,12 +447,26 @@ export class WarUI {
     }
     if (!this.opened && !w.fighting && !g.spectator) { this.opened = true; this.setPanel(true); }   // (a spectator has no army to build: spectate.js)
     if (w.panelOpen && g.input.locked) g.input.unlock();
+    this.marks(dt);
     this.t -= dt;
     if (this.t > 0) return;
     this.t = 0.2;
     if (w.panelOpen) this.refreshPanel();
     this.refreshTop();
     this.refreshBar();
+  }
+
+  // the marks in the world (warmarks.js): over the chosen soldiers, where the crosshair would send them, and where each group was sent
+  marks(dt) {
+    const g = this.g, w = this.w, f = g.localFaction;
+    const on = w.fighting && !g.spectator && !!f && !!f.war && !f.eliminated && !w.panelOpen;
+    if (!on) { if (this.mk) this.mk.hide(); return; }
+    if (!this.mk) this.mk = warMarks(g.scene);
+    this.markT = (this.markT || 0) + dt;
+    const n = this.barN || { inf: 1, arch: 1, cav: 1 };
+    // (the aim ring only while a group is chosen and the hero looks out over the field: Move here goes there)
+    const aim = this.sel && g.player.alive && !g.ui.shopOpen && !g.ui.mapOpen ? aimGround(g) : null;
+    this.mk.update(g, f, this.sel, aim, this.markT, n);
   }
 
   refreshPanel() {

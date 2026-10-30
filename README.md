@@ -725,15 +725,17 @@ controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handl
 
 ## War Mode
 
-Pick **War Mode** in the Mode row of the menu (or of the lobby). There are no castles, waves, upgrades or income. Every side
+Pick **War Mode** in the Mode row of the menu (or of the lobby). There are no castles, waves, upgrades or income. Every army
 starts **on top of a hill of its own**: a broad, flat-topped ridge (about 26 m high on a medium map) with open slopes no
 steeper than about 26 degrees, so infantry, riders and heroes all walk up and down them. The armies march down their hill and
-meet in the low field between, and may push up the other side. Two sides get two hills face to face; three or four armies
-(a free-for-all) get one hill each round the field. Behind the hills the ground climbs into the chosen land's mountains and
-forest; the field and the hills stay open. The number of hills comes from the match's sides, so it is part of the world
-(`src/warmap.js`; the same ground on every screen). The air is clearer than in the war modes (`WAR.haze`): the battle is
-watched across 150 to 300 m from a hilltop. The Armies row picks how they are set against each other: **Free-for-all**
-(four armies), **Two against two** (Blue and Green against Red and Gold, each side on one long hill) or **One against one**.
+meet in the low field between, and may push up the other side. Two armies get two hills face to face; three or four get one
+hill each round the field; allies (Two against two, Co-op) get **neighbouring hills of their own**, close together with a
+saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero starts at the front edge of
+his own army's hill. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
+stay open. The hills come from the match's sides (one digit per side, the armies on it: `'22'`, `'1111'`, `'31'`), so they are
+part of the world (`src/warmap.js`; the same ground on every screen). The air is clearer than in the war modes (`WAR.haze`):
+the battle is watched across 150 to 300 m from a hilltop. The Armies row picks how they are set against each other:
+**Free-for-all** (four armies), **Two against two** (Blue and Green against Red and Gold) or **One against one**.
 Online, Co-op in the lobby puts the players on one side against the AI; houses nobody plays are led by AI generals.
 
 **The timer.** The two minutes are the **army-building phase** (`WAR.buildTime` in `src/config.js`): a countdown in the bar at
@@ -760,15 +762,28 @@ not buy. Online it goes through the host like any other purchase.
 Soldiers appear in their places at once; −1 / −10 dismiss them for a full refund. Three **formations**: Battle line
 (infantry in front, archers behind, cavalry on the wings), Wedge (an arrowhead of infantry with the knights at the tip) and
 Archers behind (a deep infantry block, the archers on a long line well behind it, the riders held back). The **battle plan**
-says what infantry, archers and cavalry do when the battle begins: Charge, Hold (stay and fight what comes; archers shoot
-from where they stand), Move forward or Follow me.
+says what infantry, archers and cavalry do when the battle begins: **Hold** (the default: they stay where they were set out
+and fight what comes, archers shoot from where they stand, until you give an order; your hero is free to walk the field),
+Charge, Advance or Follow me. The AI generals keep their own plans.
 
-**The command bar** (bottom of the screen in the battle) gives orders: **1** Infantry, **2** Archers, **3** Cavalry, **4**
-Everyone (the same number twice also picks everyone); each shows how many are left and its order. Once a group is chosen the
-bar offers **F1 Charge**, **F2 Hold** (stop and hold where they stand, facing the enemy), **F3 Move forward** (25 m towards
-the nearest enemy army, keeping their shape, then hold: `WAR.forward`) and **F4 Follow me**; the buttons can be clicked
-too while the mouse is free. Because 1 to 4 are the bar, the hero's sword and bow switch with the **mouse wheel or X** in
-War Mode.
+**The command bar** (bottom of the screen in the battle) gives orders, as in Bannerlord but fewer of them. Choose a group:
+**1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). The chosen soldiers
+get a small gold arrow over their heads (and the button lights up); the others none. Then:
+
+| Key | Order | What they do |
+| --- | --- | --- |
+| F1 | Move here | March to the spot on the ground under your crosshair (a ring shows it while a group is chosen), form up there and hold. A banner with the group's number marks the spot. Everyone: the infantry on the spot, the archers behind it, the riders on its right. |
+| F2 | Follow me | Form up behind your hero and follow him (archers behind the infantry, riders on the right). |
+| F3 | Charge | March on the enemy and fight. |
+| F4 | Hold | Stop: form up where they are, facing the enemy. |
+| T / G | Advance / Fall back | 25 m towards / away from the nearest enemy army (`WAR.forward`), formed up, then hold. |
+| F | Formation | The next formation for the group (or click one): **Line** (a broad front a few ranks deep), **Shield wall** (shoulder to shoulder, shields locked when holding: blocks far more, melee men keep their place, marches slower), **Loose** (3.4 m apart: a giant's club or a fireball catches fewer; good for archers), **Wedge** (an arrowhead that closes a little quicker). |
+
+Each group's button shows how many are left, its order and its formation; the buttons can be clicked while the mouse is
+free, and an order given before any group is chosen goes to everyone. The spacing of each formation is in `WAR.formations`
+(riders take `WAR.ride` times it). Because 1 to 4 are the bar, the hero's sword and bow switch with the **mouse wheel or X**
+in War Mode. Online a guest's orders and formations go to the host like its purchases (the Move here spot is checked to be a
+point inside the field); a spectator has no bar and no marks.
 
 **Talents.** **N** opens the Talents panel (alone, as in Hero Mode) in the build and in the battle; B goes back to the army
 panel. A hero earns experience from kills (and a share of those of soldiers fighting near them) and 10 more for every 30
@@ -1093,7 +1108,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/fx.js`, `src/particles.js`, `src/fxtex.js`, `src/groundfx.js`, `src/camfx.js` | Effects: GPU particles and ground marks, the ability glyphs, and the camera (shake, kicks, field-of-view punch, colour drain on low health, death fade) |
 | `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js`, `src/quality.js`, `src/shaderhook.js` | The renderer: sky, fog and the tone curve, the two shadow cascades, the HDR post passes, the frame path and adaptive resolution, the quality tunables `Q`, and the helper that lets several modules extend one material's shader |
 | `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
-| `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warnet.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the orders of the command bar, the AI generals, the win), the field and its hills (the ground and the places of the armies), what is on screen (menu and lobby rows, the army panel and Repeat, the top bar, the command bar, the cameras, the end-screen table) and the packed snapshot of its soldiers |
+| `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warmarks.js`, `src/warnet.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the orders of the command bar, the AI generals, the win), the field and its hills (the ground and the places of the armies), what is on screen (menu and lobby rows, the army panel and Repeat, the top bar, the command bar, the cameras, the end-screen table), the marks in the world (the chosen soldiers, the aim ring, the Move here banners) and the packed snapshot of its soldiers |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/flow.js` | The gap between matches: what Quick Play starts, the end screen's actions (Play Again, Change class, Rematch), Ready, and the offer to concede or finish a decided war |
