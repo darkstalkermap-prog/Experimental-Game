@@ -13,6 +13,7 @@ export const UPDATES = [
       'Bigger, clearer text on the battle screen, on darker panels, and a UI scale slider in Options (80 to 140 %).',
       'The key reminders show in your first two battles. After that press I to see them again.',
       'The Ranger is reworked: headshots, arrows that pierce, Power Shot (Q), Snare Trap (R), arrows that come back over time and a new talent tree.',
+      'War Mode: every army starts on its own hill, your army waits for your orders, the chosen group is marked over their heads, and new orders like Bannerlord: Move here (where you look), Follow me, Charge, Hold, Advance, Fall back and four formations.',
       'King of the Hill: a bar shows how long every house has held the hill.',
       'Up close, a castle shows how much its keep, gate and walls can still take.',
       'Knights carry a larger kite shield.',
