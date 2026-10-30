@@ -290,27 +290,31 @@ export const PINGS = {
   ],
 };
 
-// War Mode (src/warmode.js): no castles, a bowl-shaped arena and one great battle. The "2-minute timer" is the army-building phase: every lord has
+// War Mode (src/warmode.js): no castles, a hill for each army and one great battle. The "2-minute timer" is the army-building phase: every lord has
 // `buildTime` seconds (Ready ends it early once everybody is ready) to spend `gold` on an army and set it out; then the armies fight to the end and the
 // last army standing wins (the heroes fight too, and do not rise again). A fight still going after `fightLimit` seconds is decided on the worth of what
 // is left. Each kind of soldier has a gold cost and a cap of its own that falls with its power (up to 200 footmen, far fewer knights and riders); a house
-// fields at most `armyCap` soldiers, and fewer when four armies take the field (`totalCap` over all houses), so that the biggest battle keeps its frame
-// rate (README, War Mode).
+// fields at most `armyCap` soldiers in every format (`totalCap` over all houses: four full armies; README, War Mode).
 export const WAR = {
   buildTime: 120,
   fightLimit: 6 * 60,
-  gold: 6000,
+  // the clear-air haze and the valley mist, as a share of the usual land's (atmosphere.js). The war modes are seen across a few dozen metres, to the next
+  // castle; War Mode's battle is watched from a hilltop across the whole field, 150 to 300 m, and at the usual density it melts into a white haze.
+  haze: 0.42,
+  gold: 10000,
   armyCap: 200,
-  totalCap: 600,
+  totalCap: 800,
+  forward: 25,          // metres a group's "Move forward" order advances it towards the enemy before it holds
+  xpEvery: 30,          // seconds of battle a living hero is paid XP.wave for, as a war mode pays each wave lived through
   // the soldier types for sale (keys of UNIT_TYPES): the gold each costs and how many one house may field
   units: {
     swordsman: { name: 'Footman', cost: 30, cap: 200, desc: 'Sword and shield: cheap and steady, the body of any army.' },
     spearman: { name: 'Spearman', cost: 35, cap: 150, desc: 'Long reach; holds a line and stops riders.' },
     archer: { name: 'Archer', cost: 45, cap: 100, desc: 'Shoots from 44 m. Keep them behind the infantry.' },
-    longbowman: { name: 'Longbowman', cost: 70, cap: 50, desc: 'Shoots further and harder than an archer, and wears mail.' },
-    knight: { name: 'Knight', cost: 100, cap: 50, desc: 'Plate armour: the strongest man on foot.' },
-    horseman: { name: 'Cavalry', cost: 120, cap: 40, desc: 'Fast riders that crash through a line.' },
-    lancer: { name: 'Lancer', cost: 170, cap: 20, desc: 'Armoured riders with lances: the heaviest charge.' },
+    longbowman: { name: 'Longbowman', cost: 70, cap: 60, desc: 'Shoots further and harder than an archer, and wears mail.' },
+    knight: { name: 'Knight', cost: 100, cap: 60, desc: 'Plate armour: the strongest man on foot.' },
+    horseman: { name: 'Cavalry', cost: 120, cap: 50, desc: 'Fast riders that crash through a line.' },
+    lancer: { name: 'Lancer', cost: 170, cap: 25, desc: 'Armoured riders with lances: the heaviest charge.' },
     giant: { name: 'Giant', cost: 1500, cap: 1, desc: 'One to an army. Smashes whole ranks.' },
   },
   presets: {
@@ -322,6 +326,7 @@ export const WAR = {
   orders: {
     charge: { name: 'Charge', desc: 'March on the enemy and fight.' },
     hold: { name: 'Hold', desc: 'Stay in place and fight what comes close (archers shoot from where they stand).' },
+    forward: { name: 'Move forward', desc: 'Advance 25 m towards the enemy, then hold there.' },
     follow: { name: 'Follow me', desc: 'Follow your hero.' },
   },
   formats: {
@@ -330,6 +335,7 @@ export const WAR = {
     duel: { name: 'One against one', desc: 'Two armies, face to face.' },
   },
 };
-// War Mode changes the world itself (a bowl instead of castles and roads), so it is a switch set before a Game is built, like the practice yard
-export const WAR_WORLD = { on: false };
-export const setWarWorld = (on) => { WAR_WORLD.on = !!on; };
+// War Mode changes the world itself (a hill for each army instead of castles and roads), so it is a switch set before a Game is built, like the practice
+// yard; `hills` is how many armies' hills the ground has (2 to 4: warmap.js), from the match's sides (warHills in warmode.js)
+export const WAR_WORLD = { on: false, hills: 2 };
+export const setWarWorld = (hills) => { WAR_WORLD.on = !!hills; WAR_WORLD.hills = hills ? Math.max(2, Math.min(4, hills === true ? 2 : hills | 0)) : 2; };

@@ -53,7 +53,7 @@ import { applyBiomeRules, twistLine } from './biometwist.js';
 import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 import { WarMode } from './warmode.js';
-import { WarPhysics, BOWL } from './warmap.js';
+import { WarPhysics, FIELD } from './warmap.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
@@ -1712,9 +1712,10 @@ export class Game {
   menuCamera(dt) {
     this.menuCamT += dt * 0.05;
     const t = this.menuCamT;
-    if (this.physics.war) {   // (War Mode's bowl: round its rim)
-      this.camera.position.set(Math.sin(t) * BOWL.rim * 0.9, BOWL.height + 16, Math.cos(t) * BOWL.rim * 0.9);
-      this.camera.lookAt(0, 0, 0);
+    if (this.physics.war) {   // (War Mode's field: round it, high over the hills)
+      const r = FIELD.front + FIELD.hd * 2;
+      this.camera.position.set(Math.sin(t) * r, FIELD.height + 34, Math.cos(t) * r);
+      this.camera.lookAt(0, 4, 0);
       followShadow(this.lights.sun, (this.menuFocus || (this.menuFocus = new THREE.Vector3())).copy(this.camera.position).multiplyScalar(0.3));
       return;
     }

@@ -11,7 +11,7 @@ const TYPES = Object.keys(WAR.units);
 const GROUPS = [['inf', 'Infantry'], ['arch', 'Archers'], ['cav', 'Cavalry']];
 const COLOR_NAMES = ['Blue', 'Red', 'Green', 'Gold'];
 
-export const WAR_DESC = `No castles: one battle in a great bowl. You have ${clock(WAR.buildTime)} (the timer) to buy an army with ${WAR.gold} gold and set it out (Ready starts the battle sooner), then the armies fight to the last man. Your hero fights too.`;
+export const WAR_DESC = `No castles: each army musters on a hill of its own, and the battle is fought in the field between. You have ${clock(WAR.buildTime)} (the timer) to buy an army with ${WAR.gold} gold and set it out (Ready starts the battle sooner), then the armies fight to the last man. Your hero fights too.`;
 
 // ---------------- styles (once) ----------------
 const CSS = `
@@ -343,10 +343,10 @@ export class WarUI {
     const p = g.player;
     let want = null, look = null;
     if (w.panelOpen) {
-      // over your army: behind it and above, looking at the front rank
+      // over your army: behind it and above, looking over the front rank down your hill to the field
       const s = f.war.spot;
-      want = [s.x - s.fx * 40, 24, s.z - s.fz * 40];
-      look = [s.x + s.fx * 8, 0, s.z + s.fz * 8];
+      want = [s.x - s.fx * 42, 22, s.z - s.fz * 42];
+      look = [s.x + s.fx * 26, 0, s.z + s.fz * 26];
       if (p.viewModel && p.viewModel.visible) p.viewModel.visible = false;
     } else if (!p.alive) {
       // the battle: circling slowly over where the soldiers are

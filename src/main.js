@@ -28,7 +28,7 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
   warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
-import { sanitizeWar } from './warmode.js';
+import { sanitizeWar, warHills } from './warmode.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -85,14 +85,14 @@ let palette = soloPalette();
 
 // the key of a world: its map size, the practice yard, War Mode's bowl and the land it is dressed as (a different land is another world, built again; so are
 // other colours, kept beside it in game.paletteBuilt)
-const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war ? '+war' : '') + (practice ? '' : landKey(o.biome, o.seed));
+const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war ? '+war' + war : '') + (practice ? '' : landKey(o.biome, o.seed));
 
 function buildGame(size, practice = false, landOpts = null, war = false) {
   const o = sanitizeOptions(landOpts);
   setMapSize(size);
   setPalette(palette);   // (before anything of the world is made: castles, banners, soldiers and heroes take their colours as they are built)
   setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
-  setWarWorld(war && !practice);   // War Mode's world is a bowl without castles (warmap.js)
+  setWarWorld(war && !practice ? war : 0);   // War Mode's world: a hill for each army, no castles (warmap.js; `war` is the number of hills)
   setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
@@ -187,6 +187,8 @@ let objective = 'conquest';
 // setup (`hero: { win }`) and its own row of three ways to win, the last one remembered per browser.
 let heroOn = false;
 let warOn = false;   // War Mode (warmode.js): a mode of its own, like Hero Mode, but online too
+// the War Mode world the menu shows behind it: two hills face to face, or four round the field for a free-for-all (begin builds the match's own)
+const menuWar = () => (warOn ? (warSetup().format === 'ffa' ? 4 : 2) : false);
 let heroWin = 'kills';
 try { heroWin = localStorage.getItem('cw-herowin') || 'kills'; } catch (e) { /* storage unavailable */ }
 if (!HERO.modes[heroWin]) heroWin = 'kills';
@@ -221,13 +223,17 @@ function selectObjective(o) {
   $('objDesc').textContent = hero ? heroDesc() : war ? WAR_DESC : OBJECTIVES[o].desc;
   $('lobbyObjDesc').textContent = war ? WAR_DESC : OBJECTIVES[objective].desc;   // (the lobby's Mode row itself is drawn by lobbyui.js)
   showWarRow(war);
-  if (rebuild) { clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') { palette = soloPalette(); ensureMap(mapSize, false, land, warOn); } }, 350); }   // (the menu shows the bowl behind it)
+  if (rebuild) { clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') { palette = soloPalette(); ensureMap(mapSize, false, land, menuWar()); } }, 350); }   // (the menu shows the bowl behind it)
   $('heroWin').classList.toggle('hidden', !hero);
   $('menu').classList.toggle('hero', hero);
   showLength();   // (the length row is for the war modes: in Hero Mode it says so)
   showSolo();
 }
-initWarMenu(() => { if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast(); refreshQuick(); });   // (adds War Mode to the Mode rows before they are wired)
+initWarMenu(() => {
+  if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();
+  refreshQuick();
+  clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, menuWar()); }, 350);   // (two hills or four)
+});   // (adds War Mode to the Mode rows before they are wired)
 document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => { selectObjective(b.dataset.o); rememberLast(); }));
 const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : warOn ? 'war' : objective);
 
@@ -251,14 +257,14 @@ initLandMenu({
   onChange: () => {
     if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();   // (the guests hear of it while they wait in the lobby)
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, warOn); }, 350);
+    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, menuWar()); }, 350);
   },
 });
 
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
-  ensureMap(map, !!(setup && setup.practice), setup && setup.options, !!(setup && setup.war));
+  ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false);   // (War Mode: a hill for each side)
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
@@ -285,7 +291,7 @@ function freshWorldSoon() {
     seen = endScreenUp() ? seen + 250 : 0;   // (the screen may be built before a finishing show has ended: wait until it is in view)
     if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
     const size = WORLD.size, practice = !!game.practice;   // (the world's key also carries the land now: do not parse it)
-    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, !!game.war);   // (the next battle's land: the end screen's row may have rolled it)
+    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? Math.max(2, game.war.sideList.length) : false);   // (the next battle's land: the end screen's row may have rolled it)
     // (a disposed world takes the shader programs of its own materials with it: compile the effect shaders of the new one now, a moment after the build as a task of
     // its own, while the end screen is still, instead of in the click that starts the match)
     const fresh = game;
@@ -326,7 +332,7 @@ function afterSolo() {
   showSolo();
   refreshQuick();
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land, warOn); } }, 350);
+  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land, menuWar()); } }, 350);
 }
 
 // the line under Quick Play (and under Play Again): what a click will start
@@ -351,7 +357,7 @@ function toMenu() {
   clearTimeout(freshTimer);
   refreshOptions();
   palette = soloPalette();
-  ensureMap(mapSize, false, land, warOn);   // (the menu shows the picked land behind it, as a bowl for War Mode, in the single player's colours)
+  ensureMap(mapSize, false, land, menuWar());   // (the menu shows the picked land behind it, as a bowl for War Mode, in the single player's colours)
   ui.reset();
   ui.hideHud();
   showLength();
@@ -678,7 +684,7 @@ function backToLobby(isHost) {
   if (game.state === 'playing') return;
   clearTimeout(freshTimer);
   const practice = !!game.practice;   // (the world's key also carries the land: it is not parsed; this asks for what freshWorldSoon builds)
-  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed }, !!game.war);   // (a fresh world for the next match, on the land the end screen rolled)
+  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? Math.max(2, game.war.sideList.length) : false);   // (a fresh world for the next match, on the land the end screen rolled)
   ui.reset();
   ui.hideHud();
   if (!isHost && net) net.toHost({ k: 'cos', cos: progress.loadout() });   // (the host is back in its lobby now: what this match earned is for the next battle)

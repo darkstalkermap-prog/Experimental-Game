@@ -1,4 +1,4 @@
-// War Mode: one great battle in a bowl (warmap.js), no castles. Two phases:
+// War Mode: one great battle, each army starting on a hill of its own (warmap.js), no castles. Two phases:
 //   build   WAR.buildTime seconds (the "2-minute timer"; Ready ends it early when every lord is ready, as in the war modes): each lord spends WAR.gold on
 //           an army in the War Mode shop (each type has its cost and its own cap, see WAR.units in config.js), picks a formation and a battle plan per group
 //           (infantry, archers, cavalry). The soldiers appear in their places at once and nobody can be hurt.
@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { WAR, UNIT_TYPES, DIFFICULTY, FORMATIONS, clock } from './config.js';
 import { Unit } from './units.js';
 import { setSides, allied } from './teams.js';
-import { BOWL, sideSpot } from './warmap.js';
+import { FIELD, sideSpot } from './warmap.js';
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
 import { WarUI } from './warui.js';
@@ -31,6 +31,26 @@ const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.c
 export function sanitizeWar(w) {
   const f = w && typeof w === 'object' && own(WAR.formats, w.format) ? w.format : 'ffa';
   return { format: f };
+}
+
+// How the houses of a match are set against each other: [[teams]] one entry per side. humans: the players' teams; houses: the teams that take the field
+// (a castle the lobby or the menu left empty sends no army: seats.js); coop: the lobby's Co-op (the players on one side against the AI).
+export function warSides(format, humans, houses, coop) {
+  if (format === 'duel' && humans.length <= 2 && !(coop && humans.length > 1)) {
+    const foe = houses.find((t) => !humans.includes(t));
+    houses = humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();
+  }
+  let sides;
+  if (coop && humans.length > 1) sides = humans.length >= 4 ? [[0, 1], [2, 3]] : [humans.slice(), houses.filter((t) => !humans.includes(t))];
+  else if (format === 'teams') sides = [[0, 2], [1, 3]];
+  else sides = houses.map((t) => [t]);
+  return { houses, sides: sides.map((s) => s.filter((t) => houses.includes(t))).filter((s) => s.length) };
+}
+// the number of hills a match's world needs (one per side: warmap.js), from its setup, before the world is built (main.js; the same on every screen)
+export function warHills(setup) {
+  const humans = (setup.players || []).map((p) => p.team);
+  const houses = [0, 1, 2, 3].filter((t) => humans.includes(t) || !(Array.isArray(setup.empty) && setup.empty.includes(t)));
+  return Math.max(2, Math.min(4, warSides(sanitizeWar(setup.war).format, humans, houses, !!setup.coop).sides.length));
 }
 
 // AI generals: how each likes to spend its gold (shares of the purse by type)
@@ -65,16 +85,7 @@ export class WarMode {
     const g = this.g;
     const humans = setup.players.map((p) => p.team);
     // (a castle the lobby or the menu left empty sends no army: seats.js)
-    let houses = [0, 1, 2, 3].filter((t) => !g.factions[t].empty);
-    if (this.format === 'duel' && humans.length <= 2 && !(g.coop && humans.length > 1)) {
-      const foe = houses.find((t) => !humans.includes(t));
-      houses = humans.length === 2 || foe === undefined ? humans.slice().sort() : [humans[0], foe].sort();
-    }
-    let sides;
-    if (g.coop && humans.length > 1) sides = humans.length >= 4 ? [[0, 1], [2, 3]] : [humans.slice(), houses.filter((t) => !humans.includes(t))];
-    else if (this.format === 'teams') sides = [[0, 2], [1, 3]];
-    else sides = houses.map((t) => [t]);
-    sides = sides.map((s) => s.filter((t) => houses.includes(t))).filter((s) => s.length);
+    const { houses, sides } = warSides(this.format, humans, [0, 1, 2, 3].filter((t) => !g.factions[t].empty), g.coop);
     this.houses = houses;
     this.sideList = sides;
     g.sides = sides.filter((s) => s.length > 1);
@@ -487,5 +498,5 @@ export class WarMode {
     });
   }
 
-  get bowl() { return BOWL; }
+  get field() { return FIELD; }
 }
