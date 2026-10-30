@@ -232,6 +232,7 @@ const CSS = `
 @keyframes standFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
 #hud.standing::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 130px 26px rgba(255,190,60,0.6); animation: standGlow 2.2s ease-in-out infinite; }
 @keyframes standGlow { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #lastStand, #hud.standing::after, #standFlash.go { animation: none; } #hud.standing::after { opacity: 0.8; } }
 `;
 let refs = null;
 function hudRefs() {
