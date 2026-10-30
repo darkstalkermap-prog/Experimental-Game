@@ -1570,6 +1570,8 @@ export class Game {
     const frozen = this.mode === 'single' && (this.paused || this.ui.shopOpen);
     if (frozen) return;
     const slow = this.finale.timeScale(dt);   // (the ending's slow motion; single player only)
+    // the hero's own steps: a hit-stop holds the blow and the world, never your own walking (that made strafing in a fight judder)
+    const ownDt = dt * slow;
     // brief hit-stop when a blow lands (single player only)
     if (this.hitStop > 0) { this.hitStop -= dt; dt *= 0.12; }
     dt *= slow;
@@ -1585,7 +1587,7 @@ export class Game {
     for (const h of this.humans) if (h.alive && !h.drive) this.grid.insert(h);
 
     const p = this.player;
-    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen && !(this.war && this.war.panelOpen) ? this.input : this.input.idle);
+    if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen && !(this.war && this.war.panelOpen) ? this.input : this.input.idle, ownDt);
     else this.deathCamera(dt);
     this.finale.camera();   // (the ending frames the falling keep: after the hero has placed the camera, before anything looks through it)
     if (this.war) this.war.camera(dt);   // (War Mode: the view over your army while its panel is open, over the battle once your hero has fallen)

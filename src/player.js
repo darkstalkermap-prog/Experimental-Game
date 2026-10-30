@@ -566,7 +566,8 @@ export class Player {
   }
 
   // ---------- per-frame ----------
-  update(dt, input) {
+  // moveDt: the step for walking, jumping and climbing (the game's dt without a hit-stop: see Game.update)
+  update(dt, input, moveDt = dt) {
     const g = this.game;
     if (!this.alive) return;
     const m = input.mouse;
@@ -601,8 +602,8 @@ export class Player {
     // movement (a climb carries the hero up a wall instead)
     let moving = false, sprint = false;
     if (!this.climb && input.hit('Space') && !this.mounted) this.tryClimb();
-    if (this.climb) this.updateClimb(dt);
-    else ({ moving, sprint } = this.move(dt, input));
+    if (this.climb) this.updateClimb(moveDt);
+    else ({ moving, sprint } = this.move(moveDt, input));
     if (this.climbCd > 0) this.climbCd -= dt;
     this.climbing = !!this.climb;
     if ((this.hintT -= dt) <= 0) {

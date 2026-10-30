@@ -1014,8 +1014,13 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   about 75 to 85 draw calls.
 - Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
   models are prepared in the background during the preparation minute, so nothing stutters on first use.
-- Online, other players and soldiers are interpolated between the host's updates for smooth movement, and
-  shop purchases show instantly while the host confirms them.
+- Online, other players and soldiers are interpolated between the host's updates for smooth movement (each keeps its last
+  four updates on a smoothed clock, since the view is shown further back than the gap between two updates: `src/interpolation.js`),
+  and shop purchases show instantly while the host confirms them.
+- Each frame steps the world by the time between two screen refreshes, taken from the animation frame's own timestamp and
+  snapped to whole refreshes when the browser rounds its timers (`src/framepace.js`); a clock read inside the frame strays by
+  a few milliseconds and made strafing judder. Walking speed changes and jumps come out the same at any frame rate, and the
+  short hit-stop when your blow lands holds the world, not your own steps.
 - Mouse look uses raw input where the browser supports it.
 - Edges are smoothed by 4x multisampling of the scene target plus FXAA at High and Ultra and by FXAA alone at Medium; the canvas itself has samples only at Low, where the scene is drawn straight into it.
 - Sun shadows read five samples of the soft filter where a pixel is clearly in light or shadow, and all of them only near a shadow edge.
