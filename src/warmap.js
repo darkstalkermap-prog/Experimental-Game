@@ -18,22 +18,33 @@ import { WORLD, WAR_WORLD, WAR } from './config.js';
 //   slope    the length of the slope from the edge of the top to the field
 //   height   the hilltop above the field
 //   rim      where the ground starts to rise towards the edge of the map
-export const FIELD = { hills: 2, front: 86, hd: 28, hw: 80, slope: 60, height: 20, rim: 175, floor: 26 };
+export const FIELD = { hills: 2, plan: '11', front: 86, hd: 28, hw: 80, slope: 60, height: 20, rim: 175, floor: 26, angles: [0, Math.PI] };
+// the angle between the hills of two allies (radians): neighbours, their tops well apart (a saddle between them), nearer each other than any enemy
+const ALLY_GAP = (76 * Math.PI) / 180;
 export function layoutField() {
   const P = WORLD.playHalf, n = Math.max(2, Math.min(4, WAR_WORLD.hills | 0 || 2));
   FIELD.hills = n;
+  FIELD.plan = typeof WAR_WORLD.plan === 'string' && [...WAR_WORLD.plan].reduce((a, c) => a + +c, 0) === n ? WAR_WORLD.plan : '1'.repeat(n);
   FIELD.front = Math.round(P * (n > 2 ? 0.48 : 0.45));
   FIELD.hd = Math.round(P * 0.14);
-  FIELD.hw = Math.round(P * (n > 2 ? 0.27 : 0.42));   // (two sides: a long ridge, room for two allied armies side by side)
+  FIELD.hw = Math.round(P * (n > 2 ? 0.27 : 0.42));   // (two hills: a long ridge each, face to face)
   FIELD.slope = Math.round(P * 0.34);
   FIELD.height = Math.min(30, Math.round(FIELD.slope * 0.38));   // (steepest about 26 degrees: see slopeDrop)
   FIELD.rim = Math.round(P * 0.86);
   FIELD.floor = Math.max(18, FIELD.front - FIELD.slope);   // the open field round the middle, where no hill reaches
+  // where each hill stands round the field: the sides evenly round it (two face to face; three or four a quarter turn on), and the armies of one side on
+  // neighbouring hills of their own, ALLY_GAP apart round the side's own direction
+  const sizes = [...FIELD.plan].map(Number), m = sizes.length;
+  FIELD.angles = [];
+  sizes.forEach((k, s) => {
+    const c = (s / m) * Math.PI * 2 + (m === 2 ? 0 : Math.PI / 4);
+    for (let j = 0; j < k; j++) FIELD.angles.push(c + (j - (k - 1) / 2) * ALLY_GAP);
+  });
 }
 
-// The middle of hill i of n and the way it faces (towards the middle of the map): the same angles as sideSpot, so side i stands on hill i
-export function hillAt(i, n = FIELD.hills) {
-  const a = (i / n) * Math.PI * 2 + (n === 2 ? 0 : Math.PI / 4);
+// The middle of hill i and the way it faces (towards the middle of the map)
+export function hillAt(i) {
+  const a = FIELD.angles[i] || 0;
   const d = FIELD.front + FIELD.hd;
   return { x: Math.sin(a) * d, z: Math.cos(a) * d, fx: -Math.sin(a), fz: -Math.cos(a) };
 }
@@ -41,10 +52,11 @@ export function hillAt(i, n = FIELD.hills) {
 // how far (x, z) lies outside the top of the nearest hill (0 on the top), and that hill's index; o is reused by the caller
 const HILLS = [];
 function hillList() {
-  if (HILLS.length !== FIELD.hills || HILLS.key !== FIELD.front + FIELD.hd) {
+  const key = FIELD.plan + ':' + (FIELD.front + FIELD.hd);
+  if (HILLS.key !== key) {
     HILLS.length = 0;
     for (let i = 0; i < FIELD.hills; i++) HILLS.push(hillAt(i));
-    HILLS.key = FIELD.front + FIELD.hd;
+    HILLS.key = key;
   }
   return HILLS;
 }
@@ -87,16 +99,17 @@ export function fieldPropOk(x, z) {
   return r > FIELD.rim - 10 || (r > FIELD.front + FIELD.hd && hillDistance(x, z) > FIELD.slope * 0.9);
 }
 
-// The point and the facing of each side's army: side i on hill i, its front rank a few metres behind the forward edge of the top, facing the middle.
-// `slot` of `of` houses on one side stand next to each other along the front. -> { x, z, yaw, fx, fz } (fx, fz: the way the army faces)
-// (fewer sides than hills, e.g. a world built for four with only two armies in it: they take hills across the field from each other)
+// The point and the facing of an army: every army on a hill of its own (allies on neighbouring hills), its front rank a few metres behind the forward
+// edge of the top, facing the middle. `slot` of `of` houses on side `side` of `sides`. -> { x, z, yaw, fx, fz, hill } (fx, fz: the way the army faces)
+// (a world whose hills were laid out for other sides, which a match never has, still gives every army a hill of its own while there are enough)
 export function sideSpot(side, sides, slot = 0, of = 1) {
-  const h = hillAt(Math.round((side * FIELD.hills) / Math.max(1, sides)) % FIELD.hills, FIELD.hills);
-  const fx = h.fx, fz = h.fz;
-  const rx = fz, rz = -fx;                       // to the right of the facing
-  const lateral = (slot - (of - 1) / 2) * Math.min(56, FIELD.hw * 0.62);
-  const d = FIELD.front + 4;   // (the hero stands 5 m in front of this: on the very edge of the top, looking down the slope)
-  return { x: -fx * d + rx * lateral, z: -fz * d + rz * lateral, yaw: Math.atan2(fx, fz), fx, fz };
+  const sizes = [...FIELD.plan].map(Number);
+  let i;
+  if (sizes.length === sides && sizes[side] === of) i = sizes.slice(0, side).reduce((a, k) => a + k, 0) + slot;
+  else i = Math.round(((side + slot / Math.max(1, of)) * FIELD.hills) / Math.max(1, sides)) % FIELD.hills;
+  const h = hillAt(i);
+  const d = FIELD.hd - 4;   // (the hero stands 5 m in front of this: on the very edge of the top, looking down the slope)
+  return { x: h.x + h.fx * d, z: h.z + h.fz * d, yaw: Math.atan2(h.fx, h.fz), fx: h.fx, fz: h.fz, hill: i };
 }
 
 // ---------------- the sides of a match ----------------
@@ -121,9 +134,13 @@ export function warSides(format, humans, houses, coop) {
   else sides = houses.map((t) => [t]);
   return { houses, sides: sides.map((s) => s.filter((t) => houses.includes(t))).filter((s) => s.length) };
 }
-// the number of hills a match's world needs (one per side: warmap.js), from its setup, before the world is built (main.js; the same on every screen)
+// the hills a match's world needs, from its setup, before the world is built (main.js; the same on every screen): one per army, grouped by side, as
+// WAR_WORLD.plan ('22': two sides of two armies; config.js)
+export const planOf = (sides) => (sides.length >= 2 ? sides.map((s) => s.length).join('') : '11');
 export function warHills(setup) {
   const humans = (setup.players || []).map((p) => p.team);
   const houses = [0, 1, 2, 3].filter((t) => humans.includes(t) || !(Array.isArray(setup.empty) && setup.empty.includes(t)));
-  return Math.max(2, Math.min(4, warSides(sanitizeWar(setup.war).format, humans, houses, !!setup.coop).sides.length));
+  return planOf(warSides(sanitizeWar(setup.war).format, humans, houses, !!setup.coop).sides);
 }
+// the world the menu shows behind it for a format (one player, every house in it)
+export const menuPlan = (format) => warHills({ players: [{ team: 0 }], war: { format } });

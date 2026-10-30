@@ -80,6 +80,8 @@ export class Unit {
     this.homeCastle = null;
     this.lane = false;     // a wave soldier marching on the enemy, rather than a bought troop in the garrison
     this.army = false;     // a bought troop that follows its lord and takes orders (otherwise it holds the garrison)
+    this.warForm = null;   // War Mode: the formation of the soldier's group (WAR.formations) and, while it follows the hero, its place behind him
+    this.warFollow = null;
     this.isCrew = !!t.crew;
     this.crewOf = null;    // the siege engine this soldier is manning, and which seat
     this.crewSlot = 0;
@@ -306,11 +308,13 @@ export class Unit {
       }
       case 'follow': {
         const hero = fac.hero;
-        const F = FORMATIONS[fac.formation] || FORMATIONS.line;
-        const cols = Math.min(F.cols, 6);
+        const W = this.warFollow;   // (War Mode: the group's own formation and its place behind the hero, beside the other groups: warmode.js)
+        const F = W || FORMATIONS[fac.formation] || FORMATIONS.line;
+        const cols = W ? W.cols : Math.min(F.cols, 6);
         const row = Math.floor(this.slot / cols), col = (this.slot % cols) - (cols - 1) / 2;
         const fx = Math.sin(hero.yaw), fz = Math.cos(hero.yaw);
-        tmp.set(hero.pos.x - fx * (3 + row * F.sz) + fz * col * F.sx, 0, hero.pos.z - fz * (3 + row * F.sz) - fx * col * F.sx);
+        const back = 3 + row * F.sz + (W ? W.back : 0), side = col * F.sx + (W ? W.side : 0);
+        tmp.set(hero.pos.x - fx * back + fz * side, 0, hero.pos.z - fz * back - fx * side);
         this.goal = tmp.clone();
         engage = this.ranged ? Math.min(this.range, 32) : 10;
         anchor = hero.pos; leash = 18;
@@ -318,12 +322,15 @@ export class Unit {
       }
       case 'hold': {
         const d = this.orderData;
-        const F = FORMATIONS[fac.formation] || FORMATIONS.line;
-        const row = Math.floor(this.slot / F.cols), col = (this.slot % F.cols) - (F.cols - 1) / 2;
-        const fx = Math.sin(d.yaw), fz = Math.cos(d.yaw);
-        this.goal = new THREE.Vector3(d.pos.x + fz * col * F.sx - fx * row * F.sz, 0, d.pos.z - fx * col * F.sx - fz * row * F.sz);
+        if (d.exact) this.goal = d.pos;   // (War Mode: the soldier's own place, worked out by his group's formation: warmode.js)
+        else {
+          const F = FORMATIONS[fac.formation] || FORMATIONS.line;
+          const row = Math.floor(this.slot / F.cols), col = (this.slot % F.cols) - (F.cols - 1) / 2;
+          const fx = Math.sin(d.yaw), fz = Math.cos(d.yaw);
+          this.goal = new THREE.Vector3(d.pos.x + fz * col * F.sx - fx * row * F.sz, 0, d.pos.z - fx * col * F.sx - fz * row * F.sz);
+        }
         // a shield wall holds its line: it only fights what comes within arm's reach
-        const wall = fac.formation === 'shieldwall' && !this.ranged;
+        const wall = (this.warForm ? !!this.warForm.brace : fac.formation === 'shieldwall') && !this.ranged;
         engage = this.ranged ? this.range : wall ? 2.8 : 5;
         anchor = this.goal; leash = this.ranged ? this.range + 5 : wall ? 3 : 8;
         // a soldier sent up the hill fights anyone who sets foot inside it, and goes back to his place afterwards
@@ -572,7 +579,7 @@ export class Unit {
     if (this.post) this.pos.copy(this.post.pos);
 
     const fac = g.factions[this.team];
-    this.braced = this.order === 'hold' && !this.ranged && this.hasShield && fac && fac.formation === 'shieldwall' && this.swingT < 0;
+    this.braced = this.order === 'hold' && !this.ranged && this.hasShield && fac && (this.warForm ? !!this.warForm.brace : fac.formation === 'shieldwall') && this.swingT < 0;
     if (face) this.faceTo(face, dt);
     else if (!moving && this.order === 'hold' && this.orderData) this.turnTo(this.orderData.yaw, dt);
     else if (moving) {
@@ -612,6 +619,7 @@ export class Unit {
     if (this.hasteT > 0) sp *= this.hasteMul;
     sp *= groundMul(this.game, this, dt);   // deep snow, mud (biometwist.js)
     if (fac && fac.formation === 'shieldwall' && this.order === 'follow' && !this.mounted) sp *= 0.7;
+    else if (this.warForm && (this.order === 'hold' || this.order === 'follow')) sp *= this.warForm.slow || this.warForm.fast || 1;   // (War Mode: a shield wall marches slowly, a wedge quickly)
     const k = Math.min(1, dt * (this.mounted ? 2.2 : 8));
     let ux = dx / d, uz = dz / d;
     const steer = this.game.physics.steerAroundTrees(this.pos.x, this.pos.z, ux, uz, this.radius, this.id % 2 ? 1 : -1);

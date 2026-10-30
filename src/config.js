@@ -318,7 +318,7 @@ export const WAR = {
   gold: 10000,
   armyCap: 200,
   totalCap: 800,
-  forward: 25,          // metres a group's "Move forward" order advances it towards the enemy before it holds
+  forward: 25,          // metres a group's Advance (and Fall back) order moves it towards (away from) the nearest enemy before it holds
   xpEvery: 30,          // seconds of battle a living hero is paid XP.wave for, as a war mode pays each wave lived through
   // the soldier types for sale (keys of UNIT_TYPES): the gold each costs and how many one house may field
   units: {
@@ -336,13 +336,27 @@ export const WAR = {
     wedge: { name: 'Wedge', desc: 'An arrowhead of infantry, knights at the tip; archers behind it, riders at the back.' },
     archers: { name: 'Archers behind', desc: 'A deep block of infantry, the archers on a long line well behind it, the riders held back.' },
   },
-  // the battle plan of each group of soldiers, for when the fight begins (F1 / F2 / F3 change it in the fight)
+  // the orders of the command bar (warui.js: F1 to F4, T and G, or a click), and the battle plan of each group for when the fight begins (the build panel
+  // offers the `plan` ones). Every one but Charge and Follow me ends with the group formed up in its formation and holding.
   orders: {
-    charge: { name: 'Charge', desc: 'March on the enemy and fight.' },
-    hold: { name: 'Hold', desc: 'Stay in place and fight what comes close (archers shoot from where they stand).' },
-    forward: { name: 'Move forward', desc: 'Advance 25 m towards the enemy, then hold there.' },
-    follow: { name: 'Follow me', desc: 'Follow your hero.' },
+    hold: { name: 'Hold', plan: true, desc: 'Stop and hold where they stand, formed up, facing the enemy; fight what comes close (archers shoot from where they stand).' },
+    charge: { name: 'Charge', plan: true, desc: 'March on the enemy and fight.' },
+    forward: { name: 'Advance', plan: true, desc: 'Advance 25 m towards the enemy, formed up, then hold there.' },
+    follow: { name: 'Follow me', plan: true, desc: 'Follow your hero, formed up behind him.' },
+    move: { name: 'Move here', desc: 'March to the spot on the ground you are looking at, form up there and hold.' },
+    back: { name: 'Fall back', desc: 'Fall back 25 m away from the enemy, still facing it, then hold there.' },
   },
+  // the formation of each group (the command bar's lower row, F cycles it): the spacing across (sx) and between ranks (sz) in metres for men on foot
+  // (riders take `ride` times that), how wide the front is (about `deep` ranks, at most `cols` men a rank) and what else it does (units.js reads the flags)
+  //   brace  shields locked when holding (units.js: braced, blocks much more), a melee man keeps his place, and it marches slower
+  //   wedge  an arrowhead (rank r has 2r + 1 men); it marches a little faster to its place
+  formations: {
+    line: { name: 'Line', sx: 1.7, sz: 1.9, deep: 4, cols: 36, desc: 'A broad front a few ranks deep: the all-round formation.' },
+    wall: { name: 'Shield wall', sx: 1.05, sz: 1.3, deep: 3, cols: 44, brace: true, slow: 0.75, desc: 'Shoulder to shoulder, shields locked: blocks most blows and arrows and holds its line, but marches slowly.' },
+    loose: { name: 'Loose', sx: 3.4, sz: 3.4, deep: 3, cols: 18, desc: 'Wide gaps between the men: a giant\'s club, a fireball or a charge catches far fewer of them. Good for archers.' },
+    wedge: { name: 'Wedge', sx: 1.6, sz: 1.6, wedge: true, fast: 1.1, desc: 'An arrowhead: a narrow point to drive into a line, and it closes quicker.' },
+  },
+  ride: 1.75,
   formats: {
     ffa: { name: 'Free-for-all', desc: 'Four armies, each for itself.' },
     teams: { name: 'Two against two', desc: 'Armies 1 and 3 against armies 2 and 4.' },
@@ -350,6 +364,14 @@ export const WAR = {
   },
 };
 // War Mode changes the world itself (a hill for each army instead of castles and roads), so it is a switch set before a Game is built, like the practice
-// yard; `hills` is how many armies' hills the ground has (2 to 4: warmap.js), from the match's sides (warHills in warmode.js)
-export const WAR_WORLD = { on: false, hills: 2 };
-export const setWarWorld = (hills) => { WAR_WORLD.on = !!hills; WAR_WORLD.hills = hills ? Math.max(2, Math.min(4, hills === true ? 2 : hills | 0)) : 2; };
+// yard. `plan` is how the armies' hills are grouped: one digit per side, the number of armies on it ('11' a duel, '22' two against two, '1111' a
+// free-for-all, '31' three lords in co-op against one AI general); `hills` is their sum (2 to 4: warmap.js). From the match's sides (warHills in warmode.js).
+export const WAR_WORLD = { on: false, hills: 2, plan: '11' };
+export const setWarWorld = (v) => {
+  WAR_WORLD.on = !!v;
+  let plan = typeof v === 'string' ? v.replace(/[^1-4]/g, '').slice(0, 4) : '1'.repeat(Math.max(2, Math.min(4, v === true ? 2 : v | 0)));
+  let n = [...plan].reduce((a, c) => a + +c, 0);
+  if (plan.length < 2 || n > 4) { plan = '1'.repeat(Math.max(2, Math.min(4, n))); n = plan.length; }
+  WAR_WORLD.plan = v ? plan : '11';
+  WAR_WORLD.hills = v ? n : 2;
+};
