@@ -379,11 +379,11 @@ async function connect() {
   net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });
   net.on('closed', () => {
     if (game.state === 'playing' && game.mode === 'client') game.finish(-1, 'Lost connection to the server.');
-    else if (endScreenUp() && !flow.left) roomGone('The connection to the room was lost.');
+    else if (endScreenBuilt() && !flow.left) roomGone('The connection to the room was lost.');
   });
   net.on('hostleft', () => {
     if (game.state === 'playing') game.finish(-1, 'The host left the game.');
-    else if (endScreenUp()) roomGone('The host left the game.');
+    else if (endScreenBuilt()) roomGone('The host left the game.');
     else { ui.lobbyError('The host closed the game.'); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); }
   });
 }
@@ -453,7 +453,8 @@ $('leaveLobby').addEventListener('click', () => location.reload());
 // ---------------- a rematch in the same room ----------------
 // When a match ends the room goes back to lobby duty: the host's end screen has "Rematch", which takes everybody who is still here back to the room's lobby,
 // where classes are picked again and the host starts the next battle. (The room stays locked: nobody new can join a game that has started.)
-function endScreenUp() {   // (in view: built, and no longer kept see-through behind the show of an ending, which needs the finished world: finale.js)
+function endScreenBuilt() { return !$('gameover').classList.contains('hidden'); }   // (built: it may still be see-through behind the show of an ending, finale.js)
+function endScreenUp() {   // (in view: built, and no longer kept see-through behind the show, which needs the finished world under it)
   const c = $('gameover').classList;
   return !c.contains('hidden') && !c.contains('finale-wait');
 }

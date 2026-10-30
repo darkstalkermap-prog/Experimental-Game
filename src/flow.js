@@ -157,11 +157,13 @@ export function confirmOffer(g, ui) {
 }
 
 // ---------------------------------------------------------------- the HUD pieces (called a few times a second by ui.update)
-const last = { ready: '', offer: '', told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
+const last = { ready: '', offer: '', hillY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
 const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 // a new match starts with nothing shown (ui.reset)
 export function resetHud() {
   last.ready = last.offer = '';
+  last.hillY = 0;
+  $('hill').style.top = '';
   last.told.clear();
   armedUntil = 0;
   for (const id of ['readyRow', 'offerRow']) $(id).classList.add('hidden');
@@ -185,6 +187,13 @@ export function updateHud(g, ui) {
       setText($('readyNote'), rv.alone ? (rv.mine ? '' : 'Start the battle now') : rv.mine ? `You are ready · waiting for the others (${rv.n}/${rv.of})` : `${rv.n}/${rv.of} ready`);
       setText($('shopReady'), rv.alone ? 'Ready' : `Ready · ${rv.n}/${rv.of}`);
     }
+  }
+  // The King of the Hill panel hangs under the top panel, which grows by a row for Ready, for the offer and for the decrees (decrees.js): it follows the real bottom edge
+  const hill = $('hill');
+  if (!g.hero && !hill.classList.contains('hidden')) {
+    const top = $('top');
+    const y = top.offsetTop + top.offsetHeight + 8;
+    if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
   }
   const o = offerFor(g);
   const armed = performance.now() < armedUntil;
@@ -344,7 +353,6 @@ style.textContent = `
 #offerRow { flex-wrap: wrap; }
 #offerBtn.armed { border-color: #ff9d8a; color: #fff; background: linear-gradient(#8a2a1c, #5a1710); }
 #hud.hero #heroTop > .flowrow { grid-column: 1 / -1; }
-#hud.prep #hill, #hud.offer #hill { top: 134px; }   /* (the top panel has one more row: the hill panel of King of the Hill steps down) */
 #shopReady { background: linear-gradient(#6a8a34, #3f5a1c); border-color: #9ec25a; color: #f4ffe0; }
 #shopReady:hover:not(:disabled) { background: linear-gradient(#7fa23f, #4b6b22); }
 #pauseOffer { border-color: #e0b44c; }
