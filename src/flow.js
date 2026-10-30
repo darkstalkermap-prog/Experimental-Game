@@ -188,15 +188,6 @@ export function updateHud(g, ui) {
       setText($('shopReady'), rv.alone ? 'Ready' : `Ready · ${rv.n}/${rv.of}`);
     }
   }
-  // The King of the Hill panel and the label of the soldier you aim at hang under the top panel, which grows by a row for Ready, for the offer and for the decrees
-  // (decrees.js): they follow its real bottom edge instead of a fixed place
-  if (!g.hero) {
-    const top = $('top'), hill = $('hill'), tg = $('target');
-    let y = top.offsetTop + top.offsetHeight + 8;
-    if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
-    if (!hill.classList.contains('hidden')) y += hill.offsetHeight + 6;
-    if (y !== last.targetY) { last.targetY = y; tg.style.top = `${y}px`; }
-  }
   const o = offerFor(g);
   const armed = performance.now() < armedUntil;
   const okey = o ? `${o.kind}/${o.text}/${armed}` : '';
@@ -213,6 +204,15 @@ export function updateHud(g, ui) {
       setText($('offerLabel'), armed ? `Press K again: ${o.yes}` : o.label);
       $('offerBtn').classList.toggle('armed', armed);
     }
+  }
+  // The King of the Hill panel and the label of the soldier you aim at hang under the top panel, which grows by a row for Ready, for the offer and for the decrees
+  // (decrees.js): they follow its real bottom edge instead of a fixed place (measured last, after the rows above have been shown or hidden)
+  if (!g.hero) {
+    const top = $('top'), hill = $('hill'), tg = $('target');
+    let y = top.offsetTop + top.offsetHeight + 8;
+    if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
+    if (!hill.classList.contains('hidden')) y += hill.offsetHeight + 6;
+    if (y !== last.targetY) { last.targetY = y; tg.style.top = `${y}px`; }
   }
 }
 
