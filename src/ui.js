@@ -18,6 +18,8 @@ import { updateDecreeHud, showPauseDecrees } from './decrees.js';
 import { showPauseLand } from './landui.js';
 import { updateComebackHud } from './comeback.js';
 import { rivalTagHtml, houseRival } from './rivalsui.js';
+import { HillBar } from './hillbar.js';
+import { CastleBar } from './castlebar.js';
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -78,6 +80,8 @@ export class UI {
     this.practiceOpen = false;   // the practice courtyard's panel (P)
     this.tab = 'army';
     this.hudT = 0;
+    this.hillBar = new HillBar();
+    this.castleBar = new CastleBar();
     this.mapT = 0;
     this.mapOpen = false;
     this.bigBg = null;
@@ -735,12 +739,14 @@ export class UI {
     for (const id of ['toasts', 'killfeed', 'goldpops', 'xppops', 'dmgpops', 'alerts', 'goSections']) $(id).textContent = '';
     for (const id of ['tip', 'streak', 'banner']) $(id).classList.remove('show');
     this.tab = 'army';
-    this.lastPrompt = this.lastCmdKey = this.hillHtml = this.buffHtml = this.heroHtml = '';
+    this.lastPrompt = this.lastCmdKey = this.buffHtml = this.heroHtml = '';
     $('buffs').innerHTML = '';   // (the list is only written when it changes: a label of the last match would stay through the next preparation)
     this.heroSeen = undefined;   // (the next frame asks the new world again whether this is the Hero Game Mode, and sets or clears the HUD's hero classes)
     this.goldShown = null;
     this.noArmy = this.inBattle = undefined;
     this.hudT = 0;
+    this.hillBar.reset();
+    this.castleBar.reset();
     resetFlowHud();
   }
 
@@ -823,37 +829,10 @@ export class UI {
     }
   }
 
-  // The hill in the middle: who holds it, who is taking it, and (King of the Hill) how long each side has held it.
-  updateHill(dt) {
-    const g = this.game, h = g.hill, el = $('hill');
-    if (!h) return;
-    const koth = g.objective === 'koth';
-    if (!koth) { el.classList.add('hidden'); return; }
-    const me = g.spectator ? -1 : g.localTeam;   // (a spectator has no side: spectate.js)
-    const nm = (t) => (t === me ? 'You' : g.factions[t].name);
-    let state, color = 'var(--parch)';
-    if (h.contested) { state = 'Contested'; color = '#ff8a6a'; }
-    else if (h.owner >= 0) { state = allied(h.owner, me) && h.owner !== me ? `Held by ally ${g.factions[h.owner].name.replace(/^House /, '')}` : `Held by ${nm(h.owner).replace(/^House /, '')}`; color = TEAM_CSS[h.owner]; }
-    else state = 'Nobody holds it';
-    const taking = !h.contested && h.capturer >= 0 && h.progress > 0.01;
-    const bar = taking ? h.progress : h.owner >= 0 && !h.contested ? 1 : 0;
-    const barColor = taking ? TEAM_CSS[h.capturer] : h.owner >= 0 ? TEAM_CSS[h.owner] : '#888';
-    let lines = '';
-    if (taking) lines += `<div class="hc" style="color:${TEAM_CSS[h.capturer]}">${esc(nm(h.capturer).replace(/^House /, ''))} taking it · ${Math.round(h.progress * 100)}%</div>`;
-    if (koth) {
-      const seen = new Set(), parts = [];
-      for (const f of g.factions) {
-        const k = [0, 1, 2, 3].find((t) => allied(t, f.team));
-        if (seen.has(k) || (f.eliminated && !h.held[k])) continue;
-        seen.add(k);
-        const mine = allied(k, me);
-        parts.push(`<span style="color:${TEAM_CSS[k]}${mine ? ';font-weight:700' : ''}">${mine ? 'You' : esc(f.name.replace(/^House /, ''))} ${clock(Math.floor(h.held[k]))}</span>`);
-      }
-      lines += `<div class="hs">${parts.join(' · ')} · first to ${clock(HILL.target)}</div>`;
-    }
-    const html = `<div class="ht"><span>⛰ The Hill</span><b style="color:${color}">${esc(state)}</b></div><div class="hb"><i style="width:${(bar * 100).toFixed(0)}%;background:${barColor}"></i></div>${lines}`;
-    if (html !== this.hillHtml) { this.hillHtml = html; el.innerHTML = html; }
-    el.classList.toggle('hidden', g.state !== 'playing');
+  // King of the Hill: the timer bar of the sides on the hill (hillbar.js); the castle you stand at: its keep, gate and walls (castlebar.js)
+  updateHill() {
+    this.hillBar.update(this.game);
+    this.castleBar.update(this.game);
   }
 
   // Q and R: icon, name, cooldown sweep and the effects running on you
@@ -904,7 +883,7 @@ export class UI {
       // the 'ally' tag comes first so a long house name can't push it out of sight
       const ally = g.coop && f.team !== g.localTeam && allied(f.team, g.localTeam);
       html += `<div class="fac ${f.eliminated ? 'dead' : ''}">
-        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam && !g.spectator ? 'You' : f.name)}</span>${rivalTagHtml(g, f)}${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}${g.objective === 'koth' ? `<em class="hl" title="time on the hill">⛰ ${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</em>` : ''}</span>
+        <i style="background:${TEAM_CSS[f.team]}"></i><span class="n">${ally ? '<em class="ally">ally</em>' : ''}<span class="nm">${esc(f.team === g.localTeam && !g.spectator ? 'You' : f.name)}</span>${rivalTagHtml(g, f)}${f.wage > 0 ? `<em class="hl" title="Underdog's wage: +${f.wage} gold a minute">⚜</em>` : ''}</span>
         <span class="h" title="hero">${hero}</span>
         <span class="bar"><b style="width:${keep}%"></b></span>
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>

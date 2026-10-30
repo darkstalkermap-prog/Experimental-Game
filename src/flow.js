@@ -162,13 +162,14 @@ export function confirmOffer(g, ui) {
 }
 
 // ---------------------------------------------------------------- the HUD pieces (called a few times a second by ui.update)
-const last = { ready: '', offer: '', hillY: 0, targetY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
+const last = { ready: '', offer: '', hillY: 0, castleY: 0, targetY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
 const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 // a new match starts with nothing shown (ui.reset)
 export function resetHud() {
   last.ready = last.offer = '';
-  last.hillY = last.targetY = 0;
+  last.hillY = last.castleY = last.targetY = 0;
   $('hill').style.top = $('target').style.top = '';
+  if ($('castleBar')) $('castleBar').style.top = '';
   last.told.clear();
   armedUntil = 0;
   for (const id of ['readyRow', 'offerRow']) $(id).classList.add('hidden');
@@ -217,6 +218,11 @@ export function updateHud(g, ui) {
     let y = top.offsetTop + top.offsetHeight + 8;
     if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
     if (!hill.classList.contains('hidden')) y += hill.offsetHeight + 6;
+    const cb = $('castleBar');   // (the castle you are at: castlebar.js)
+    if (cb) {
+      if (y !== last.castleY) { last.castleY = y; cb.style.top = `${y}px`; }
+      if (cb.classList.contains('on')) y += cb.offsetHeight + 6;
+    }
     if (y !== last.targetY) { last.targetY = y; tg.style.top = `${y}px`; }
   }
 }
