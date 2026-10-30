@@ -287,7 +287,7 @@ export class UI {
   renderShop() {
     const g = this.game;
     if (document.querySelector(`#shop .tabs button[data-tab="${this.tab}"]`)?.disabled) this.tab = 'army';   // a greyed-out tab can't be shown
-    if (g.hero) this.tab = 'talents';   // Hero Game Mode: the Talents panel is the whole shop
+    if (g.hero || g.war) this.tab = 'talents';   // Hero Game Mode and War Mode (whose army has its own panel): the Talents panel is the whole shop
     document.querySelectorAll('#shop .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === this.tab));
     const grid = $('shopGrid');
     grid.innerHTML = '';
@@ -553,7 +553,7 @@ export class UI {
   // Update gold, descriptions and button states in place.
   refreshShop() {
     const g = this.game;
-    if (g.hero) { refreshTalentTab(this); return; }   // (no gold, army or class cards to refresh)
+    if (g.hero || g.war) { refreshTalentTab(this); return; }   // (no gold, army or class cards to refresh)
     const f = g.localFaction;
     $('shopGold').textContent = Math.floor(f.gold);
     const rc = g.roleCounts(g.localTeam);

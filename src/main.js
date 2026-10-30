@@ -823,6 +823,7 @@ addEventListener('keydown', (e) => {
     e.preventDefault();
     input.pressed.delete(e.code); // don't let the game loop re-open it this frame
     ui.toggleShop(false);
+    if (e.code === 'KeyB' && game.war && !game.war.fighting) game.war.ui.setPanel(true);   // (War Mode's build: B goes from the Talents panel back to the army panel)
   }
   if (ui.shopOpen && e.code === 'KeyN') {   // N: the Talents tab (and closes the shop when it is already there)
     e.preventDefault();

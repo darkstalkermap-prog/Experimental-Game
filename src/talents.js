@@ -268,6 +268,7 @@ export function talentBlock(p, id) {
 // Why the hero cannot give their talents back now (null when they can): free, but only in the grounds of their own castle.
 export function respecBlock(p) {
   if (!Object.keys(p.talents).length) return 'You have no talents to give back';
+  if (p.game.war) return p.game.war.fighting ? 'Not once the battle has begun' : null;   // (War Mode: no castle to go home to; free while the armies muster)
   return p.atHome() ? null : 'Only at your own castle';
 }
 

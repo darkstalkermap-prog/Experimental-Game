@@ -579,9 +579,11 @@ export class Player {
     if (this.drive) { this.updateDrive(dt, input); return; }
 
     // weapon switching
-    if (input.hit('Digit1')) this.setWeapon('sword');
-    if (input.hit('Digit2')) this.setWeapon('bow');
-    if (m.wheel) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
+    // (War Mode: 1 to 4 choose a group on the command bar, warui.js; the wheel or X switch the weapon there)
+    const warKeys = !!this.game.war;
+    if (!warKeys && input.hit('Digit1')) this.setWeapon('sword');
+    if (!warKeys && input.hit('Digit2')) this.setWeapon('bow');
+    if (m.wheel || (warKeys && input.hit('KeyX'))) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyH')) this.drinkPotion();
     // Q: most abilities go off at once; the Ranger's volley is aimed with a circle (hold it, let go to loose it)
     if (input.hit('KeyQ')) { if (this.cls.q.aimed) this.beginAim('q'); else this.useAbility('q', input); }
