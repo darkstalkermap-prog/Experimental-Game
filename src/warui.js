@@ -97,10 +97,10 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warCmd button.on { background: linear-gradient(rgba(224,180,76,0.34), rgba(224,180,76,0.12)); border-color: var(--gold); color: #fff; }
 #warCmd button.none { opacity: 0.45; }
 #warCmd .wc-orders, #warCmd .wc-forms { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
-#warCmd .wc-orders button { min-width: 0; padding: 4px 8px 5px; white-space: nowrap; }
+#warCmd .wc-orders button { min-width: 0; padding: 4px 7px 5px; font-size: 13.5px; white-space: nowrap; }
 #warCmd .wc-forms button { min-width: 0; padding: 3px 10px; font-size: 13px; white-space: nowrap; }
 #warCmd .wc-label kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
-#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 13px; color: var(--gold); min-width: 84px; text-align: right; padding-right: 4px; }
+#warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 13px; color: var(--gold); text-align: right; padding-right: 4px; white-space: nowrap; }
 #warCmd .wc-hint { font-size: 13px; opacity: 0.8; }
 #warCmd .wc-hint kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
@@ -270,7 +270,7 @@ export class WarUI {
     }
     bar.classList.add('hidden');
     bar.innerHTML = `<div class="wc-row wc-groups">${BAR_GROUPS.map(([k, id, n]) => `<button data-g="${id}" title="Choose ${id === 'all' ? 'the whole army' : n.toLowerCase()} (${k}): gold arrows mark them"><span><kbd>${k}</kbd>${n}</span><small></small></button>`).join('')}</div>
-      <div class="wc-row wc-orders hidden"><span class="wc-label"></span>${BAR_ORDERS.map(([k, id]) => `<button data-c="${id}" title="${esc(WAR.orders[id].desc)}"><span><kbd>${k}</kbd>${esc(WAR.orders[id].name)}</span></button>`).join('')}</div>
+      <div class="wc-row wc-orders hidden">${BAR_ORDERS.map(([k, id]) => `<button data-c="${id}" title="${esc(WAR.orders[id].desc)}"><span><kbd>${k}</kbd>${esc(WAR.orders[id].name)}</span></button>`).join('')}</div>
       <div class="wc-row wc-forms hidden"><span class="wc-label">Formation <kbd>F</kbd></span>${FORMS.map((id) => `<button data-f="${id}" title="${esc(WAR.formations[id].desc)}"><span>${esc(WAR.formations[id].name)}</span></button>`).join('')}</div>
       <div class="wc-hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> choose a group, then <kbd>F1</kbd> move here · <kbd>F2</kbd> follow · <kbd>F3</kbd> charge · <kbd>F4</kbd> hold · <kbd>T</kbd> / <kbd>G</kbd> advance / fall back · <kbd>F</kbd> formation</div>`;
     this.el.bar = bar;
@@ -279,7 +279,6 @@ export class WarUI {
     this.el.barForms = [...bar.querySelectorAll('[data-f]')];
     this.el.barOrderRow = bar.querySelector('.wc-orders');
     this.el.barFormRow = bar.querySelector('.wc-forms');
-    this.el.barLabel = bar.querySelector('.wc-orders .wc-label');
     this.el.barHint = bar.querySelector('.wc-hint');
     this.shown = {};
   }
@@ -338,8 +337,6 @@ export class WarUI {
     const cur = this.sel === 'all' ? same : plan[this.sel], curF = this.sel === 'all' ? sameF : fm[this.sel];
     for (const b of el.barOrders) b.classList.toggle('on', b.dataset.c === cur);
     for (const b of el.barForms) b.classList.toggle('on', b.dataset.f === curF);
-    const label = `${GROUP_NAME[this.sel]}:`;
-    if (this.shown.label !== label) { this.shown.label = label; el.barLabel.textContent = label; }
   }
 
   // ---- Repeat last army ----

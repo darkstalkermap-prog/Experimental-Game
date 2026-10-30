@@ -114,9 +114,11 @@ class Marks {
       const y = g.physics.terrainHeight(d.x, d.z);
       const bright = sel === k || sel === 'all';
       flag.material.opacity = bright ? 1 : 0.55;
+      const bs = Math.max(1, Math.min(3, Math.hypot(d.x - cam.x, y - cam.y, d.z - cam.z) * 0.015));   // (a banner stays readable far down the field)
       flag.position.set(d.x, y, d.z);
+      flag.scale.setScalar(bs);
       flag.rotation.y = Math.atan2(cam.x - d.x, cam.z - d.z) + Math.sin(t * 1.7 + i) * 0.2;   // (turned to the eye, stirring)
-      tmpM.makeTranslation(d.x, y, d.z);
+      tmpM.makeScale(bs, bs, bs).setPosition(d.x, y, d.z);
       this.poles.setMatrixAt(p++, tmpM);
       const rs = ringScale(cam, d.x, y, d.z);
       tmpM.makeScale(rs, 1, rs).setPosition(d.x, y + 0.15, d.z);
