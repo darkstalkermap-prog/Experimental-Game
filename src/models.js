@@ -562,7 +562,7 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
     warmed.add(key);
     const m = buildSoldier(type, team, variant, tier);
     const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
-    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume')) for (const l of levels) warmTasks.push([p.shape, l]);
+    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume') || p === m.bowDrawn) for (const l of levels) warmTasks.push([p.shape, l]);
     warmTasks.push([m, 3]);
     if (m.mounted) { const h = buildHorse(team, variant, team !== RAIDER_TEAM); for (const p of h.parts) for (const l of levels) warmTasks.push([p.shape, l]); warmTasks.push([h, 3]); }
     return;
