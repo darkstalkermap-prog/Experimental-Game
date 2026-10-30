@@ -314,11 +314,12 @@ new MutationObserver(() => {
   wasUp = up;
 }).observe($('gameover'), { attributes: true, attributeFilter: ['class'] });
 
-// Space or Enter on the end screen plays again (a button that has the focus keeps the key for itself)
+// Space or Enter on the end screen plays again (a button that has the focus keeps the key for itself). While an ending show keeps the screen see-through the keys
+// belong to the show (finale.js: any key skips it): they are not read here, whatever order the listeners run in.
 addEventListener('keydown', (e) => {
   if (e.repeat || (e.code !== 'Space' && e.code !== 'Enter')) return;
   const go = $('gameover');
-  if (!go || go.classList.contains('hidden')) return;
+  if (!go || go.classList.contains('hidden') || go.classList.contains('finale-wait')) return;
   const again = $('again');
   if (!again || !again.isConnected || again.closest('.hidden')) return;
   if (performance.now() - flow.endShownAt < 700) return;
