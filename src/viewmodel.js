@@ -82,7 +82,7 @@ const NOCK_Y = 0.068, ARROW_REST = new THREE.Vector3(-0.025, NOCK_Y, -0.016), DR
 const SH_BOW_L = new THREE.Vector3(-0.07, -0.21, 0.0), SH_BOW_R = new THREE.Vector3(0.17, -0.2, 0.26);   // the shoulders, side-on to the mark
 const POLE_BOW_L = new THREE.Vector3(-1, -0.3, 0).normalize(), POLE_BOW_R = new THREE.Vector3(0.5, 0.6, 0.4).normalize();
 const VOLLEY_PIVOT = new THREE.Vector3(0.02, -0.45, 0.12);   // (where the lean back for a high shot turns: low in the chest)
-const AXIS_X = new THREE.Vector3(1, 0, 0), ARROW_FWD = new THREE.Vector3(0, 0, -1);
+const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Z = new THREE.Vector3(0, 0, 1), ARROW_FWD = new THREE.Vector3(0, 0, -1);
 const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new THREE.Quaternion(), BOW_P = new THREE.Vector3(), SH_A = new THREE.Vector3(), SH_B = new THREE.Vector3(), POLE_A = new THREE.Vector3(), POLE_B = new THREE.Vector3();
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
@@ -568,7 +568,12 @@ export class ViewModel {
       const still = 1 - 0.7 * zoom;
       BOW_P.x += ox * still; BOW_P.y += oy * still - swapDip; BOW_P.z += oz;
       if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * (0.0008 + 0.0022 * pw);   // (a long hold at full draw trembles; a Power Shot's more)
-      if (pw > 0) { BOW_P.y += Math.sin(t * 53) * 0.0012 * pw; BOW_P.z += 0.012 * pw; }
+      if (pw > 0) {   // (and canted over, round the nock at the anchor, as an archer lays a heavy bow over for a long hold)
+        BOW_P.y += Math.sin(t * 53) * 0.0012 * pw; BOW_P.z += 0.012 * pw;
+        BOW_Q2.setFromAxisAngle(AXIS_Z, -0.32 * pw);
+        BOW_P.sub(BOW_ANCHOR).applyQuaternion(BOW_Q2).add(BOW_ANCHOR);
+        BOW_Q.premultiply(BOW_Q2);
+      }
       L.bowGrp.position.copy(BOW_P);
       L.bowGrp.quaternion.copy(BOW_Q);
       L.bowGrp.updateMatrix();

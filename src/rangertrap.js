@@ -54,7 +54,9 @@ export class TrapLooks {
   // thrown from `from` (the Ranger's eyes) to `to` on the ground; it lands after `flight` seconds
   throw(from, to, yaw, flight) {
     const o = this.make();
-    o.from = from.clone(); o.from.y -= 0.35;
+    // (it leaves the hand: an arm's length out toward where it is going and down at the hip, not from between the eyes)
+    const dx = to.x - from.x, dz = to.z - from.z, l = Math.hypot(dx, dz) || 1, out = Math.min(0.9, l * 0.5);
+    o.from = from.clone(); o.from.x += (dx / l) * out; o.from.z += (dz / l) * out; o.from.y -= 0.6;
     o.to = to.clone(); o.t = 0; o.flight = flight; o.state = 'fly'; o.k = 0;
     o.root.rotation.set(0, yaw, 0);
     o.root.position.copy(o.from);

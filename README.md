@@ -221,6 +221,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     heavy hinge stiles and a gold crest.
   - **Tower Archers**: level 1 house shields on the tower walls and an archer on every tower roof, level 2 more shields,
     a second archer and a ballista, level 3 a third archer, braziers, gold-rimmed shields and wooden hoardings.
+    The archers are men like any other: an arrow, spell or blade that reaches one hurts him (70 health), and a tower
+    shoots slower for each of its archers that has fallen until another takes his place 30 s later (`src/towerarchers.js`).
   - **Expand Barracks**: racks of spears and shields line one more wall of the courtyard with every level (back,
     left, right, then the front).
   - **Elite Levies**: one more pair of tall standards beside the keep door with every level, topped by a spearhead,
@@ -249,12 +251,16 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
     spin for a second and cut everyone around you three times. **R Blood Rage**: for 7 s you heal for half the
     damage you deal, can't be staggered and hit 25% harder.
-  - **Ranger** (140% bow damage, draws 20% faster, quick, frail). **Q Arrow Volley**: hold Q and a circle appears on
-    the ground where your crosshair points (up to 62 m away; it turns amber when that is as far as it reaches); let go
-    and 18 free arrows come down out of the sky on it, spread over the men standing inside. Walls don't stop it, so it
-    reaches men behind them. A quick tap looses it at once; Esc or R cancels.
-    **R Evasive Roll**: throw yourself nine metres the way you are moving (back when standing still); nothing
-    can hurt you for a moment.
+  - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter. An arrow in the **head** (the top sixth
+    of a body) deals double damage, 1.5x into a hero, with its own sharp sound and a skull over the cross. **Piercing
+    Shots**: a fully drawn arrow goes on through the first body into up to two more behind it (70%, then 50%). Ranger
+    arrows hit engineers, siege crews and engines 50% harder, and an arrow comes back to the quiver every 4 s.
+    **Q Power Shot**: the bow is drawn to the full and held (half a second, walking slowly), then a heavy arrow flies
+    flat and fast through every soldier in its line, throwing them back and staggering them; a hero it hits is
+    staggered. Shields don't stop it; walls do. **R Snare Trap**: throw a trap where you look (up to 15 m). A moment
+    after it lands it is armed; the first enemy to step in it is rooted for 2 s (a hero can still fight, but not walk)
+    and the enemies within 4.5 m are slowed. Two traps at most; each lies for 45 s. The old **Arrow Volley** is the
+    tree's tier-4 talent. Numbers: `RANGER` in `src/classes.js`.
   - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
     flies where you aim and explodes on impact, burning gates and engines too. Stone walls shelter anyone behind
     them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
@@ -280,8 +286,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
   speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Berserker's Whirlwind strikes
-  once more, the Ranger rolls twice, the Mage's fireballs burn and fork, the Cleric's Smite chains on to more foes, the
-  Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
+  once more, the Ranger's headshots and Piercing Shots hit harder and her traps hold longer and Mark their catch (and
+  her capstone trades Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
+  to more foes, the Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
   to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
   own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
   level, parent, free point, castle) and says why it refused one. Every number is in the table at the top of
@@ -365,7 +372,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   your own fly through. The Tower Archers upgrade fills the roofs with archers, a ballista and braziers.
 - **Battlements**: the wall tops have merlons with gaps between them, and your archers stand behind the gaps.
   Archers on your walls, your tower archers, and your own arrows and spells fly through the slots and over the
-  stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit.
+  stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit. Whatever
+  an arrow reaches is hit: a man on a tower roof, on a wall top or a merlon, in a crenel, or an archer of the towers.
   A wall that is badly damaged loses its merlons.
 - **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
 - **Death**: your hero respawns in the courtyard of your own keep, wherever you fell (in an enemy castle, at the
@@ -667,7 +675,8 @@ a soldier has about 3.4 times the health and damage of a round-one soldier and a
 
 **The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
 alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
-rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class, they retreat
+rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
+looses Power Shot down the line with the most men in it and throws a Snare Trap in front of whoever closes in on her), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
 fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty.
 They do not climb, duck or drive engines.
@@ -835,8 +844,8 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
   the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
   the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
-  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Second Wave): 90% of a volley's arrows
-  seek out a foe, not 70%. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
+  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Arrow Volley): zoomed in, the bow draws
+  25% faster and the arrow flies 25% faster, and Power Shot stays your Q. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
   harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
   Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
   tree, under the capstone, only for an account that has earned them (and in the practice yard, where anybody may try them), and
@@ -897,7 +906,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
 | Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
-| Q | Class ability: attack (Ranger: hold to place the volley circle, let go to loose it) |
+| Q | Class ability: attack (Ranger: Power Shot draws and looses itself; with the Arrow Volley talent, hold to place the circle, let go to loose it) |
 | R | Class ability: defence |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
@@ -1019,13 +1028,15 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/pings.js` | Pings and markers: the crosshair ray and what it hit, the marker wheel, map clicks, the beacons and edge arrows, the sounds, and the host's checks and relay to allies |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
+| `src/towerarchers.js` | The archers on the corner towers as men: hit by what reaches them, a slower tower while one is down, the next one 30 s later |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
 | `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, a shot with the bow (side-on, the bow arm at the mark, the string drawn to the jaw on a bent bow, the loose), three deaths; a cape hangs toward the ground and lies along the back of a man fallen on his face), and the catalogue of parts they wear (a body of lofted rings that swells at the muscles and tapers at the joints, a skull with a face, helmets fitted to it, armour, weapons, shields, heraldry) built from primitives with baked shading |
 | `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints (so it takes the same poses and is drawn by the same crowd batches), its own shapes (bald scowling heads with long beards, a bare muscled trunk, fur kilt with an iron boss and the house banner, rag-bound shins and forearms, bare feet, a stone hammer) and a hunched, heavy layer over the soldier's walk, swing and deaths |
 | `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn steel; cloth that sways, capes that stream behind a runner, skirts and tassets that ride up onto the thighs in a crouch) and its face and emblem atlases |
 | `src/nav.js` | Routing around castles and through gates and breaches |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
-| `src/classes.js` | The six hero classes: stats, abilities, buffs |
+| `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
+| `src/rangertrap.js` | How the Ranger's Snare Trap looks on every screen: thrown, lying open, snapping shut |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |
