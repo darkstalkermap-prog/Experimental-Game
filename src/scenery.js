@@ -25,7 +25,7 @@ export function placeScenery(physics, terrain) {
       const p = clamp(dens * 1.25 + 0.02 - 0.6 * smoothstep(tl - 36, tl - 6, h), 0, 1);
       if (r1 < p * ex.trees) {
         const sl = slopeAt(x, z);
-        if (sl < 1.5 && !(sl > 0.85 && rockN > 0.62)) {
+        if (sl < 1.0 && !(sl > 0.7 && rockN > 0.6)) {   // (no trees on the cliffs: on a face steeper than about 45 degrees a tree reads as hung on the rock, not standing on it)
           const y = terrain.surfaceHeight(x, z) - Math.min(1.1, sl * 0.5);
           trees.push({ x, y, z, s: (0.8 + r2 * 0.6) * (1 - 0.3 * smoothstep(tl - 34, tl - 4, h)), r: r3 * 6.283, c: r4, conifer: r2 + 0.5 * smoothstep(20, 70, h) > 0.62 - ex.conifer, extra: true });
           continue;

@@ -76,6 +76,10 @@ const FRAG_COLOR = `
   float strokes = 1.0 - smoothstep(14.0, 70.0, dist);         // the blade tufts repeat every 2.3 m: gone before the repeat can show as a grid
   float midK = 1.0 - smoothstep(60.0, 220.0, dist);           // the coarse layer (8.5 m) carries the texture of the middle distance
   float steep = 1.0 - N.y;
+  // The bump is taken from screen derivatives, which see 2x2 pixels at a time: where a texel of the fine layer is smaller than a pixel the bump
+  // of that layer turns to blocky, pixel-sized grain (gravel roads read as noise). It is given up as its texels shrink below a pixel.
+  float texPx = length(fwidth(p)) * 220.0;                   // texels of the 2.3 m tile (512 texels) per pixel
+  float bumpK = 1.0 - smoothstep(0.8, 2.6, texPx);
   // the ground layers are read from above, and on a slope also from the side (blended by the normal), so a bank is not smeared into streaks
   vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
   vec4 n2 = texture2D(uNoise, p * 0.021 + vec2(0.57, 0.29));
@@ -88,8 +92,13 @@ const FRAG_COLOR = `
   float gv = d1.r * (0.55 + d2.r * 0.9) * 1.5;
   float macro = 0.72 + 0.56 * (n2.g * 0.55 + n3.g * 0.45);    // (the same average as the strokes, but it never repeats)
   float far = mix(macro, macro * (0.7 + 0.55 * d2.r), midK);
+  // tussocks and hollows a few metres across (the soil channel's clods on a 28 m tile): what gives a hillside 40 to 400 m off its texture
+  // and its relief, where the finer layers have averaged out to their mean
+  float hillK = smoothstep(20.0, 70.0, dist) * (1.0 - smoothstep(350.0, 700.0, dist));
+  vec4 dm = hillK > 0.0 ? texture2D(uDetail, mat2(0.6, -0.8, 0.8, 0.6) * p * 0.035 + vec2(0.71, 0.43)) : vec4(0.5);
+  far *= 1.0 + (dm.g - 0.5) * 0.5 * hillK * uBiomeK.x;
   vec3 col = vBase * mix(far, mix(far, 0.42 + 0.7 * gv, strokes), uBiomeK.x);
-  float bump = ((d1.r - 0.5) * 0.06 * strokes + (d2.r - 0.5) * 0.04 * midK) * uBiomeK.x;
+  float bump = ((d1.r - 0.5) * 0.06 * strokes * bumpK + (d2.r - 0.5) * 0.04 * midK + (dm.g - 0.5) * 0.7 * hillK) * uBiomeK.x;
 
   // the foot of the mountains: a canopy of round crowns, lit like real tree tops through the bump
   float canopy = vMask.w;
@@ -113,7 +122,8 @@ const FRAG_COLOR = `
   float ms = smoothstep(0.3, 0.7, vMask.z + (n3.b - 0.5) * 0.4);
   col = mix(col, mix(P_PATCH_A, P_PATCH_B, soil), ms);
   gWet = ms * uBiomeK.y;
-  bump += (mc + mh + ms) * (soil - 0.5) * 0.05 * fine;
+  float soilBump = ((soil - 0.5) * 0.05 * bumpK + (d2.g - 0.5) * 0.09) * fine;   // (the coarse layer's clods keep their relief where the fine grain has to go)
+  bump = bump * (1.0 - max(mc, max(mh, ms))) + (mc + mh + ms) * soilBump;   // (bare ground has no blades)
 
   // the roads: worked out from their lines, with an irregular edge, wheel ruts, a worn strip between them and pebbles
   float rd = 1e5, rs = 0.0;
@@ -138,7 +148,7 @@ const FRAG_COLOR = `
   roadCol *= 1.0 - 0.45 * rut;
   roadCol = mix(roadCol, roadCol * 1.18 + 0.01, worn * 0.5);
   col = mix(col, roadCol, road * 0.95);
-  bump += (peb * 0.03 - rut * 0.07) * road * fine;
+  bump = mix(bump, (peb * 0.03 * bumpK - rut * 0.07) * fine + soilBump, road);
   // wetter, darker ground along the road
   col *= 1.0 - 0.22 * (1.0 - smoothstep(3.0, 7.0, rd)) * (1.0 - road);
 
@@ -152,12 +162,18 @@ const FRAG_COLOR = `
     if (topW < 0.999) rS = mix(texture2D(uDetail, vec2(p.x, y) * 0.23), texture2D(uDetail, vec2(vWPos.z, y) * 0.23), wx);
     if (topW > 0.001) rU = texture2D(uDetail, p * 0.23);
     vec4 rk = mix(rS, rU, topW);
+    // the mountain's own scale: plates, gullies and ridges 80 m across, so a far face is not a flat grey (its texels are metres wide: no grain)
+    vec4 rL = triDetail(vWPos, tw, 0.012, mat2(0.8, 0.6, -0.6, 0.8), vec2(0.53, 0.19));
+    float farK = smoothstep(30.0, 180.0, dist);
+    rk.b = mix(rk.b, rL.b, farK * 0.6);
     float band = smoothstep(-0.6, 0.6, sin(y * 0.41 + n1.r * 11.0 + n2.g * 4.0 + dot(p, vec2(0.03, 0.02))));
     vec3 rockCol = mix(P_ROCK_A, P_ROCK_B, band * (0.5 + 0.5 * n2.b));
     rockCol = mix(rockCol, P_ROCK_CRACK, smoothstep(0.6, 0.95, rk.b) * 0.6);
-    rockCol *= 0.65 + 0.7 * rk.g;
+    rockCol = mix(rockCol, P_ROCK_CRACK, smoothstep(0.55, 0.9, rL.b) * 0.45);
+    rockCol *= (0.65 + 0.7 * mix(rk.g, 0.5, farK * 0.7)) * (0.72 + 0.56 * rL.g);
     col = mix(col, rockCol, rockW);
-    bump = mix(bump, ((rk.b - 0.5) * 0.5 + (rk.g - 0.5) * 0.3) * (0.4 + 0.6 * fine), rockW);
+    float rockK = 1.0 - smoothstep(1.5, 4.5, texPx);         // (the rock tile has half the texels per metre of the grass's)
+    bump = mix(bump, ((rk.b - 0.5) * 0.5 + (rk.g - 0.5) * 0.3) * (0.4 + 0.6 * fine) * rockK + (rL.b - 0.5) * 3.5 + (rL.g - 0.5) * 2.0, rockW);
   }
   // scree at the foot of the bare slopes
   float scree = smoothstep(0.16, 0.3, steep) * (1.0 - rockW) * vAlt.x;
@@ -189,7 +205,7 @@ const FRAG_NORMAL = `
 // the ground of a 2 m vertex grid was a smooth wash of colour (Low) or a smear of streaks (Medium). Low reads the texture once; Medium twice
 // (a coarse layer that breaks the tiling and carries the middle distance) and bumps the normal with it.
 const LITE_DECL = `uniform sampler2D uDetail; uniform vec2 uBiomeK;
-varying vec3 vWPos; varying vec3 vWN;
+varying vec3 vWPos; varying vec3 vWN; varying vec2 vAlt;
 float gBump = 0.0;`;
 const LITE_COLOR = `
 {
@@ -201,7 +217,7 @@ const LITE_COLOR = `
   float lum = dot(c, vec3(0.3, 0.55, 0.15));
   float green = clamp((c.g - max(c.r, c.b)) / max(lum, 0.03) * 3.0, 0.0, 1.0);   // grass, 0 for earth, sand, rock and snow
   float snow = smoothstep(0.55, 0.75, min(c.r, min(c.g, c.b)));
-  float rock = smoothstep(0.42, 0.62, 1.0 - N.y) * (1.0 - green) * (1.0 - snow);   // (the forest floor on the mountains is steep too, but green)
+  float rock = max(smoothstep(0.42, 0.62, 1.0 - N.y) * (1.0 - green), vAlt.x) * (1.0 - snow);   // (the forest floor on the mountains is steep too, but green)
   vec4 d1 = texture2D(uDetail, p * 0.43);
 #ifdef LITE_TWO
   vec4 d2 = texture2D(uDetail, mat2(0.8, -0.6, 0.6, 0.8) * p * 0.117 + vec2(0.37, 0.11));
@@ -212,12 +228,30 @@ const LITE_COLOR = `
 #endif
   float gm = mix(1.0, 0.45 + 0.68 * d1.r * (0.55 + d2.r * 0.9) * 1.5, near * uBiomeK.x);
   gm *= mix(1.0, 0.72 + 0.5 * d2.r, midK * (1.0 - near) * uBiomeK.x);
+#ifdef LITE_TWO
+  // tussocks and hollows a few metres across, for the hillsides of the middle distance (see the splat shader)
+  float hillK = smoothstep(20.0, 70.0, dist) * (1.0 - smoothstep(350.0, 700.0, dist));
+  vec4 dm = hillK > 0.0 ? texture2D(uDetail, mat2(0.6, -0.8, 0.8, 0.6) * p * 0.035 + vec2(0.71, 0.43)) : vec4(0.5);
+  gm *= 1.0 + (dm.g - 0.5) * 0.5 * hillK * uBiomeK.x;
+#endif
   float sm = mix(1.0, (0.7 + 0.6 * d1.g) * (0.85 + 0.3 * d2.g), max(near, 0.6 * midK));
   float rm = mix(1.0, (0.75 + 0.5 * d1.g) * (1.0 - 0.22 * smoothstep(0.7, 0.95, d1.b)), max(near, 0.6 * midK));
   float m = mix(mix(sm, gm, green), rm, rock);
   m = mix(m, 1.0 + (d1.g - 0.5) * 0.12 * near, snow);
   diffuseColor.rgb *= c * m;
-  gBump = (mix(mix(d1.g, d1.r, green), d1.b, rock) - 0.5) * 0.05 * near * (1.0 - snow * 0.7);
+  float bumpK = 1.0 - smoothstep(0.8, 2.6, length(fwidth(p)) * 220.0);   // (see the splat shader: no pixel-sized grain)
+  gBump = (mix(mix(d1.g, d1.r, green), d1.b, rock) - 0.5) * 0.05 * near * bumpK * (1.0 - snow * 0.7);
+#ifdef LITE_TWO
+  gBump += (dm.g - 0.5) * 0.7 * hillK * green * uBiomeK.x;
+  gBump += (d2.g - 0.5) * 0.09 * near * (1.0 - green) * (1.0 - snow);
+#endif
+#ifdef LITE_TWO
+  if (rock > 0.01) {   // the mountain's own scale on bare rock: plates and gullies 80 m across (see the splat shader)
+    vec4 rL = texture2D(uDetail, mat2(0.8, 0.6, -0.6, 0.8) * p * 0.012 + vec2(0.53, 0.19));
+    diffuseColor.rgb *= mix(1.0, (0.6 + 0.8 * rL.g) * (1.0 - 0.4 * smoothstep(0.55, 0.9, rL.b)), rock);
+    gBump += ((rL.b - 0.5) * 4.5 + (rL.g - 0.5) * 2.5) * rock;
+  }
+#endif
 }
 `;
 const LITE_NORMAL = FRAG_NORMAL;
@@ -232,8 +266,8 @@ export function terrainMaterial(level) {
     patchMaterial(m, 'terrain-lite' + level, (shader) => {
       shader.uniforms.uDetail = U.uDetail; shader.uniforms.uBiomeK = U.uBiomeK;
       shader.vertexShader = shader.vertexShader
-        .replace('#include <common>', '#include <common>\nvarying vec3 vWPos; varying vec3 vWN;')
-        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWPos = position; vWN = normal;');
+        .replace('#include <common>', '#include <common>\nattribute vec2 aAlt; varying vec3 vWPos; varying vec3 vWN; varying vec2 vAlt;')
+        .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWPos = position; vWN = normal; vAlt = aAlt;   // (x: the bare mountain above the trees)');
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', '#include <common>\n' + LITE_DECL)
         .replace('#include <color_fragment>', LITE_COLOR);
