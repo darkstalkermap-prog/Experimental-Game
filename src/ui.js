@@ -777,7 +777,7 @@ export class UI {
       this.hudT = 0.12;
       $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
       $('gold').textContent = Math.floor(f.gold);
-      $('round').textContent = g.round ? `Wave ${g.round}` : 'Preparation';
+      $('round').textContent = `${g.round ? `Wave ${g.round}` : 'Preparation'}${g.timeLimit ? ` · ${clock(g.timeLeft)} left` : ''}`;   // (a Short war has a clock)
       if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
       else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
       $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;

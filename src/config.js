@@ -62,13 +62,16 @@ export const WAVES = {
   siegeLimit: 3,      // wave engines alive at once, per house
 };
 
-// Match length (options.length, see options.js): a Short match turns the same war faster, so that it is decided in about 10-12 minutes. It is a source of
-// rule modifiers (src/mods.js) that Game.start puts in for the war modes: the preparation and the gap between waves are shorter, the waves are a little bigger
-// and every wave grows tougher (and breaks gates faster) quicker than in a Standard match. Standard sets nothing: it is the war as it always was.
+// Match length (options.length, see options.js). A Short match is a TIMED war: its tempo is faster (a shorter preparation, a wave every 21 seconds instead of 30,
+// soldiers and engines that grow tougher a quarter quicker: a source of rule modifiers, src/mods.js, put in by Game.start for the war modes) and after `limit`
+// seconds of play the war is decided on points (castles standing, then the health of the keeps, then soldiers, then kills; Game.timeUp), so that it is over in
+// about ten to twelve minutes whatever happens. Why a clock and not only a tempo: in bot-vs-bot wars (the lords play every house) a faster tempo makes the early war
+// quicker (the first castle falls at about half the time) but not the end of it: nobody takes the last keep, with or without the pace. A person does, by spending the
+// surplus gold on a giant and engines and leading the siege, but how long that takes cannot be measured without people. Standard sets nothing: the war as it was.
 export const LENGTHS = {
-  standard: { name: 'Standard', time: 'about 30 min', desc: 'The war as it always was: a new army every 30 seconds.', mods: null },
-  short: { name: 'Short', time: '10 to 12 min', desc: 'A quicker war: a shorter preparation, faster and tougher waves.',
-    mods: { prep: 0.6, waveGap: 0.7, growth: 2, siegeGrowth: 2 } },
+  standard: { name: 'Standard', time: 'no time limit', desc: 'The war as it always was: a new army every 30 seconds, until one castle stands.', mods: null, limit: 0 },
+  short: { name: 'Short', time: 'over by 12:00', desc: 'A timed war: a shorter preparation, a wave every 21 seconds, and after 12 minutes the strongest house wins.',
+    mods: { prep: 0.6, waveGap: 0.7, growth: 1.25, siegeGrowth: 1.25 }, limit: 12 * 60 },
 };
 
 // A countdown as m:ss (65 -> "1:05").

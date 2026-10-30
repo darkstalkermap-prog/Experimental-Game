@@ -574,10 +574,15 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
   Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
   for friends who are still in it. None of this applies to the Hero Game Mode, whose match ends when a keep falls.
-- **Match length** (Standard / Short, a row under the difficulty and in the host's lobby, `options.length`). A Short match
-  is the same war turned faster by a `mods` source named `length`: a shorter preparation (36 s), waves every 21 s instead of
-  30 and soldiers and engines that grow tougher twice as fast, so that it is decided in about 10 to 12 minutes (`LENGTHS` in
-  `src/config.js`). The Hero Game Mode and the practice courtyard keep their own pace.
+- **Match length** (Standard / Short, a row under the difficulty and in the host's lobby, `options.length`). Short is a
+  **timed war**. Its tempo is faster, by a `mods` source named `length`: a shorter preparation (36 s), a wave every 21 s
+  instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
+  wins**: the castles that still stand, then the health of their keeps, then the soldiers alive, then the kills (a dead heat is
+  a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
+  of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
+  `src/config.js`) a faster pace makes the first castle fall in about half the time, but the lords never finish a war by
+  themselves, with or without it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
+  The Hero Game Mode (its own timed match) and the practice courtyard keep their own pace.
 
 ## Code layout
 

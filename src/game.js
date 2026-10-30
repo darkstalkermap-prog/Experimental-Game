@@ -160,6 +160,8 @@ export class Game {
     // the match length is a source of rule modifiers (the war modes only: the Hero Game Mode and the practice courtyard keep their own pace)
     const length = LENGTHS[this.options.length];
     if (length && length.mods && !setup.hero && !setup.practice) mods.set('length', length.mods);
+    this.timeLimit = length && length.limit && !setup.hero && !setup.practice ? length.limit : 0;   // seconds of play after which a Short war is decided on points
+    this.timeWarned = 0;
     this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
     this.hero = setup.hero && setup.mode === 'single' ? new HeroMode(this, setup.hero) : null;   // (single player only for now)
     this.hill.reset();
@@ -251,7 +253,7 @@ export class Game {
     this.audio.play('horn');
     if (this.hero) return;   // (the Hero Game Mode HUD opens the match with its own banner)
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
-    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(this.phaseT)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine} B: shop and roster · M: map · Q / R: your abilities · Enter: ready, start now.`);
+    this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(this.phaseT)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine}${this.timeLimit ? ` A short war: at ${clock(this.timeLimit)} the strongest house wins.` : ''} B: shop and roster · M: map · Q / R: your abilities · Enter: ready, start now.`);
   }
 
   // Compile the shaders for effects that appear later (spells, arrows, bolts) now, so their first
@@ -1364,6 +1366,57 @@ export class Game {
     return true;
   }
 
+  // ---------------- a timed war (the Short length) ----------------
+  // Seconds of play left on the clock of a timed war (0 when the war has no clock).
+  get timeLeft() { return this.timeLimit ? Math.max(0, this.timeLimit - matchlog.t) : 0; }
+
+  // The host (or a single lord) watches the clock: a word of warning three minutes and one minute before, then the verdict.
+  updateClock() {
+    if (this.state !== 'playing') return;
+    const left = this.timeLimit - matchlog.t;
+    if (left <= 0) { this.timeUp(); return; }
+    if (this.timeWarned < 1 && left < 180) { this.timeWarned = 1; this.announce('Three minutes left on the clock: the strongest house wins at the horn.', -1, 'all'); }
+    if (this.timeWarned < 2 && left < 60) { this.timeWarned = 2; this.announce('One minute left: castles and keeps decide it.', -1, 'all'); this.audio.play('horn', this.camera.position); }
+  }
+
+  // How the sides stand: a side is a house, or the houses that fight together (co-op). A war that runs out of time is decided on, in this order: the castles that
+  // still stand, the health of their keeps, the soldiers alive, the kills. (Keeps within half a percent count as equal.)
+  warStandings() {
+    const groups = [];
+    const seen = new Set();
+    for (const side of this.sides) { groups.push(side.slice()); for (const t of side) seen.add(t); }
+    for (const f of this.factions) if (!seen.has(f.team)) groups.push([f.team]);
+    return groups.map((teams) => {
+      const fs = teams.map((t) => this.factions[t]);
+      const standing = fs.filter((f) => !f.castle.fallen);
+      return {
+        teams, castles: standing.length,
+        keeps: standing.reduce((a, f) => a + f.castle.keep.hp / f.castle.keep.maxHp, 0),
+        troops: fs.reduce((a, f) => a + this.troopCount(f.team), 0),
+        kills: fs.reduce((a, f) => a + f.kills, 0),
+        name: fs.length === 1 ? fs[0].name : 'The alliance',
+      };
+    }).sort(Game.standsAbove);
+  }
+  // > 0 when side b stands above side a (what decided it is told by whyAhead)
+  static standsAbove(a, b) { return (b.castles - a.castles) || (Math.abs(b.keeps - a.keeps) > 0.005 ? b.keeps - a.keeps : 0) || (b.troops - a.troops) || (b.kills - a.kills); }
+  static whyAhead(a, b) {
+    return a.castles > b.castles ? `the most castles (${a.castles})` : a.keeps - b.keeps > 0.005 ? 'the strongest keeps' : a.troops > b.troops ? 'the biggest army' : 'the most kills';
+  }
+
+  // The clock has run out: the war is decided on points. No show: nothing falls, the horn sounds and the screen comes up.
+  timeUp() {
+    const [best, next] = this.warStandings();
+    const draw = Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
+    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.`;
+    const winner = draw ? -1 : best.teams[0];
+    matchlog.record('timeup', { winner });
+    this.audio.play('horn', this.camera.position);
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason);
+    this.quickEnd = true;
+    this.finish(winner, reason, { quick: true });
+  }
+
   endGame(winner, reason = '') {
     if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason);
     this.finish(winner, reason);
@@ -1479,6 +1532,7 @@ export class Game {
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       if (this.hero) this.hero.update(dt);
       else this.updateHeroes(dt);
+      if (this.timeLimit) this.updateClock();
       // trickle income while the castle stands
       if (!this.hero) for (const f of this.factions) if (!f.eliminated && !f.castle.fallen) { f.goldFrac = (f.goldFrac || 0) + dt * 1.5; if (f.goldFrac >= 1) { f.gold += 1; f.earned += 1; f.goldFrac -= 1; } }
     }
