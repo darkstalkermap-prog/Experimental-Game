@@ -90,16 +90,12 @@ export class HillBar {
       const cp = s.k === take ? Math.round(h.progress * 100) : 0;
       if (cp !== s.cp) { s.cp = cp; s.cap.style.width = `${cp}%`; }
     }
-    // the header: what is happening on the hill now
-    const nm = (t) => {
-      const s = this.segs.find((x) => x.k === leader(t));
-      return s ? s.name : short(g.factions[t].name);
-    };
+    // the header: what is happening on the hill now (a house by name: 'You', 'Ally Gwen', or a rival's name)
+    const nm = (t) => (t === me ? 'You' : me >= 0 && allied(t, me) ? `Ally ${short(g.factions[t].name)}` : short(g.factions[t].name));
     let head, color;
     if (h.contested) { head = 'Contested: nobody scores'; color = '#ff8a6a'; }
     else if (hold >= 0) {
-      const s = this.segs.find((x) => x.k === hold);
-      head = `${s && s.own ? 'You hold it' : `${nm(h.owner)} holds it`} · ${clock(HILL.target - h.held[hold])} to win`;
+      head = `${h.owner === me ? 'You hold it' : `${nm(h.owner)} holds it`} · ${clock(HILL.target - h.held[hold])} to win`;
       color = TEAM_CSS[hold];
     } else if (take >= 0) { head = `${nm(h.capturer)} taking it · ${Math.round(h.progress * 100)}%`; color = TEAM_CSS[take]; }
     else { head = 'Nobody holds it'; color = 'var(--parch)'; }

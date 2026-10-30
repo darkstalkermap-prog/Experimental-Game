@@ -17,9 +17,11 @@ Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** 
   alone: a lone soldier takes an empty hill in about eight seconds, more soldiers are quicker (a hero counts for two,
   a giant for four). While soldiers of two houses are on it, it is **contested** and nothing changes. Whoever holds it
   earns **2 gold a second** (paid in lumps of ten) and the seconds add up: **hold it for 2:30 in all and you win
-  outright**, wherever the rest of the war stands. A house that is destroyed loses its hold. The hill box under the
-  top panel shows who holds it, who is taking it and each side's time (the castle list and the scoreboard show it
-  too, and the map marks the hill in the holder's colour). Each rival lord sends three of his first soldiers up to the
+  outright**, wherever the rest of the war stands. A house that is destroyed loses its hold. The **hill bar** under the
+  top panel has a segment for each side in its house colour, filling toward 2:30 as its time adds up: the holder's is lit,
+  the header says who holds it and how long they still need, a capture shows on the taker's segment, and a contested
+  hill pulses red on the sides standing on it. Every screen (guests and spectators too) shows the host's numbers. The
+  scoreboard has the times as well, and the map marks the hill in the holder's colour. Each rival lord sends three of his first soldiers up to the
   hill at once, and men of every wave after that (more as the war goes on) to keep them there, so nobody can sit on it
   unopposed and it is fought over all game long. **Y** sends your own army up to
   hold it. In co-op, allies share the hold and the time, and win together.
@@ -881,7 +883,11 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 - **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
   potions, where your soldiers are); top left the houses, top centre the wave and its clock, top right the gold. The orders bar
   shows only while your army has soldiers, and the key reminder (top right) and the minimap's ping hint only in the
-  preparation. On screens of 1800 × 1000 and up the HUD is drawn a fifth larger.
+  preparation. Near a castle (about 75 m from its middle, or looking straight at one up to 150 m away) a small **castle
+  panel** fades in under the top panel: the house, its keep's hit points, its gate (strength, or open, barred, broken)
+  and its walls (sections standing and their strength), for any castle, yours or a rival's, and while spectating; not
+  in War Mode or the Hero Game Mode (whose top panel shows both keeps and gates). On screens of 1800 × 1000 and up the
+  HUD is drawn a fifth larger.
 - **Shop**: one size for every tab (it does not jump as you switch), a tab strip, the gold at the top right.
 - **Options** come in four groups (Sound, Mouse and view, Graphics, Battle) with their notes behind a **?**; **Controls** in
   five (Move and fight, Your castle and army, Map and markers, The battle, Hero Game Mode).
@@ -1016,6 +1022,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
 | `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |
 | `src/hill.js` | The hill in the middle: the banner, and in King of the Hill the capture, scoring, gold and win |
+| `src/hillbar.js`, `src/castlebar.js` | The King of the Hill timer bar (a segment per side), and the castle panel shown near a castle (keep, gate, walls) |
 | `src/pings.js` | Pings and markers: the crosshair ray and what it hit, the marker wheel, map clicks, the beacons and edge arrows, the sounds, and the host's checks and relay to allies |
 | `src/castle.js` | Castle construction, breakable gate, walls with merlons, climbable towers, keep, wall-walk posts |
 | `src/upgrades.js` | What every upgrade level looks like: wall stone, gate ironwork, tower archers, racks, standards |
