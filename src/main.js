@@ -20,6 +20,7 @@ import { initLandMenu, showLobbyLand } from './landui.js';
 import { progress, sanitizeLoadout } from './progress.js';
 import { endSound } from './endprogress.js';   // (the end screen's battle and Renown sections)
 import './wardrobe.js';       // (the Renown panel of the menu)
+import './whatsnew.js';       // (the What's new panel of the menu)
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
 import { pendingDecrees, hearDecrees } from './decrees.js';
 import { withRivals, lobbyRivals } from './rivalsui.js';
@@ -952,7 +953,7 @@ addEventListener('keydown', (e) => {
   flowKey(e, game, ui);
   // I: the full key line on the HUD, or back to the small note (not F1: in a war F1 is "follow me", in War Mode an order)
   if (e.code === 'KeyI' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && game.state === 'playing' && !(e.target && /INPUT|TEXTAREA/.test(e.target.tagName))) ui.toggleKeys();
-  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls') && !($('wardrobe') && shown('wardrobe'))) { e.preventDefault(); $('quickPlay').click(); }
+  if (e.code === 'Enter' && !e.repeat && e.target === document.body && shown('menu') && !shown('options') && !shown('controls') && !($('wardrobe') && shown('wardrobe')) && !($('whatsNew') && shown('whatsNew'))) { e.preventDefault(); $('quickPlay').click(); }
 });
 
 // Browsers only allow sound after a click or key press: the music starts with the first one.

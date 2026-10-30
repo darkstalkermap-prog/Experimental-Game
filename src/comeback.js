@@ -242,7 +242,7 @@ export function updateComeback(game, dt) {
 
 // ---------------- the HUD ----------------
 const CSS = `
-#wageBadge { position: absolute; right: 148px; top: 16px; padding: 4px 10px 5px; font: 600 13px Cinzel, Georgia, serif; letter-spacing: 0.03em; color: #f2d98a;
+#wageBadge { position: absolute; right: 148px; top: 16px; padding: 4px 10px 5px; font: 600 14px Cinzel, Georgia, serif; letter-spacing: 0.03em; color: #f2d98a;
   background: linear-gradient(rgba(58,44,14,0.86), rgba(34,26,10,0.86)); border: 1px solid rgba(224,180,76,0.7); border-radius: 4px; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 #wageBadge b { color: #fff3cf; }
 #wageBadge i { font-style: normal; margin-right: 5px; }

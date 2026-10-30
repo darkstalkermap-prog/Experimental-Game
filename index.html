@@ -275,6 +275,7 @@
   @media (max-width: 1150px) { #hud.wage #keysNote { top: 100px; } }   /* (as the key line, below the wager badge: comeback.js) */
 
   #factions { position: absolute; left: 16px; top: 12px; width: 340px; font-size: 14px; }
+  #factions:has(.hl) { width: 400px; }   /* (King of the Hill: each house's hill time beside its name) */
   .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 42px; gap: 6px; align-items: center; padding: 2px 0; }
   .fac i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .fac .bar { height: 7px; margin: 0; }
@@ -386,7 +387,7 @@
   :root { --ui-scale: 1; --hud-base: 1; --hud-zoom: calc(var(--hud-base) * var(--ui-scale)); }
   @media (min-width: 1800px) and (min-height: 1000px) { :root { --hud-base: 1.2; } }
   #dock, #factions, #goldbox, #hint, #keysNote, #killfeed, #alerts, #heroRoster, #command, #toasts, #tip, #top, #hill, #target, #heroTop, #pracStats, #prompt,
-  #aimhint, #respawn, #streak, #banner, #away, #pingWheel, #warTop, #warCmd, #specBar, #wageBadge, #clickFight .cf-box { zoom: var(--hud-zoom); }
+  #aimhint, #respawn, #streak, #banner, #away, #pingWheel, #warTop, #warCmd, #specBar, #wageBadge, #castleBar, #clickFight .cf-box { zoom: var(--hud-zoom); }
   #minimap { width: calc(180px * var(--hud-zoom)); height: calc(180px * var(--hud-zoom)); }   /* (sized, not zoomed: the clicks on it are mapped by its box) */
 
   /* "Click to fight": over the HUD, under the menus (z 20) and the shop (15 is under it, but the shop hides it: see main.js) */

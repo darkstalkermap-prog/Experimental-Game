@@ -181,7 +181,7 @@ const CSS = `
 .nb-dice.roll { animation: nbRoll 0.55s ease-in-out; }
 @keyframes nbRoll { 0% { transform: rotate(0) scale(1); } 40% { transform: rotate(200deg) scale(1.35); } 100% { transform: rotate(360deg) scale(1); } }
 @keyframes nbIn { 0% { opacity: 0; transform: translateX(-10px); } 100% { opacity: 1; transform: none; } }
-#decreeLine { margin-top: 2px; font-size: 12px; color: #f2d98a; opacity: 0.95; }
+#decreeLine { margin-top: 2px; font-size: 14px; color: #f2d98a; opacity: 0.95; }
 #pauseDecrees { margin: 6px auto 10px; max-width: 520px; padding: 8px 14px; text-align: left; font-size: 15px; line-height: 1.3; border: 1px solid #8a6a3a; border-radius: 4px; background: rgba(255,248,226,0.4); }
 #pauseDecrees .pd-h { font: 700 13px Cinzel, Georgia, serif; letter-spacing: 0.12em; text-transform: uppercase; color: #5a1d12; margin-bottom: 3px; }
 @media (prefers-reduced-motion: reduce) { .nb-list li, .nb-dice.roll { animation: none; } }
