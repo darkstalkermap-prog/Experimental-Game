@@ -3,8 +3,9 @@
 // edits the screen. Register at import time:
 //   registerEndSection('highlight', 20, (summary) => { const el = document.createElement('div'); ...; return el; });   // return null to show nothing
 //   onMatchEnd((summary) => { ...persist stats, grant renown...; summary.renown = { gained: 120, ... }; });
-// Orders in use (lower = higher up): 10 headline and the table of numbers (ui.js), 20 the highlight line, 30 your stats and personal bests, 40 renown and
-// the next unlock, 50 next-battle decrees (preview and reroll), 90 the actions row (Play Again, Change class). Leave gaps so that others can slot in.
+// Orders in use (lower = higher up): 10 headline and the table of numbers (ui.js), 20 the highlight line, 30 your stats and personal bests, 35 the comeback
+// ribbon (comeback.js), 40 renown and the next unlock, 50 next-battle decrees (preview and reroll; a class `nb-row` placed right after it, e.g. the next land
+// at 51, joins it in one panel), 90 the actions row (Play Again, Change class). Leave gaps so that others can slot in.
 const sections = [];
 const endHandlers = [];
 

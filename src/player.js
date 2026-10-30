@@ -11,8 +11,13 @@ import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
-import { rules } from './biometwist.js';
+import { mods as rules } from './mods.js';
+import { rules as biomeRules } from './biometwist.js';
 import { ViewModel } from './viewmodel.js';
+
+// the rule modifier `heroSpeed` (a Battle Decree), read from the rules only when they change
+let walkVer = -1, walkM = 1;
+const walkMul = () => { if (walkVer !== rules.version) { walkVer = rules.version; walkM = rules.mul('heroSpeed'); } return walkM; };
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
 
@@ -279,7 +284,7 @@ export class Player {
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = this.cls[slot]; return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
@@ -657,8 +662,8 @@ export class Player {
       if (input.down('KeyS')) target = -HORSE.back;
       const dv = target - this.rideSpeed;
       this.rideSpeed += clamp(dv, -HORSE.brake * dt, HORSE.accel * dt);
-      if (sprint && this.rideSpeed > HORSE.walk) this.stamina = Math.max(0, this.stamina - dt * 9 * rules().drain);
-      else this.stamina = Math.min(100, this.stamina + dt * 14 * rules().regen);
+      if (sprint && this.rideSpeed > HORSE.walk) this.stamina = Math.max(0, this.stamina - dt * 9 * biomeRules().drain);
+      else this.stamina = Math.min(100, this.stamina + dt * 14 * biomeRules().regen);
       let turn = 0;
       if (input.down('KeyA')) turn += 1;
       if (input.down('KeyD')) turn -= 1;
@@ -687,8 +692,8 @@ export class Player {
       if (this.drawT > 0) speed *= 0.6;
       if (this.aiming) speed *= 0.7;
       speed *= 1 - (1 - BODY.duckSpeed) * this.duck;
-      if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18 * rules().drain);   // (the heat of the desert drains it faster and slows its return: biometwist.js)
-      else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * rules().regen);
+      if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18 * biomeRules().drain);   // (the heat of the desert drains it faster and slows its return: biometwist.js)
+      else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
       const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
       const acc = this.onGround ? 12 : 2.5;
       this.vel.x += (tx - this.vel.x) * Math.min(1, dt * acc);

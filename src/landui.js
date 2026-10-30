@@ -15,16 +15,18 @@ const CSS = `
 .landrow .seed input:disabled { opacity: 0.6; }
 .landrow .seed button { padding: 4px 8px; font-size: 14px; letter-spacing: 0; }
 .landrow .landdesc b { font-style: normal; font-family: Cinzel, serif; font-size: 13px; color: #5a1d12; }
-.nb-row.nb-land { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; padding: 8px 12px; border-radius: 4px;
-  background: rgba(90,60,30,0.10); border: 1px solid rgba(138,106,58,0.55); box-shadow: inset 0 0 14px rgba(120,80,30,0.14); }
-.nb-row.nb-land .nb-thumb { flex: none; width: 156px; height: 78px; border: 1px solid #5a3a1c; border-radius: 3px; box-shadow: 0 1px 4px rgba(60,30,10,0.35); }
-.nb-row.nb-land .nb-text { flex: 1; min-width: 0; line-height: 1.3; font-size: 15px; }
-.nb-row.nb-land .nb-text b { font-family: Cinzel, serif; font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #5a1d12; display: block; }
-.nb-row.nb-land .nb-text .nb-name { font-family: Cinzel, serif; font-size: 18px; font-weight: 700; color: #2c1a0e; letter-spacing: 0; text-transform: none; display: inline; }
-.nb-row.nb-land .nb-text small { display: block; font-size: 14px; font-style: italic; opacity: 0.9; }
-.nb-row.nb-land .nb-text small.nb-was { margin-top: 3px; font-size: 13px; font-style: normal; opacity: 0.7; }
-.nb-row.nb-land button { padding: 7px 14px; font-size: 13px; white-space: nowrap; }
-@media (max-width: 560px) { .nb-row.nb-land { flex-direction: column; align-items: center; text-align: center; } }
+:where(.nb-land) { position: relative; text-align: left; padding: 10px 16px 12px; border: 1px solid #8a6a3a; border-radius: 4px; background: rgba(255,248,226,0.5); }
+.nb-land .nb-landbody { display: flex; align-items: center; gap: 14px; }
+.nb-land .nb-pic { flex: none; line-height: 0; }
+.nb-land .nb-thumb { width: 156px; height: 78px; border: 1px solid #5a3a1c; border-radius: 3px; box-shadow: 0 1px 4px rgba(60,30,10,0.35); animation: nbIn 0.38s ease-out both; }
+.nb-land .nb-text { flex: 1; min-width: 0; line-height: 1.25; }
+.nb-land .nb-name { display: block; font: 700 17px Cinzel, Georgia, serif; color: #3b120b; margin-bottom: 2px; }
+.nb-land .nb-desc { font-size: 16px; }
+.nb-land .nb-was { margin-top: 3px; font-size: 13.5px; font-style: italic; opacity: 0.7; }
+.nb-row + .nb-land .nb-title { display: none; }
+.nb-row + .nb-land .nb-sub { font: 700 13px Cinzel, Georgia, serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: #5a1d12; opacity: 1; }
+@media (max-width: 560px) { .nb-land .nb-landbody { flex-direction: column; text-align: center; } }
+@media (prefers-reduced-motion: reduce) { .nb-land .nb-thumb { animation: none; } }
 `;
 function injectCss() {
   if (document.getElementById('land-style')) return;
@@ -211,42 +213,45 @@ onMatchEnd(() => {
   refreshRows();
 });
 
+// The "Next battle" panel of the end screen is the Battle Decrees' (decrees.js, order 50, class `nb-row`): the land is the second half of it, a `nb-row` placed right
+// after it (order 51), and the two join into one panel (their CSS). Without the decrees (Hero Mode) the land stands alone and carries the panel's title itself.
+const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+
 registerEndSection('land', 51, (summary) => {
-  const el = document.createElement('div');
-  el.className = 'nb-row nb-land';
-  const text = document.createElement('div');
-  text.className = 'nb-text';
-  const pic = document.createElement('div');
-  pic.className = 'nb-pic';
+  injectCss();
+  const guest = summary.mode === 'client';   // (online, the host decides the next land)
+  const el = mk('div', 'nb-row nb-land');
+  const head = mk('div', 'nb-head'), title = mk('div', 'nb-ttl'), acts = mk('div', 'nb-acts'), body = mk('div', 'nb-landbody');
+  title.append(mk('span', 'nb-title', 'Next battle'), mk('span', 'nb-sub', 'The land'));
+  head.append(title, acts);
+  el.append(head, body);
   const fill = () => {
-    pic.textContent = '';
-    pic.append(landThumb(land.biome, land.seed));
-    text.textContent = '';
-    const head = document.createElement('b');
-    head.textContent = 'Next battle: the land';
-    const name = document.createElement('span');
-    name.className = 'nb-name';
-    name.textContent = landName(land.biome, land.seed);
-    const small = document.createElement('small');
-    small.textContent = describe(land.biome);
-    text.append(head, name, small);
-    const o = summary.options;
-    if (o && typeof o.biome === 'string') {   // (the seed of the battle just fought: worth keeping if the land was a good one)
-      const was = document.createElement('small');
-      was.className = 'nb-was';
-      was.textContent = 'This battle was fought on ' + landName(o.biome, o.seed) + '.';
-      text.append(was);
+    body.textContent = '';
+    const text = mk('div', 'nb-text');
+    if (guest) text.append(mk('div', 'nb-desc', 'The host picks the next battle’s land.'));
+    else {
+      const pic = mk('div', 'nb-pic');
+      pic.append(landThumb(land.biome, land.seed));
+      body.append(pic);
+      text.append(mk('b', 'nb-name', landName(land.biome, land.seed)), mk('div', 'nb-desc', describe(land.biome)));
     }
+    const o = summary.options;
+    if (o && typeof o.biome === 'string') text.append(mk('div', 'nb-was', 'This battle was fought on ' + landName(o.biome, o.seed) + '.'));   // (its seed is worth keeping if the land was a good one)
+    body.append(text);
   };
   fill();
-  el.append(pic, text);
-  if (summary.mode !== 'client') {   // (online, the host decides the next land)
-    const btn = document.createElement('button');
+  if (!guest) {
+    const dice = mk('span', 'nb-dice', '\u{1F3B2}');
+    const btn = mk('button', '', '');
     btn.type = 'button';
-    btn.textContent = 'Reroll land';
+    btn.append(dice, 'Reroll land');
     btn.title = land.mode === 'random' ? 'Roll another biome and seed' : 'Roll another seed of this biome';
-    btn.addEventListener('click', () => { rollLand(land.mode === 'fixed'); fill(); refreshRows(); onChange(land); });
-    el.append(btn);
+    btn.addEventListener('click', () => {
+      rollLand(land.mode === 'fixed');
+      fill(); refreshRows(); onChange(land);
+      dice.classList.remove('roll'); void dice.offsetWidth; dice.classList.add('roll');
+    });
+    acts.append(btn);
   }
   return el;
 });

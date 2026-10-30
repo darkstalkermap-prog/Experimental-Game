@@ -8,9 +8,10 @@
 // Keys in use (add yours here when you hook one into the rules; `mul` keys multiply across sources, `sum` keys add up, `flag` keys are on if any source says so):
 //   mul  waveSize      units in every wave                        mul  waveGap       seconds between waves
 //   mul  income        passive gold income                        mul  bounty        gold for a kill
-//   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item)
+//   mul  cost.<item>   shop price of an item (cost.giant, cost.gateRepair, cost.ram, ...; cost.all for every item; cost.recruit, cost.siege,
+//                      cost.upgrade, cost.gear, cost.castle for a group of them: the lists are in economy.js)
 //   mul  speed         march speed of soldiers                    mul  heroSpeed     walking speed of heroes
-//   sum  startGold     gold at the start of the match
+//   mul  respawn       seconds until a fallen hero or lord rises  sum  startGold     gold at the start of the match
 //   mul  offroadSpeed  march speed of soldiers away from the roads (snow)          mul  mudSpeed      march speed of soldiers wading through a pond (marsh)
 //   mul  archerRange   range of archers (the marsh's mist)                          mul  staminaDrain / staminaRegen   a hero's sprint stamina: how fast it drains and returns (desert)
 export const mods = {

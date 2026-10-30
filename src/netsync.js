@@ -10,6 +10,7 @@ import { DIRS, DIR_IDX } from './combat.js';
 import { mirrorTalents } from './talents.js';
 import { Interp, setInterpDelay } from './interpolation.js';
 import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js';
+import { standFor } from './comeback.js';
 export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
@@ -51,8 +52,8 @@ export class HostSync {
       if (p && !QUIET_SOUNDS.has(n)) this.shared.push({ k: 'snd', n, p: v3(p) });
     };
     const fire = g.projectiles.fireArrow.bind(g.projectiles);
-    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false) => {
-      fire(from, vel, team, dmg, owner, big);
+    g.projectiles.fireArrow = (from, vel, team, dmg, owner, big = false, ability = '') => {
+      fire(from, vel, team, dmg, owner, big, ability);
       const ev = { k: 'arrow', p: v3(from), v: v3(vel), t: team };
       if (big) ev.b = 1;
       this.shared.push(ev);
@@ -121,6 +122,7 @@ export class HostSync {
       case 'formation': g.setFormation(p.team, String(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
       case 'buy': g.buyFor(p.team, String(d.id)); break;
+      case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
         if (d.target >= 0 && g.castles[d.target]) f.siegeTarget = g.castles[d.target];
@@ -165,6 +167,8 @@ export class HostSync {
         name: f.name,
         formation: f.formation,
         levies: f.levies,
+        wage: f.wage || 0,   // the underdog's wage in gold a minute, and whether the Last Stand is spent (comeback.js)
+        stand: f.stand ? 1 : 0,
       })),
       h: g.humans.map((h) => packHero({
         team: h.team,
@@ -213,8 +217,8 @@ export class HostSync {
     this.priv.clear();
   }
 
-  sendEnd(winner, reason = '') {
-    this.g.net.toAll({ k: 'end', winner, reason });
+  sendEnd(winner, reason = '', hl = null) {
+    this.g.net.toAll({ k: 'end', winner, reason, hl });   // (hl: the notable moments of the match, for the guests' highlight line: see highlights.js)
   }
 }
 
@@ -231,7 +235,7 @@ export class ClientSync {
   onData(d) {
     if (!d) return;
     if (d.k === 'snap') this.apply(d);
-    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '');
+    else if (d.k === 'end') this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null });
   }
 
   apply(d) {
@@ -331,6 +335,7 @@ export class ClientSync {
       f.lord = state.lord; f.name = state.name;
       if (!mine) f.formation = state.formation;
       f.levies = state.levies || 0;
+      f.wage = state.wage || 0; f.stand = state.stand || 0;
       if (!state.isPlayer && f.isPlayer && f.player !== g.player) {
         // that person left; an AI lord took over
         g.humans = g.humans.filter((h) => h !== f.player);

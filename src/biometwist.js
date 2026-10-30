@@ -1,9 +1,11 @@
 // The small rule twist of a biome (biomes.js `twist` and `mods`), one each, none in the meadow:
 //   snow    Deep snow       soldiers off the roads march 12% slower (the roads, the castle yards and the hill in the middle are trampled)
 //   marsh   Fens            archers' range -20% in the mist, and soldiers wading through a pond march 22% slower (the ponds you see are the mud)
-//   desert  Scorching sun   a hero's sprint drains stamina 35% faster and it comes back 30% slower
-// They are rule modifiers (mods.js keys offroadSpeed, mudSpeed, archerRange, staminaDrain, staminaRegen), set when a match starts from the land the world
-// was built for: the host's simulation reads them (the soldiers); every machine sets the same ones from the options (a hero's stamina is its own).
+//   desert  Scorching sun   a hero's sprint drains stamina 50% faster and it comes back 35% slower
+// They are rule modifiers like the Battle Decrees' (mods.js: keys offroadSpeed, mudSpeed, archerRange, staminaDrain, staminaRegen, each its own source
+// 'biome:<id>'), set when a match starts from the land the world was built for: the host's simulation reads them (the soldiers); every machine sets the same
+// ones from the options (a hero's stamina is its own). They multiply with the decrees' keys (speed, heroSpeed, ...) wherever both apply, e.g. Swift March
+// (speed 1.2) off the road in the snow (offroadSpeed 0.88) is a march of 1.056 of the normal speed.
 import { mods } from './mods.js';
 import { active } from './biomes.js';
 import { patchAt } from './terrain.js';
