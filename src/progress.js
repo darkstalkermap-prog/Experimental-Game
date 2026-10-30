@@ -124,7 +124,8 @@ export function renownFor(m) {
     { id: 'kills', label: 'Kills', n: kills, amount: RENOWN.perKill * kills },
     { id: 'win', label: 'Victory', n: 0, amount: m.won ? RENOWN.win : 0 },
   ].map((p) => ({ ...p, amount: Math.round(p.amount) })).filter((p) => p.amount > 0);
-  const mult = RENOWN.difficulty[m.difficulty] ?? 1;
+  const k = Object.prototype.hasOwnProperty.call(RENOWN.difficulty, m.difficulty) ? RENOWN.difficulty[m.difficulty] : 1;
+  const mult = typeof k === 'number' && Number.isFinite(k) ? k : 1;
   const sum = parts.reduce((s, p) => s + p.amount, 0);
   return { total: Math.max(0, Math.round(sum * mult)), parts, mult };
 }

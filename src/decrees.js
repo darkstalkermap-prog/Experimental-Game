@@ -62,17 +62,23 @@ let lastGame = null;
 
 // what main.js puts in the options of a match it starts: nothing while the switch in the Options screen is off
 export function pendingDecrees() { return settings.decrees ? next.slice() : []; }
-export function setPendingDecrees(ids) {
+export function setPendingDecrees(ids, late = false) {   // late: the roll at the end of a match, which reaches the guests a moment after the end message (see broadcast)
   next = ids.filter((id) => DECREE_BY_ID[id]).slice(0, 2);
   saveOptions({ ...loadOptions(), decrees: next });
-  broadcast();
+  broadcast(late);
   paintMenuRow();
 }
 // online, the host tells every guest what the next battle will have: a message of the room, not a snapshot event (when the match is over the guests' snapshot
 // handler is put away for the room's own, main.js roomAfterMatch, whose guestData hears this and calls hearDecrees)
-function broadcast() {
+let castTimer = 0;
+function broadcast(late = false) {
   const g = lastGame;
-  if (g && g.mode === 'host' && g.net) g.net.toAll({ k: 'decrees', ids: next });
+  if (!(g && g.mode === 'host' && g.net)) return;
+  clearTimeout(castTimer);
+  if (!late) { g.net.toAll({ k: 'decrees', ids: next }); return; }
+  // not in the tick of the ending: the room's outbox is small (roomnet.js), and a second message sent right after the end message pushes it out of the outbox,
+  // so the guests would never see the match end
+  castTimer = setTimeout(() => { if (g.net && lastGame === g) g.net.toAll({ k: 'decrees', ids: next }); }, 1200);
 }
 // a guest hears the host's roll
 export function hearDecrees(ids) {
@@ -312,5 +318,5 @@ registerEndSection('decrees', 50, (s) => {
 onMatchEnd((s) => {
   if (s.hero || s.mode === 'client' || !settings.decrees) return;
   const used = (s.options && s.options.decrees) || [];
-  setPendingDecrees(rollDecrees(used));
+  setPendingDecrees(rollDecrees(used), true);
 });

@@ -29,7 +29,7 @@ export function loadLast() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(LAST_KEY)); } catch (e) { /* storage unavailable or garbage */ }
   o = o && typeof o === 'object' ? o : {};
-  return { diff: DIFFICULTY[o.diff] ? o.diff : 'normal', mode: MODES.includes(o.mode) ? o.mode : 'conquest' };
+  return { diff: Object.prototype.hasOwnProperty.call(DIFFICULTY, o.diff) ? o.diff : 'normal', mode: MODES.includes(o.mode) ? o.mode : 'conquest' };
 }
 export function saveLast(diff, mode) {
   try { localStorage.setItem(LAST_KEY, JSON.stringify({ diff, mode })); } catch (e) { /* ignore */ }
@@ -328,6 +328,7 @@ addEventListener('keydown', (e) => {
   const t = e.target;
   if (t && t.tagName && /^(INPUT|TEXTAREA|SELECT|BUTTON|A)$/.test(t.tagName)) return;
   e.preventDefault();
+  e.stopImmediatePropagation();   // (the key that started the match must not also reach the new match's input: the hero would jump in its first frame)
   again.click();
 });
 

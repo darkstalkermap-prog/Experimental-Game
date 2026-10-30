@@ -1476,13 +1476,13 @@ export class Game {
     const winner = draw ? -1 : best.teams[0];
     matchlog.record('timeup', { winner });
     this.audio.play('horn', this.camera.position);
-    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates(), true);
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates(undefined, 12), true);   // (the best twelve: the end message must stay small, the room's outbox is: see roomnet.js)
     this.quickEnd = true;
     this.finish(winner, reason, { quick: true });
   }
 
   endGame(winner, reason = '') {
-    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates());
+    if (this.mode === 'host' && this.sync) this.sync.sendEnd(winner, reason, highlights.candidates(undefined, 12));
     this.finish(winner, reason);
   }
 

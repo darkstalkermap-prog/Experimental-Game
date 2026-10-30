@@ -750,6 +750,8 @@ export class UI {
     for (const id of ['tip', 'streak', 'banner']) $(id).classList.remove('show');
     this.tab = 'army';
     this.lastPrompt = this.lastCmdKey = this.hillHtml = this.buffHtml = this.heroHtml = '';
+    $('buffs').innerHTML = '';   // (the list is only written when it changes: a label of the last match would stay through the next preparation)
+    this.heroSeen = undefined;   // (the next frame asks the new world again whether this is the Hero Game Mode, and sets or clears the HUD's hero classes)
     this.goldShown = null;
     this.hudT = 0;
     resetFlowHud();

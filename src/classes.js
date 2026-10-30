@@ -62,7 +62,9 @@ export const CLASSES = {
   },
 };
 
-export function classOf(id) { return CLASSES[id] || CLASSES.knight; }
+export function classOf(id) { return isClassId(id) ? CLASSES[id] : CLASSES.knight; }
+// a class id from outside (a guest's message, storage): an own key, so that 'constructor' and '__proto__' are not classes
+export function isClassId(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(CLASSES, id); }
 
 // Experience for the support classes: a Healing Light earns this share of the health it really restores in others (up
 // to a cap), and a Rally Cry this much for each ally it reaches (up to a cap).

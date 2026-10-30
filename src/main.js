@@ -2,13 +2,13 @@
 import * as THREE from 'three';
 import { Game } from './game.js';
 import { UI, renderClassPicker } from './ui.js';
-import { CLASSES } from './classes.js';
+import { CLASSES, isClassId } from './classes.js';
 import { Audio } from './audio.js';
 import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS } from './config.js';
+import { setMapSize, setPracticeWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS, DIFFICULTY } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
@@ -135,7 +135,7 @@ let options = loadOptions();
 const matchOptions = (humans) => { options = sanitizeOptions({ ...options, biome: land.biome, seed: land.seed, decrees: pendingDecrees() }); saveOptions(options); return withRivals(options, humans); };   // (the land comes from biomes.js and the Battle Decrees from decrees.js: the end screen rolls both)
 // Between matches the stored options are the truth: the end screen's sections roll the next battle into them (land, rivals) and save, so a rematch reads them
 // afresh (the decrees are asked from decrees.js at every start, above). The menu pieces change `options` in memory and the next start saves them.
-const refreshOptions = () => { options = loadOptions(); };
+const refreshOptions = () => { options = { ...loadOptions(), length: options.length }; };   // (the length is what the menu said, also where storage is unavailable and loadOptions gives the defaults)
 
 // match length (Standard / Short, options.length): the war modes only, the Hero Game Mode has its own length
 function showLength() {
@@ -266,7 +266,7 @@ function freshWorldSoon() {
 // hero class (remembered per browser)
 let heroClass = 'knight';
 try { heroClass = localStorage.getItem('cw-class') || 'knight'; } catch (e) { /* storage unavailable */ }
-if (!CLASSES[heroClass]) heroClass = 'knight';
+if (!isClassId(heroClass)) heroClass = 'knight';
 const rememberClass = (id) => {
   heroClass = id;
   try { localStorage.setItem('cw-class', id); } catch (e) { /* ignore */ }
@@ -407,11 +407,11 @@ async function connect() {
   await net.connect();
   net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });
   net.on('closed', () => {
-    if (game.state === 'playing' && game.mode === 'client') game.finish(-1, 'Lost connection to the server.');
+    if (game.state === 'playing' && game.mode === 'client') { game.finish(-1, 'Lost connection to the server.'); roomGone('The connection to the room was lost.'); }   // (the end screen is up now: its button must not wait for a room that is gone)
     else if (endScreenBuilt() && !flow.left) roomGone('The connection to the room was lost.');
   });
   net.on('hostleft', () => {
-    if (game.state === 'playing') game.finish(-1, 'The host left the game.');
+    if (game.state === 'playing') { game.finish(-1, 'The host left the game.'); roomGone('The host left the game.'); }
     else if (endScreenBuilt()) roomGone('The host left the game.');
     else { ui.lobbyError('The host closed the game.'); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); }
   });
@@ -428,12 +428,13 @@ $('hostBtn').addEventListener('click', async () => {
   const looks = new Map();   // what guests said they wear (a guest may speak before the host has seated it)
   net.on('data', ({ from, d }) => {
     if (d && d.k === 'cos') {   // a guest's banner, cloak and capstones
-      looks.set(from, sanitizeLoadout(d.cos));
+      const look = sanitizeLoadout(d.cos), same = JSON.stringify(look) === JSON.stringify(looks.get(from));
+      looks.set(from, look);
       const q = lobby.find((x) => x.netId === from);
-      if (q) { q.cos = looks.get(from); broadcast(); }
+      if (q && !(same && JSON.stringify(q.cos) === JSON.stringify(look))) { q.cos = look; broadcast(); }   // (a guest repeating itself does not make the host redraw the room)
       return;
     }
-    if (!d || d.k !== 'cls' || !CLASSES[d.cls]) return;
+    if (!d || d.k !== 'cls' || !isClassId(d.cls)) return;
     const p = lobby.find((x) => x.netId === from);
     if (p && p.cls !== d.cls) { p.cls = d.cls; broadcast(); }
   });
@@ -482,7 +483,7 @@ $('joinBtn').addEventListener('click', async () => {
     if (d.k === 'start') {
       const me = d.players.find((p) => p.netId === net.id);
       if (!me) return;
-      begin(d.diff, { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos) })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', localTeam: me.team, players: d.players.map((p) => ({ team: p.team, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos) })), coop: !!d.coop, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);
@@ -504,16 +505,23 @@ function inRoom() { return !!net && !flow.left && (net.role === 'host' || net.ro
 // the match is over: put the room's handlers back (the match's sync replaced them) and see who is still here
 function roomAfterMatch(s) {
   if (!net || flow.left) return;
-  if (s.mode === 'client') { net.on('data', guestData); return; }
+  if (s.mode === 'client') { net.on('data', guestData); net.toHost({ k: 'cos', cos: progress.loadout() }); return; }   // (what the match earned: the host may not be listening yet, so backToLobby says it again)
   if (s.mode !== 'host') return;
   const here = new Set(game.humans.filter((h) => !h.isBot && h !== game.player).map((h) => h.netId));
   lobby = lobby.filter((p) => p.netId === null || here.has(p.netId));
   const me = lobby.find((p) => p.netId === null);
-  if (me) me.cls = heroClass;
-  net.on('data', ({ from, d }) => {   // (guests may change class on their end screens)
-    if (!d || d.k !== 'cls' || !CLASSES[d.cls]) return;
+  if (me) { me.cls = heroClass; me.cos = progress.loadout(); }   // (the match may have earned a banner, a cloak or a capstone)
+  net.on('data', ({ from, d }) => {   // (guests may change class on their end screens, and tell what they wear now)
+    if (!d) return;
     const p = lobby.find((x) => x.netId === from);
-    if (p && p.cls !== d.cls) { p.cls = d.cls; if (lobbyBroadcast) lobbyBroadcast(); }
+    if (!p) return;
+    if (d.k === 'cos') {
+      const look = sanitizeLoadout(d.cos);
+      if (JSON.stringify(look) !== JSON.stringify(p.cos)) { p.cos = look; if (lobbyBroadcast) lobbyBroadcast(); }
+      return;
+    }
+    if (d.k !== 'cls' || !isClassId(d.cls)) return;
+    if (p.cls !== d.cls) { p.cls = d.cls; if (lobbyBroadcast) lobbyBroadcast(); }
   });
   net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); if (lobbyBroadcast) lobbyBroadcast(); });
 }
@@ -521,10 +529,11 @@ function roomAfterMatch(s) {
 function backToLobby(isHost) {
   if (game.state === 'playing') return;
   clearTimeout(freshTimer);
-  const [size, practice] = game.mapBuiltFor.split('+');
-  ensureMap(size, !!practice);   // (a fresh world for the next match)
+  const practice = !!game.practice;   // (the world's key also carries the land: it is not parsed; this asks for what freshWorldSoon builds)
+  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed });   // (a fresh world for the next match, on the land the end screen rolled)
   ui.reset();
   ui.hideHud();
+  if (!isHost && net) net.toHost({ k: 'cos', cos: progress.loadout() });   // (the host is back in its lobby now: what this match earned is for the next battle)
   ui.showLobby($('roomCode').textContent, isHost);
   $('invite').classList.add('hidden');   // (nobody new can join a game that has started)
   $('inviteHelp').textContent = 'The same room, the same lords: pick your class, and the host starts the next battle.';
