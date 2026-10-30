@@ -4,7 +4,7 @@ import { TEAM_CSS, TEAM_COLORS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_
 import { armsChip } from './heraldry.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
 import { allied } from './teams.js';
-import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
+import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH, abilityOf } from './classes.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
@@ -234,11 +234,23 @@ export class UI {
     else this.toggleShop(true);
   }
 
-  hitMarker() {
+  // head: a headshot (the Ranger's): a skull over the cross, bigger and pale gold, so it reads apart from an ordinary hit
+  hitMarker(head = false) {
     const h = $('hitmarker');
     h.classList.remove('show');
     void h.offsetWidth;
     h.classList.add('show');
+    if (!head) return;
+    let s = this.skullEl;
+    if (!s) {
+      s = this.skullEl = document.createElement('div');
+      s.id = 'headmarker';
+      s.textContent = '☠';
+      s.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font:700 30px/1 Georgia,serif;color:#ffe9a8;' +
+        'text-shadow:0 0 3px #000,0 0 8px rgba(255,140,60,0.9);pointer-events:none;opacity:0;z-index:5';
+      h.parentNode.insertBefore(s, h.nextSibling);
+    }
+    if (s.animate) s.animate([{ opacity: 1, transform: 'translate(-50%,-50%) scale(1.5)' }, { opacity: 1, transform: 'translate(-50%,-50%) scale(1)', offset: 0.25 }, { opacity: 0, transform: 'translate(-50%,-50%) scale(1)' }], { duration: 650, easing: 'ease-out' });
   }
 
   setOrder(cmd) {
@@ -851,24 +863,24 @@ export class UI {
       const mk = (id) => { const r = $(id); return { r, ic: r.querySelector('.ic'), nm: r.querySelector('.nm'), cd: r.querySelector('.cd'), sec: r.querySelector('.sec') }; };
       this.abilEls = { q: mk('abilQ'), r: mk('abilR') };
     }
-    if (this.abilClass !== p.classId) {
-      this.abilClass = p.classId;
+    if (this.abilClass !== p.classId || this.abilRev !== p.talentRev) {   // (a talent can put another ability in a slot)
+      this.abilClass = p.classId; this.abilRev = p.talentRev;
       for (const slot of ['q', 'r']) {
-        const d = p.cls[slot], e = this.abilEls[slot];
+        const d = abilityOf(p, slot), e = this.abilEls[slot];
         e.ic.textContent = d.icon;
         e.nm.textContent = d.name;
         e.r.title = `${d.name} (${d.cd} s): ${d.desc}`;
       }
     }
     for (const slot of ['q', 'r']) {
-      const e = this.abilEls[slot], d = p.cls[slot], cd = p.abilCd[slot];
-      const k = cd > 0 ? Math.min(1, cd / d.cd) : 0;
+      const e = this.abilEls[slot], d = abilityOf(p, slot), cd = p.abilCd[slot];
+      const k = cd > 0 ? Math.min(1, cd / p.abilityCd(slot)) : 0;
       const t = `scaleY(${k.toFixed(3)})`;
       if (e.cd.style.transform !== t) e.cd.style.transform = t;
       const sec = cd > 0 ? String(Math.ceil(cd)) : '';
       if (e.sec.textContent !== sec) e.sec.textContent = sec;
-      e.r.classList.toggle('ready', (cd <= 0 || (d.id === 'evade' && p.buffs.has('twin'))) && p.alive && !p.drive);
-      e.r.classList.toggle('aiming', !!p.aiming && p.aiming.slot === slot);
+      e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
+      e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power));   // (the volley's circle, or Power Shot being drawn)
     }
     const aim = !!p.aiming;
     if (aim !== this.aimShown) { this.aimShown = aim; $('aimhint').classList.toggle('hidden', !aim); }

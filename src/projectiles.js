@@ -7,6 +7,9 @@ import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { allied } from './teams.js';
 import { TEAM_COLORS } from './config.js';
 import { F, R } from './fxtex.js';
+import { RANGER } from './classes.js';
+import { talentFx } from './talents.js';
+import { archerAt, eachArcher } from './towerarchers.js';
 
 export const ARROW_SPEED = 52;
 export const G_ARROW = 9.8;
@@ -154,9 +157,13 @@ export class Projectiles {
     return _c.set(hex).lerp(this.white || (this.white = new THREE.Color(1, 1, 1)), 0.6);
   }
 
-  // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands
-  fireArrow(from, vel, team, dmg, owner, big = false, ability = '') {
-    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0, ability };
+  // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands.
+  // opts (the Ranger's arrows): pierce: the shares of the damage for the bodies after the first that it goes on into (Piercing
+  // Shots); power: a Power Shot, flying flat through everyone in its line, throwing soldiers back and staggering heroes.
+  fireArrow(from, vel, team, dmg, owner, big = false, ability = '', opts = null) {
+    const power = !!(opts && opts.power);
+    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0, ability,
+      grav: power ? RANGER.power.grav : 1, power, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null };
     const fx = this.game.fx;
     fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075);
     e.tr = fx._to; e.trb = fx._tb;
@@ -192,7 +199,7 @@ export class Projectiles {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       p.life -= dt;
-      const grav = p.spell ? 0 : p.kind === 'arrow' ? G_ARROW : G_ROCK;
+      const grav = p.spell ? 0 : p.kind === 'arrow' ? G_ARROW * p.grav : G_ROCK;
       // short enough steps that a fast arrow can never jump over a 0.5 m merlon, even on a slow frame
       const steps = Math.min(12, Math.max(p.kind === 'arrow' || p.spell ? 3 : 2, Math.ceil(p.vel.length() * dt / 0.25)));
       const h = dt / steps;
@@ -221,16 +228,26 @@ export class Projectiles {
         }
         // characters
         if (p.kind === 'arrow') {
-          const hit = this.hitCharacter(next, p.team, 0.15);
+          const hit = this.hitCharacter(next, p.team, 0.15, p.hitSet);
           if (hit) {
-            g.damage(hit, p.dmg, p.owner, { ranged: true, dir: p.vel, ability: p.ability });
-            g.audio.play('arrowHit', next);
+            this.arrowHit(p, hit, next);
+            // a Power Shot goes on through everyone; a Ranger's full draw through up to two more (Piercing Shots)
+            if (p.power || (p.pierce && p.through < p.pierce.length)) {
+              (p.hitSet || (p.hitSet = new Set())).add(hit);
+              p.through++;
+              p.pos.copy(next);
+              continue;
+            }
             this.kill(i, p);
             done = true;
             break;
           }
           const siege = g.siegeAt(next, p.team);
-          if (siege) { g.damage(siege, p.dmg * 0.3, p.owner, { ranged: true }); this.stick(i, p, next, 'wood'); done = true; break; }
+          if (siege) {
+            const k = p.owner && p.owner.mods && p.owner.mods.marksman ? RANGER.siege : 1;   // (the Ranger: siege hunter)
+            g.damage(siege, p.dmg * 0.3 * k * (p.power ? 2 : 1), p.owner, { ranged: true, ability: p.ability });
+            this.stick(i, p, next, 'wood'); done = true; break;
+          }
         }
         // structures
         const col = phys.pointHit(next.x, next.y, next.z, p.team);
@@ -323,6 +340,31 @@ export class Projectiles {
     if (changed) this.stuckMesh.instanceMatrix.needsUpdate = true;
   }
 
+  // An arrow strikes a body. The Ranger's do more: double in the head (less in a hero's), more into siege crews; and every arrow hits
+  // a foe Marked by a Ranger's trap harder. A Power Shot throws a soldier back and staggers a hero.
+  arrowHit(p, hit, at) {
+    const g = this.game, o = p.owner, marks = !!(o && o.mods && o.mods.marksman);
+    g.audio.play('arrowHit', at);
+    if (!g.simulating) return;   // (a guest's copy of the arrow only shows the flight)
+    let dmg = p.dmg;
+    if (p.through > 0 && !p.power) dmg *= p.pierce[p.through - 1];
+    const head = marks && p.ability !== 'Arrow Volley' && at.y > hit.pos.y + hit.height * (1 - RANGER.headZone);
+    if (head) {
+      const big = hit.isPlayer || hit.isHero || hit.isGiant || (hit.def && hit.def.boss);
+      dmg *= (big ? RANGER.headshotHero : RANGER.headshot) + talentFx(o, big ? 'headshotHero' : 'headshot', 0);
+    }
+    if (marks && (hit.isCrew || hit.crewOf)) dmg *= RANGER.siege;
+    if (hit.markUntil > g.time) dmg *= hit.markMul;
+    g.damage(hit, dmg, o, { ranged: true, dir: p.vel, ability: p.ability, head, power: p.power });
+    if (!p.power || !hit.alive) return;
+    const P = RANGER.power, l = Math.hypot(p.vel.x, p.vel.z) || 1;
+    if (hit.isPlayer) hit.stagger(P.hero);
+    else {
+      if (hit.stagger) hit.stagger(P.stagger, o);
+      if (hit.vel && !hit.isGiant) { hit.vel.x += (p.vel.x / l) * P.knock; hit.vel.z += (p.vel.z / l) * P.knock; }
+    }
+  }
+
   hitCharacter(pt, team, pad, skip = null) {
     let found = null;
     this.game.grid.query(pt.x, pt.z, 1.2 + pad, (u) => {
@@ -333,7 +375,8 @@ export class Projectiles {
       if (pt.y < u.pos.y || pt.y > u.pos.y + u.height) return;
       found = u;
     });
-    return found;
+    // the archers on the castle towers are men too (towerarchers.js): a cheap test that is over at once away from a tower roof
+    return found || archerAt(this.game, pt, team, pad, skip);
   }
 
   // an arrow lands: it joins the instanced mesh of landed arrows; kind is what it hit ('earth', 'wood', or the kind of a collider)
@@ -381,7 +424,7 @@ export class Projectiles {
     if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(p.dmg * 0.6, p.owner, 'Fireball');
     const s = g.siegeAt(at, p.team, p.radius);
     if (s) g.damage(s, p.dmg * 0.8, p.owner, { magic: true, ability: 'Fireball' });
-    g.grid.query(at.x, at.z, p.radius + 1, (u) => {
+    const blast = (u) => {
       if (!u.alive || allied(u.team, p.team)) return;
       const d = Math.hypot(u.pos.x - at.x, u.pos.z - at.z);
       if (d > p.radius + u.radius || Math.abs(u.pos.y + 1 - at.y) > p.radius + 1) return;
@@ -391,7 +434,9 @@ export class Projectiles {
       g.damage(u, p.dmg * k, p.owner, { magic: true, splash: true, ability: 'Fireball' });
       if (u.alive && p.owner && p.owner.isPlayer) g.abilities.scorch(u, p);   // (a Mage talent sets the foes alight)
       if (u.stagger && d < p.radius * 0.6) u.stagger(0.5, { pos: at });
-    });
+    };
+    g.grid.query(at.x, at.z, p.radius + 1, blast);
+    eachArcher(g, p.team, at.x, at.z, p.radius, at.y, p.radius + 2, blast);   // (and the archers on a tower roof)
   }
 
   rockImpact(p, at, col) {

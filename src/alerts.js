@@ -82,7 +82,7 @@ export const TIPS = [
   { id: 'arrows', text: 'Arrows run out. Each wave brings five more, so save them for archers and siege crews.' },
   { id: 'knight', cls: 'knight', text: 'Knight: [Q] Shield Bash stuns whatever is ahead; [R] Bulwark cuts the damage you take by 70% for five seconds.' },
   { id: 'berserker', cls: 'berserker', text: 'Berserker: Blood Rage ([R]) heals you for half of what you deal. Stay in the thick of it.' },
-  { id: 'ranger', cls: 'ranger', text: 'Ranger: hold [Q] to put the circle on the ground, let go and arrows rain on it. Best against packed ranks.' },
+  { id: 'ranger', cls: 'ranger', text: 'Ranger: aim for the head (double damage) and draw fully to shoot through a line of men. [Q] Power Shot breaks a rank, [R] throws a Snare Trap at whoever comes for you.' },
   { id: 'mage', cls: 'mage', text: 'Mage: Fireball ([Q]) burns gates and siege engines as well as men; Frost Ward ([R]) soaks up the next blows.' },
   { id: 'cleric', cls: 'cleric', text: 'Cleric: Healing Light ([R]) heals you and every ally within 14 m. Smite ([Q]) blasts where you aim.' },
   { id: 'cavalier', cls: 'cavalier', learn: 'mounted', text: 'Cavalier: [E] mounts your warhorse, or whistles it over. Lance Charge ([Q]) flattens whoever is in your way.' },

@@ -7,6 +7,7 @@ import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { CASTLE, TEAM_COLORS } from './config.js';
 import { box } from './materials.js';
 import { buildSoldier, poseSoldier, bakedMesh, unitMaterial } from './models.js';
+import { ARCHER_SPOTS, archersOf } from './towerarchers.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerH, towerR, towerOff } = CASTLE;
 const GW = gateW / 2;
@@ -61,6 +62,7 @@ export class Upgrades {
 
   tick(dt, time) {
     if (this.wallDirty) { this.wallDirty = false; this.rebuildWalls(); }
+    if (this.c.archersDirty && this.shown) this.rebuildArchers();   // (a tower archer fell, or another took his place)
     const fx = this.c.game.fx;
     for (const f of this.flames) if (fx && Math.random() < dt * 9) fx.fireTrail(f.pos);   // sparks and smoke rise from the braziers
   }
@@ -212,8 +214,10 @@ export class Upgrades {
   rebuildTowers() {
     const c = this.c, L = c.towerLevel, M = this.M;
     this.clear(this.towerMeshes);
+    this.archerMesh = null;   // (it was one of them)
     this.flames.length = 0;
-    this.archers = [];   // (one entry per archer: where he stands; all of them are drawn as one mesh)
+    this.spots = [];     // (every place an archer can stand, in towerarchers.js's order)
+    this.archers = [];   // (the archers standing there now: all of them are drawn as one mesh)
     const fire = [];
     c.fire.set('tower', fire);
     if (!L) return;
@@ -234,15 +238,14 @@ export class Upgrades {
       for (const a of [19.8, 22.5, 25.2]) shield(true, a);
       if (L >= 2) for (const a of [19.8, 22.5, 25.2]) shield(false, a);
       if (L >= 3) for (const a of [20.8, 24.2]) { shield(true, a); shield(false, a); }
-      // archers on the roof, one behind each gap in the battlements, facing out
-      const spots = [[22, 26.2, 0], [26.2, 22, 1], [26.2, 24, 1]];
-      for (let i = 0; i < Math.min(L, 3); i++) {
-        const [ax, az, east] = spots[i];
+      // archers on the roof, one behind each gap in the battlements, facing out (every place, in towerarchers.js's order: which of
+      // them stand there is decided in rebuildArchers)
+      for (const [ax, az, east] of ARCHER_SPOTS) {
         const m = new THREE.Object3D();
         m.position.set(sx * ax, towerH, sz * az);
         m.rotation.y = east ? (sx > 0 ? Math.PI / 2 : -Math.PI / 2) : (sz > 0 ? 0 : Math.PI);
         m.updateMatrix();
-        this.archers.push(m);
+        this.spots.push(m);
       }
       if (L >= 2) {
         // a ballista on the roof deck, aimed out over the north wall
@@ -281,14 +284,29 @@ export class Upgrades {
     this.add(this.towerMeshes, plank, M.plank);
     this.add(this.towerMeshes, disc, M.team[c.team]);
     this.add(this.towerMeshes, rim, M.gold);
-    if (this.archers.length) {        // every archer on the towers in one mesh
-      const base = this.archerGeo();
-      const mesh = new THREE.Mesh(mergeGeometries(this.archers.map((o) => base.clone().applyMatrix4(o.matrix))), unitMaterial());
-      mesh.castShadow = true;
-      c.group.add(mesh);
-      this.towerMeshes.push(mesh);
-    }
+    this.rebuildArchers();
     c.fire.set('tower', fire);
+  }
+
+  // every archer standing on the towers in one mesh: made again when one falls or another takes his place (towerarchers.js)
+  rebuildArchers() {
+    const c = this.c, old = this.archerMesh;
+    c.archersDirty = false;
+    if (old) {
+      c.group.remove(old); old.geometry.dispose();
+      const i = this.towerMeshes.indexOf(old);
+      if (i >= 0) this.towerMeshes.splice(i, 1);
+      this.archerMesh = null;
+    }
+    const up = archersOf(c).filter((a) => a.alive).map((a) => this.spots[a.tower * ARCHER_SPOTS.length + a.slot]).filter(Boolean);
+    this.archers = up;   // (the ones standing there now)
+    if (!up.length) return;
+    const base = this.archerGeo();
+    const mesh = new THREE.Mesh(mergeGeometries(up.map((o) => base.clone().applyMatrix4(o.matrix))), unitMaterial());
+    mesh.castShadow = true;
+    c.group.add(mesh);
+    this.towerMeshes.push(mesh);
+    this.archerMesh = mesh;
   }
 
   // one archer drawing his bow, baked into a single static geometry (shared by every tower of the house)

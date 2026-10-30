@@ -38,14 +38,15 @@ export const TUNE = {
     tithe: 0.08,           // Blood Tithe (alternative to Reaper): the share of your health the last strike of a Whirlwind gives back (Reaper gives 1.5% a foe, a strike)
   },
   ranger: {
-    volleyRadius: 0.15,    // Wide Volley: a wider circle
-    volleyArrows: 5,       // Hail of Arrows: arrows added
-    volleySlow: 2.5,       // Pinning Fire: seconds the foes in the circle are slowed for
-    wave: { arrows: 8, gap: 1 },   // Second Wave: arrows in it, and seconds after the first
+    headshot: 0.5,         // Eagle Eye: added to the headshot's double damage ...
+    headshotHero: 0.35,    //   ... and to its 1.5x into a hero
+    pierce: [0.85, 0.7, 0.5],   // Bodkin Points: what a fully drawn arrow deals to the second, third and fourth body it goes into (70% and 50% without it, and no fourth)
+    qDmg: 0.25, qCd: 0.25, // Heavy Draw: Power Shot (or the Volley) hits harder and recharges sooner
     speed: 0.06, draw: 0.1,        // Fleet-Footed: faster on foot, and the bow draws quicker
-    rollAgain: 2.5,        // Twin Roll: seconds in which a second roll is allowed
-    focus: { time: 4, dmg: 1.4, draw: 0.25 },   // Hunter's Focus: after a roll, for this long, the next arrow draws at this share of the time and hits this much harder
-    aimed: 0.9,            // Steady Aim (alternative to Second Wave): the share of the volley's arrows that pick a foe (18 + 5 arrows; 70% without it)
+    trapRoot: 1,           // Iron Jaws: seconds added to the Snare Trap's hold ...
+    trapDmg: 35,           //   ... and the damage of its bite
+    mark: { time: 5, dmg: 1.3 },   // Hunter's Mark: a foe caught in your trap takes this much more from arrows for this long
+    aim: { draw: 0.75, speed: 1.25 },   // Steady Aim (alternative to Arrow Volley): zoomed in (right mouse), the bow draws in this share of the time and the arrow flies this much faster
   },
   mage: {
     fireRadius: 0.2,       // Greater Blast: wider explosions
@@ -125,21 +126,22 @@ export const TALENTS = [
   { id: 'bz_endless', cls: 'berserker', br: 'r', tier: 3, needs: 'bz_scars', icon: '🔥', name: 'Endless Fury',
     desc: `Blood Rage lasts ${Z.rageTime} s longer and hits ${pc(Z.rageDmg)} harder.`, fx: { rageTime: Z.rageTime, rageDmg: Z.rageDmg } },
 
-  // ---------- Ranger: Arrow Volley | Evasive Roll (the capstone is under Pinning Fire) ----------
-  { id: 'rg_wide', cls: 'ranger', br: 'q', tier: 1, needs: null, icon: '⭕', name: 'Wide Volley',
-    desc: `The volley's circle is ${pc(R.volleyRadius)} wider.`, fx: { volleyRadius: 1 + R.volleyRadius } },
-  { id: 'rg_hail', cls: 'ranger', br: 'q', tier: 2, needs: 'rg_wide', icon: '🌧', name: 'Hail of Arrows',
-    desc: `${R.volleyArrows} more arrows fall.`, fx: { volleyArrows: R.volleyArrows } },
-  { id: 'rg_pin', cls: 'ranger', br: 'q', tier: 3, needs: 'rg_hail', icon: '📌', name: 'Pinning Fire',
-    desc: `Foes in the circle are slowed while the arrows fall.`, fx: { volleySlow: R.volleySlow } },
-  { id: 'rg_wave', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', icon: '⛈', name: 'Second Wave',
-    desc: `A second wave of ${R.wave.arrows} arrows falls ${R.wave.gap} s after the first.`, fx: { volleyWave: R.wave } },
+  // ---------- Ranger: headshots, piercing and Power Shot | Snare Trap (the capstone, Arrow Volley in Power Shot's place, is under Heavy Draw) ----------
+  { id: 'rg_eagle', cls: 'ranger', br: 'q', tier: 1, needs: null, icon: '👁', name: 'Eagle Eye',
+    desc: `Headshots deal ${R.headshot + 2}x damage instead of 2x (${R.headshotHero + 1.5}x into a hero instead of 1.5x).`, fx: { headshot: R.headshot, headshotHero: R.headshotHero } },
+  { id: 'rg_bodkin', cls: 'ranger', br: 'q', tier: 2, needs: 'rg_eagle', icon: '🗡', name: 'Bodkin Points',
+    desc: `A fully drawn arrow goes on into ${R.pierce.length} bodies behind the first instead of two, at ${R.pierce.map(pc).join(', ')} of its damage.`, fx: { pierce: R.pierce } },
+  { id: 'rg_heavy', cls: 'ranger', br: 'q', tier: 3, needs: 'rg_bodkin', icon: '💪', name: 'Heavy Draw',
+    desc: `Power Shot (or Arrow Volley) hits ${pc(R.qDmg)} harder and recharges ${pc(R.qCd)} sooner.`,
+    fx: { powerDmg: 1 + R.qDmg, volleyDmg: 1 + R.qDmg, cd_powershot: 1 - R.qCd, cd_volley: 1 - R.qCd } },
+  { id: 'rg_volley', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_heavy', icon: '🌧', name: 'Arrow Volley',
+    desc: 'Q becomes Arrow Volley instead of Power Shot: hold Q to put a circle on the ground, let go and a volley of arrows rains down on it.', fx: { volleyQ: true } },
   { id: 'rg_light', cls: 'ranger', br: 'r', tier: 1, needs: null, icon: '👢', name: 'Fleet-Footed',
     desc: `+${pc(R.speed)} speed, and the bow draws ${pc(R.draw)} faster.`, mods: { mul: { speed: 1 + R.speed, draw: 1 - R.draw } } },
-  { id: 'rg_twin', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '♻', name: 'Twin Roll',
-    desc: `Roll a second time within ${R.rollAgain} s.`, fx: { rollAgain: R.rollAgain } },
-  { id: 'rg_focus', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_twin', icon: '🎯', name: "Hunter's Focus",
-    desc: `After a roll your next arrow is drawn at once and hits ${pc(R.focus.dmg - 1)} harder.`, fx: { focus: R.focus } },
+  { id: 'rg_jaws', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '🦷', name: 'Iron Jaws',
+    desc: `The Snare Trap holds ${R.trapRoot} s longer and bites for ${R.trapDmg} damage.`, fx: { trapRoot: R.trapRoot, trapDmg: R.trapDmg } },
+  { id: 'rg_mark', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_jaws', icon: '📍', name: "Hunter's Mark",
+    desc: `A foe caught in your trap is Marked: arrows hit them ${pc(R.mark.dmg - 1)} harder for ${R.mark.time} s.`, fx: { trapMark: R.mark } },
 
   // ---------- Mage: Fireball | Frost Ward (the capstone is under Glacial Burst) ----------
   { id: 'mg_blast', cls: 'mage', br: 'q', tier: 1, needs: null, icon: '💥', name: 'Greater Blast',
@@ -200,8 +202,8 @@ export const ALT_TALENTS = {
     desc: `While Bulwark stands ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
   bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
     desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
-  rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_pin', alt: 'rg_wave', icon: '👁', name: 'Steady Aim',
-    desc: `${pc(R.aimed)} of the volley's arrows seek out a foe in the circle, instead of seven in ten.`, fx: { volleyAimed: R.aimed } },
+  rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_heavy', alt: 'rg_volley', icon: '🔭', name: 'Steady Aim',
+    desc: `Zoomed in (right mouse), your bow draws ${pc(1 - R.aim.draw)} faster and your arrows fly ${pc(R.aim.speed - 1)} faster. Power Shot stays your Q.`, fx: { zoomDraw: R.aim.draw, zoomSpeed: R.aim.speed } },
   mg_snap: { id: 'mg_snap', cls: 'mage', br: 'r', tier: 4, needs: 'mg_glacier', alt: 'mg_shatter', icon: '💠', name: 'Cold Snap',
     desc: `When the ward breaks, your next Fireball within ${M.snap.time} s hits ${pc(M.snap.dmg - 1)} harder.`, fx: { snap: M.snap } },
   cl_mercy: { id: 'cl_mercy', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', alt: 'cl_bloom', icon: '🙏', name: 'Mercy',

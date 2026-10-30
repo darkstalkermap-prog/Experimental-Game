@@ -12,13 +12,14 @@ import { navigate } from './nav.js';
 import { SWING } from './combat.js';
 import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
+import { abilityOf } from './classes.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
   knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
   berserker: ['bz_thirst', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_endless', 'bz_dervish', 'bz_reaper'],
-  ranger: ['rg_light', 'rg_wide', 'rg_twin', 'rg_hail', 'rg_focus', 'rg_pin', 'rg_wave'],
+  ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_jaws', 'rg_heavy', 'rg_mark', 'rg_volley'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
   cavalier: ['cv_barding', 'cv_lance', 'cv_horn', 'cv_sweep', 'cv_banner', 'cv_thunder', 'cv_vanguard'],
@@ -337,7 +338,7 @@ export class HeroBot {
 
   chooseWeapon() {
     const p = this.p, st = this.style, t = this.target;
-    if (!t || this.t < this.weaponOk || p.mounted) return;
+    if (!t || this.t < this.weaponOk || p.mounted || p.power) return;   // (not in the middle of a Power Shot's draw)
     let want = 'sword';
     const reserve = st.kind === 'ranged' ? 2 : 8;
     if (st.bow && !t.isStructure && p.arrows > reserve && this.t >= this.meleeUntil) {
@@ -467,10 +468,9 @@ export class HeroBot {
         if (q && hpf > 0.2 && (n.c3 >= 2 || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
         break;
       case 'ranger': {
-        // (a roll is also how a Ranger gets out of reach again once somebody has closed in on her)
-        const caught = n.c3 >= 1 && this.nearGap < 2.4 && p.weapon === 'bow';
-        if (r && ((hpf < 0.5 && n.c3 >= 1) || n.c3 >= 3 || (hpf < 0.7 && n.heroes8 && this.heroGap < 4) || (heavy && n.c5) || caught)) { this.rollAway(); break; }
-        if (q) this.volley();
+        // the trap at whoever is coming for her (it is how a Ranger gets out of reach again), else at a rival hero in its reach
+        if (r && this.snare(heavy)) break;
+        if (q) { if (abilityOf(p, 'q').id === 'volley') this.volley(); else this.powerShot(); }
         break;
       }
       case 'mage':
@@ -536,22 +536,51 @@ export class HeroBot {
     this.cast('q', at);
   }
 
-  // Evasive Roll, away from the people hurting us (and toward home if that is not clear)
-  rollAway() {
-    const p = this.p;
-    let ax = 0, az = 0;
+  // Snare Trap: thrown in front of the nearest foe closing in on her (where he will be in a second), or of a rival hero in its reach
+  snare(heavy) {
+    const p = this.p, n = this.n, reach = 14;
+    let best = null, bs = Infinity;
     for (let i = 0; i < this.foes.length; i++) {
-      if (this.dist[i] > 7 || this.foes[i].isSiege) continue;
-      const dx = p.pos.x - this.foes[i].pos.x, dz = p.pos.z - this.foes[i].pos.z, l = Math.hypot(dx, dz) || 1;
-      ax += dx / l; az += dz / l;
+      const o = this.foes[i], d = this.dist[i];
+      if (o.isSiege || d > reach || d < 1.2 || o.pos.y - p.pos.y > 2) continue;
+      const vx = o.vel ? o.vel.x : 0, vz = o.vel ? o.vel.z : 0;
+      const coming = (vx * (p.pos.x - o.pos.x) + vz * (p.pos.z - o.pos.z)) / (Math.hypot(p.pos.x - o.pos.x, p.pos.z - o.pos.z) || 1);
+      const s = d - (o.isPlayer ? 6 : 0) - (coming > 1 ? 4 : 0);
+      if (s < bs) { bs = s; best = o; }
     }
-    const h = this.castle.spawnPoint, hx = h.x - p.pos.x, hz = h.z - p.pos.z, hl = Math.hypot(hx, hz) || 1;
-    ax += (hx / hl) * 0.5; az += (hz / hl) * 0.5;
-    const yaw0 = p.yaw;
-    p.yaw = Math.atan2(ax, az);
-    this.keys.held.add('KeyW');
-    if (!this.cast('r')) p.yaw = yaw0;
-    this.keys.held.clear();
+    if (!best) return false;
+    const close = this.gapTo(best) < 6, rival = best.isPlayer && this.gapTo(best) < 12;
+    if (!close && !rival && !(heavy && n.c8) && n.c5 < 2) return false;
+    const vx = best.vel ? best.vel.x : 0, vz = best.vel ? best.vel.z : 0;
+    const x = best.pos.x + vx * 0.9, z = best.pos.z + vz * 0.9;
+    this.aim(x, this.g.physics.groundHeight(x, z, best.pos.y + 1), z, 0.5);
+    return this.cast('r');
+  }
+
+  // Power Shot: along the line with the most foes in it (a rival hero is worth three), from the bow
+  powerShot() {
+    const p = this.p;
+    if (p.weapon !== 'bow' || p.power || p.mounted) return;
+    const e = p.eyePos(V1);
+    let best = null, bs = 0;
+    for (let i = 0; i < this.foes.length; i++) {
+      const o = this.foes[i], d = this.dist[i];
+      if (o.isSiege || d < 4 || d > 60 || !this.clearShot(o)) continue;
+      const dx = o.pos.x - e.x, dz = o.pos.z - e.z, l = Math.hypot(dx, dz) || 1;
+      let s = 0;
+      for (const f of this.foes) {   // who else stands within a metre of that line, beyond us
+        if (f.isSiege) continue;
+        const fx = f.pos.x - e.x, fz = f.pos.z - e.z, along = (fx * dx + fz * dz) / l;
+        if (along < 2 || along > 70 || Math.abs((fx * dz - fz * dx) / l) > 1) continue;
+        s += f.isPlayer ? 3 : 1;
+      }
+      if (s > bs) { bs = s; best = o; }
+    }
+    if (!best || bs < 3) return;
+    this.powerAt = best;
+    this.aimAtFoe(best, 95);
+    p.useAbility('q', this.keys);
+    if (p.power) { this.stats.q++; this.castOk = this.t + 0.5; }
   }
 
   // ===================================================================================================== planning
@@ -805,7 +834,11 @@ export class HeroBot {
     } else {
       p.blocking = false;
       const tg = this.target;
-      if (this.wantShoot && tg && tg.alive && p.arrows > 0 && now >= this.nockAt) {
+      if (p.power) {   // a Power Shot being drawn: keep it on the line, and it looses itself
+        const pt = this.powerAt && this.powerAt.alive ? this.powerAt : tg;
+        if (pt && pt.alive) this.aimAtFoe(pt, 95);
+        p.tickPower(dt);
+      } else if (this.wantShoot && tg && tg.alive && p.arrows > 0 && now >= this.nockAt) {
         this.aimShot(tg);
         p.drawT += dt;
         if (p.drawT >= this.drawGoal) {

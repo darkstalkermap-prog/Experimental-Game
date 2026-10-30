@@ -4,9 +4,12 @@
 import * as THREE from 'three';
 import { SPELLS, VOLLEY, TEAM_COLORS } from './config.js';
 import { GroundFX } from './groundfx.js';
+import { TrapLooks } from './rangertrap.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
 import { talentFx } from './talents.js';
+import { SOUNDS } from './audio.js';
+import { eachArcher } from './towerarchers.js';
 
 export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'cavalier'];
 
@@ -30,11 +33,11 @@ export const CLASSES = {
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
-    blurb: 'Quick and deadly at range, but fragile when caught in melee.',
-    mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8 },
-    passive: 'Draws the bow 20% faster.',
-    q: { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' },
-    r: { id: 'evade', icon: '💨', name: 'Evasive Roll', cd: 7, desc: 'Throw yourself nine metres the way you are moving (back if standing still). Nothing can hurt you for under a second.' },
+    blurb: 'A sharpshooter: arrows in the head, through whole ranks and into siege crews. Fragile when caught in melee.',
+    mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8, marksman: 1 },
+    passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Headshots deal double damage (1.5x to heroes), arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
+    q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
+    r: { id: 'trap', icon: '🕸', name: 'Snare Trap', cd: 14, desc: 'Throw a snare trap where you look (up to 15 m). The first enemy to step in it is rooted for 2 s, and the enemies around it are slowed.' },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -62,9 +65,54 @@ export const CLASSES = {
   },
 };
 
+// The Ranger's numbers (the talents that change them are in talents.js; the arrows themselves fly in projectiles.js).
+export const RANGER = {
+  headshot: 2, headshotHero: 1.5,   // an arrow in the head deals this much (into a hero's, the second)
+  headZone: 0.17,                   // the top share of a body's height that is its head
+  pierce: [0.7, 0.5],               // Piercing Shots: the share of the damage dealt to the second and the third body a fully drawn arrow goes into
+  pierceDraw: 0.97,                 // how full a draw that takes
+  siege: 1.5,                       // against engineers, siege crews and the engines themselves
+  arrowEvery: 4,                    // seconds for one arrow to come back to the quiver
+  // Power Shot: drawn for `draw` seconds (the hero turns but walks slowly), then loosed flat and fast (gravity times `grav`). It goes
+  // through every soldier in its line, each taking `dmg` full arrows, thrown back `knock` m/s and staggered `stagger` s; a hero is
+  // staggered `hero` s
+  power: { draw: 0.55, speed: 95, grav: 0.3, dmg: 1.6, knock: 9, stagger: 0.6, hero: 0.8 },
+  // Snare Trap: thrown up to `range` m; it lands after `flight` s and is armed `arm` s later. The first enemy to come within `radius` m
+  // is rooted for `root` s, and the enemies within `slowR` m are slowed by `slow` for `slowT` s. A Ranger has `max` traps out at
+  // most, and each lasts `life` s
+  trap: { range: 15, flight: 0.5, arm: 0.5, radius: 1, root: 2, slowR: 4.5, slow: 0.45, slowT: 3, life: 45, max: 2 },
+};
+
+// Arrow Volley, the Ranger's old Q: a tier-4 talent (talents.js) puts it back in Power Shot's place.
+export const VOLLEY_Q = { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' };
+
+// The ability a hero has in a slot: the class's, or the one a talent puts in its place.
+export function abilityOf(p, slot) {
+  const swap = slot === 'q' && talentFx(p, 'volleyQ', false);
+  return swap ? VOLLEY_Q : classOf(p.classId)[slot];
+}
+
 export function classOf(id) { return isClassId(id) ? CLASSES[id] : CLASSES.knight; }
 // a class id from outside (a guest's message, storage): an own key, so that 'constructor' and '__proto__' are not classes
 export function isClassId(id) { return typeof id === 'string' && Object.prototype.hasOwnProperty.call(CLASSES, id); }
+
+// The Ranger's sounds. A headshot is a sharp knock with a ring over it, unlike any other hit, so the archer knows by ear.
+SOUNDS.headshot = (a, k) => {
+  a.tone(2100, 0.09, 0.2 * k, 'square', 0.5);
+  a.tone(3150, 0.32, 0.09 * k, 'sine', 0.92, 0.02);
+  a.noise(0.05, 2600, 3, 0.35 * k, 'bandpass');
+};
+SOUNDS.powershot = (a, k) => {   // a heavy string and the arrow tearing the air
+  a.tone(150, 0.3, 0.3 * k, 'triangle', 0.5);
+  a.noise(0.35, 1800, 0.7, 0.3 * k, 'bandpass');
+  a.noise(0.2, 5000, 1, 0.12 * k, 'highpass', 0.05);
+};
+SOUNDS.trapThrow = (a, k) => { a.noise(0.14, 1100, 1, 0.15 * k, 'bandpass'); a.tone(900, 0.06, 0.06 * k, 'square', 0.8, 0.45); };
+SOUNDS.trapSnap = (a, k) => {    // iron jaws slamming shut
+  a.tone(1400, 0.12, 0.2 * k, 'square', 0.4);
+  a.noise(0.08, 3200, 2, 0.4 * k, 'highpass');
+  a.tone(240, 0.18, 0.25 * k, 'triangle', 0.6, 0.02);
+};
 
 // Experience for the support classes: a Healing Light earns this share of the health it really restores in others (up
 // to a cap), and a Rally Cry this much for each ally it reaches (up to a cap).
@@ -113,7 +161,8 @@ export class Buffs {
 
 export const BUFF_NAMES = {
   guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Blood Rage', ghost: 'Evading',
-  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', twin: 'Roll again', focus: 'Focus', snap: 'Cold Snap',
+  ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', snap: 'Cold Snap',
+  rooted: 'Snared', slow: 'Slowed', marked: 'Marked',
 };
 
 const ZERO = new THREE.Vector3();
@@ -138,7 +187,9 @@ export class Abilities {
     this.rising = [];   // a record of each climbing arrow of a volley while it is in the air (the arrows are drawn by Projectiles.showArrow)
     this.burning = [];  // foes a fireball set alight (Mage talent)
     this.trails = [];   // looks that follow a hero for a moment (the dust of a charge)
+    this.traps = [];    // the Rangers' snare traps on the ground (where the battle is run)
     this.gfx = new GroundFX(game);   // the glyphs, shells and columns of light the abilities draw (see groundfx.js)
+    this.trapLook = new TrapLooks(game);   // the Snare Traps as they look (rangertrap.js)
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
   }
@@ -146,11 +197,13 @@ export class Abilities {
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
   // Ranger's volley). Returns false when it is refused.
   use(p, slot, cam, dir, at = null) {
-    const def = p.cls[slot];
+    const def = abilityOf(p, slot);
     if (!def || !p.alive || p.drive) return false;
-    const again = def.id === 'evade' && p.buffs.has('twin');   // Twin Roll: one more roll while the first one's window is open
-    if (p.abilCd[slot] > 0.45 && !again) return false;   // a little slack for network delay
-    if (!again) p.abilCd[slot] = p.abilityCd(slot);
+    if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
+    p.abilCd[slot] = p.abilityCd(slot);
+    // (a guest says where its eyes are: never more than a step from where the host has its hero)
+    const eye = p.eyePos(this.tmpv);
+    if (cam.distanceToSquared(eye) > 9) cam = eye.clone();
     this[def.id](p, cam, dir.clone().normalize(), at);
     return true;
   }
@@ -175,11 +228,13 @@ export class Abilities {
       } else this.chargeSweep(p, e);
     }
     this.burn(dt);
+    this.updateTraps(dt);
   }
 
   // Looks that run on every screen: the glyphs on the ground, shells and columns of light, the dust behind a charging hero.
   updateFx(dt) {
     this.gfx.update(dt);
+    this.trapLook.update(dt);
     for (let i = this.rising.length - 1; i >= 0; i--) { this.rising[i].t += dt; if (this.rising[i].t > 0.9) this.rising.splice(i, 1); }
     for (let i = this.trails.length - 1; i >= 0; i--) {
       const e = this.trails[i];
@@ -212,6 +267,7 @@ export class Abilities {
       const d = Math.hypot(s.pos.x - x, s.pos.z - z);
       if (d - s.radius <= r && (y === null || Math.abs(s.pos.y - y) < dy + 2)) fn(s, d);
     }
+    eachArcher(g, team, x, z, r, y, dy, fn);   // (the archers on the castle towers: towerarchers.js)
   }
 
   eachFriend(team, x, z, r, fn) {
@@ -316,7 +372,7 @@ export class Abilities {
   }
 
   // ---------- Ranger ----------
-  // The volley falls on the circle the Ranger placed: arrows go up from the bow, and a moment later they come down
+  // Arrow Volley (a Ranger talent puts it in Power Shot's place): the volley falls on the circle the Ranger placed: arrows go up from the bow, and a moment later they come down
   // out of the sky over about a second, most of them picking a foe standing inside the circle.
   volley(p, cam, dir, at) {
     const g = this.g, V = VOLLEY;
@@ -328,15 +384,11 @@ export class Abilities {
       c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
     }
     const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
-    const k = talentFx(p, 'volleyRadius', 1), slow = talentFx(p, 'volleySlow', 0), wave = talentFx(p, 'volleyWave', null);
-    const flight = (arrows, t) => {
-      const shots = [];
-      for (let i = 0; i < arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / arrows);
-      this.active.push({ kind: 'rain', p, t, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * V.dmg, radius: V.radius * k, slow, aimed: talentFx(p, 'volleyAimed', V.aimed) });
-    };
-    flight(V.arrows + talentFx(p, 'volleyArrows', 0), 0);
-    if (wave) flight(wave.arrows, -wave.gap);   // Second Wave (Ranger talent): another flight, a moment later
-    this.emit('volley', cam, f, [c], k);
+    const shots = [];
+    for (let i = 0; i < V.arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / V.arrows);
+    const dmg = p.bowDmg * V.dmg * talentFx(p, 'volleyDmg', 1);   // (Heavy Draw, a Ranger talent)
+    this.active.push({ kind: 'rain', p, t: 0, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg, radius: V.radius, aimed: V.aimed });
+    this.emit('volley', cam, f, [c]);
   }
 
   // The arrows that are due: each one falls steeply from above and behind the target onto a foe in the circle (a
@@ -352,7 +404,6 @@ export class Abilities {
         // the foe the volley has picked least so far, so the arrows spread over everyone in the circle
         let o = null, least = Infinity;
         this.eachFoe(e.p.team, e.c.x, e.c.z, e.radius, (f) => {
-          if (e.slow && f.slowT !== undefined) f.slowT = Math.max(f.slowT, e.slow);   // Pinning Fire (Ranger talent)
           const k = (e.picked.get(f) || 0) + Math.random() * 0.5;
           if (k < least) { least = k; o = f; }
         }, e.c.y, 12);
@@ -397,13 +448,77 @@ export class Abilities {
     return { pos: new THREE.Vector3(x, phys.groundHeight(x, z, from.y), z), far: true };
   }
 
-  evade(p) {
-    p.buffs.add('ghost', 0.85);
-    const again = talentFx(p, 'rollAgain', 0);   // Twin Roll (Ranger talent): the first roll opens a window for a second
-    if (again) { if (p.buffs.has('twin')) p.buffs.del('twin'); else p.buffs.add('twin', again); }
-    const focus = talentFx(p, 'focus', null);   // Hunter's Focus: the next arrow is drawn at once and hits harder
-    if (focus) p.buffs.add('focus', focus.time, focus.dmg);
-    this.emit('evade', p.pos, ZERO);
+  // Power Shot: the hero has already held the full draw (Player.tickPower); this looses the arrow. It flies flat and fast and goes
+  // through every soldier in its line (Projectiles: opts.power).
+  powershot(p, cam, dir) {
+    const P = RANGER.power;
+    const from = cam.clone().addScaledVector(dir, 0.6);
+    from.y -= 0.08;
+    const dmg = p.bowDmg * P.dmg * talentFx(p, 'powerDmg', 1);
+    this.g.projectiles.fireArrow(from, dir.clone().multiplyScalar(P.speed), p.team, dmg, p, true, 'Power Shot', { power: 1 });
+    p.swingT = 0.6; p.attackDir = 'over';   // (the loose on the body the others see)
+    this.emit('power', from, dir);
+  }
+
+  // Snare Trap: thrown at the spot under the crosshair (or as far as it goes); it lands, and a moment later it is armed.
+  trap(p, cam, dir) {
+    const T = RANGER.trap;
+    const r = this.aimPoint(cam, dir, T.range, p.team);
+    const at = r.pos;
+    const dx = at.x - p.pos.x, dz = at.z - p.pos.z, d = Math.hypot(dx, dz);
+    if (d < 1.5) { at.x = p.pos.x + Math.sin(p.yaw) * 1.5; at.z = p.pos.z + Math.cos(p.yaw) * 1.5; }   // (never at your own feet)
+    at.y = this.g.physics.groundHeight(at.x, at.z, Math.max(at.y, p.pos.y) + 0.5);
+    const mine = this.traps.filter((t) => t.p === p);
+    if (mine.length >= T.max) this.dropTrap(mine[0], false);   // the oldest is taken up again
+    const tr = { p, team: p.team, pos: at.clone(), t: 0, armAt: T.flight + T.arm, life: T.life, sprung: false };
+    this.traps.push(tr);
+    this.emit('trap', at, flat(dir), [p.eyePos(new THREE.Vector3())]);
+  }
+
+  // the traps that are out: a foe who steps into an armed one is caught (simulated where the battle is run)
+  updateTraps(dt) {
+    const T = RANGER.trap;
+    for (let i = this.traps.length - 1; i >= 0; i--) {
+      const tr = this.traps[i];
+      tr.t += dt;
+      if (tr.t >= tr.life) { this.dropTrap(tr, false); continue; }
+      if (tr.t < tr.armAt) continue;
+      let caught = null, best = Infinity;
+      this.eachFoe(tr.team, tr.pos.x, tr.pos.z, T.radius, (o, d) => { if (!o.isSiege && !o.isTowerArcher && d < best) { best = d; caught = o; } }, tr.pos.y, 1.6);
+      if (caught) this.spring(tr, caught);
+    }
+  }
+
+  spring(tr, o) {
+    const T = RANGER.trap, p = tr.p, g = this.g;
+    const root = T.root + talentFx(p, 'trapRoot', 0);
+    this.root(o, root);
+    const bite = talentFx(p, 'trapDmg', 0);   // Iron Jaws (Ranger talent)
+    if (bite) g.damage(o, bite, p, { splash: true, ability: 'Snare Trap' });
+    const mark = talentFx(p, 'trapMark', null);   // Hunter's Mark (Ranger talent): the caught foe takes more from arrows for a while
+    if (mark && o.alive) this.mark(o, mark.time, mark.dmg);
+    const slowR = T.slowR * talentFx(p, 'trapSlowR', 1);
+    this.eachFoe(tr.team, tr.pos.x, tr.pos.z, slowR, (f) => { if (f !== o && !f.isSiege) this.slow(f, T.slowT, T.slow); }, tr.pos.y, 3);
+    this.dropTrap(tr, true);
+  }
+
+  // rooted: a soldier stops where it is (units.js rootT); a hero cannot walk (Player.move) but can still fight
+  root(o, t) {
+    if (o.isPlayer) { o.buffs.add('rooted', t); o.dash = null; } else if (o.rootT !== undefined) o.rootT = Math.max(o.rootT, t);
+  }
+  slow(o, t, by) {
+    if (o.isPlayer) o.buffs.add('slow', t, by); else if (o.snareT !== undefined) { o.snareT = Math.max(o.snareT, t); o.snareMul = 1 - by; }
+  }
+  mark(o, t, mul) {   // (Projectiles reads markUntil and markMul; a hero also sees it among their effects)
+    o.markUntil = this.g.time + t; o.markMul = mul;
+    if (o.isPlayer) o.buffs.add('marked', t, mul);
+  }
+
+  // a trap goes: sprung (snapped shut on a foe) or taken up (it has lain too long, or its Ranger set another)
+  dropTrap(tr, sprung) {
+    const i = this.traps.indexOf(tr);
+    if (i >= 0) this.traps.splice(i, 1);
+    this.emit(sprung ? 'snap' : 'trapgone', tr.pos, ZERO);
   }
 
   // ---------- Mage ----------
@@ -673,13 +788,31 @@ export class Abilities {
         snd('roar');
         break;
       }
-      case 'evade': {
-        gf.glyph('shock', at.x, at.y, at.z, 2.6, 0xb8f0a8, 0.4, { team: house });
-        fx._dust(at.clone().setY(at.y + 0.2), 10, 1.3, '');
-        fx.ring(at, 0.8, this.col.set(0x9ae88a), 12, { up: 1.2, size: 0.22 });
-        snd('swing');
+      case 'power': {
+        // the heavy arrow leaves the bow with a crack and a burst of air; its flight is drawn by Projectiles (every screen gets the arrow)
+        const f = this.tmpv.copy(dir).normalize();
+        fx.flash(at.clone().addScaledVector(f, 0.5), this.col.set(0xd8f0b8), 2.2, 0.15, 0.6);
+        fx.ring(at.clone().addScaledVector(f, 0.8), 0.25, this.col.set(0xe8f6d0), 14, { up: 0.3, size: 0.18, speed: 5 });
+        snd('powershot');
         break;
       }
+      case 'trap': {
+        // the trap flies from the Ranger's hand (targets[0]: the eyes) to where it lands
+        const from = targets && targets[0] ? targets[0] : at.clone().setY(at.y + 1.5);
+        this.trapLook.throw(from, at, Math.atan2(dir.x, dir.z), RANGER.trap.flight);
+        snd('trapThrow');
+        break;
+      }
+      case 'snap': {
+        this.trapLook.snap(at);
+        gf.glyph('shock', at.x, at.y, at.z, 1.6, 0xd8c8a0, 0.35, { strength: 1.6 });
+        gf.glyph('pulse', at.x, at.y, at.z, RANGER.trap.slowR, 0x9ad08a, 0.7, { team: house });
+        fx._sparks(at.clone().setY(at.y + 0.3), 10);
+        fx._dust(at.clone().setY(at.y + 0.15), 8, 1.2, '');
+        snd('trapSnap');
+        break;
+      }
+      case 'trapgone': this.trapLook.gone(at); break;
       case 'volley': {
         // a flight of arrows leaves the bow and climbs out of sight; the circle stays marked on the ground until they land
         snd('bow');
