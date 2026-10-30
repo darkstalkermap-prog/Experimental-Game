@@ -18,7 +18,7 @@ import { FX } from './fx.js';
 import { LordAI } from './ai.js';
 import { buy, SHOP_BY_ID } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
-import { incomingSide, PARRY_WINDOW } from './combat.js';
+import { PARRY_WINDOW, BLOCK_STAMINA } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
@@ -727,16 +727,16 @@ export class Game {
       if (attacker.isPlayer) this.deliver(attacker, { k: 'fb', text: 'Blocked' });
       return;
     }
-    // heroes guard with their shield; guarding the side the blow comes from stops it completely,
-    // and doing so just as it lands parries, leaving the attacker reeling
+    // heroes guard with their shield: a blow from in front is stopped (raising the guard just as it lands parries, and the
+    // attacker reels), while it costs stamina; with too little left, or against arrows and spells, the shield only softens it
     if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.35) {
         const at = target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6);
-        if (info.melee && info.attackDir && target.blockDir === incomingSide(info.attackDir)) {
-          target.stamina = Math.max(0, target.stamina - 4);
+        if (info.melee && target.stamina >= BLOCK_STAMINA) {
+          target.stamina = Math.max(0, target.stamina - BLOCK_STAMINA);
           if (this.time - target.blockStart < PARRY_WINDOW && attacker.stagger) {
             attacker.stagger(0.9, target);
             this.fx.sparks(at, 22);

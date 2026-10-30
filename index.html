@@ -67,20 +67,6 @@
   #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
   #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
   /* direction indicator: four chevrons around the crosshair */
-  #dirs { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-  #dirs i { position: absolute; width: 0; height: 0; border: 9px solid transparent; opacity: 0.22; transition: opacity 0.08s; }
-  #dirs i[data-d="over"] { left: -9px; top: -46px; border-bottom: 12px solid #fff; border-top: 0; }
-  #dirs i[data-d="thrust"] { left: -9px; top: 34px; border-top: 12px solid #fff; border-bottom: 0; }
-  #dirs i[data-d="left"] { top: -9px; left: -46px; border-right: 12px solid #fff; border-left: 0; }
-  #dirs i[data-d="right"] { top: -9px; left: 34px; border-left: 12px solid #fff; border-right: 0; }
-  #dirs i.aim { opacity: 0.75; }
-  #dirs i.wind { opacity: 1; filter: drop-shadow(0 0 4px #ffcc55); }
-  #dirs i[data-d="over"].wind { border-bottom-color: #ffd36a; } #dirs i[data-d="thrust"].wind { border-top-color: #ffd36a; }
-  #dirs i[data-d="left"].wind { border-right-color: #ffd36a; } #dirs i[data-d="right"].wind { border-left-color: #ffd36a; }
-  #dirs i[data-d="over"].guard { border-bottom-color: #7cc0ff; opacity: 1; } #dirs i[data-d="thrust"].guard { border-top-color: #7cc0ff; opacity: 1; }
-  #dirs i[data-d="left"].guard { border-right-color: #7cc0ff; opacity: 1; } #dirs i[data-d="right"].guard { border-left-color: #7cc0ff; opacity: 1; }
-  #dirs i[data-d="over"].threat { border-bottom-color: #ff3b2f; opacity: 1; } #dirs i[data-d="thrust"].threat { border-top-color: #ff3b2f; opacity: 1; }
-  #dirs i[data-d="left"].threat { border-right-color: #ff3b2f; opacity: 1; } #dirs i[data-d="right"].threat { border-left-color: #ff3b2f; opacity: 1; }
   kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 11px/1.4 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.35); color: #fff; }
   #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
   #prompt kbd { font-size: 14px; }
@@ -653,7 +639,6 @@
 <div id="hud" class="hidden">
   <div id="vignette"></div>
   <div id="crosshair"></div>
-  <div id="dirs"><i data-d="over"></i><i data-d="right"></i><i data-d="thrust"></i><i data-d="left"></i></div>
   <div id="feedback"></div>
   <div id="drawbar"><div id="drawFill"></div></div>
   <div id="hitmarker"></div>
@@ -819,10 +804,8 @@
       <b>Space at a wall</b><span>Jump at your own castle's wall to climb onto the wall walk</span>
       <b>C (hold)</b><span>Duck: harder to hit, slower</span>
       <b>Mouse</b><span>Look</span>
-      <b>Left click</b><span>Hold to wind up, release to strike · draw bow</span>
-      <b>Right click</b><span>Guard (or feint while winding up) · aim bow</span>
-      <b>Mouse flick</b><span>Choose direction: left, right, up = overhead, down = thrust</span>
-      <b>Red arrow</b><span>Incoming blow: guard that side; just in time parries</span>
+      <b>Left click</b><span>Swing your sword (hold to keep swinging) · hold and release to shoot the bow</span>
+      <b>Right click</b><span>Block with your shield: stops blows from the front; just in time parries · aim bow</span>
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
       <b>Q</b><span>Class ability: attack (Ranger: hold to aim the circle, let go to fire)</span>
       <b>R</b><span>Class ability: defence</span>

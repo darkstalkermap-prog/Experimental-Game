@@ -41,7 +41,6 @@ export class Unit {
     this.idleT = Math.random() * 10;
     this.attackDir = 'over';
     this.staggerT = 0;
-    this.feint = false;
     this.strafeSide = Math.random() < 0.5 ? 1 : -1;
     this.strafeT = 0;
     this.hasShield = !!t.shield;
@@ -216,7 +215,6 @@ export class Unit {
     this.staggerT = Math.max(this.staggerT, sec);
     this.staggerMax = this.staggerT;
     this.swingT = -1;
-    this.feint = false;
     this.attackTimer = Math.max(this.attackTimer, sec + 0.25);
     if (from && from.pos) {
       const dx = this.pos.x - from.pos.x, dz = this.pos.z - from.pos.z;
@@ -240,7 +238,6 @@ export class Unit {
     if (this.braced) chance = Math.max(chance, info.ranged ? 0.7 : 0.6); // locked shields
     if (this.mounted) chance *= 0.5;
     if (info.charge >= 0.8) chance *= 0.6;                                   // heavy blows break through
-    if (attacker.feintedAt !== undefined && this.game.time - attacker.feintedAt < 1.2) chance *= 0.35; // fell for a feint
     if (Math.random() >= chance) return false;
     this.blockFlash = 0.35;
     if (!info.ranged) this.attackTimer = Math.min(this.attackTimer, 0.35); // quick riposte
@@ -676,14 +673,9 @@ export class Unit {
   }
 
   chooseAttackDir() {
+    // (only how the blow looks: any blow from in front is stopped by a raised shield)
     const dirs = attackDirsFor(this.def.weapon);
-    const t = this.target;
-    // a hero aims where its opponent isn't guarding
     if (this.isGiant) return Math.random() < 0.5 ? 'over' : 'right';
-    if (this.isHero && t && t.isPlayer && t.blocking && dirs.length > 1 && Math.random() < 0.75) {
-      const open = dirs.filter((d) => d !== t.blockDir);
-      return open[Math.floor(Math.random() * open.length)];
-    }
     return dirs[Math.floor(Math.random() * dirs.length)];
   }
 
@@ -691,21 +683,12 @@ export class Unit {
     this.swingT = 0;
     this.struck = false;
     this.attackDir = this.chooseAttackDir();
-    this.feint = this.isHero && !this.ranged && Math.random() < 0.22;
     this.attackTimer = this.cd * (0.9 + Math.random() * 0.2);
     if (!this.ranged) this.game.audio.play('swing', this.pos);
   }
 
   updateAttack(dt) {
     this.swingT += dt * (this.isGiant ? 0.45 : 1); // giants wind up slowly
-    if (this.feint && this.swingT >= 0.18) {
-      // feint: abandon the wind-up and come in from another side
-      this.feint = false;
-      this.swingT = -1;
-      this.attackTimer = 0.12;
-      this.feintedAt = this.game.time;
-      return;
-    }
     const strikeAt = this.ranged ? 0.55 : 0.32;
     if (!this.struck && this.swingT >= strikeAt) {
       this.struck = true;

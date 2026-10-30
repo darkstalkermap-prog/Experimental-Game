@@ -5,7 +5,7 @@ import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y } from './models.js';
 import { avoidCastles } from './nav.js';
-import { dirFromAim, STRIKE, DIRS, DIR_IDX } from './combat.js';
+import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
@@ -65,8 +65,7 @@ export class Player {
     this.climb = null;         // a scramble up a castle wall: { t, dur, ... }
     this.climbing = false;     // (what other screens are told)
     this.climbCd = 0;
-    this.climbHint = false;    // a wall is right in front and a jump would climb it (for the on-screen prompt)
-    this.climbMsgAt = -99;
+    this.climbHint = false;    // a wall is right in front and a jump would climb it: 'own' or 'foe' (for the on-screen prompt)
     this.hintT = 0;
     this.vmDown = 0;           // how far the weapons are lowered (while climbing)
     this.aiming = null;        // holding Q to place the Ranger's volley: { slot, t, at, far }
@@ -101,14 +100,13 @@ export class Player {
     this.swingT = -1;          // animation clock other people see on this hero's body
     this.struck = false;
     this.blocking = false;
-    // directional melee
-    this.aim = { x: 0, y: 0 };  // recent mouse movement: picks attack / guard direction
+    // melee: left click swings, right click guards in front (combat.js)
     this.atkDir = 'right';
-    this.attackDir = 'right';
-    this.atk = null;            // { dir, phase: 'wind' | 'strike' | 'recover', t, charge }
-    this.blockDir = 'right';
+    this.attackDir = 'right';   // how the current swing looks (the swings take turns; nobody chooses)
+    this.swingN = 0;
+    this.atk = null;            // { dir, phase: 'wind' | 'strike' | 'recover', t }
+    this.blockDir = 'right';    // (kept for the network snapshot; a guard covers the front whatever this is)
     this.blockStart = -99;
-    this.feintedAt = undefined;
     this.staggerT = 0;
     this.shake = 0;
     this.drawT = 0;
@@ -237,7 +235,6 @@ export class Player {
       this.pitch = n.pitch;
       this.vel.set(n.vx, 0, n.vz);
       if (n.b && !this.blocking) this.blockStart = this.game.time - (n.ba || 0);
-      if (n.b && n.bd !== undefined && DIRS[n.bd] !== this.blockDir) { this.blockDir = DIRS[n.bd]; this.blockStart = this.game.time - (n.ba || 0); }
       this.blocking = !!n.b;
       this.weapon = n.w ? 'bow' : 'sword';
       this.mounted = !!n.m && this.hasHorse;
@@ -252,6 +249,8 @@ export class Player {
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
       if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
+      // (blocks on the shield cost stamina here, where the battle is run: it comes back as it does on the guest's own screen)
+      this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
       if (this.mounted) this.trample(dt);
       this.tickAbilities(dt);
     }
@@ -262,7 +261,7 @@ export class Player {
   poseMsg() {
     const m = { x: r2(this.pos.x), y: r2(this.pos.y), z: r2(this.pos.z), yaw: r2(this.yaw), pitch: r2(this.pitch),
       vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
-      bd: DIR_IDX[this.blockDir], ba: r2(Math.max(0, this.game.time - this.blockStart)),
+      ba: r2(Math.max(0, this.game.time - this.blockStart)),
       m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed), dk: this.ducking ? 1 : 0, cl: this.climb ? 1 : 0 };
     if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
     return m;
@@ -607,16 +606,14 @@ export class Player {
     this.climbing = !!this.climb;
     if ((this.hintT -= dt) <= 0) {
       this.hintT = 0.15;
-      this.climbHint = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround && this.stamina >= BODY.climbStamina &&
-        !!g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height, this.team);
+      // (the prompt: false, or 'own' / 'foe' for a wall that a jump would climb now)
+      const l = !this.mounted && !this.climb && !this.ducking && this.climbCd <= 0 && this.onGround && this.stamina >= BODY.climbStamina &&
+        g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, Math.sin(this.yaw), Math.cos(this.yaw), BODY.height, null);
+      this.climbHint = !l ? false : l.owner !== undefined && !allied(l.owner, this.team) ? (this.stamina >= BODY.enemyClimb.stamina ? 'foe' : false) : 'own';
     }
     if (this.aiming) this.updateAim(dt, input);
 
     // combat
-    const decay = Math.pow(0.0004, dt);
-    this.aim.x = this.aim.x * decay + m.dx;
-    this.aim.y = this.aim.y * decay + m.dy;
-    const aimDir = dirFromAim(this.aim.x, this.aim.y, null);
     if (this.staggerT > 0) {
       this.staggerT -= dt;
       this.atk = null;
@@ -627,7 +624,7 @@ export class Player {
       this.shake = Math.max(this.shake, 0.1);   // hands full: the view judders as you haul yourself up
     } else if (this.weapon === 'sword') {
       if (this.buffs.has('whirl')) { this.atk = null; this.blocking = false; }
-      else this.swordInput(dt, m, aimDir);
+      else this.swordInput(dt, m);
       this.zoomed = false;
     } else {
       this.blocking = false;
@@ -751,30 +748,21 @@ export class Player {
     return { moving, sprint };
   }
 
-  // Hold left to wind up in the direction you last moved the mouse, release to strike.
-  // Right click guards; while winding up it feints instead.
-  swordInput(dt, m, aimDir) {
+  // Left click swings (held, the hero keeps swinging); right click raises the shield in front (it drops a swing that is
+  // still winding up). The swings take turns between a few looks (SWING_CYCLE): the player never picks a direction.
+  swordInput(dt, m) {
     const g = this.game;
     let atk = this.atk;
-    if (atk && atk.phase === 'wind' && m.rightPressed) {
-      this.atk = atk = null;
-      this.feintedAt = g.time;
-      this.stamina = Math.max(0, this.stamina - 3);
-      if (this.netClient) g.net.toHost({ a: 'feint' });
-    }
-    const canGuard = !atk || atk.phase === 'recover';
-    if (m.right && canGuard) {
-      const dir = aimDir || (this.blocking ? this.blockDir : this.atkDir);
-      if (!this.blocking || dir !== this.blockDir) this.blockStart = g.time; // raising or shifting the guard opens a parry window
-      this.blockDir = dir;
+    if (m.right && (!atk || atk.phase !== 'strike')) {
+      if (!this.blocking) this.blockStart = g.time;   // raising the guard opens a parry window
       this.blocking = true;
-      this.atk = atk = null;
+      if (atk) { this.atk = atk = null; this.swingT = -1; }
     } else this.blocking = false;
     if (this.blocking) return;
 
     if (!atk && (m.leftPressed || m.left) && this.stamina > 4) {
-      const dir = aimDir || this.atkDir;
-      this.atk = atk = { dir, phase: 'wind', t: 0, charge: 0 };
+      const dir = SWING_CYCLE[this.swingN++ % SWING_CYCLE.length];
+      this.atk = atk = { dir, phase: 'wind', t: 0 };
       this.atkDir = dir;
       this.attackDir = dir;
       this.stamina -= 6;
@@ -784,26 +772,26 @@ export class Player {
     if (!atk) return;
     atk.t += dt;
     if (atk.phase === 'wind') {
-      if ((!m.left && atk.t >= 0.09) || atk.t > 1.4) {
-        atk.charge = Math.max(0, Math.min(1, (atk.t - 0.09) / 0.5));
+      if (atk.t >= SWING.wind) {
         atk.phase = 'strike'; atk.t = 0;
         this.struck = false;
         this.swingT = 0.25;
         g.audio.play('swing', this.isBot ? this.pos : null);
-      } else this.swingT = Math.min(0.24, atk.t * 1.7);
+      } else this.swingT = 0.24 * atk.t / SWING.wind;
     } else if (atk.phase === 'strike') {
       this.swingT = 0.25 + atk.t * 0.75;
-      if (!this.struck && atk.t >= 0.05) { this.struck = true; this.meleeStrike(atk.dir, atk.charge); }
-      if (atk.t >= 0.16) { atk.phase = 'recover'; atk.t = 0; }
+      if (!this.struck && atk.t >= 0.05) { this.struck = true; this.meleeStrike(atk.dir); }
+      if (atk.t >= SWING.strike) { atk.phase = 'recover'; atk.t = 0; }
     } else {
       this.swingT = 0.4 + atk.t * 0.88;
-      if (atk.t >= 0.2) { this.atk = null; this.swingT = -1; }
+      if (atk.t >= SWING.recover) { this.atk = null; this.swingT = -1; }
     }
   }
 
   // knocked off balance (e.g. your blow was parried)
   stagger(sec) {
     if (this.buffs.has('steady')) return;
+    if (this.climb && this.climb.t < this.climb.dur * 0.82) this.fallFromClimb();   // (a heavy blow knocks a climber off; once over the top he is safe)
     this.staggerT = Math.max(this.staggerT, sec);
     this.atk = null;
     this.swingT = -1;
@@ -839,27 +827,25 @@ export class Player {
     this.eye = BODY.eye - (BODY.eye - BODY.duckEye) * this.duck;
   }
 
-  // Jump at a castle wall from outside and the hero scrambles up it: about a second and some stamina, and then they
-  // stand on the wall walk. Returns whether a climb began (false: nothing to climb, so the jump goes ahead).
+  // Jump at a castle wall and the hero scrambles up it and mantles over the battlements through a crenel onto the wall walk
+  // (or, from the courtyard, up onto the edge of the walk). Your own walls take about a second and some stamina; an
+  // enemy's take longer and cost more (BODY.enemyClimb), and a heavy blow knocks the climber off (see stagger). Returns
+  // whether a climb began (false: nothing to climb, so the jump goes ahead).
   tryClimb() {
     const g = this.game;
     if (this.mounted || this.drive || this.climb || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (!this.onGround && this.pos.y - ground > 2.2) return false;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, this.team);
-    if (!l) {
-      // somebody else's wall: say why the jump does nothing (not every time)
-      if (g.time - this.climbMsgAt > 4) {
-        const other = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, null);
-        if (other && other.owner !== this.team) { this.climbMsgAt = g.time; this.notify('You can only climb the walls of your own castle.'); }
-      }
-      return false;
-    }
-    if (this.stamina < BODY.climbStamina) { this.notify('Too tired to climb.'); this.sound('deny'); return true; }
-    this.stamina -= BODY.climbStamina;
-    this.climb = { t: 0, dur: 0.5 + (l.top - this.pos.y) * 0.08, x0: this.pos.x, y0: this.pos.y, z0: this.pos.z,
-      hx: l.hang.x, hz: l.hang.z, lx: l.land.x, lz: l.land.z, top: l.top, puff: 0 };
+    const l = g.physics.ledge(this.pos.x, this.pos.z, this.pos.y, this.radius, fx, fz, BODY.height, null);
+    if (!l) return false;
+    const foe = l.owner !== undefined && !allied(l.owner, this.team);
+    const cost = foe ? BODY.enemyClimb.stamina : BODY.climbStamina;
+    if (this.stamina < cost) { this.notify(foe ? 'Too tired to climb an enemy wall.' : 'Too tired to climb.'); this.sound('deny'); return true; }
+    this.stamina -= cost;
+    const dur = (0.5 + (l.top - this.pos.y) * 0.08) * (foe ? BODY.enemyClimb.slow : 1);
+    this.climb = { t: 0, dur, x0: this.pos.x, y0: this.pos.y, z0: this.pos.z,
+      hx: l.hang.x, hz: l.hang.z, lx: l.land.x, lz: l.land.z, top: l.top, puff: 0, foe };
     this.vel.set(0, 0, 0);
     this.vy = 0;
     this.onGround = false;
@@ -867,6 +853,20 @@ export class Player {
     this.cancelAim();
     g.audio.play('thud', this.pos);
     return true;
+  }
+
+  // Knocked off a wall half-way up: the hero drops from the face (and lands at its foot).
+  fallFromClimb() {
+    const c = this.climb;
+    if (!c) return;
+    this.climb = null;
+    this.climbing = false;
+    this.climbCd = BODY.climbCooldown;
+    this.pos.x = c.hx; this.pos.z = c.hz;
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.onGround = false;
+    if (this.isLocal) this.notify('Knocked off the wall!');
   }
 
   // In to the foot of the wall, up its face, then over the edge and onto the top.
@@ -1070,15 +1070,16 @@ export class Player {
     return out.set(Math.sin(this.yaw) * cp, Math.sin(this.pitch), Math.cos(this.yaw) * cp);
   }
 
-  meleeStrike(dir = this.atkDir, windCharge = 0) {
+  // One sword blow (dir is only how it looks: every swing reaches and hits the same).
+  meleeStrike(dir = this.atkDir) {
     const g = this.game;
-    if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg(), d: DIR_IDX[dir], ch: r2(windCharge) }); return; }
-    const S = STRIKE[dir] || STRIKE.right;
-    this.attackDir = dir;
+    if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg(), d: DIR_IDX[dir] }); return; }
+    const S = SWING;
+    this.attackDir = DIRS.includes(dir) ? dir : 'right';
     const reach = this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach;
     const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
-    const dmg = this.sword.dmg * this.dmgMult * charge * S.mult * (1 + 0.35 * windCharge) * (0.9 + Math.random() * 0.2);
-    const info = { melee: true, attackDir: dir, charge: windCharge, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };
+    const dmg = this.sword.dmg * this.dmgMult * charge * S.mult * (0.9 + Math.random() * 0.2);
+    const info = { melee: true, charge: charge > 1.6 ? 1 : 0, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };   // (a blow at the gallop counts as heavy)
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
     g.grid.query(this.pos.x, this.pos.z, reach + 1, (u) => {
@@ -1181,6 +1182,7 @@ export class Player {
       if (amount <= 0) return;
     }
     if (info.melee && amount > this.maxHp * 0.15) this.stagger(0.25);
+    else if (this.climbing && amount > this.maxHp * 0.08) this.stagger(0.2);   // a solid hit (an arrow too) knocks a climber off the wall
     if (this.mounted) {
       // the horse takes half the blows
       this.horseHp -= amount * 0.5;

@@ -9,7 +9,7 @@
 import * as THREE from 'three';
 import { CASTLE, WORLD } from './config.js';
 import { navigate } from './nav.js';
-import { DIRS, STRIKE } from './combat.js';
+import { SWING } from './combat.js';
 import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 
@@ -44,7 +44,7 @@ const SKILL = {
   nock: [0.5, 0.15],     // pause between two arrows
   turn: [7, 14],         // radians a second the bot can turn
   block: [0.35, 0.85],   // chance it guards against a blow it saw in time
-  dirs: [0.4, 0.9],      // chance that guard is on the right side
+  dirs: [0.4, 0.9],      // how readily a guard goes up at all (scales the block chance)
 };
 
 const SCAN = 50;         // how far a bot looks around it (metres)
@@ -117,7 +117,6 @@ export class HeroBot {
     this.returnAt = lerp(0.85, 0.7, this.bold);
     this.laneOff = (Math.random() - 0.5) * 12;
     this.lead = lerp(-3, 5, this.bold);
-    this.windBase = lerp(0.12, 0.3, Math.random());
     this.aggro = lerp(18, 28, this.bold);
     this.side = Math.random() < 0.5 ? 1 : -1;
     this.castle = this.g.castles[this.p.team];
@@ -140,8 +139,8 @@ export class HeroBot {
     this.hold = false; this.sprint = false; this.tired = false; this.go = 0;
     this.hasWay = false; this.navAt = 0; this.face = 'way'; this.faceYaw = p.yaw;
     this.agent.nav = null; this.agent.avoid = {}; this.agent.blockedBy = null;
-    this.guardAt = 0; this.guardUntil = 0; this.guardDir = 'right';
-    this.gapUntil = now + 0.6; this.windFor = 0.2; this.hadAtk = false; this.nextDir = 'over'; this.lastDir = '';
+    this.guardAt = 0; this.guardUntil = 0;
+    this.gapUntil = now + 0.6; this.hadAtk = false;
     this.wantHit = false; this.wantShoot = false; this.nockAt = 0; this.drawGoal = 0.7;
     this.castOk = now + 0.5; this.drinkOk = 0; this.weaponOk = 0; this.mountOk = 0; this.noMount = 0; this.passAt = -9; this.meleeUntil = 0; this.backT = 0;
     this.sideT = 0; this.planted = false; this.sideUntil = 0; this.sideSign = 1; this.ghostUntil = 0; this.jumpAt = 0;
@@ -364,20 +363,20 @@ export class HeroBot {
       if ((Math.sin(o.yaw) * dx + Math.cos(o.yaw) * dz) / (Math.hypot(dx, dz) || 1) < 0.4) continue;   // not swinging at us
       this.seen.set(o, now);
       const r = sk.react * (0.75 + 0.5 * Math.random());
-      if (r < tti - 0.02 && Math.random() < sk.block + (o.isPlayer ? 0.1 : 0) - 0.15 * this.bold) {
+      // (a raised shield stops any blow from in front, so a weaker bot is slower to think of raising it at all)
+      if (r < tti - 0.02 && Math.random() < (sk.block + (o.isPlayer ? 0.1 : 0) - 0.15 * this.bold) * (0.55 + 0.45 * sk.dirs)) {
         this.guardAt = now + r;
         this.guardUntil = now + r + tti + 0.3;
-        this.guardDir = Math.random() < sk.dirs ? (o.attackDir || 'over') : DIRS[Math.floor(Math.random() * DIRS.length)];
         this.stats.blocks++;
       }
     }
-    // a soldier in arm's reach whose next blow is due: shield up before it comes (on the wrong side it still stops most of it)
+    // a soldier in arm's reach whose next blow is due: shield up before it comes
     if (!p.atk && p.weapon === 'sword' && !this.retreat) {
       for (let i = 0; i < foes.length; i++) {
         const o = foes[i];
         if (o.isPlayer || o.isSiege || o.ranged || o.isGiant || dist[i] > 3 || o.swingT >= 0 || !(o.attackTimer < 0.3) || now < this.guardUntil) continue;
         if (Math.random() < 0.25 + 0.5 * this.skill - 0.2 * this.bold) {
-          this.guardAt = now; this.guardUntil = now + 0.45; this.guardDir = DIRS[Math.floor(Math.random() * DIRS.length)];
+          this.guardAt = now; this.guardUntil = now + 0.45;
           break;
         }
       }
@@ -692,32 +691,14 @@ export class HeroBot {
   }
 
   // ====================================================================================================== acting
-  // a good direction for the next swing
-  pickDir() {
-    const t = this.target;
-    let d;
-    if (t && t.isPlayer && t.blocking && Math.random() < 0.75) {
-      const open = DIRS.filter((x) => x !== t.blockDir);
-      d = open[Math.floor(Math.random() * open.length)];
-    } else if (this.n.c3 >= 2) d = Math.random() < 0.6 ? (Math.random() < 0.5 ? 'left' : 'right') : 'over';
-    else {
-      const r = Math.random();
-      d = r < 0.32 ? 'over' : r < 0.6 ? 'thrust' : r < 0.8 ? 'right' : 'left';
-    }
-    if (d === this.lastDir && Math.random() < 0.5) d = DIRS[Math.floor(Math.random() * DIRS.length)];
-    this.lastDir = d;
-    return d;
-  }
-
   canStrike() {
     const p = this.p, t = this.target, now = this.t;
     if (!this.wantHit || !t || !t.alive || now < this.gapUntil || p.stamina < 10) return false;
     const dx = t.pos.x - p.pos.x, dz = t.pos.z - p.pos.z, d = Math.hypot(dx, dz);
-    const dir = this.nextDir, S = STRIKE[dir] || STRIKE.right;
-    const reach = p.sword.len + (p.mounted ? 2.2 : 1.6) + S.reach;
+    const reach = p.sword.len + (p.mounted ? 2.2 : 1.6) + SWING.reach;
     const lead = p.mounted ? Math.max(0, Math.abs(p.rideSpeed) - 2) * 0.16 : 0;
     if (d - (t.radius || 0.4) > reach - 0.25 + lead) return false;
-    return Math.abs(angDiff(p.yaw, Math.atan2(dx, dz))) < (dir === 'thrust' ? 0.3 : 0.5);
+    return Math.abs(angDiff(p.yaw, Math.atan2(dx, dz))) < 0.5;
   }
 
   // the direction the bot wants to walk this frame (null: stand still)
@@ -808,19 +789,16 @@ export class HeroBot {
     if (p.staggerT > 0) { p.atk = null; p.blocking = false; p.drawT = 0; }
     else if (p.weapon === 'sword') {
       m.left = m.right = m.rightPressed = false;
-      let dir = null;
       if (p.buffs.has('whirl')) { p.atk = null; p.blocking = false; }
       else {
         const atk = p.atk;
-        if (now >= this.guardAt && now < this.guardUntil && (!atk || atk.phase === 'recover')) { m.right = true; dir = this.guardDir; }
-        else if (atk) { if (atk.phase === 'wind') m.left = atk.t < this.windFor; }
-        else if (this.canStrike()) { m.left = true; dir = this.nextDir; this.windFor = this.windBase * (0.7 + 0.6 * Math.random()); }
-        p.swordInput(dt, m, dir);
+        if (now >= this.guardAt && now < this.guardUntil && (!atk || atk.phase === 'recover')) m.right = true;
+        else if (!atk && this.canStrike()) m.left = true;
+        p.swordInput(dt, m);
       }
       const has = !!p.atk;
       if (this.hadAtk && !has) {
         this.gapUntil = now + this.sk.gap * (0.7 + 0.6 * Math.random());
-        this.nextDir = this.pickDir();
         this.stats.swings++;
       }
       this.hadAtk = has;

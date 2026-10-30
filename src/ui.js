@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { TEAM_CSS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, clock } from './config.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
-import { dirFromAim, incomingSide } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH } from './classes.js';
 import { roadDist } from './world.js';
@@ -181,7 +180,7 @@ export class UI {
         if (c) text = c.gateLocked ? 'Unbar the gate' : 'Bar the gate';
         else if (e) text = e.abandoned ? `Take over the abandoned ${e.name.toLowerCase()}` : `Take the controls of your ${e.name.toLowerCase()}`;
         else if (p.hasHorse && !p.mounted && Math.hypot(p.horsePos.x - p.pos.x, p.horsePos.z - p.pos.z) < 3.5) text = 'Mount your horse';
-        else if (p.climbHint) { text = 'Climb the wall'; promptKey = 'Space'; }
+        else if (p.climbHint) { text = p.climbHint === 'foe' ? 'Climb the enemy wall' : 'Climb onto the wall walk'; promptKey = 'Space'; }
       }
     }
     if (text !== this.lastPrompt || promptKey !== this.lastPromptKey) {
@@ -216,35 +215,6 @@ export class UI {
     this.tab = 'talents';
     if (this.shopOpen) this.renderShop();
     else this.toggleShop(true);
-  }
-
-  // Direction chevrons: where you're aiming / winding up / guarding, and blows coming at you.
-  updateDirs() {
-    const g = this.game;
-    const p = g.player;
-    const els = this.dirEls || (this.dirEls = Object.fromEntries([...document.querySelectorAll('#dirs i')].map((e) => [e.dataset.d, e])));
-    const show = p.alive && p.weapon === 'sword';
-    $('dirs').style.display = show ? '' : 'none';
-    if (!show) return;
-    const state = { left: '', right: '', over: '', thrust: '' };
-    if (p.blocking) state[p.blockDir] = 'guard';
-    else if (p.atk) state[p.atk.dir] = p.atk.phase === 'wind' ? 'wind' : 'aim';
-    else state[dirFromAim(p.aim.x, p.aim.y, p.atkDir)] = 'aim';
-    // enemies close by, facing you and winding up
-    const check = (u) => {
-      if (!u.alive || allied(u.team, p.team) || u.ranged || u.weapon === 'bow' || u.swingT < 0 || u.swingT > 0.33) return;
-      const dx = p.pos.x - u.pos.x, dz = p.pos.z - u.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d > 4.2) return;
-      const face = u.mounted ? u.heading ?? u.yaw : u.yaw;
-      if ((dx * Math.sin(face) + dz * Math.cos(face)) / (d || 1) < 0.55) return;
-      state[incomingSide(u.attackDir || 'over')] = 'threat';
-    };
-    g.grid.query(p.pos.x, p.pos.z, 5, check);
-    for (const h of g.humans) if (h !== p) check(h);
-    for (const d of ['left', 'right', 'over', 'thrust']) {
-      if (els[d].className !== state[d]) els[d].className = state[d];
-    }
   }
 
   hitMarker() {
@@ -781,7 +751,6 @@ export class UI {
     this.updateAbilities(dt);
     updateTalentHud(this, p);
     $('crosshair').classList.toggle('block', p.blocking);
-    this.updateDirs();
     this.updatePrompt();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');
     $('drawFill').style.width = p.weapon === 'bow' ? `${Math.min(1, p.drawT / p.drawTime) * 100}%` : '0%';

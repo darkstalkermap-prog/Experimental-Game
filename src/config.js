@@ -185,6 +185,7 @@ export const BODY = {
   climbReach: 1.1,    // you must be this close to the wall face (from your edge)
   climbStamina: 20,
   climbCooldown: 0.7,
+  enemyClimb: { stamina: 35, slow: 1.7 },   // an enemy's wall: more stamina, a slower climb (and a solid hit knocks you off any wall)
 };
 
 // The Ranger's Arrow Volley: hold Q to put a circle on the ground, let go and the arrows fall on it.
