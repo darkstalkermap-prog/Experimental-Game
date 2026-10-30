@@ -11,7 +11,7 @@ import * as THREE from 'three';
 // colour slots: which per-instance colour a part takes (see unitmat.js)
 export const SLOT = { fixed: 0, cloth: 1, skin: 2, hair: 3, clothDark: 4, clothLight: 5, skinDark: 6, glow: 7 };
 // surface patterns drawn in the fragment shader
-export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10 };
+export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11 };
 // [roughness, metalness]
 export const MAT = {
   cloth: [0.92, 0], wool: [0.97, 0], silk: [0.55, 0], leather: [0.6, 0.02], skin: [0.58, 0], hair: [0.78, 0], fur: [1, 0], wood: [0.74, 0], bone: [0.5, 0],
@@ -20,8 +20,9 @@ export const MAT = {
 
 const _m = new THREE.Matrix4(), _n3 = new THREE.Matrix3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _p2 = new THREE.Vector3(), _s = new THREE.Vector3(), _v = new THREE.Vector3(), _one = new THREE.Vector3(1, 1, 1);
-const _c = new THREE.Color(), _tp = new THREE.Vector3(), _tn = new THREE.Vector3();
+const _c = new THREE.Color(), _tp = new THREE.Vector3(), _tn = new THREE.Vector3(), _tu = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
+const _mx = new THREE.Matrix4();
 
 export class Builder {
   // level 0 richest .. 2 plainest: how many segments and small parts the shape carries
@@ -29,6 +30,16 @@ export class Builder {
     this.level = level;
     this.P = []; this.N = []; this.C = []; this.S = []; this.F = []; this.I = [];
     this.count = 0;
+    this.xf = null;   // a matrix applied to everything placed while it is set (see within)
+  }
+
+  // build part of a shape through matrix M (a helmet scaled to the head, a torso piece moved)
+  within(M, fn) {
+    const prev = this.xf;
+    this.xf = prev ? new THREE.Matrix4().multiplyMatrices(prev, M) : M;
+    fn(this);
+    this.xf = prev;
+    return this;
   }
 
   // level 3 is the baked far-away model: plain like level 2 with fewer segments still
@@ -38,6 +49,8 @@ export class Builder {
   //   m material (MAT key)  c fixed colour (hex)  s slot (SLOT key)  a [shade at the bottom, at the top] of the primitive's y extent
   //   g feature gate  w cloth sway weight, or [bottom, top]  p pattern  uv [cx, cy, sx, sy] planar (x, y) or a function  flat faceted normals
   add(geo, M, o = {}) {
+    const M0 = M;   // (texture coordinates are laid on in the shape's own frame, before `within` moves it)
+    if (this.xf) M = _mx.multiplyMatrices(this.xf, M);
     const pa = geo.attributes.position, na = geo.attributes.normal, ia = geo.index ? geo.index.array : null;
     const nv = pa.count;
     _n3.getNormalMatrix(M);
@@ -66,8 +79,9 @@ export class Builder {
       this.S.push(mat[0], mat[1], slot, o.g || 0);
       let u = 0, v = 0;
       if (uv) {
-        if (typeof uv === 'function') { const r = uv(_tp.x, _tp.y, _tp.z); u = r[0]; v = r[1]; }
-        else { u = (_tp.x - uv[0]) / uv[2] + 0.5; v = (_tp.y - uv[1]) / uv[3] + 0.5; }
+        const q = M0 === M ? _tp : _tu.fromBufferAttribute(pa, i).applyMatrix4(M0);
+        if (typeof uv === 'function') { const r = uv(q.x, q.y, q.z); u = r[0]; v = r[1]; }
+        else { u = (q.x - uv[0]) / uv[2] + 0.5; v = (q.y - uv[1]) / uv[3] + 0.5; }
       }
       this.F.push(w0 + (w1 - w0) * t, o.p || 0, u, v);
     };
@@ -178,6 +192,49 @@ export class Builder {
       pa.setXYZ(i, _p.x + (pa.getX(i) - _p.x) * r, _p.y + (pa.getY(i) - _p.y) * r, _p.z + (pa.getZ(i) - _p.z) * r);
     }
     g.computeBoundingBox();
+    _m.identity();
+    this.add(g, _m, o);
+    g.dispose();
+    return this;
+  }
+
+  // A body of rings stacked along y (a torso, a thigh, a boot): rings [[y, half width, half depth, z offset, x offset?], ...], each a
+  // superellipse (o.sq: 2 is an ellipse, higher is squarer, like a chest). o.arc [start, length] radians (0 = +z) keeps part of the way
+  // round (a breastplate). Normals are smooth across the rings, the ends are left open.
+  loft(rings, o = {}) {
+    // (the plain levels keep every other ring: a distant limb needs its taper, not its muscles)
+    if (this.level >= 2 && rings.length > 4) rings = rings.filter((r, i) => i % 2 === 0 || i === rings.length - 1);
+    const n = o.seg || this.pick(16, 12, 8), sq = o.sq || 2, e = 2 / sq;
+    const a0 = o.arc ? o.arc[0] : 0, al = o.arc ? o.arc[1] : Math.PI * 2, closed = !o.arc;
+    const pos = [], idx = [], cols = n + 1;
+    const down = rings[rings.length - 1][0] < rings[0][0];   // (rings listed downward wind the other way round)
+    const sp = (v) => Math.sign(v) * Math.pow(Math.abs(v), e);
+    for (const r of rings) {
+      for (let i = 0; i <= n; i++) {
+        const t = a0 + (al * i) / n, sx = sp(Math.sin(t)), cz = sp(Math.cos(t));
+        pos.push((r[4] || 0) + r[1] * sx, r[0], (r[3] || 0) + r[2] * cz);
+      }
+    }
+    for (let j = 0; j < rings.length - 1; j++) {
+      for (let i = 0; i < n; i++) {
+        const a = j * cols + i, b = a + cols;
+        if (down) idx.push(a, b, a + 1, a + 1, b, b + 1);
+        else idx.push(a, a + 1, b, a + 1, b + 1, b);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    if (closed) {
+      // (the seam: the first and last column are the same points, so they share one normal)
+      const na = g.attributes.normal;
+      for (let j = 0; j < rings.length; j++) {
+        const a = j * cols, b = a + n;
+        _v.set(na.getX(a) + na.getX(b), na.getY(a) + na.getY(b), na.getZ(a) + na.getZ(b)).normalize();
+        na.setXYZ(a, _v.x, _v.y, _v.z); na.setXYZ(b, _v.x, _v.y, _v.z);
+      }
+    }
     _m.identity();
     this.add(g, _m, o);
     g.dispose();
