@@ -29,6 +29,7 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
 import { sanitizeWar } from './warmode.js';
+import { FramePacer } from './framepace.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -840,13 +841,13 @@ function wakeAudio() {
 addEventListener('pointerdown', wakeAudio);
 addEventListener('keydown', wakeAudio);
 
-const clock = new THREE.Clock();
+const pacer = new FramePacer();   // (the step of each frame, from the refresh it is shown at: see framepace.js)
 let frameErrors = 0;
 let fpsT0 = performance.now(), frames = 0;
-function frame() {
+function frame(ts) {
   requestAnimationFrame(frame);
   const t0 = performance.now();
-  const dt = Math.min(0.05, clock.getDelta());
+  const dt = pacer.step(ts === undefined ? t0 : ts);
   // one bad frame must never freeze the game: report it once and keep going
   try {
     game.update(dt);

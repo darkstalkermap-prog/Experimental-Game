@@ -703,9 +703,12 @@ export class Player {
       if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18 * biomeRules().drain);   // (the heat of the desert drains it faster and slows its return: biometwist.js)
       else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
       const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
-      const acc = this.onGround ? 12 : 2.5;
-      this.vel.x += (tx - this.vel.x) * Math.min(1, dt * acc);
-      this.vel.z += (tz - this.vel.z) * Math.min(1, dt * acc);
+      // (the same approach to the walking speed at any frame rate: per 60th of a second it closes 20% of the gap on the ground, 4% in
+      // the air, as it always did at 60 fps; a fixed share per frame made a start or a stop uneven when the frames were)
+      const keep = this.onGround ? 0.8 : 0.9583;
+      const k = 1 - Math.pow(keep, dt * 60);
+      this.vel.x += (tx - this.vel.x) * k;
+      this.vel.z += (tz - this.vel.z) * k;
     }
 
     if (this.dash) {
@@ -733,9 +736,10 @@ export class Player {
       this.rideSpeed *= 0.6; // ran into a wall
     }
 
-    // vertical
+    // vertical (integrated exactly over the step, so a jump reaches the same height at any frame rate: it used to lose a few
+    // centimetres at 60 fps and more at 30)
+    let ny = this.pos.y + this.vy * dt - 0.5 * WORLD.gravity * dt * dt;
     this.vy -= WORLD.gravity * dt;
-    let ny = this.pos.y + this.vy * dt;
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, Math.max(this.pos.y, ny));
     if (ny <= ground) {
       ny = ground; this.vy = 0; this.onGround = true;
