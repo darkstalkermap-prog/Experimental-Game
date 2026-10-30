@@ -712,7 +712,7 @@ falls ends the match) and the Short / Standard length does not apply.
 shows the score (Blue's hero kills : Red's), the goal of the chosen mode, the battle clock (the time left in the timed mode), the
 round with the seconds to the next army ("Prepare: 24 s" during the preparation), and both keeps and gates as slim bars. A roster
 of the six heroes sits at the top left: class icon, name, level, kills/deaths and a health bar, or "respawn 7 s" while down, with
-your own hero highlighted. Your health, stamina, level and experience bar, abilities, potions and the talent-point hint stay.
+your own hero highlighted (on a narrow window or a large UI scale the roster and the key line move below the score panel). Your health, stamina, level and experience bar, abilities, potions and the talent-point hint stay.
 **Tab** shows the score and a table of the six heroes (side, hero, class, level, kills, deaths, status). A callout says when a
 hero falls ("Enemy hero slain: 12/25", "Your ally Mara was slain"), and the end screen gives the reason, the score and what each
 of the six did (class, level, kills, deaths).
@@ -766,7 +766,7 @@ says what infantry, archers and cavalry do when the battle begins: **Hold** (the
 and fight what comes, archers shoot from where they stand, until you give an order; your hero is free to walk the field),
 Charge, Advance or Follow me. The AI generals keep their own plans.
 
-**The command bar** (bottom of the screen in the battle) gives orders, as in Bannerlord but fewer of them. Choose a group:
+**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
 **1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). The chosen soldiers
 get a small gold arrow over their heads (and the button lights up); the others none. Then:
 
