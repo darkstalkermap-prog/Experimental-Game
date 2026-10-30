@@ -7,13 +7,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
 <style>
+  /* One look for every screen: parchment cards with ink for the menus, dark glass with gold edges for the HUD and the in-battle panels.
+     Type scale 12 / 13.5 / 15 / 18 / 24 / 44; Cinzel for names and buttons, Garamond for everything you read. */
   :root {
     --parch: #e9dcbc;
     --ink: #2a1f14;
     --gold: #e0b44c;
-    --panel: rgba(20, 16, 12, 0.72);
-    --edge: rgba(224, 180, 76, 0.45);
+    --wine: #5a1d12;
+    --panel: rgba(18, 14, 10, 0.7);
+    --edge: rgba(224, 180, 76, 0.34);
+    --muted: rgba(233, 220, 188, 0.7);
     --red: #c43c30;
+    --chip: linear-gradient(#f4ead0, #e3d2a8);
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #111; color: var(--parch);
@@ -22,34 +27,94 @@
   .hidden { display: none !important; }
   h1, h2, h3, h4, button { font-family: 'Cinzel', Georgia, serif; }
   button { cursor: pointer; background: linear-gradient(#4a3a24, #2e2416); color: var(--parch); border: 1px solid var(--edge);
-    padding: 10px 18px; font-size: 15px; letter-spacing: 0.04em; border-radius: 3px; }
+    padding: 9px 18px; font-size: 15px; letter-spacing: 0.03em; border-radius: 4px; transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s; }
   button:hover:not(:disabled) { background: linear-gradient(#6a522e, #3e301c); border-color: var(--gold); }
   button:disabled { opacity: 0.45; cursor: default; }
   button.active { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; color: #fff; }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  /* the small "?" that keeps a long explanation out of the way until it is asked for (a <details>: no script) */
+  details.help > summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+    font: 700 13px/1 Cinzel, Georgia, serif; color: var(--wine); border: 1px solid rgba(90,29,18,0.55); background: rgba(255,250,235,0.55); user-select: none; }
+  details.help > summary::-webkit-details-marker { display: none; }
+  details.help > summary:hover, details.help[open] > summary { background: var(--wine); color: #f6e8c6; border-color: var(--wine); }
 
   /* ---------- menus ---------- */
   .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20;
     background: radial-gradient(ellipse at center, rgba(10,8,6,0.35), rgba(10,8,6,0.85)); }
-  .scroll { background: linear-gradient(#efe3c4, #d9c79c); color: var(--ink); padding: 34px 44px; max-width: 760px; width: calc(100% - 32px);
-    border-radius: 6px; box-shadow: 0 10px 60px rgba(0,0,0,0.6), inset 0 0 40px rgba(120,80,30,0.35); border: 2px solid #8a6a3a;
+  .scroll { position: relative; background: linear-gradient(#efe3c4, #d9c79c); color: var(--ink); padding: 30px 40px; max-width: 760px; width: calc(100% - 32px);
+    border-radius: 8px; box-shadow: 0 10px 60px rgba(0,0,0,0.6), inset 0 0 40px rgba(120,80,30,0.3); border: 2px solid #8a6a3a;
     max-height: calc(100% - 32px); overflow: auto; }
-  .scroll h1 { margin: 0; font-size: 58px; letter-spacing: 0.08em; text-align: center; color: #5a1d12;
+  .scroll h1 { margin: 0; font-size: 44px; letter-spacing: 0.06em; text-align: center; color: var(--wine);
     text-shadow: 0 2px 0 rgba(255,255,255,0.4); font-weight: 900; }
-  .scroll .sub { text-align: center; margin: 4px 0 18px; font-style: italic; font-size: 18px; }
-  .scroll button { background: linear-gradient(#5a1d12, #3b120b); color: #f4e6c4; border-color: #2a0c06; }
+  .scroll .sub { text-align: center; margin: 4px 0 18px; font-style: italic; font-size: 17px; }
+  .scroll button { background: linear-gradient(#64221a, #3b120b); color: #f4e6c4; border-color: #2a0c06; }
+  .scroll button:hover:not(:disabled) { background: linear-gradient(#7a2c20, #4a170e); border-color: #b8862a; }
   .scroll button.active { box-shadow: 0 0 0 2px #e0b44c inset; }
+  .scroll button:focus-visible { outline-color: var(--wine); }
+  /* choices on parchment (segmented: the active one is inked in) */
+  .scroll .seg button, #menu .setup .row button, #lobbyModes button, #lobbyObjective button, #lobbyLength button, .landrow button, #options .quality button {
+    background: var(--chip); color: var(--wine); border: 1px solid rgba(138,106,58,0.75); box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset; }
+  .scroll .seg button:hover:not(:disabled), #menu .setup .row button:hover:not(:disabled), #lobbyModes button:hover:not(:disabled), #lobbyObjective button:hover:not(:disabled),
+  #lobbyLength button:hover:not(:disabled), .landrow button:hover:not(:disabled), #options .quality button:hover:not(:disabled) { background: linear-gradient(#fbf3de, #eadbb4); border-color: var(--wine); }
+  .scroll .seg button.active, #menu .setup .row button.active, #lobbyModes button.active, #lobbyObjective button.active, #lobbyLength button.active, .landrow button.active, #options .quality button.active {
+    background: linear-gradient(#6a2416, #46140b); color: #f8ebc8; border-color: #2a0c06; box-shadow: inset 0 0 0 1px rgba(224,180,76,0.65); }
   .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 10px 0; }
   .scroll.wide { max-width: 1020px; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 30px; align-items: start; }
   .cols .col > :first-child { margin-top: 0; }
   .cols .classes { grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
-  .controls { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 14px; font-size: 15px; margin: 18px 0 8px; }
-  .controls b { font-family: 'Cinzel', serif; font-size: 13px; white-space: nowrap; }
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 14.5px; line-height: 1.3; margin: 14px 0 8px; text-align: left; }
+  .controls b { font-family: 'Cinzel', serif; font-size: 12.5px; color: var(--wine); text-align: right; padding-top: 1px; }
+  #controls .scroll { max-width: 1060px; }
   #controls .scroll { padding-bottom: 0; }
   #controls .scroll > .row:last-child { position: sticky; bottom: 0; margin: 0; padding: 12px 0 22px; background: #d9c79c; }   /* Back stays in view however long the list grows */
   .howto { font-size: 15.5px; line-height: 1.4; }
-  #play, #mpBtn { font-size: 22px; padding: 12px 48px; }
+
+  /* ---------- the main menu: Quick Play first; the three ways to play under it; then the battle's setup and the hero side by side ---------- */
+  #menu .scroll { max-width: 1000px; padding: 26px 36px 20px; }
+  #menu h1 { font-size: 46px; line-height: 1.05; }
+  #menu .sub { margin: 2px 0 12px; }
+  #howtoHelp { position: absolute; top: 16px; right: 18px; z-index: 3; text-align: left; }
+  #howtoHelp > summary { width: auto; height: 26px; padding: 0 11px 0 4px; gap: 6px; border-radius: 13px; font-size: 12px; letter-spacing: 0.04em; }
+  #howtoHelp > summary::before { content: '?'; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--wine); color: #f6e8c6; font-size: 12px; }
+  #howtoHelp[open] > summary::before { background: #f6e8c6; color: var(--wine); }
+  #howtoHelp .howto { position: absolute; right: 0; top: 34px; width: min(460px, calc(100vw - 80px)); padding: 14px 18px; border: 1px solid #8a6a3a; border-radius: 6px;
+    background: linear-gradient(#f8efd8, #ead9b0); box-shadow: 0 8px 30px rgba(40,20,5,0.45); font-size: 15px; line-height: 1.42; }
+  #menu .menu-actions > .row:first-child { margin: 8px 0 14px; gap: 10px; }
+  #play, #mpBtn, #practiceBtn { font-size: 15px; padding: 9px 22px; min-width: 170px; background: var(--chip); color: var(--wine); border: 1px solid #8a6a3a; }
+  #play:hover:not(:disabled), #mpBtn:hover:not(:disabled), #practiceBtn:hover:not(:disabled) { background: linear-gradient(#fbf3de, #eadbb4); border-color: var(--wine); }
+  #mpBtn.active { background: linear-gradient(#6a2416, #46140b); color: #f8ebc8; }
+  #menu .scroll { display: flex; flex-direction: column; }
+  #menu .scroll > * { flex: none; }
+  #menu .menu-actions { display: contents; }
+  #menu .menu-actions .row.small { margin: -6px 0 14px; gap: 8px; }   /* (Renown, Options and Controls: a quiet row under the ways to play) */
+  #menu .menu-actions .row.small button { padding: 5px 14px; font-size: 12.5px; letter-spacing: 0.04em; background: rgba(255,250,235,0.5); color: var(--wine); border: 1px solid rgba(90,29,18,0.4); }
+  #menu .menu-actions .row.small button:hover { background: var(--wine); color: #f6e8c6; }
+  #menu #online, #menu #offlineNote { order: 9; }
+  #menu .cols { gap: 0 22px; }
+  .card-p { border: 1px solid rgba(138,106,58,0.55); border-radius: 6px; background: rgba(255,250,235,0.32); padding: 12px 16px 10px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.5); }
+  .ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(138,106,58,0.4); }
+  .ph h3 { margin: 0; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--wine); }
+  /* the setup rows: a label column on the left, compact choices on the right; their descriptions show when the panel's "?" is open */
+  #menu .setup { display: flex; flex-direction: column; }
+  #menu .setup .ph { order: 0; }
+  #objective { order: 1; } #heroWin { order: 2; } #mapsize { order: 3; } #landRow { order: 4; } #difficulty { order: 5; } #length { order: 6; } #decreeRow { order: 7; }
+  #menu .setup .row { position: relative; justify-content: flex-start; align-items: center; gap: 5px; margin: 0; padding: 3px 0 3px 104px; min-height: 36px; }
+  #menu .setup .row + .row { border-top: 1px dotted rgba(138,106,58,0.35); }
+  #menu .setup .qlabel { position: absolute; left: 0; top: 11px; width: 94px; margin: 0; text-align: right; white-space: nowrap; font: 600 12px Cinzel, Georgia, serif; letter-spacing: 0.06em; color: #6a4a2a; }
+  #menu .setup .row button { padding: 5px 9px; font-size: 13px; letter-spacing: 0.02em; display: inline-flex; flex-direction: row; align-items: baseline; gap: 5px; }
+  #menu .setup .row button small { font: 12px 'EB Garamond', Georgia, serif; opacity: 0.8; letter-spacing: 0; }
+  #menu .setup .mapdesc { display: none; flex-basis: 100%; text-align: left; margin: 2px 0 0; font-size: 13.5px; line-height: 1.3; color: #4a3a22; }
+  #menu .setup:has(details.help[open]) .mapdesc { display: block; }
+  #menu .setup .landrow .seed { margin-left: 4px; }
+  #menu .setup .landrow .seed input { width: 64px; padding: 3px 5px; }
+  #menu .hero-col .classes { margin: 0 0 6px; }
+  #menu .hero-col .classes button { padding: 5px 2px; }
+  #menu .hero-col .classes button .ic { font-size: 22px; }
+  #menu .hero-col .classinfo { min-height: 0; font-size: 13.5px; line-height: 1.3; margin-bottom: 2px; }
+  #heroNote { margin: 6px 0 0; font-size: 14px; }
+  #online { margin-top: 14px; }
   #invite { display: flex; gap: 6px; max-width: 460px; margin: 10px auto 0; }
   #invite input { flex: 1; min-width: 0; font-size: 14px; padding: 6px 8px; }
   #inviteBanner { font-weight: bold; color: #5a1d12; }
@@ -57,7 +122,7 @@
 
   /* ---------- HUD ---------- */
   #hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-  .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; padding: 8px 12px; }
+  .panel { background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; padding: 8px 12px; box-shadow: 0 2px 14px rgba(0,0,0,0.28); }
   #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
   #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.85); }
   #crosshair::before { left: 10px; top: 4px; width: 2px; height: 14px; }
@@ -66,17 +131,20 @@
   #crosshair.bow { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; }
   #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
   #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
-  /* direction indicator: four chevrons around the crosshair */
   kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 11px/1.4 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.35); color: #fff; }
   #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
   #prompt kbd { font-size: 14px; }
-  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 14px; align-items: center; font-size: 14px; padding: 6px 12px; white-space: nowrap; }
-  #command .orders { display: flex; gap: 8px; }
-  #command .orders span { opacity: 0.7; padding: 1px 6px; border-radius: 3px; }
-  #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.3); color: #fff; }
+  /* the orders bar: only while soldiers march in your army (class noarmy on the HUD otherwise, see ui.update) */
+  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; font-size: 13px; padding: 5px 10px; white-space: nowrap; }
+  #hud.noarmy #command { display: none; }
+  #command .orders { display: flex; gap: 4px; padding-left: 10px; border-left: 1px solid var(--edge); }
+  #command .orders span { opacity: 0.6; padding: 1px 6px; border-radius: 3px; }
+  #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.28); color: #fff; }
+  #command kbd { font-size: 10px; padding: 0 4px; }
   #command b { font-weight: 600; color: var(--gold); }
-  @media (max-width: 1420px) { #command { bottom: 150px; } #toasts { bottom: 196px; } }
-  @media (max-width: 1000px) { #command { font-size: 12px; gap: 8px; } #command .orders { gap: 4px; } }
+  #command > .cg:last-child { padding-left: 10px; border-left: 1px solid var(--edge); opacity: 0.8; }
+  @media (max-width: 1100px) { #command { bottom: 160px; } #toasts { bottom: 206px; } }
+  @media (max-width: 1000px) { #command { font-size: 12px; gap: 8px; } #command .orders { gap: 2px; } }
   .orders-grid { grid-column: 1 / -1; display: grid; gap: 14px; }
   .orders-grid h5 { margin: 0 0 6px; font-family: Cinzel, serif; font-size: 14px; color: var(--gold); }
   .orders-grid .row { justify-content: flex-start; margin: 0; }
@@ -95,30 +163,35 @@
   #hitmarker.show { animation: hm 0.25s ease-out; }
   @keyframes hm { from { opacity: 1; } to { opacity: 0; } }
 
-  #status { position: absolute; left: 16px; bottom: 16px; width: 300px; }
-  .bar { position: relative; height: 16px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); margin-bottom: 6px; }
+  /* bottom left: the dock holds (from the top) the talent hint, the two abilities and the hero's own panel, so they stack whatever their heights */
+  #dock { position: absolute; left: 16px; bottom: 16px; width: 300px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  #status { position: relative; width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; padding: 8px 12px 9px; }
+  #status > .bar { width: 100%; }
+  .bar { position: relative; height: 16px; background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18); margin-bottom: 6px; border-radius: 3px; overflow: hidden; }
   .bar .fill { position: absolute; inset: 0; width: 100%; }
   #hpFill { background: linear-gradient(#d0463a, #8c1e16); }
   #stFill { background: linear-gradient(#d6c06a, #96803a); }
   #hpText { position: absolute; inset: 0; text-align: center; font-size: 12px; line-height: 15px; text-shadow: 0 1px 2px #000; }
-  #stbar { height: 7px; }
-  #xpbar { height: 8px; margin-bottom: 4px; }
+  #stbar { height: 6px; margin-bottom: 4px; }
+  #xpbar { height: 6px; margin-bottom: 6px; }
   #xpFill { background: linear-gradient(#b79bff, #6a47d6); width: 0; }
   #xpbar.max #xpFill { background: linear-gradient(#ffe08a, #d9a521); width: 100% !important; }
   #xpbar.glow { animation: xpglow 1.4s ease-out; }
   @keyframes xpglow { 0% { box-shadow: 0 0 14px 3px rgba(190,160,255,0.95); } 100% { box-shadow: 0 0 0 0 rgba(190,160,255,0); } }
-  #lvl { font-family: Cinzel, serif; font-size: 13px; color: #d9c9ff; margin-left: 4px; }
+  #lvl { font-family: Cinzel, serif; font-size: 12.5px; color: #d9c9ff; }
   #xppops { position: absolute; left: 50%; top: calc(50% + 46px); width: 0; height: 0; }
   .xppop { position: absolute; left: 0; top: 0; transform: translateX(-50%); white-space: nowrap; color: #cbb6ff; font-family: Cinzel, serif; font-weight: 700; font-size: 15px; text-shadow: 0 1px 3px #000; animation: xpp 1.5s ease-out forwards; pointer-events: none; }
   @keyframes xpp { 0% { opacity: 0; transform: translate(-50%, 4px); } 12% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -26px); } }
   #banner.level h2 { color: #ffe08a; text-shadow: 0 0 18px rgba(255,214,102,0.8), 0 2px 6px #000; }
-  #weapon { font-family: Cinzel, serif; font-size: 14px; }
-  #cls { font-family: Cinzel, serif; font-size: 13px; opacity: 0.95; }
-  #clsHint { font-family: 'EB Garamond', Georgia, serif; font-size: 12px; opacity: 0.6; }
+  #cls { order: -1; width: 100%; margin-bottom: 6px; font-family: Cinzel, serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; }
+  #clsHint { display: none; }   /* (the key is in the hint line and the Controls; its words stay for whoever reads the element) */
+  #weapon { flex: 1 1 120px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13.5px; color: var(--muted); }
+  #potions { flex: none; margin-left: 10px; font-size: 13.5px; color: var(--muted); white-space: nowrap; }
+  #army { width: 100%; margin-top: 2px; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* class abilities */
-  #abilities { position: absolute; left: 16px; bottom: 192px; display: flex; gap: 8px; align-items: flex-end; }
-  .abil { position: relative; width: 150px; height: 46px; padding: 4px 8px 4px 40px; background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+  #abilities { position: relative; display: flex; gap: 8px; align-items: flex-end; }
+  .abil { position: relative; width: 146px; height: 46px; padding: 4px 8px 4px 40px; background: var(--panel); border: 1px solid var(--edge); border-radius: 6px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
   .abil .ic { position: absolute; left: 6px; top: 6px; font-size: 24px; line-height: 1; }
   .abil kbd { position: absolute; left: 3px; bottom: 3px; margin: 0; min-width: 0; padding: 0 4px; font-size: 10px; }
   .abil .nm { font-family: Cinzel, serif; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -128,21 +201,24 @@
   .abil.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(224,180,76,0.35); }
   .abil.aiming { border-color: #8fe88a; box-shadow: 0 0 12px rgba(143,232,138,0.7); }
   #aimhint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 5px 14px; background: var(--panel); border: 1px solid #8fe88a; border-radius: 4px; font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; color: #d8ffd4; pointer-events: none; }
-  #buffs { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-  #buffs span { background: rgba(0,0,0,0.5); border-left: 3px solid var(--gold); padding: 1px 8px; white-space: nowrap; }
+  #buffs { position: absolute; left: calc(100% + 8px); bottom: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+  #buffs span { background: rgba(0,0,0,0.5); border-left: 3px solid var(--gold); border-radius: 0 3px 3px 0; padding: 1px 8px; white-space: nowrap; }
 
   /* class picker (main menu and lobby) */
   .classes { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 8px 0 4px; }
   .classes button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 2px; font-size: 13px; letter-spacing: 0; }
   .classes button .ic { font-size: 25px; line-height: 1.1; }
   .classes button small { font-family: 'EB Garamond', Georgia, serif; font-size: 11.5px; opacity: 0.8; }
-  .classinfo { text-align: left; font-size: 14.5px; line-height: 1.35; min-height: 8.6em; margin: 6px 0 10px; padding: 8px 12px; background: rgba(255,255,255,0.35); border-left: 5px solid #8a6a3a; }
+  .scroll .classes button { background: var(--chip); color: var(--wine); border: 1px solid rgba(138,106,58,0.75); }
+  .scroll .classes button:hover:not(:disabled) { background: linear-gradient(#fbf3de, #eadbb4); border-color: var(--wine); }
+  .scroll .classes button.active { background: linear-gradient(#6a2416, #46140b); color: #f8ebc8; border-color: #2a0c06; box-shadow: inset 0 0 0 1px rgba(224,180,76,0.65), 0 2px 8px rgba(60,20,8,0.3); }
+  .classinfo { text-align: left; font-size: 14px; line-height: 1.35; min-height: 8.6em; margin: 6px 0 4px; padding: 8px 12px; background: rgba(255,255,255,0.4); border-left: 4px solid #8a6a3a; border-radius: 0 4px 4px 0; }
   .classinfo b { font-family: Cinzel, serif; }
   .classinfo .ab { margin-top: 3px; }
   .classinfo .st { font-size: 13px; opacity: 0.8; }
-  .roster { grid-column: 1 / -1; background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.25); border-radius: 4px; padding: 12px; display: grid; gap: 9px; }
+  .roster { grid-column: 1 / -1; background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.22); border-radius: 6px; padding: 12px; display: grid; gap: 9px; }
   .roster h5 { margin: 0; font-family: Cinzel, serif; font-size: 15px; color: var(--gold); }
-  .roster .help { font-size: 14px; opacity: 0.85; margin: 0; }
+  .roster .help { font-size: 13.5px; line-height: 1.35; color: var(--muted); margin: 0; }
   .roster .rbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 14px; }
   .roster .rbar .lbl { font-family: Cinzel, serif; font-size: 13px; opacity: 0.9; }
   .roster button { padding: 4px 10px; font-size: 12.5px; letter-spacing: 0; }
@@ -168,12 +244,14 @@
   #round { font-family: Cinzel, serif; font-size: 22px; color: var(--gold); }
   #phase { font-size: 15px; }
   #war { font-size: 13px; opacity: 0.9; }
-  #goldbox { position: absolute; right: 16px; top: 12px; font-family: Cinzel, serif; font-size: 24px; color: var(--gold); display: flex; align-items: center; gap: 8px; }
+  #goldbox { position: absolute; right: 16px; top: 12px; font-family: Cinzel, serif; font-size: 22px; font-weight: 700; color: var(--gold); display: flex; align-items: center; gap: 8px; padding: 6px 14px; }
   .coin { color: var(--gold); }
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 58px; max-width: 280px; line-height: 1.35; font-size: 13px; text-align: right; padding: 2px 8px; background: rgba(0,0,0,0.4); border-radius: 3px; text-shadow: 0 1px 2px #000; }
+  #hint { position: absolute; right: 16px; top: 64px; max-width: 280px; line-height: 1.4; font-size: 13px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.42); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
+  /* once the fighting has begun the key reminders step aside (they are in the game menu's Controls) */
+  #hud.inbattle #hint, #hud.inbattle #minimapWrap .mapHint { display: none; }
 
   #factions { position: absolute; left: 16px; top: 12px; width: 350px; font-size: 13px; }
   .fac { display: grid; grid-template-columns: 12px minmax(0, 1fr) 30px 56px 52px 38px; gap: 6px; align-items: center; padding: 2px 0; }
@@ -222,8 +300,8 @@
   #pingWheel .hub small { display: block; font-size: 11px; opacity: 0.85; }
   #pingWheel .stick { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #000; opacity: 0.85; }
 
-  #toasts { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
-  .toast { background: var(--panel); border-left: 4px solid var(--gold); padding: 6px 14px; font-size: 16px; transition: opacity 0.8s; text-align: center; }
+  #toasts { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
+  .toast { background: var(--panel); border-left: 4px solid var(--gold); border-radius: 0 4px 4px 0; padding: 5px 14px; font-size: 15.5px; transition: opacity 0.8s; text-align: center; text-shadow: 0 1px 2px #000; }
   .toast.important { font-size: 18px; color: #ffdcc8; border-left-color: var(--red); background: rgba(70,14,10,0.8); }
   .toast.fade { opacity: 0; }
   #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
@@ -258,7 +336,7 @@
   #tip.show { opacity: 1; }
   #tip b { font-family: Cinzel, serif; font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--gold); margin-right: 9px; }
   #tip kbd { font-size: 12px; margin: 0 1px; }
-  @media (max-width: 1420px) { #tip { bottom: 16px; } }
+  @media (max-width: 1100px) { #tip { bottom: 16px; } }
   @media (max-width: 900px) { #tip { left: auto; right: 16px; bottom: 214px; transform: none; max-width: 280px; text-align: left; } }
   @media (max-width: 760px) { #tip { bottom: 150px; } }
   .tipline { font-size: 17px; font-style: italic; max-width: 520px; margin: 12px auto 0; text-shadow: 0 2px 6px #000; }
@@ -279,27 +357,44 @@
   #respawn { position: absolute; left: 50%; top: 40%; transform: translate(-50%,-50%); text-align: center; }
   #respawn h2 { font-size: 46px; margin: 0; color: #d55; text-shadow: 0 3px 10px #000; }
   #respawnT { font-size: 22px; text-shadow: 0 2px 6px #000; }
-  #fps { position: absolute; right: 214px; bottom: 16px; font-size: 11px; opacity: 0.6; text-shadow: 0 1px 2px #000; }
+  #fps { position: absolute; right: 16px; bottom: 2px; font-size: 10px; opacity: 0.45; text-shadow: 0 1px 2px #000; }
+  /* big screens: the HUD grows with them instead of shrinking into the corners (zoom keeps each piece's offsets in proportion) */
+  @media (min-width: 1800px) and (min-height: 1000px) {
+    #dock, #factions, #goldbox, #hint, #killfeed, #alerts, #heroRoster, #command, #toasts, #tip, #top, #hill, #target, #heroTop, #pracStats, #prompt { zoom: 1.2; }
+    #minimap { width: 216px; height: 216px; }
+  }
 
-  #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(840px, calc(100% - 32px)); max-width: calc(100% - 32px); max-height: calc(100% - 32px); overflow: auto; }
-  #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; }
-  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 12px; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 8px; white-space: nowrap; }
-  #scoreboard td { padding: 5px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  #scoreboard { position: fixed; left: 50%; top: 50%; transform: translate(-50%,-50%); z-index: 8; min-width: min(840px, calc(100% - 32px)); max-width: calc(100% - 32px); max-height: calc(100% - 32px); overflow: auto;
+    padding: 14px 18px; background: linear-gradient(rgba(36,28,18,0.96), rgba(22,17,11,0.96)); border-color: rgba(224,180,76,0.55); box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+  #scoreboard table { width: 100%; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+  #scoreboard th { font-family: Cinzel, serif; text-align: left; font-size: 11.5px; letter-spacing: 0.08em; color: var(--gold); border-bottom: 1px solid var(--edge); padding: 4px 10px 7px; white-space: nowrap; }
+  #scoreboard td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); white-space: nowrap; }
+  #scoreboard tbody tr:nth-child(odd) td { background: rgba(255,255,255,0.03); }
+  #scoreboard td:first-child { font-family: Cinzel, serif; font-weight: 700; font-size: 14px; }
   #scoreboard td:nth-child(n+3) { white-space: nowrap; }
 
   /* ---------- shop ---------- */
   #shop { position: fixed; inset: 0; z-index: 15; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); }
-  #shop .box { width: min(980px, calc(100% - 32px)); max-height: calc(100% - 32px); display: flex; flex-direction: column; background: linear-gradient(#2a2117, #1b150e);
-    border: 1px solid var(--gold); border-radius: 6px; box-shadow: 0 10px 60px #000; }
-  #shop header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--edge); gap: 12px; flex-wrap: wrap; }
-  #shop header h3 { margin: 0; font-size: 26px; color: var(--gold); }
-  #shop .stat { font-family: Cinzel, serif; font-size: 18px; }
-  #shop .tabs { display: flex; gap: 6px; padding: 10px 20px 0; flex-wrap: wrap; }
-  #shop .tabs button:disabled { opacity: 0.35; filter: grayscale(1); }
-  #shopGrid { padding: 16px 20px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; overflow: auto; }
-  .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.25); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; }
-  .card h4 { margin: 0 0 6px; font-size: 16px; color: #f3e2b5; }
-  .card p { margin: 0 0 12px; font-size: 15px; opacity: 0.85; flex: 1; }
+  /* one size for every tab (the box does not jump as you switch), tabs as a strip with the chosen one lit, the gold always at the top right */
+  #shop .box { width: min(980px, calc(100% - 32px)); height: min(780px, calc(100% - 32px)); display: flex; flex-direction: column; background: linear-gradient(#2a2117, #1b150e);
+    border: 1px solid rgba(224,180,76,0.7); border-radius: 8px; box-shadow: 0 10px 60px #000; overflow: hidden; }
+  #shop.hero .box { height: auto; max-height: calc(100% - 32px); }
+  #shop header { display: flex; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--edge); gap: 14px; flex-wrap: wrap; background: rgba(0,0,0,0.18); }
+  #shop header h3 { margin: 0 auto 0 0; font-size: 22px; letter-spacing: 0.04em; color: var(--gold); }
+  #shop .stat { font-size: 15px; color: var(--muted); display: flex; align-items: baseline; gap: 6px; }
+  #shop .stat .coin, #shopGold { font-family: Cinzel, serif; }
+  #shop .stat .coin, #shopGold { color: var(--gold); font-size: 20px; font-weight: 700; }
+  #shopTroops { margin-left: 10px; }
+  #shopClose { padding: 6px 14px; font-size: 13px; }
+  #shop .tabs { display: flex; gap: 2px; padding: 0 20px; flex-wrap: wrap; border-bottom: 1px solid var(--edge); }
+  #shop .tabs button { background: none; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 14px 8px; font-size: 13.5px; letter-spacing: 0.06em; color: var(--muted); margin-bottom: -1px; }
+  #shop .tabs button:hover:not(:disabled) { background: rgba(255,255,255,0.05); color: var(--parch); border-color: rgba(224,180,76,0.4); }
+  #shop .tabs button.active { color: #fff; border-bottom-color: var(--gold); box-shadow: none; background: linear-gradient(transparent, rgba(224,180,76,0.12)); }
+  #shop .tabs button:disabled { display: none; }   /* (Items: not there yet, so not shown) */
+  #shopGrid { flex: 1; min-height: 0; padding: 16px 20px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; overflow: auto; align-content: start; }
+  .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(224,180,76,0.22); border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; }
+  .card h4 { margin: 0 0 6px; font-size: 15px; color: #f3e2b5; }
+  .card p { margin: 0 0 12px; font-size: 14.5px; line-height: 1.35; color: var(--muted); flex: 1; }
   .card button { width: 100%; }
   .card button.unavailable { opacity: 0.45; }
   .card button.poor { opacity: 0.6; }
@@ -308,7 +403,7 @@
   .card h4 small { font-family: 'EB Garamond', Georgia, serif; font-weight: 400; font-size: 13px; opacity: 0.75; margin-left: 4px; }
   .card .ab { font-size: 13.5px; margin-top: 5px; }
   .card .st { font-size: 12.5px; margin-top: 5px; opacity: 0.7; }
-  .classnote { grid-column: 1 / -1; font-size: 14.5px; opacity: 0.85; }
+  .classnote { grid-column: 1 / -1; font-size: 13.5px; line-height: 1.35; color: var(--muted); }
   /* calling a fallen ally back (co-op Conquest): one bar for each ally who is out of the battle, under the tabs on every tab */
   #allyBar { padding: 12px 20px 0; display: flex; flex-direction: column; gap: 8px; }
   #allyBar .al { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 12px; border: 1px solid var(--red); border-radius: 4px; background: rgba(196,60,48,0.15); }
@@ -331,7 +426,7 @@
   .tal-pts b { color: var(--gold); font-size: 19px; }
   .tal-head .respec { margin-left: auto; padding: 6px 16px; font-size: 13px; }
   .tal-head .respec.unavailable { opacity: 0.45; }
-  .tal-note { font-size: 14px; opacity: 0.85; }
+  .tal-note { font-size: 13.5px; line-height: 1.35; color: var(--muted); }
   .tal-tree { display: grid; grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr); gap: 22px 16px; align-items: stretch; }
   .tal-col { align-self: end; padding-bottom: 6px; text-align: center; font-family: Cinzel, serif; font-size: 16px; border-bottom: 2px solid var(--cls, var(--gold)); }
   .tal-col small { display: block; font-family: 'EB Garamond', Georgia, serif; font-size: 12.5px; opacity: 0.7; }
@@ -354,11 +449,11 @@
   .tnode.child.linked::before { background: var(--gold); box-shadow: 0 0 6px rgba(224,180,76,0.7); }
   .tnode.bought { animation: bought 0.45s ease-out; }
   .tnode.nope { animation: nope 0.3s ease-out; }
-  #talentHint { position: absolute; left: 16px; bottom: 244px; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
-  @media (max-width: 760px) { #talentHint { bottom: 212px; } }   /* (the ability tiles sit lower here) */
+  #talentHint { position: relative; padding: 4px 12px; font-family: Cinzel, serif; font-size: 13px; color: #fff3cf; background: var(--panel); border: 1px solid var(--gold); border-radius: 4px; animation: talentPulse 1.8s ease-in-out infinite; }
   /* ---------- practice courtyard ---------- */
   #hud:not(.practice) #pracStats, #hud:not(.practice) #dmgpops { display: none; }
-  #hud.practice #factions, #hud.practice #goldbox, #hud.practice #hill { display: none; }
+  #hud.practice #factions, #hud.practice #goldbox, #hud.practice #hill, #hud.practice #army { display: none; }
+  #practice .note { text-align: left; }
   #pracStats { position: absolute; left: 16px; top: 12px; width: min(400px, calc(50vw - 150px)); font-size: 14px; line-height: 1.5; }
   #pracStats b { color: var(--gold); font-family: Cinzel, serif; font-weight: 600; }
   #pracStats span { opacity: 0.7; font-size: 12.5px; }
@@ -397,7 +492,7 @@
     .tnode small { font-size: 13px; }
   }
   .targets { grid-column: 1 / -1; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .targets .label { width: 100%; font-size: 15px; opacity: 0.85; }
+  .targets .label { width: 100%; font-size: 13.5px; line-height: 1.35; color: var(--muted); }
   #goSections { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
   #goSections:empty { display: none; }
   #gameover h1.win { color: #2c5a12; }
@@ -425,11 +520,19 @@
   #lobbyList b { font-family: Cinzel, serif; font-size: 14px; }
   #lobbyList b small { font-family: 'EB Garamond', Georgia, serif; font-size: 13px; font-weight: 400; opacity: 0.8; }
   .screen.overlay { z-index: 25; }
-  .menu-buttons { display: grid; gap: 10px; max-width: 320px; margin: 18px auto; }
-  .menu-buttons button { font-size: 18px; padding: 12px; }
+  .menu-buttons { display: grid; gap: 8px; max-width: 300px; margin: 16px auto; }
+  .menu-buttons button { font-size: 16px; padding: 10px; }
   .row.small button { padding: 6px 18px; font-size: 14px; }
-  .opt-grid { display: grid; gap: 14px; max-width: 560px; margin: 20px auto 10px; }
-  .opt-grid label { display: grid; grid-template-columns: 170px 1fr 46px; align-items: center; gap: 12px; font-family: Cinzel, serif; font-size: 14px; text-align: left; }
+  .opt-grid { display: grid; gap: 9px; max-width: 560px; margin: 14px auto 6px; }
+  .opt-grid label { display: grid; grid-template-columns: 170px 1fr 46px; align-items: center; gap: 12px; font-family: Cinzel, serif; font-size: 13.5px; text-align: left; }
+  .opt-grid h4.og { margin: 10px 0 0; padding-bottom: 4px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--wine); text-align: left; border-bottom: 1px solid rgba(138,106,58,0.45); }
+  .opt-grid h4.og:first-child { margin-top: 0; }
+  .opt-grid .quality { justify-content: flex-start; margin: 0; gap: 5px; padding-left: 182px; position: relative; }
+  .opt-grid .quality .qlabel { position: absolute; left: 0; font-size: 13.5px; }
+  .opt-grid .quality button { padding: 4px 11px; font-size: 12.5px; }
+  .opts .opt-help { margin: 4px auto 0; max-width: 560px; text-align: center; }
+  .opts .opt-help .note { text-align: left; font-size: 14px; margin: 8px 0 0; }
+  .opt-rivals-note { display: none; }   /* (its words are in the panel's "?") */
   .opt-grid output { font-family: 'EB Garamond', Georgia, serif; font-size: 15px; text-align: right; }
   input[type=range] { accent-color: #8a2a18; width: 100%; }
   .opt-grid input[type=checkbox] { justify-self: start; width: 20px; height: 20px; margin: 0; accent-color: #8a2a18; }
@@ -441,7 +544,7 @@
     .scroll .sub { margin: 0 0 8px; font-size: 16px; }
     .howto { font-size: 14px; line-height: 1.3; }
     .row { margin: 6px 0; }
-    #play, #mpBtn { padding: 8px 40px; font-size: 19px; }
+    #play, #mpBtn, #practiceBtn { padding: 7px 18px; font-size: 14px; }
     .classes { gap: 5px; margin: 4px 0; }
     .classes button { padding: 4px 2px; font-size: 12px; }
     .classes button .ic { font-size: 20px; }
@@ -454,12 +557,11 @@
     .fac { grid-template-columns: 10px 1fr 26px 40px 44px 30px; }
     #minimap { width: 120px; height: 120px; }
     #hill { width: 250px; top: 98px; }
-    #status { width: 210px; }
-    .controls { grid-template-columns: auto 1fr; }
+    #dock { width: 210px; }
     .scroll h1 { font-size: 38px; }
     .classes { grid-template-columns: repeat(3, 1fr); }
-    #abilities { bottom: 160px; }
-    .abil { width: 120px; }
+    .abil { width: 101px; padding-left: 34px; }
+    .abil .kind { display: none; }
   }
 
   /* ---------- Hero Game Mode: the menu rows, the HUD pieces (shown by the class `hero`, set by UI.syncHero), the Talents-only shop, the
@@ -532,8 +634,11 @@
   #gameover .herotbl th { color: #5a1d12; border-bottom-color: #8a6a3a; }
   #gameover .herotbl td { border-bottom-color: rgba(60,40,20,0.2); }
   #gameover .herotbl tr.me td { background: rgba(224,180,76,0.3); }
-  .controls .grp { grid-column: 1 / -1; margin: 12px 0 2px; font-size: 16px; color: #5a1d12; border-bottom: 1px solid #8a6a3a; }
+  .controls .grp, .controls .cg { grid-column: 1 / -1; margin: 0 0 4px; padding-bottom: 4px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--wine); border-bottom: 1px solid rgba(138,106,58,0.5); }
   .controls .war { display: contents; }
+  .controls .cgrp, .controls .cgrp.war { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 4px 12px; align-content: start; padding: 12px 14px; border: 1px solid rgba(138,106,58,0.45); border-radius: 6px; background: rgba(255,250,235,0.3); }
+  .controls .hero-grp { grid-column: 1 / -1; grid-template-columns: 118px minmax(0, 1fr) 118px minmax(0, 1fr); }
+  @media (max-width: 860px) { .controls { grid-template-columns: 1fr; } .controls .cgrp, .controls .hero-grp { grid-template-columns: 96px minmax(0, 1fr); } }
   #controls.hero .war { display: none; }
 </style>
 <script type="importmap">
@@ -546,11 +651,7 @@
 
 <div id="menu" class="screen hidden">
   <div class="scroll wide">
-    <h1>CASTLE WARS</h1>
-    <div class="sub">Four lords. Four castles. Armies that never stop marching.</div>
-    <div class="quick"><button id="quickPlay">Quick Play</button><div id="quickInfo" class="quickinfo"></div></div>
-    <div class="cols">
-      <div class="col">
+    <details id="howtoHelp" class="help"><summary title="How to play">How to play</summary>
         <div class="howto">
           You are the lord of the blue castle. Every castle sends a fresh army marching out every 30 seconds, for as long as it stands.
           Earn gold from kills and spend it on soldiers, castle upgrades and siege engines; pick a hero class; and choose who garrisons your castle
@@ -558,6 +659,18 @@
           Cut down an engine's crew and it is yours for the taking. <b>Conquest</b> is the main mode: the last castle and hero standing wins.
           In <b>King of the Hill</b> the same war has a hill in the middle of the map, and the house that holds it long enough wins outright.
         </div>
+    </details>
+    <h1>CASTLE WARS</h1>
+    <div class="sub">Four lords. Four castles. Armies that never stop marching.</div>
+    <div class="quick"><button id="quickPlay">Quick Play</button><div id="quickInfo" class="quickinfo"></div></div>
+    <div class="menu-actions">
+      <div class="row"><button id="play" title="Start a battle with the setup below">Single Player</button><button id="mpBtn">Multiplayer</button><button id="practiceBtn" title="A walled yard with training dummies: try any hero class, level and talents, and every kind of soldier by rank and tier">Practice Courtyard</button></div>
+      <div id="heroNote" class="note hidden">Hero Game Mode is single player for now. Choose Conquest or King of the Hill to play online.</div>
+      <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
+    </div>
+    <div class="cols">
+      <div class="col setup card-p">
+        <div class="ph"><h3>Battle setup</h3><details class="help"><summary title="Explain these choices">?</summary></details></div>
         <div class="row" id="mapsize" role="group" aria-label="Map size"><span class="qlabel">Map</span>
           <button data-m="small">Small</button><button data-m="medium">Medium</button><button data-m="large">Large</button>
           <span id="mapDesc" class="mapdesc"></span>
@@ -569,7 +682,7 @@
         <div class="row hidden" id="heroWin" role="group" aria-label="How to win"><span class="qlabel">Win by</span>
           <span id="heroWinDesc" class="mapdesc"></span>
         </div>
-        <div class="row" id="difficulty">
+        <div class="row" id="difficulty"><span class="qlabel">Difficulty</span>
           <button data-d="easy">Easy</button>
           <button data-d="normal" class="active">Normal</button>
           <button data-d="hard">Hard</button>
@@ -579,16 +692,11 @@
           <span id="lengthDesc" class="mapdesc"></span>
         </div>
       </div>
-      <div class="col">
-        <h3 class="section" style="margin-top:0">Choose your hero</h3>
+      <div class="col hero-col card-p">
+        <div class="ph"><h3>Your hero</h3></div>
         <div class="classes" id="classPick" role="group" aria-label="Hero class"></div>
         <div class="classinfo" id="classInfo"></div>
       </div>
-    </div>
-    <div class="menu-actions">
-      <div class="row"><button id="play">Single Player</button><button id="mpBtn">Multiplayer</button><button id="practiceBtn" title="A walled yard with training dummies: try any hero class, level and talents, and every kind of soldier by rank and tier">Practice Courtyard</button></div>
-      <div id="heroNote" class="note hidden">Hero Game Mode is single player for now. Choose Conquest or King of the Hill to play online.</div>
-      <div class="row small"><button id="menuOptions">Options</button><button id="menuControls">Controls</button></div>
     </div>
     <div id="online" class="hidden">
       <h3 class="section">Multiplayer (up to 4 players)</h3>
@@ -663,7 +771,6 @@
   <div id="pracStats" class="panel"></div>
   <div id="dmgpops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
-  <div id="talentHint" class="hidden"><kbd>N</kbd> Talent point available (<span id="talentN">1</span>)</div>
   <div id="hint">Esc: menu · B: shop · N: talents · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
@@ -679,8 +786,10 @@
     <span class="orders">
       <span data-o="follow"><kbd>F1</kbd>Follow</span><span data-o="hold"><kbd>F2</kbd>Hold</span><span data-o="charge"><kbd>F3</kbd>Charge</span><span data-o="defend"><kbd>F4</kbd>Defend</span><span data-o="assault"><kbd>T</kbd>Assault</span>
     </span>
-    <span class="cg"><kbd>O</kbd> Orders menu</span>
+    <span class="cg"><kbd>O</kbd> Orders</span>
   </div>
+  <div id="dock">
+  <div id="talentHint" class="hidden"><kbd>N</kbd> Talent point available (<span id="talentN">1</span>)</div>
   <div id="abilities">
     <div class="abil" id="abilQ"><span class="ic"></span><kbd>Q</kbd><span class="nm"></span><span class="kind">Attack</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
     <div class="abil" id="abilR"><span class="ic"></span><kbd>R</kbd><span class="nm"></span><span class="kind">Defence</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
@@ -694,6 +803,7 @@
     <div id="weapon"></div>
     <div id="potions"></div>
     <div id="army"></div>
+  </div>
   </div>
   <div id="minimapWrap" class="panel"><canvas id="minimap" width="180" height="180"></canvas><span class="mapHint">MMB: ping</span></div>
   <div id="bigmap" class="hidden">
@@ -772,25 +882,32 @@
 </div>
 
 <div id="options" class="screen overlay hidden">
-  <div class="scroll" style="text-align:center">
+  <div class="scroll opts">
     <h1 style="font-size:44px">Options</h1>
     <div class="opt-grid">
+      <h4 class="og">Sound</h4>
       <label>Master volume <input id="optMaster" type="range" min="0" max="100"><output></output></label>
       <label>Music <input id="optMusic" type="range" min="0" max="100"><output></output></label>
       <label>Sound effects <input id="optSfx" type="range" min="0" max="100"><output></output></label>
+      <h4 class="og">Mouse and view</h4>
       <label>Mouse sensitivity <input id="optSens" type="range" min="0" max="100"><output></output></label>
       <label>Field of view <input id="optFov" type="range" min="60" max="110"><output></output></label>
-      <label>Alerts and sounds <input id="optAlerts" type="checkbox"><output></output></label>
-      <label>Tips <input id="optTips" type="checkbox"><output></output></label>
+      <h4 class="og">Graphics</h4>
+      <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Quality</span>
+        <button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button><button data-q="ultra">Ultra</button>
+      </div>
       <label>Adaptive resolution <input id="optDynres" type="checkbox"><output></output></label>
       <label>Big finishes <input id="optFinale" type="checkbox"><output></output></label>
+      <h4 class="og">Battle</h4>
+      <label>Alerts and sounds <input id="optAlerts" type="checkbox"><output></output></label>
+      <label>Tips <input id="optTips" type="checkbox"><output></output></label>
       <label>Battle Decrees <input id="optDecrees" type="checkbox"><output></output></label>
     </div>
-    <div class="row quality" role="group" aria-label="Graphics quality"><span class="qlabel">Graphics</span>
-      <button data-q="auto">Auto</button><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button><button data-q="ultra">Ultra</button>
-    </div>
-    <div class="note">Auto picks a level for your machine and lowers the resolution a little whenever the frame rate drops. Low turns off shadows and grass for the smoothest play; Ultra adds the sharpest shadows and ambient occlusion.</div>
-    <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then. Battle Decrees: after each battle, one or two random rule changes are rolled for the next (you can reroll them or play a classic battle).</div>
+    <details class="help opt-help"><summary title="What these options do">?</summary>
+      <div class="note">Graphics: Auto picks a level for your machine and lowers the resolution a little whenever the frame rate drops. Low turns off shadows and grass for the smoothest play; Ultra adds the sharpest shadows and ambient occlusion.</div>
+      <div class="note">Alerts: callouts and sounds for attacks, waves and low health, and a summary when you look away. Tips: a hint line now and then. Big finishes: the slow-motion ending when a keep falls. Battle Decrees: after each battle, one or two random rule changes are rolled for the next (you can reroll them or play a classic battle).</div>
+      <div class="note">Named rival lords: every battle the other houses are led by lords with a name and a style of their own (a rusher, a turtler, a siege-lover, ...). Off: the old, plain lords. Takes effect at the next battle.</div>
+    </details>
     <div class="row"><button id="optionsBack">Back</button></div>
   </div>
 </div>
@@ -799,11 +916,12 @@
   <div class="scroll">
     <h1 style="font-size:44px">Controls</h1>
     <div class="controls">
-      <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
+      <section class="cgrp">
+      <h4 class="cg">Move and fight</h4>
       <b>WASD</b><span>Move · Shift sprint · Space jump</span>
+      <b>Mouse</b><span>Look</span>
       <b>Space at a wall</b><span>Jump at a castle wall to climb over the battlements onto the wall walk (an enemy's is slower)</span>
       <b>C (hold)</b><span>Duck: harder to hit, slower</span>
-      <b>Mouse</b><span>Look</span>
       <b>Left click</b><span>Swing your sword (hold to keep swinging) · hold and release to shoot the bow</span>
       <b>Right click</b><span>Block with your shield: stops blows from the front; just in time parries · aim bow</span>
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
@@ -812,32 +930,44 @@
       <b>H</b><span>Healing draught</span>
       <b>E</b><span>Gate lever · take over an empty siege engine · mount / call your horse</span>
       <b>Engine</b><span>W/S roll · A/D turn · left click batters or fires · E climbs out</span>
-      <div class="war"><b>O</b><span>Orders menu (click to command troops)</span>
+      </section>
+      <section class="cgrp war">
+      <h4 class="cg">Your castle and army</h4>
       <b>B</b><span>Shop &amp; upgrades</span>
       <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
-      <b>U</b><span>Co-op Conquest: call a fallen ally back to life for 500 gold (the bar under the shop's tabs does the same)</span>
-      <b>L</b><span>Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep (the glowing button does the same)</span>
-      <b>R (end screen)</b><span>Roll the next battle's Battle Decrees again</span></div>
-      <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
-      <b>Enter</b><span>Ready: start the first wave now instead of waiting out the preparation (online: when everyone is ready)</span>
-      <b>K</b><span>When a battle is decided: concede and start the next one (or finish a war you have won); press twice to confirm</span>
-      <b>Space / Enter</b><span>On the end screen: Play Again (online, the host's Rematch). On the main menu Enter is Quick Play</span>
-      <b>P</b><span>Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies)</span>
-      <b>M</b><span>Big battle map (the battle goes on; the mouse is free while it is up; press again to close)</span>
-      <b>Middle click</b><span>Ping what you look at: foes red (attack), your castle and allies blue (defend), ground gold (go here); allies see it</span>
-      <b>Middle (hold)</b><span>Marker wheel: move the mouse to Go here / Attack / Defend / Danger / Need help, let go to place it</span>
-      <b>Map click</b><span>On the big map or the minimap, while the mouse is free: left click puts down a marker, right click removes yours</span>
-      <b>Tab</b><span>Scoreboard</span>
-      <b>Any key</b><span>At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go to the results</span>
-      <div class="war"><b>F1 / Z</b><span>Your army: follow me</span>
+      <b>B → Army</b><span>Choose who garrisons the castle and who is in your army</span>
+      <b>O</b><span>Orders menu (click to command troops)</span>
+      <b>F1 / Z</b><span>Your army: follow me</span>
       <b>F2 / X</b><span>Your army: hold here</span>
       <b>F3</b><span>Your army: charge</span>
       <b>F4 / V</b><span>Your army: defend castle</span>
       <b>T</b><span>Your army: assault target castle</span>
       <b>Y</b><span>King of the Hill: your army takes the hill</span>
       <b>G</b><span>Select group: all / infantry / archers / cavalry</span>
-      <b>B → Army</b><span>Choose who garrisons the castle and who is in your army</span>
-      <b>F</b><span>Formation: line / shield wall / loose</span></div>
+      <b>F</b><span>Formation: line / shield wall / loose</span>
+      <b>U</b><span>Co-op Conquest: call a fallen ally back to life for 500 gold (also the bar under the shop's tabs)</span>
+      <b>L</b><span>Last Stand, once a battle, when your keep is below 25%: you are healed, your soldiers hit harder and march faster for 20 s and militia rise at the keep</span>
+      </section>
+      <section class="cgrp">
+      <h4 class="cg">Map and markers</h4>
+      <b>M</b><span>Big battle map (the battle goes on; the mouse is free while it is up; press again to close)</span>
+      <b>Middle click</b><span>Ping what you look at: foes red (attack), your castle and allies blue (defend), ground gold (go here); allies see it</span>
+      <b>Middle (hold)</b><span>Marker wheel: move the mouse to Go here / Attack / Defend / Danger / Need help, let go to place it</span>
+      <b>Map click</b><span>On the big map or the minimap, while the mouse is free: left click puts down a marker, right click removes yours</span>
+      <b>Tab</b><span>Scoreboard</span>
+      </section>
+      <section class="cgrp">
+      <h4 class="cg">The battle</h4>
+      <b>Esc</b><span>Game menu: resume, options, controls, quit</span>
+      <b>N</b><span>Talents: spend the point you earn at each level (B → Talents)</span>
+      <b>Enter</b><span>Ready: start the first wave now instead of waiting out the preparation (online: when everyone is ready)</span>
+      <b>K</b><span>When a battle is decided: concede and start the next one (or finish a war you have won); press twice to confirm</span>
+      <b>Any key</b><span>At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go to the results</span>
+      <b>Space / Enter</b><span>On the end screen: Play Again (online, the host's Rematch). On the main menu Enter is Quick Play</span>
+      <div class="war"><b>R (end screen)</b><span>Roll the next battle's Battle Decrees again</span></div>
+      <b>P</b><span>Practice courtyard only: the practice panel (hero class, level and talents; soldiers by rank and tier; dummies)</span>
+      </section>
+      <section class="cgrp hero-grp">
       <h4 class="grp">Hero Game Mode</h4>
       <b>Your side</b><span>Three heroes against three, out of one castle each: you and two bot heroes (Blue) against three bot heroes (Red)</span>
       <b>The armies</b><span>Both castles send a wave every 30 s by themselves, each round tougher. No gold, no shop, no army, no orders</span>
@@ -847,6 +977,7 @@
       <b>Fountain</b><span>Near your own keep you mend quickly; a fallen hero rises there after a few seconds</span>
       <b>Tab</b><span>The score and the six heroes: class, level, kills, deaths</span>
       <b>Winning</b><span>First to 25 hero kills, destroy the enemy keep, or the most hero kills in 20 minutes; a fallen keep ends any of them</span>
+      </section>
     </div>
     <div class="row"><button id="controlsBack">Back</button></div>
   </div>

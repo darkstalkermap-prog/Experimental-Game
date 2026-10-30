@@ -13,9 +13,9 @@ const CSS = `
 #renownBtn { position: relative; }
 #renownBtn small { margin-left: 8px; opacity: 0.8; font-size: 12px; letter-spacing: 0; }
 #renownBtn .dot { position: absolute; top: -5px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 9px; background: #e0b44c; color: #3a1d08; font: 700 11px/16px Cinzel, serif; text-align: center; box-shadow: 0 0 6px rgba(224,180,76,0.9); }
-#wardrobe .scroll { max-width: 1040px; padding: 26px 34px 22px; }
+#wardrobe .scroll { max-width: 1040px; padding: 26px 34px 0; }
 #wardrobe h1 { font-size: 38px; }
-#wardrobe .sub { margin-bottom: 12px; }
+#wardrobe .sub { max-width: 720px; margin: 2px auto 14px; font-size: 15.5px; line-height: 1.35; }
 .wd-top { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 22px; align-items: center; padding: 10px 16px; border: 1px solid rgba(90,60,20,0.4); border-radius: 5px; background: rgba(255,248,226,0.4); }
 .wd-total { text-align: center; }
 .wd-total b { display: block; font: 700 34px/1.1 Cinzel, serif; color: #7a4a0a; }
@@ -29,8 +29,8 @@ const CSS = `
 .wd-worn figure { margin: 0; text-align: center; font-size: 12px; }
 .wd-worn canvas { display: block; border-radius: 3px; box-shadow: 0 1px 5px rgba(0,0,0,0.45); background: rgba(255,255,255,0.25); }
 #wardrobe .cols { margin-top: 4px; }
-#wardrobe h3.section { margin: 14px 0 6px; font-size: 17px; }
-#wardrobe h3.section small { font: italic 14px 'EB Garamond', Georgia, serif; color: #4a3a22; margin-left: 6px; }
+#wardrobe h3.section { margin: 16px 0 8px; padding-bottom: 5px; font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase; text-align: left; border-bottom: 1px solid rgba(138,106,58,0.45); }
+#wardrobe h3.section small { font: italic 14px 'EB Garamond', Georgia, serif; letter-spacing: 0; text-transform: none; color: #4a3a22; margin-left: 8px; }
 .wd-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 7px; }
 .wd-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 4px 6px; text-align: center; background: rgba(255,255,255,0.3) !important; color: #2a1f14 !important; border: 1px solid rgba(90,60,20,0.35) !important; border-radius: 4px; letter-spacing: 0; position: relative; min-height: 128px; }
 .wd-card:hover:not(:disabled) { background: rgba(255,246,210,0.7) !important; border-color: #b8862a !important; }
@@ -65,7 +65,7 @@ const CSS = `
 .wd-recs td { padding: 3px 4px; border-bottom: 1px solid rgba(90,60,20,0.2); }
 .wd-recs td:last-child { text-align: right; font: 600 15px Cinzel, serif; }
 .wd-acct { font-size: 14px; margin-top: 8px; opacity: 0.85; }
-#wardrobe .row { margin-top: 14px; }
+#wardrobe .scroll > .row:last-child { position: sticky; bottom: 0; z-index: 2; margin: 14px -34px 0; padding: 12px 34px 16px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }   /* (Back stays in view) */
 @media (max-width: 700px) { .wd-top { grid-template-columns: 1fr; } }
 `;
 

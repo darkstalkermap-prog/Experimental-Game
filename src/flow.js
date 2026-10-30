@@ -344,10 +344,10 @@ style.textContent = `
 .scroll #quickPlay:focus-visible { outline: 3px solid #5a1d12; outline-offset: 3px; }
 .quickinfo { margin-top: 6px; font-size: 16px; font-style: italic; }
 /* the menu and the lobby grow with every row the features add: their buttons stay in view at the bottom of the card, whatever the window's height */
-#menu .scroll, #lobby .scroll { padding-bottom: 0; scroll-padding-bottom: 150px; }
-.menu-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -44px; padding: 6px 44px 14px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }
+#lobby .scroll { padding-bottom: 0; scroll-padding-bottom: 150px; }
+#lobby .menu-actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -40px; padding: 6px 40px 14px; background: linear-gradient(rgba(217,199,156,0), #d9c79c 14px); }
 @media (max-height: 700px) {
-  .menu-actions { margin: 0 -30px; padding: 2px 30px 8px; }
+  #lobby .menu-actions { margin: 0 -30px; padding: 2px 30px 8px; }
   .quick { margin: 0 0 6px; }
   .scroll #quickPlay { font-size: 22px; padding: 7px 56px; }
   .quickinfo { margin-top: 3px; font-size: 14px; }
@@ -372,7 +372,7 @@ style.textContent = `
 #offerConfirm { margin-top: 10px; }
 
 #gameover .scroll { padding-bottom: 0; }
-.go-actions { position: sticky; bottom: 0; z-index: 2; margin: 6px -44px 0; padding: 14px 44px 18px; text-align: center;
+.go-actions { position: sticky; bottom: 0; z-index: 2; margin: 6px -40px 0; padding: 14px 40px 18px; text-align: center;
   background: linear-gradient(rgba(217,199,156,0), #d9c79c 16px); }
 @media (max-height: 700px) { .go-actions { margin-left: -30px; margin-right: -30px; padding: 10px 30px 12px; } .scroll .go-primary { font-size: 24px; padding: 10px 56px; } }
 .go-main { display: flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
