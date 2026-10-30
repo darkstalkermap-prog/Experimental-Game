@@ -16,12 +16,18 @@ const CSS = `
 .landrow .seed button { padding: 4px 8px; font-size: 14px; letter-spacing: 0; }
 .landrow .landdesc b { font-style: normal; font-family: Cinzel, serif; font-size: 13px; color: #5a1d12; }
 :where(.nb-land) { position: relative; text-align: left; padding: 10px 16px 12px; border: 1px solid #8a6a3a; border-radius: 4px; background: rgba(255,248,226,0.5); }
+:where(.nb-land) .nb-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
+:where(.nb-land) .nb-ttl { display: flex; align-items: baseline; gap: 10px; }
+:where(.nb-land) .nb-title { font: 700 15px Cinzel, Georgia, serif; letter-spacing: 0.14em; text-transform: uppercase; color: #5a1d12; }
+:where(.nb-land) .nb-sub { font-size: 13.5px; font-style: italic; opacity: 0.75; }
+:where(.nb-land) .nb-acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .nb-land .nb-landbody { display: flex; align-items: center; gap: 14px; }
 .nb-land .nb-pic { flex: none; line-height: 0; }
 .nb-land .nb-thumb { width: 156px; height: 78px; border: 1px solid #5a3a1c; border-radius: 3px; box-shadow: 0 1px 4px rgba(60,30,10,0.35); animation: nbIn 0.38s ease-out both; }
 .nb-land .nb-text { flex: 1; min-width: 0; line-height: 1.25; }
 .nb-land .nb-name { display: block; font: 700 17px Cinzel, Georgia, serif; color: #3b120b; margin-bottom: 2px; }
 .nb-land .nb-desc { font-size: 16px; }
+.nb-land .nb-twist { font: 700 15.5px Cinzel, Georgia, serif; color: #3b120b; }
 .nb-land .nb-was { margin-top: 3px; font-size: 13.5px; font-style: italic; opacity: 0.7; }
 .nb-row + .nb-land .nb-title { display: none; }
 .nb-row + .nb-land .nb-sub { font: 700 13px Cinzel, Georgia, serif; font-style: normal; letter-spacing: 0.14em; text-transform: uppercase; color: #5a1d12; opacity: 1; }
@@ -233,7 +239,10 @@ registerEndSection('land', 51, (summary) => {
       const pic = mk('div', 'nb-pic');
       pic.append(landThumb(land.biome, land.seed));
       body.append(pic);
-      text.append(mk('b', 'nb-name', landName(land.biome, land.seed)), mk('div', 'nb-desc', describe(land.biome)));
+      const d = biomeOf(land.biome), desc = mk('div', 'nb-desc');
+      if (d.twist) desc.append(d.short + ' ', mk('b', 'nb-twist', d.twist.name + ':'), ' ' + d.twist.text);   // (the twist's name in bold, as the decrees' are)
+      else desc.append(describe(land.biome));
+      text.append(mk('b', 'nb-name', landName(land.biome, land.seed)), desc);
     }
     const o = summary.options;
     if (o && typeof o.biome === 'string') text.append(mk('div', 'nb-was', 'This battle was fought on ' + landName(o.biome, o.seed) + '.'));   // (its seed is worth keeping if the land was a good one)
