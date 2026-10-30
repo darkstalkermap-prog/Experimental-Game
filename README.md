@@ -945,6 +945,9 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   in chunks, and trees, rocks, arrows and grass are instanced. Crowds, engines and the first-person kit cast shadows
   into the near shadow map only, drawn there as their plainest model. The profiler overlay (backquote) shows where a
   frame goes.
+- War Mode's biggest battles (two armies of 200, or four of 150: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine:
+  the simulation of 400 soldiers in melee takes about 8 to 12 ms a frame and of 600 about 5 to 9 ms (it falls as they fall); the crowd draws them in
+  about 75 to 85 draw calls.
 - Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
   models are prepared in the background during the preparation minute, so nothing stutters on first use.
 - Online, other players and soldiers are interpolated between the host's updates for smooth movement, and
