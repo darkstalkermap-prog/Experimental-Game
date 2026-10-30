@@ -565,6 +565,41 @@ For modders: a personality is a table of parameters in `src/rivals.js` (the key 
 `src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
 his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees. The match log records `rival`, `push` and `rivalFell` events.
 
+## Spectating
+
+Nobody stares at a death screen. Whenever you are out of the fight (dead and waiting to rise, your house destroyed, or in War Mode your
+hero fallen while your army fights on) the camera is yours to watch the battle with, and it hands itself back the moment your hero rises.
+The end of the match brings the end screen as ever.
+
+- **Follow** (the start): behind a living hero or lord, with their name, house and health in a small bar at the bottom left.
+  **Left / right click** (or **Q / E**) steps to the previous / next one; the mouse turns round them, the wheel moves in and out. When the one
+  you follow falls, the camera stays on them a moment and then moves on.
+- **Free camera** (**Space**, again to go back): fly with **WASD** and the mouse, **Shift** for speed. It stays inside the map and above the
+  ground.
+- **Overview** (**C**): high above the battlefield, turning slowly; **WASD** moves it, the mouse turns it, the wheel goes up and down.
+  (**1 / 2 / 3** pick the three cameras too.)
+
+While spectating the HUD is the bar (who you watch, the camera, its keys), the minimap (its arrow is the camera), the houses or the hero
+scores or War Mode's standings, **Tab** for the scoreboard, the kill feed, the banners and the toasts; the hero's own panel, the abilities
+and the crosshair go. A lord who is out still has the shop, the map and the orders.
+
+**Spectate a whole battle.** **Spectate** in the quiet row of the main menu starts the battle the setup describes with nobody of yours in
+it: every house an AI lord (castles set to empty stay empty), War Mode's armies all AI generals', Hero Mode's seats all bots. The first
+preparation is short (10 seconds, War Mode's build 6: the AI has its armies at once). Nothing is earned (no Renown, no records); the end
+screen names the winner and offers **Watch Again**.
+
+**Online: the spectator seat.** In the room's lobby, under the castles (or the hero seats), a **Watching** line lists who watches; **Watch
+instead** takes you off your place (it takes no castle or hero seat), **Play instead** (or **Take** on a free place) brings you back. The host
+can watch too: it then runs the battle without a hero of its own. Somebody who joins when every free place is closed now joins as a
+watcher instead of being turned away. A watcher gets the host's snapshots and news (toasts, banners, the kill feed) like a guest and uses
+the same cameras; it sends nothing (the host only listens to the people behind the heroes, and the watcher's page never sends a game
+action). The room stays at **4 people in all, watchers included**: every transport already caps a room at the host and three guests
+(`server.js` MAX_PLAYERS, `peernet.js` and `roomnet.js` MAX_CLIENTS), and the host sends each guest its own snapshot, so a fifth person
+would add a whole snapshot stream to a host that is already the busiest page (and the claude.ai room's outbox is small).
+
+The cameras, the bar and its CSS are `src/spectate.js`; a spectator is `game.spectator` (it is not one of `game.humans`, never spawns, and
+the texts it is shown read as for nobody's house: `Game.viewers` / `viewTeam`); the host's watchers are `game.watchers`.
+
 ## Castles, seats and colours
 
 **Castles (the lobby).** The room's list (right under the invite link, with *Your colour* at the top of the other column, so both
@@ -573,7 +608,7 @@ to move there, and when nobody does an AI lord holds it. Each line tags a free c
 cycles **Open → AI → Empty**: *AI* keeps people out and gives it to an AI lord, *Empty* leaves the castle standing with nobody
 in it (no lord, no soldiers, no waves; nobody marches on it; it counts as out of the war from the start). A war needs two
 houses, and co-op needs an enemy: the host's **Start the Battle** stays off and says why until it has them. Somebody who joins
-gets the first open castle; when the host has closed every free one, they are told the game has no free place. A guest's
+gets the first open castle; when the host has closed every free one, they join as a watcher (**Spectating**, above). A guest's
 Take goes to the host, who checks it (the castle must be open and free); the host's lobby message carries the castles' states.
 
 **One player** picks the same on the main menu: the **Castle** row (which of the four you play) and the **Others** row (each
@@ -810,7 +845,7 @@ One look throughout: parchment cards with ink for the menus, dark glass with gol
 Cinzel for names and buttons, Garamond for what you read. Long explanations sit behind a small **?** and open when asked for.
 
 - **Main menu**: Quick Play first, with the setup it will start written under it; then Single Player, Multiplayer and the
-  Practice Courtyard; then Renown, Options and Controls. Below, two panels side by side: **Battle setup** (mode, map, land,
+  Practice Courtyard; then a quiet row: Spectate, Renown, Options and Controls. Below, two panels side by side: **Battle setup** (mode, map, land,
   difficulty, length, decrees, one row each; the **?** in its corner shows what each choice means) and **Your hero**.
   **How to play** (top right) opens the short guide to the war.
 - **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
@@ -849,6 +884,8 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | Middle button (hold) | Marker wheel round the crosshair: move the mouse towards Go here / Attack / Defend / Danger / Need help and let go to place a marker there; let go in the middle for the ordinary ping |
 | Map click | On the big map or the HUD minimap, while the mouse is free: left click puts down a marker of the kind chosen in the palette beside the big map, right click removes your nearest one |
 | Tab | Scoreboard |
+| Left / right click, Q / E (spectating) | The previous / next hero or lord to follow (**Spectating**, above) |
+| Space / C / 1 2 3 (spectating) | Free camera (WASD, mouse, Shift) / overview / pick follow, free, overview |
 | Any key or click | At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go straight to the results (see Big finishes) |
 | F1 or Z | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
@@ -958,7 +995,8 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/ai.js` | Rival lord strategy: spending, repairs and pushes, in the style of the lord's personality (the classic lord's numbers are the old ones) |
 | `src/rivals.js`, `src/rivalsui.js` | The rival lords: the nine personalities (a table of parameters each, their names and plans), the roll, and what the player sees (the card at the start, the game menu list, the HUD tag, the end-screen row, the Options switch) |
 | `src/teams.js` | Who fights whom (co-op sides) and in which colours (the palette, `setPalette`) |
-| `src/seats.js`, `src/lobbyui.js` | Who sits where (castles, hero seats, open/AI/empty, colour wishes) and its drawing in the lobby and the menu |
+| `src/seats.js`, `src/lobbyui.js` | Who sits where (castles, hero seats, open/AI/empty, colour wishes, who watches) and its drawing in the lobby and the menu |
+| `src/spectate.js` | Spectating: the follow, free and overview cameras of somebody who is out of the fight or only watches, and their bar |
 | `src/economy.js` | Shop items, shared by the player and the AI |
 | `src/decrees.js`, `src/comeback.js` | Battle Decrees (the catalogue, the roll, the end-screen "Next battle" panel) and the comeback rules (underdog's wage, cheaper gate, Last Stand); both work through `src/mods.js` |
 | `src/world.js`, `src/textures.js` | The roads, where the solid trees and rocks stand, the centre piece, the sky and lights hooks; procedural textures |

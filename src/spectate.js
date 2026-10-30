@@ -80,7 +80,7 @@ export class Spectate {
     this.shown = {};         // what the bar shows now (DOM is only written when it changes)
     this.classes = '';
     // the cameras' own state
-    this.orbit = 0; this.lift = 0.28; this.dist = 6.5;            // follow: around the target, above it, how far
+    this.orbit = 0; this.lift = 0.4; this.dist = 7;            // follow: around the target, above it, how far
     this.camYaw = 0;
     this.free = { pos: new THREE.Vector3(), yaw: 0, pitch: -0.3 };
     this.over = { x: 0, z: 0, yaw: 0, zoom: 1 };
@@ -268,7 +268,7 @@ export class Spectate {
     const v = (i.down('ShiftLeft') || i.down('ShiftRight') ? 2.5 : 1) * P * 0.35 * o.zoom * dt;
     o.x = clamp(o.x + (Math.sin(o.yaw) * fw - Math.cos(o.yaw) * st) * v, -P, P);
     o.z = clamp(o.z + (Math.cos(o.yaw) * fw + Math.sin(o.yaw) * st) * v, -P, P);
-    const base = Math.min(P * 0.58, 115) * o.zoom, back = base * 0.95, up = base;   // (not too far out: the haze of the land thickens with distance)
+    const base = Math.min(P * 0.46, 90) * o.zoom, back = base * 0.95, up = base;   // (not too far out: the haze of the land thickens with distance)
     const gy = g.physics.terrainHeight(o.x, o.z);
     tmpV.set(o.x - Math.sin(o.yaw) * back, gy + up, o.z - Math.cos(o.yaw) * back);
     this.keepIn(tmpV, 4);
@@ -323,12 +323,13 @@ export class Spectate {
     set('out', el.querySelector('.sb-out'), this.outLine());
     const t = this.mode === 'follow' ? this.target : null;
     set('mode', el.querySelector('.sb-mode'), MODE_NAME[this.mode] || '');
-    const name = t ? `${t.cls && !t.isHero && t.cls.icon ? t.cls.icon + ' ' : ''}${t.name || 'Lord'}` : this.mode === 'follow' ? 'Nobody to follow' : '';
+    const lord = t && !t.cls;   // (an AI lord is a soldier of the lord type; a hero is a Player with a class)
+    const name = t ? `${!lord && t.cls.icon ? t.cls.icon + ' ' : ''}${t.name || 'Lord'}` : this.mode === 'follow' ? 'Nobody to follow' : '';
     set('name', el.querySelector('.sb-name'), name);
     const nameEl = el.querySelector('.sb-name'), col = t ? TEAM_CSS[t.team] || '#fff' : '';
     if (s.col !== col) { s.col = col; nameEl.style.color = col; }
     const f = t ? g.factions[t.team] : null;
-    const sub = t ? [f ? f.name : '', t.isHero ? 'Lord' : t.cls ? `${t.cls.name} · Lv ${t.level || 1}` : '', t.alive ? '' : 'fallen'].filter(Boolean).join(' · ') : '';
+    const sub = t ? [f ? f.name : '', lord ? 'Lord' : `${t.cls.name} · Lv ${t.level || 1}`, t.alive ? '' : 'fallen'].filter(Boolean).join(' · ') : '';
     set('sub', el.querySelector('.sb-sub'), sub);
     const hp = t && t.alive && t.maxHp ? clamp(t.hp / t.maxHp, 0, 1) : 0;
     const w = t ? `${(hp * 100).toFixed(0)}%` : '0%';
