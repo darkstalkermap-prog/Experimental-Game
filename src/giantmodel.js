@@ -261,7 +261,7 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
   const v = variant % 4;
   const m = {
     kind: 'soldier', type, team: teamId, variant, desc: { ...desc, shield: null }, raider: false, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR,
-    shL, shR, elL, elR, weapon, cape: null, weaponTilt: GIANT_TILT, ranged: false, lance: false, mounted: false, parts, kit: off(), plumeC: off(), plumeG: off(),
+    shL, shR, elL, elR, weapon, cape: null, weaponTilt: GIANT_TILT, weaponRoll: 0, ranged: false, lance: false, mounted: false, parts, kit: off(), plumeC: off(), plumeG: off(),
     weaponPart, bowPart: null, kitArms: [], kitShield: null, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: null, giant: true, farKey: type,
   };
   setColor(m.inst, 0, cloth);
