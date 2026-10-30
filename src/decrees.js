@@ -6,7 +6,7 @@
 //     showed. main.js asks pendingDecrees() when it builds the options of a start. Nothing is rolled before the first match ends: the first battle is classic.
 //   - The Options screen's "Battle Decrees" switch (settings.decrees) turns the whole thing off: no roll, no section, classic battles.
 //   - Hero Game Mode and the practice courtyard have no decrees (no gold, no waves of their own to bend); the end screen says nothing there.
-//   - Online, only the host rolls and rerolls; guests are sent the roll (a private 'decrees' event, see Game.applyEvent) and see it read-only.
+//   - Online, only the host rolls and rerolls; guests are sent the roll (a 'decrees' message of the room, see main.js guestData) and see it read-only.
 import { mods } from './mods.js';
 import { loadOptions, saveOptions } from './options.js';
 import { settings, saveSettings } from './settings.js';
@@ -68,10 +68,11 @@ export function setPendingDecrees(ids) {
   broadcast();
   paintMenuRow();
 }
-// online, the host tells every guest what the next battle will have (a private event rides on the next snapshot: see Game.applyEvent)
+// online, the host tells every guest what the next battle will have: a message of the room, not a snapshot event (when the match is over the guests' snapshot
+// handler is put away for the room's own, main.js roomAfterMatch, whose guestData hears this and calls hearDecrees)
 function broadcast() {
   const g = lastGame;
-  if (g && g.mode === 'host') for (const h of g.humans) if (h !== g.player) g.deliver(h, { k: 'decrees', ids: next });
+  if (g && g.mode === 'host' && g.net) g.net.toAll({ k: 'decrees', ids: next });
 }
 // a guest hears the host's roll
 export function hearDecrees(ids) {

@@ -50,7 +50,7 @@ import { sanitizeOptions } from './options.js';
 import { Weather } from './weather.js';
 import { setBiomeDust } from './biomedust.js';
 import { applyBiomeRules, twistLine } from './biometwist.js';
-import { startDecrees, hearDecrees } from './decrees.js';
+import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
@@ -693,7 +693,6 @@ export class Game {
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || '', { hl: Array.isArray(ev.hl) ? ev.hl : null }); break;
       case 'stand': standFlash(); break;
-      case 'decrees': hearDecrees(ev.ids); break;   // (a guest: the host's roll for the next battle)
       case 'ping': this.pings.receive(ev); break;
       default: this.alerts.event(ev); break;
     }

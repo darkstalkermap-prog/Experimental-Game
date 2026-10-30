@@ -21,7 +21,7 @@ import { progress, sanitizeLoadout } from './progress.js';
 import { endSound } from './endprogress.js';   // (the end screen's battle and Renown sections)
 import './wardrobe.js';       // (the Renown panel of the menu)
 import { flow, loadLast, saveLast, setupLine, onKey as flowKey, offerFor, confirmOffer, pressReady, pressOffer, roomGone } from './flow.js';
-import { pendingDecrees } from './decrees.js';
+import { pendingDecrees, hearDecrees } from './decrees.js';
 import { withRivals, lobbyRivals } from './rivalsui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -473,6 +473,7 @@ $('joinBtn').addEventListener('click', async () => {
   net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); });
   guestData = ({ d }) => {
     if (d.k === 'rematch') guestRematch();
+    if (d.k === 'decrees') hearDecrees(d.ids);   // (the host's roll for the next battle: it comes after the match, when this handler is back: see roomAfterMatch)
     if (d.k === 'lobby') {
       ui.renderLobby(d.players, (d.players.find((p) => p.netId === net.id) || {}).team, !!d.coop, d.obj, d.len, d.rv);
       const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)

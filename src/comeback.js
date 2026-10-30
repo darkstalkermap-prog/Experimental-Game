@@ -44,7 +44,7 @@ export function passiveRate(game) {
   return (TRICKLE * 60 + (WAVES.wage(game.round) * 60) / (WAVES.interval * mods.mul('waveGap'))) * mods.mul('income');
 }
 
-// once a second: who is behind, the wage that pays them, and the AI lords' Last Stands
+// once a second: who is behind and the wage that pays them
 function look(game) {
   const W = COMEBACK.wage, cb = game.cb;
   const live = game.factions.filter((f) => !f.eliminated && !f.castle.fallen);
@@ -69,7 +69,6 @@ function look(game) {
         game.deliver(f.player, { k: 'toast', text: `Underdog's wage: you are behind, so the realm pays you ${f.wage} gold a minute until you catch up.`, team: f.team, imp: false });
       }
     }
-    if (!f.isPlayer && !standBlock(game, f)) useLastStand(game, f);   // (the AI lords call their Last Stand the moment they may)
   }
 }
 
@@ -191,6 +190,9 @@ export function updateComeback(game, dt) {
       if (f.isPlayer && f.player) game.deliver(f.player, { k: 'gold', g: n });
     }
   }
+  // the AI lords call their Last Stand the moment their keep is low enough: every frame, and ahead of their own decisions (Game.update runs this before the AI), or
+  // a lord with gold would mend the keep ('Restore Keep' at 55%) in the second between two looks and never be seen to make a stand
+  for (const f of game.factions) if (!f.isPlayer && !f.stand && !standBlock(game, f)) useLastStand(game, f);
   cb.look -= dt;
   if (cb.look <= 0) { cb.look = W.every; look(game); }
   // the Last Stand's blows go back to normal when its time is up; later, a word if the keep still stands
