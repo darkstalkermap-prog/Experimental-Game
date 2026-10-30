@@ -96,7 +96,7 @@ export function faceAtlas() {
   return faceTex;
 }
 
-// emblems: 0 a tower, 1 crossed swords, 2 an oak, 3 a sun, 4 a skull, 5 a cross, 6 a chevron, 7 a star
+// emblems (the houses' own): 0 a tower, 1 crossed swords, 2 an oak, 3 a sun, 4 a skull, 5 a cross, 6 a chevron, 7 a star
 const EMBLEMS = [
   (u, v) => Math.min(
     Math.max(sdBox(u, v, 0.5, 0.4, 0.17, 0.27), -Math.min(sdBox(u, v, 0.5, 0.27, 0.06, 0.1), sdCircle(u, v, 0.5, 0.37, 0.06), sdBox(u, v, 0.5, 0.58, 0.014, 0.05))),
@@ -116,23 +116,96 @@ const EMBLEMS = [
   (u, v) => { let d = 1; for (let k = 0; k < 5; k++) { const a = (k / 5) * Math.PI * 2 + Math.PI / 2; d = Math.min(d, sdSeg(u, v, 0.5, 0.5, 0.5 + Math.cos(a) * 0.34, 0.5 + Math.sin(a) * 0.34, 0.045)); } return d; },
 ];
 
-let emblemTex = null;
+// The emblem atlas has ECELLS cells: the eight above (the houses' own emblems: castle n wears cell n, the raiders cell 4) and LORDS cells painted
+// at the start of a match with the arms of the players who bear their own (heraldry.js): R the sigil, G its outline, B the part of the field in
+// the second tint. Their tint and the colour of their sigil are uniforms (armsUniforms, read by unitmat.js), one per cell.
+export const ECELLS = 16, LORD0 = 8, LORDS = ECELLS - LORD0;
+let emblemTex = null, emblemData = null;
 export function emblemAtlas() {
   if (emblemTex) return emblemTex;
-  const W = CELL * CELLS, data = new Uint8Array(W * CELL * 4);
-  for (let c = 0; c < CELLS; c++) {
+  const W = CELL * ECELLS, data = emblemData = new Uint8Array(W * CELL * 4);
+  for (let c = 0; c < ECELLS; c++) {
     for (let y = 0; y < CELL; y++) {
       for (let x = 0; x < CELL; x++) {
         const u = (x + 0.5) / CELL, v = (y + 0.5) / CELL;
-        const d = EMBLEMS[c](u, v);
+        const d = c < CELLS ? EMBLEMS[c](u, v) : 1;
         const charge = cov(d, 0.02), ring = cov(d - 0.028, 0.02) * (1 - charge);
         const i = (y * W + c * CELL + x) * 4;
         data[i] = Math.round(charge * 255); data[i + 1] = Math.round(ring * 255); data[i + 2] = 0; data[i + 3] = 255;
       }
     }
   }
-  emblemTex = makeTexture(data);
+  emblemTex = new THREE.DataTexture(data, W, CELL, THREE.RGBAFormat);
+  emblemTex.generateMipmaps = true;
+  emblemTex.minFilter = THREE.LinearMipmapLinearFilter;
+  emblemTex.magFilter = THREE.LinearFilter;
+  emblemTex.wrapS = emblemTex.wrapT = THREE.ClampToEdgeWrapping;
+  emblemTex.anisotropy = 4;
+  emblemTex.needsUpdate = true;
   return emblemTex;
 }
+
+// ---------------------------------------------------------------- the lords' cells
+export const armsUniforms = {
+  tint: Array.from({ length: LORDS }, () => new THREE.Color(0xffffff)),
+  ink: Array.from({ length: LORDS }, () => new THREE.Color(0xefe2b3)),
+};
+const teamCell = [];          // the cell a castle's soldiers wear, when its lord bears arms of their own
+const lordKeys = [];          // what each lord cell holds (cells are shared by equal arms)
+// the emblem cell of castle `team`'s soldiers
+export function emblemCell(team) { return teamCell[team] ?? (team > 4 || team < 0 ? 0 : team); }
+export function setTeamCell(team, cell) { if (cell >= 0) teamCell[team] = cell; else delete teamCell[team]; }
+// a new match: every castle wears its house's emblem again and the lord cells are free
+export function resetArmsCells() { teamCell.length = 0; lordKeys.length = 0; }
+
+// Paint the cell of a lord's arms. `paint(ctx, size, mode)` draws on a size x size canvas: mode 'sigil' the sigil in white on black (its details cut
+// out in black; false when the arms have none), mode 'field' the tinted part of the field in white on black. `team` is the house whose emblem stands in
+// for a missing sigil; `tint` and `ink` are the colours (hex) of the tinted field and the sigil. Returns the cell, or -1 when all are taken.
+export function lordCell(key, team, paint, tint, ink) {
+  let k = lordKeys.indexOf(key);
+  if (k < 0) {
+    if (lordKeys.length >= LORDS || typeof document === 'undefined') return -1;
+    k = lordKeys.length;
+    lordKeys.push(key);
+    emblemAtlas();
+    const W = CELL * ECELLS, data = emblemData, cell = LORD0 + k;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = CELL;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    const grab = (mode) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, CELL, CELL);
+      const ok = paint(ctx, CELL, mode);
+      return ok === false ? null : ctx.getImageData(0, 0, CELL, CELL).data;
+    };
+    const sig = grab('sigil'), field = grab('field');
+    const src = team > 4 || team < 0 ? 0 : team;
+    // the outline of the sigil: what a disc of OUT px round each pixel reaches, less the sigil itself
+    const OUT = 2, ch = new Float32Array(CELL * CELL);
+    for (let y = 0; y < CELL; y++) for (let x = 0; x < CELL; x++) ch[y * CELL + x] = sig ? sig[((CELL - 1 - y) * CELL + x) * 4] / 255 : data[(y * W + src * CELL + x) * 4] / 255;
+    for (let y = 0; y < CELL; y++) {
+      for (let x = 0; x < CELL; x++) {
+        let dil = 0;
+        for (let dy = -OUT; dy <= OUT; dy++) for (let dx = -OUT; dx <= OUT; dx++) {
+          if (dx * dx + dy * dy > OUT * OUT + 1) continue;
+          const xx = x + dx, yy = y + dy;
+          if (xx >= 0 && yy >= 0 && xx < CELL && yy < CELL) dil = Math.max(dil, ch[yy * CELL + xx]);
+        }
+        const c = ch[y * CELL + x], i = (y * W + cell * CELL + x) * 4;
+        data[i] = Math.round(c * 255);
+        data[i + 1] = sig ? Math.round(Math.max(0, dil - c) * 255) : data[(y * W + src * CELL + x) * 4 + 1];
+        data[i + 2] = field ? field[((CELL - 1 - y) * CELL + x) * 4] : 0;
+        data[i + 3] = 255;
+      }
+    }
+    emblemTex.needsUpdate = true;
+  }
+  armsUniforms.tint[k].setHex(tint);
+  armsUniforms.ink[k].setHex(ink);
+  return LORD0 + k;
+}
+
+// wear emblem cell `cell` (a rig of models.js or giantmodel.js: its face is kept beside it in the same number)
+export function setRigEmblem(m, cell) { m.inst[7] = cell + ECELLS * (m.faceIdx || 0); }
 
 export function unitTextures() { return [faceTex, emblemTex].filter(Boolean); }

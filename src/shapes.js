@@ -436,11 +436,73 @@ def('shield.round', (b) => {
     }
   });
 }, true);
+// The knights' tall kite (knights, lords and the Knight hero): a rounded top, sides that belly out and taper to a point, the whole of it curved
+// round the forearm. A grid, so the curve is in the surface and not only at its edge: the painted face (the house's arms), a darker back and the
+// edge between them. KITE_L: half-width, top, where the round top meets the sides, the point; the curve (metres back per metre out squared).
+const KITE_L = { W: 0.3, top: 0.4, sh: 0.2, pt: -0.7, bend: 0.32 };
+const kiteHalf = (y, k) => {
+  const { W, top, sh, pt } = KITE_L;
+  if (y >= sh) { const q = (y - sh) / (top - sh); return W * k * Math.sqrt(Math.max(0, 1 - q * q)); }
+  const s = (sh - y) / (sh - pt);
+  return W * k * Math.pow(Math.max(0, 1 - s * s), 0.8);
+};
+// the shield's surface at (x, y), scaled by k about its middle: how far forward it stands
+const kiteZ = (x, y) => -KITE_L.bend * x * x + 0.02 * (1 - Math.min(1, Math.abs(y + 0.05) / 0.6));
+function kiteGeo(b, k, thick) {
+  const { top, pt } = KITE_L, nx = b.pick(8, 6, 4), ny = b.pick(16, 10, 7);
+  const P = [], I = [];
+  const yAt = (j) => { const s = j / ny; return top * k + (pt * k - top * k) * (s < 0.35 ? s * s / 0.35 * 0.5 + s * 0.5 : s); };   // (rows closer together round the top)
+  const ring = (j, i, zOff) => { const y = yAt(j), hw = kiteHalf(y / k, k), x = (2 * i / nx - 1) * hw; return [x, y, kiteZ(x, y) + zOff]; };
+  const grid = (zOff, flip) => {
+    const base = P.length / 3;
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) P.push(...ring(j, i, zOff));
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const a = base + j * (nx + 1) + i, c = a + nx + 1;
+      if (flip) I.push(a, a + 1, c, a + 1, c + 1, c); else I.push(a, c, a + 1, a + 1, c, c + 1);
+    }
+  };
+  grid(0, false);
+  if (thick > 0) {
+    grid(-thick, true);
+    // the edge: down the right side and back up the left, front to back
+    const edge = [];
+    for (let j = 0; j <= ny; j++) edge.push(ring(j, nx, 0));
+    for (let j = ny - 1; j >= 1; j--) edge.push(ring(j, 0, 0));
+    edge.push(edge[0]);
+    const base = P.length / 3;
+    for (const [x, y, z] of edge) P.push(x, y, z, x, y, z - thick);
+    for (let e = 0; e < edge.length - 1; e++) { const a = base + e * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setIndex(I);
+  g.computeVertexNormals();
+  return g;
+}
+def('shield.kiteL', (b) => {
+  b.within(KITE_ON, () => {
+    const c = [0.03, -0.12, 0.074];
+    // the face (the house's arms: the emblem atlas, centred on the upper part, as wide as the shield) and, round it, the iron-shod edge
+    b.place(kiteGeo(b, 0.93, 0), [c[0], c[1] - 0.012, c[2] + 0.006], [0, 0, 0], 1, { ...cloth, p: PAT.emblem, uv: [0.03, -0.11, 0.56, 0.56], a: [0.8, 1] });
+    b.place(kiteGeo(b, 1, 0.03), c, [0, 0, 0], 1, { ...(b.level < 2 ? iron : clothDk), a: [0.7, 1] });
+    if (b.level < 2) {
+      b.ell([c[0], c[1] + 0.06, c[2] + 0.03], [0.055, 0.055, 0.03], { ...steel });                                          // the boss
+      for (const [x, y] of [[-0.22, 0.24], [0.22, 0.24], [-0.24, -0.02], [0.24, -0.02], [0, 0.39]]) b.ell([c[0] + x, c[1] + y, c[2] + kiteZ(x, y) + 0.012], 0.013, { ...steel, seg: [5, 4] });   // rivets round the rim
+      for (const y of [0.12, -0.08]) b.rbox([c[0], c[1] + y, c[2] - 0.045], [0.34, 0.035, 0.012], { ...leather });             // the straps on the back
+    }
+  });
+}, true);
 // the gilding of a trained soldier's shield (tier 3 and up)
 def('kit.shield.round', (b) => {
   b.within(ROUND_ON, () => {
     b.torus([0.03, -0.14, 0.088], 0.39, 0.03, { ...gold, sc: [1, 1, 1.1] });
     b.ell([0.03, -0.14, 0.128], [0.082, 0.082, 0.044], { ...gold });
+  });
+});
+def('kit.shield.kiteL', (b) => {
+  b.within(KITE_ON, () => {
+    b.rod([0.03, 0.26, 0.106], [0.03, -0.76, 0.1], 0.012, 0.012, { ...gold, seg: 5 });
+    b.ell([0.03, -0.06, 0.118], [0.062, 0.062, 0.032], { ...gold });
   });
 });
 def('kit.shield.kite', (b) => {
@@ -641,31 +703,33 @@ const hang = (b, w, h, o, bend = 0.08) => {
   g.computeVertexNormals();
   return b.place(g, [0, -h / 2, -0.03], [0, 0, 0], 1, { ...o, w: [1.95, 1.0], a: [0.7, 1] });
 };
+// the lord's sigil on the back, between the shoulder blades (the uv runs right to left: the badge is seen from behind)
+const BADGE = { p: PAT.badge, uv: [0, -0.3, -0.3, 0.3] };
 // a band along the hem (swaying with the cloth) or the collar (still)
 const hem = (b, w, h, y, o, bend = 0.08) => b.sheet([0, y, -0.034], w * (1 + FLARE), 0.05, b.pick(8, 5, 3), 1, { ...o, w: [1.95, 1.9], dz: (x) => -bend * (x / (w * (1 + FLARE) / 2)) ** 2 * (1 + FLARE) });
 const collar = (b, w, hgt, o, bend = 0.07) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(8, 5, 3), 1, { ...o, dz: (x) => -bend * (x / (w / 2)) ** 2 });
 def('cape.crimson', (b) => {   // deep red wool, a gold hem and collar, a gold clasp
-  hang(b, 0.58, 1.0, { c: 0x8c1f24, m: 'wool', p: PAT.weave });
+  hang(b, 0.58, 1.0, { c: 0x8c1f24, m: 'wool', ...BADGE });
   hem(b, 0.58, 1.0, -0.99, { ...gold });
   collar(b, 0.62, 0.075, { ...gold });
   if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...gold, e: 0.4 });
 }, true);
 def('cape.greenwood', (b) => {   // a shorter travelling cloak, a leather hem, a rolled hood at the neck
-  hang(b, 0.56, 0.86, { c: 0x2f5a34, m: 'wool', p: PAT.weave }, 0.07);
+  hang(b, 0.56, 0.86, { c: 0x2f5a34, m: 'wool', ...BADGE }, 0.07);
   hem(b, 0.56, 0.86, -0.85, { c: K.leather, m: 'leather', p: PAT.leather }, 0.07);
   collar(b, 0.6, 0.11, { c: 0x25472a, m: 'wool', p: PAT.weave });
   if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.04, 0.02], { c: K.brass, m: 'brass', e: 0.4 });
 }, true);
 def('cape.wolfpelt', (b) => {   // grey wool under a deep collar and shoulders of wolf fur
   const fur = { c: 0xcfc8b8, m: 'fur', p: PAT.fur };
-  hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', p: PAT.weave }, 0.07);
+  hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', ...BADGE }, 0.07);
   hem(b, 0.6, 0.9, -0.89, fur, 0.07);
   collar(b, 0.7, 0.17, fur, 0.07);
   for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, -0.045], [0.11, 0.06, 0.09], { ...fur, seg: [b.pick(8, 6, 4), b.pick(6, 4, 3)] });
 }, true);
 def('cape.midnight', (b) => {   // dark blue silk edged in silver
   const silver = { c: 0xc8ced8, m: 'steel' };
-  hang(b, 0.58, 1.0, { c: 0x1c2756, m: 'silk', p: PAT.weave });
+  hang(b, 0.58, 1.0, { c: 0x1c2756, m: 'silk', ...BADGE });
   hem(b, 0.58, 1.0, -0.99, silver);
   collar(b, 0.62, 0.06, silver);
   if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.05, 0.02], { ...silver, e: 0.4 });

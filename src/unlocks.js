@@ -17,6 +17,28 @@ export const BANNERS = [
   { id: 'rose', name: 'Rose', blurb: 'A five-petalled rose.' },
 ];
 
+// sigils every lord may bear from the first match (emblems.js draws them); the banners above are the ones Renown unlocks
+export const FREE_SIGILS = [
+  { id: 'lion', name: 'Lion' }, { id: 'eagle', name: 'Eagle' }, { id: 'tower', name: 'Tower' }, { id: 'swords', name: 'Crossed Swords' },
+  { id: 'cross', name: 'Cross' }, { id: 'sun', name: 'Sun' }, { id: 'crescent', name: 'Crescent' }, { id: 'fleur', name: 'Fleur-de-lis' },
+  { id: 'star', name: 'Star' }, { id: 'oak', name: 'Oak' },
+];
+// every sigil a lord can bear ('' is the house's own emblem)
+export const SIGIL_IDS = [...FREE_SIGILS.map((s) => s.id), ...BANNERS.map((b) => b.id)];
+export const sigilName = (id) => (FREE_SIGILS.find((s) => s.id === id) || BANNERS.find((b) => b.id === id) || { name: 'House' }).name;
+// how the field of the arms is divided between the house colour and the second tint (all free)
+export const DIVISIONS = [
+  { id: 'plain', name: 'Plain' }, { id: 'pale', name: 'Per pale' }, { id: 'fess', name: 'Per fess' }, { id: 'quarterly', name: 'Quarterly' },
+  { id: 'bend', name: 'Per bend' }, { id: 'chevron', name: 'Chevron' }, { id: 'saltire', name: 'Per saltire' }, { id: 'bordure', name: 'Bordure' },
+];
+// the second tint: on a plain field it colours the sigil, on a divided one the other part of the field (all free)
+export const TINTS = [
+  { id: 'argent', name: 'Silver', hex: 0xefe2b3 }, { id: 'or', name: 'Gold', hex: 0xd9a83a }, { id: 'sable', name: 'Black', hex: 0x24201c },
+  { id: 'gules', name: 'Red', hex: 0xa3201f }, { id: 'vert', name: 'Green', hex: 0x2c6a32 }, { id: 'azure', name: 'Blue', hex: 0x2a4f9e },
+  { id: 'purpure', name: 'Purple', hex: 0x63307e }, { id: 'tenne', name: 'Orange', hex: 0xc0661e },
+];
+export const DIVISION_IDS = DIVISIONS.map((d) => d.id), TINT_IDS = TINTS.map((t) => t.id);
+
 // cloaks: seen on your hero by everybody else (in first person you cannot see your own back)
 export const CLOAKS = [
   { id: 'crimson', name: 'Crimson Mantle', shape: 'cape.crimson', blurb: 'Deep red wool, edged in gold, with a gold clasp.', ink: ['#8c1f24', '#d8a83a'] },
@@ -71,6 +93,6 @@ export const KIND_LABEL = { banner: 'Banner', cloak: 'Cloak', capstone: 'Capston
 // what a player wears, in words ("Wolf banner, Crimson Mantle"; '' for the plain look): the lobby says it beside their name
 export function lookText(cos) {
   if (!cos) return '';
-  const b = BANNERS.find((x) => x.id === cos.banner), c = CLOAKS.find((x) => x.id === cos.cloak);
-  return [b && `${b.name} banner`, c && c.name].filter(Boolean).join(', ');
+  const c = CLOAKS.find((x) => x.id === cos.cloak);
+  return [SIGIL_IDS.includes(cos.banner) && `${sigilName(cos.banner)} banner`, c && c.name].filter(Boolean).join(', ');
 }

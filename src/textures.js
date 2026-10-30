@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 import { aniso } from './aniso.js';
-import { paintEmblem } from './emblems.js';
+import { HOUSE_SIGILS } from './emblems.js';
+import { DEFAULT_ARMS, armsKey, paintField, paintSigil } from './heraldry.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -129,14 +130,12 @@ export function roofTexture(seed = 5) {
   return finish(c);
 }
 
-const EMBLEMS = ['lion', 'tree', 'sun', 'tower', 'skull'];
-
-// Heraldic banner for a team: field colour plus an emblem.
-export function bannerTexture(colorHex, team, emblem = '') {
+// Heraldic banner for a team: the field in the house colour (divided with a second tint, if the lord's arms say so: heraldry.js) and a sigil:
+// the lord's own, or the emblem of the house (the one its soldiers wear). `arms`: { sig, div, tint }, a sigil id alone, or nothing.
+export function bannerTexture(colorHex, team, arms = null) {
+  const a = typeof arms === 'string' ? { ...DEFAULT_ARMS, sig: arms } : arms || DEFAULT_ARMS;
   const [c, ctx] = canvas(128, 256);
-  const col = '#' + colorHex.toString(16).padStart(6, '0');
-  ctx.fillStyle = col;
-  ctx.fillRect(0, 0, 128, 256);
+  paintField(ctx, 0, 0, 128, 256, a, colorHex, 108 / 256);
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(0, 0, 128, 14);
   // swallowtail notch
@@ -147,49 +146,19 @@ export function bannerTexture(colorHex, team, emblem = '') {
   ctx.strokeStyle = '#e9d9a6';
   ctx.lineWidth = 5;
   ctx.strokeRect(8, 20, 112, 180);
-  ctx.fillStyle = '#efe2b3';
-  ctx.strokeStyle = '#efe2b3';
-  const e = EMBLEMS[team % EMBLEMS.length];
   ctx.save();
   ctx.translate(64, 108);
-  if (emblem && paintEmblem(ctx, emblem, 46, '#efe2b3', col)) {
-    // the emblem of a banner the lord has earned (progress.js): the field stays the colour of the house
-  } else if (e === 'lion') {
-    ctx.beginPath(); ctx.arc(0, -20, 18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillRect(-16, -6, 32, 40);
-    ctx.fillRect(-20, 30, 10, 22); ctx.fillRect(10, 30, 10, 22);
-    ctx.beginPath(); ctx.moveTo(16, 10); ctx.quadraticCurveTo(40, 0, 30, -30); ctx.lineWidth = 6; ctx.stroke();
-  } else if (e === 'tree') {
-    ctx.fillRect(-5, 0, 10, 50);
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath(); ctx.moveTo(0, -50 + i * 22); ctx.lineTo(-30 + i * 2, -10 + i * 22); ctx.lineTo(30 - i * 2, -10 + i * 22); ctx.fill();
-    }
-  } else if (e === 'sun') {
-    ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 5;
-    for (let i = 0; i < 12; i++) {
-      const a = (i / 12) * Math.PI * 2;
-      ctx.beginPath(); ctx.moveTo(Math.cos(a) * 28, Math.sin(a) * 28); ctx.lineTo(Math.cos(a) * 44, Math.sin(a) * 44); ctx.stroke();
-    }
-  } else if (e === 'tower') {
-    ctx.fillRect(-20, -30, 40, 70);
-    for (let i = -20; i < 20; i += 14) ctx.fillRect(i, -42, 9, 12);
-    ctx.fillStyle = col; ctx.fillRect(-7, 18, 14, 22);
-  } else {
-    ctx.beginPath(); ctx.arc(0, -8, 24, 0, Math.PI * 2); ctx.fill();
-    ctx.fillRect(-14, 10, 28, 18);
-    ctx.fillStyle = col;
-    ctx.beginPath(); ctx.arc(-9, -10, 7, 0, Math.PI * 2); ctx.arc(9, -10, 7, 0, Math.PI * 2); ctx.fill();
-  }
+  paintSigil(ctx, a.sig ? a : { ...a, sig: HOUSE_SIGILS[team % HOUSE_SIGILS.length] }, colorHex, 46);
   ctx.restore();
   return finish(c, false);
 }
 
-// the banners with an earned emblem, one texture for each (house colour, emblem) pair; kept for the visit
+// the banners of lords' arms, one texture for each (house colour, arms) pair; kept for the visit
 const earned = new Map();
-export function customBanner(colorHex, team, emblem) {
-  const key = `${colorHex}:${emblem}`;
-  if (!earned.has(key)) earned.set(key, bannerTexture(colorHex, team, emblem));
+export function customBanner(colorHex, team, arms) {
+  const a = typeof arms === 'string' ? { ...DEFAULT_ARMS, sig: arms } : arms;
+  const key = `${colorHex}:${team}:${armsKey(a)}`;
+  if (!earned.has(key)) earned.set(key, bannerTexture(colorHex, team, a));
   return earned.get(key);
 }
 

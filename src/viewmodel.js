@@ -10,6 +10,7 @@ import { VMU, kitMaterial, glowMaterial, glowTexture, syncKitFov } from './vmmat
 import { handGeometry, armGeometry, shieldGeometry, bowGeometry, arrowGeometry, PAINT } from './vmkit.js';
 import { weaponGeometry, lanceGeometry, flaskGeometry, quiverGeometry } from './vmweapons.js';
 import { Mesher, paint, tone, PAT } from './vmgeo.js';
+import { armsOf } from './heraldry.js';
 
 const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -71,6 +72,10 @@ const HAND_SCALE = 1.1;   // hands read better a little large when seen this clo
 const ORDER_KIT = 1000;   // drawn after the world
 const SHIELD_REST = { x: -0.37, y: -0.3, z: -0.58, rx: -0.18, ry: 0.62, rz: 0.12 };
 const GUARD = { x: -0.2, y: -0.24, z: -0.52, rx: -0.05, ry: 0.3, rz: 0.06 };   // the shield brought across the front
+// the Knight's tall kite: carried lower and turned further out of the way, and on guard held with its top just under the eyes (it reaches
+// a third higher above the grip than a round shield does), so the enemy stays in sight over its rim
+const KITE_REST = { x: -0.45, y: -0.43, z: -0.6, rx: -0.2, ry: 0.76, rz: 0.14 };
+const KITE_GUARD = { x: -0.19, y: -0.36, z: -0.55, rx: -0.08, ry: 0.3, rz: 0.06 };
 // The bow. At rest it is held low across the front, an arrow on the string. Drawing, the bow arm comes up straight at the mark and the
 // string hand pulls the nock back along the arrow's line to the anchor under the jaw (BOW_ANCHOR, the nock's place at full draw; the eye
 // looks down the arrow from just above it, so the arrow points where the cross does); the draw elbow goes up and back behind, in line.
@@ -202,7 +207,7 @@ export class ViewModel {
   // ------------------------------------------------------------ building
   keyNow() {
     const p = this.p;
-    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}|${Q.kitShadows ? 1 : 0}|${p.cos.banner}`;
+    return `${p.classId}|${p.team}|${p.lv.sword}|${p.lv.shield}|${p.lv.bow}|${Q.detail}|${Q.kitShadows ? 1 : 0}|${p.cos.banner}|${p.cos.div}|${p.cos.tint}`;
   }
 
   clearKit() {
@@ -274,7 +279,7 @@ export class ViewModel {
     R.flask.scale.setScalar(0.8);
     R.grp.add(R.flask);
     // the shield, and the hand that holds it (its rod axis lies along the shield's strap)
-    const sh = shieldGeometry({ cls, team, lv: p.lv.shield, detail, emblem: p.cos.banner });
+    const sh = shieldGeometry({ cls, team, lv: p.lv.shield, detail, arms: armsOf(p.cos) });
     const shMat = kitMaterial({ map: sh.map });
     this.disposables.push(shMat);
     L.grp = new THREE.Group();
@@ -285,7 +290,7 @@ export class ViewModel {
     L.hand.scale.setScalar(HAND_SCALE);
     L.hand.morphTargetInfluences[0] = 1;   // (a fist round the grip)
     L.hand.rotation.z = -Math.PI / 2;
-    L.hand.position.set(0, p.lv.shield ? sh.shape.h * 0.14 : 0, 0.052);
+    L.hand.position.set(0, sh.grip, 0.052);
     L.hand.updateMatrix();
     L.wrist = hl.wrist.clone().applyMatrix4(L.hand.matrix);
     L.grp.add(L.shield, L.hand);
@@ -520,7 +525,7 @@ export class ViewModel {
       R.hand.morphTargetInfluences[0] = climbW > 0.3 ? 0.45 : 1;
       R.hand.morphTargetInfluences[1] = 0;
       // the shield: rest pose, or raised across the front on guard, with a little spring
-      const sp = this.shieldPose, target = p.blocking ? GUARD : SHIELD_REST, kk = Math.min(1, dt * 15);
+      const kite = cls === 'knight', sp = this.shieldPose, target = p.blocking ? (kite ? KITE_GUARD : GUARD) : kite ? KITE_REST : SHIELD_REST, kk = Math.min(1, dt * 15);
       sp.x += (target.x - sp.x) * kk; sp.y += (target.y - sp.y) * kk; sp.z += (target.z - sp.z) * kk;
       sp.rx += (target.rx - sp.rx) * kk; sp.ry += (target.ry - sp.ry) * kk; sp.rz += (target.rz - sp.rz) * kk;
       let bashZ = 0;

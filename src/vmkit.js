@@ -190,7 +190,7 @@ const SHIELD_STYLE = {
   mage: { rim: PAINT.gold, boss: PAINT.steelDull, k: 0.9 },
   cleric: { rim: PAINT.gold, boss: PAINT.gold, k: 0.95 },
 };
-// o: { cls, team, lv (0 round, 1 kite), detail, emblem (the banner the account wears, or '') }
+// o: { cls, team, lv (0 round, 1 kite; the Knight's is always a kite), detail, arms (the arms the account bears, heraldry.js, or null) }
 export function shieldGeometry(o) {
   const m = new Mesher();
   const sides = sidesFor(o.detail) + 8;
@@ -199,7 +199,8 @@ export function shieldGeometry(o) {
   m.at(0, 0, 0, 0, 0, 0, sty.k);   // (the whole shield, a little smaller for the lighter classes)
   const back = PAINT.woodDark, strap = PAINT.leather;
   let shape, rimPts, half, bossAt = [0, 0];
-  if (o.lv === 0) {
+  const knight = o.cls === 'knight';   // (the Knight always carries the tall kite: rounded at the top, its point near the knee)
+  if (o.lv === 0 && !knight) {
     const R = 0.21, depth = 0.04;
     shape = { kind: 'round', w: R * 2, h: R * 2 };
     const pos = (u, v) => { const a = u * Math.PI * 2; return [Math.cos(a) * v * R, Math.sin(a) * v * R, depth * (1 - v * v) - 0.004 * v]; };
@@ -213,11 +214,18 @@ export function shieldGeometry(o) {
     m.lathe([[0, -0.004], [0.062, -0.004, 'h'], [0.062, 0.006], [0.052, 0.022], [0.03, 0.036], [0.012, 0.042], [0, 0.044]], sides + 4, { mat: bossP });
     m.pop();
   } else {
-    const W = 0.175, H = 0.6, bulge = 0.04;
-    shape = { kind: 'kite', w: W * 2, h: H };
-    const hw = (v) => W * (v < 0.3 ? 1 : 1 - Math.pow((v - 0.3) / 0.7, 1.55));
-    const pos = (u, v) => { const x = (2 * u - 1) * hw(v), c = 1 - (2 * u - 1) * (2 * u - 1); return [x, H / 2 - v * H + 0.02 * c * (1 - v) * (1 - v) * 3, bulge * c * (0.45 + 0.55 * (1 - v)) * (v > 0.97 ? 0 : 1) + 0.014 * (1 - (2 * v - 1) * (2 * v - 1))]; };
-    const uvf = (x, y) => [(0.5 + 0.5 * x / W) * (480 / 512), 1 - ((H / 2 - y) / H) * (480 / 512)];
+    // the knight's: taller and wider, its top a round arch (ARCH above the shoulders), the sides bellying out before they taper
+    const W = knight ? 0.2 : 0.175, H = knight ? 0.66 : 0.6, bulge = knight ? 0.05 : 0.04, ARCH = knight ? 0.085 : 0, TOP = H / 2 + ARCH;
+    shape = { kind: 'kite', w: W * 2, h: H + ARCH, arch: ARCH };
+    const hw = knight ? (v) => W * (v < 0.22 ? 1 : Math.pow(Math.max(0, 1 - ((v - 0.22) / 0.78) ** 2), 0.85)) : (v) => W * (v < 0.3 ? 1 : 1 - Math.pow((v - 0.3) / 0.7, 1.55));
+    const pos = (u, v) => {
+      const s = 2 * u - 1, x = s * hw(v), c = 1 - s * s;
+      const arch = ARCH * Math.sqrt(c) * (1 - v) ** 6;   // (the top row rises into a round arch; the rows below follow it less and less)
+      return [x, H / 2 - v * H + arch + 0.02 * c * (1 - v) * (1 - v) * 3, bulge * c * (0.45 + 0.55 * (1 - v)) * (v > 0.97 ? 0 : 1) + 0.014 * (1 - (2 * v - 1) * (2 * v - 1))];
+    };
+    // (the shield is turned to face away from the holder, so its +x is on the enemy's left: the knight's arms are laid on mirrored, to read the
+    // right way round to whoever faces them)
+    const uvf = (x, y) => [(0.5 + (knight ? -0.5 : 0.5) * x / W) * (480 / 512), 1 - ((TOP - y) / (H + ARCH)) * (480 / 512)];
     m.patch(14, 20, pos, { mat: white, flip: true, uv: (u, v) => { const p = pos(u, v); return uvf(p[0], p[1]); }, size: [W * 2, H] });
     m.patch(14, 12, (u, v) => { const p = pos(u, v); return [p[0], p[1], p[2] - 0.022 - 0.01 * Math.sin(v * 3)]; }, { mat: back, size: [W * 2, H] });
     rimPts = [];
@@ -234,13 +242,13 @@ export function shieldGeometry(o) {
   m.tube(rimPts, 0.0125, 7, { mat: rimP, cap: 'round', smooth: true });
   // the strap and the grip on the back
   const gz = -0.05;
-  m.at(0, o.lv === 0 ? 0 : bossAt[1], gz);
+  m.at(0, shape.kind === 'round' ? 0 : bossAt[1], gz);
   m.tube([[-0.07, 0, 0], [0.07, 0, 0]], 0.011, 6, { mat: strap, cap: 'round' });
   m.tube([[0, 0.14, 0.012], [0, 0.12, 0], [0, -0.12, 0], [0, -0.14, 0.012]], 0.009, 5, { mat: strap, cap: 'round' });
   m.pop();
   m.pop();
   const geo = m.build();
-  return { geo, map: shieldFace(o.cls, o.team, shape, o.emblem || ''), half, shape };
+  return { geo, map: shieldFace(o.cls, o.team, shape, o.arms || null), half, shape, grip: shape.kind === 'round' ? 0 : bossAt[1] };
 }
 
 // ---------------------------------------------------------------- the bow

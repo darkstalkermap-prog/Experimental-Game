@@ -6,6 +6,7 @@ import { HERO } from './herogame.js';
 import { PALETTE, COLOR_IDS, assignColors } from './teams.js';
 import { HERO_SIZES, sideOfSeat, placeOfSeat, colorWants } from './seats.js';
 import { lookText } from './unlocks.js';
+import { armsChip, armsTitle } from './heraldry.js';
 import { lobbyRivalName } from './rivalsui.js';
 import { WAR_DESC } from './warui.js';
 
@@ -22,6 +23,7 @@ function style() {
 #lobbyList li.seat { align-items: center; flex-wrap: wrap; row-gap: 4px; }
 #lobbyList li.seat .who { flex: 1 1 200px; text-align: right; }
 #lobbyList li.seat.me { background: rgba(255,255,255,0.6); }
+#lobbyList img.arms { width: 20px; height: 24px; vertical-align: -6px; margin-right: 6px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.4)); }
 #lobbyList li.seat.closed .who { opacity: 0.7; }
 #lobbyList li.seat.side2 { margin-top: 8px; }
 #lobbyWatchers { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; padding: 4px 10px; border-left: 4px solid rgba(90,29,18,0.35); font-size: 14px; text-align: left; }
@@ -120,7 +122,8 @@ export function drawLobby(v, on) {
 
   // the list: one line per castle, or per hero seat
   const lines = [];
-  const holder = (p) => `${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
+  // (the chip of the player's arms, in the colour of the house they hold: heraldry.js)
+  const holder = (p, house, t) => `<img class="arms" src="${armsChip(p.cos, (PALETTE[house] || PALETTE.blue).hex, t)}" alt="" title="${esc(armsTitle(p.cos))}">${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
   const tag = (state) => (state === 'open' ? '<em class="st open" title="A player who joins can sit here; an AI lord holds it if nobody does">open seat</em>' : '<em class="st">closed</em>');
   const acts = (n, p, state, free) => {
     const a = [];
@@ -134,7 +137,7 @@ export function drawLobby(v, on) {
     for (let t = 0; t < 4; t++) {
       const p = players.find((q) => q.team === t) || null, state = v.slots[t];
       const c = css(house[t]);
-      const who = p ? holder(p)
+      const who = p ? holder(p, house[t], t)
         : state === 'empty' ? `<i>${war ? 'No army' : 'Empty castle'}</i> ${tag('closed')}`
           : `<i>AI lord${v.coop ? ' (enemy)' : ''}${!war && lobbyRivalName(t, v.rv) ? ' · ' + esc(lobbyRivalName(t, v.rv)) : ''}</i> ${tag(state)}`;
       lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}" style="border-left-color:${c}"><b style="color:${c}">${war ? 'Army' : 'Castle'} ${t + 1} · ${esc(PALETTE[house[t]].name)}${twoTeams || warTeams ? ` <small>· team ${twoTeams ? (t < 2 ? 1 : 2) : (t % 2) + 1}</small>` : ''}</b> <span class="who">${who}</span>${acts(t, p, state, true)}</li>`);
@@ -144,7 +147,7 @@ export function drawLobby(v, on) {
       const c = css(house[side]);
       for (let i = 0; i < hero.size; i++) {
         const s = side * 4 + i, p = players.find((q) => q.hs === s) || null, state = hero.seats[s];
-        const who = p ? holder(p) : state === 'empty' ? `<i>Nobody</i> ${tag('closed')}` : `<i>Hero bot</i> ${tag(state)}`;
+        const who = p ? holder(p, house[side], side) : state === 'empty' ? `<i>Nobody</i> ${tag('closed')}` : `<i>Hero bot</i> ${tag(state)}`;
         lines.push(`<li class="seat${p && p === mine ? ' me' : ''}${!p && state !== 'open' ? ' closed' : ''}${side && !i ? ' side2' : ''}" style="border-left-color:${c}"><b style="color:${c}">${esc(PALETTE[house[side]].name)} · ${placeOfSeat(s) + 1}</b> <span class="who">${who}</span>${acts(s, p, state, true)}</li>`);
       }
     }
