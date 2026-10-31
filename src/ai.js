@@ -198,7 +198,7 @@ export class LordAI {
       if (a.castle.fallen) {
         // the push worked: with enough men left the army marches on to the next castle, otherwise it goes home
         const next = attackers.length >= 3 ? this.weakest() : null;
-        if (next) { this.march(next, attackers, a.lord && a.lord.alive && a.lord.order === 'assault' ? a.lord : null); return; }
+        if (next) { this.march(next, attackers, a.lord && a.lord.alive && a.lord.order === 'assault' ? a.lord : null, true); return; }
         this.recall(troops);
         this.cooldown = P.winWait;
         return;
@@ -283,12 +283,13 @@ export class LordAI {
   }
 
   // send these troops at a castle; the waves and the engines follow the push (a raider leaves the waves on their lanes). An assault marches as a body
-  // (its halts are `way`: lead); a raid (a charge) rides at once.
-  march(castle, units, lord = null) {
+  // (its halts are `way`: lead); a raid (a charge) rides at once, and so does a push that has won and rolls on to the next castle (rolling: it is out in
+  // the field already, a body that has just fought together, and does not walk home to muster).
+  march(castle, units, lord = null, rolling = false) {
     if (this.P.redirect) this.f.siegeTarget = castle;
     this.assault = { castle, since: this.g.time, men: units.slice(), lord, way: null, stage: 0, stageT: this.g.time };
     const M = this.P.march;
-    if (M && this.P.order === 'assault' && units.length >= 3) {
+    if (M && this.P.order === 'assault' && units.length >= 3 && !rolling) {
       this.assault.way = this.halts(castle);
       this.halt(0);
     } else {
