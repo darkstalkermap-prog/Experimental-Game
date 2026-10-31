@@ -558,8 +558,8 @@ export class HeroBot {
     return this.cast('r', plan.to.clone());
   }
 
-  // Sniper Shot: a far target worth an arrow that hits like three: a rival hero above all, then a giant, a siege crew or an engine's
-  // driver, else a tower archer or a soldier on the walls; with a clear line, beyond the reach of her ordinary shots
+  // Sniper Shot: a far target worth an arrow that hits like three: a rival hero above all, else a giant, a boss or a siege engine's
+  // crew; with a clear line, beyond the reach of her ordinary shots (22 m) and within the arrow's flat flight
   sniperShot() {
     const p = this.p, g = this.g, S = RANGER.snipe, me = p.pos;
     if (p.weapon !== 'bow' && this.nearGap < 12) return false;
@@ -869,7 +869,7 @@ export class HeroBot {
         const st = this.snipeAt;
         if (!st || !st.alive) p.endScope();
         else {
-          this.aimAtFoe(st, RANGER.snipe.speed, 0.35);
+          this.aimAtFoe(st, RANGER.snipe.speed, 0.15);   // (steadied through the scope)
           p.tickScope(dt, true, p.scope.t >= RANGER.snipe.settle * 1.1);
         }
       } else if (this.wantShoot && tg && tg.alive && p.arrows > 0 && now >= this.nockAt) {
