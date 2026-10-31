@@ -562,8 +562,8 @@ export class Unit {
       const d = this.distTo(tgt);
       // archers with nothing to shoot help batter the gate by hand
       const reach = tgt.isStructure ? (this.ranged ? 2.2 : this.range) + 0.6 : this.range;
-      // (at a keep he strikes from his own spot along its wall, not from the first bit of wall he comes to: see keepSpot)
-      const atSpot = tgt.kind !== 'keep' || !this.keepPt || Math.hypot(this.keepPt.x - this.pos.x, this.keepPt.z - this.pos.z) < 3;
+      // (at a keep a big host strikes from each man's own spot along its wall, not from the first bit of wall he comes to: see keepSpot)
+      const atSpot = tgt.kind !== 'keep' || !this.keepPt || !this.keepFan || Math.hypot(this.keepPt.x - this.pos.x, this.keepPt.z - this.pos.z) < 3;
       if (d <= reach && atSpot && (!this.ranged || tgt.isStructure || this.los)) {
         face = tgt.pos;
         if (this.attackTimer <= 0 && this.swingT < 0) this.startAttack();
