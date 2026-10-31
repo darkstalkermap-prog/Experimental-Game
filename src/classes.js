@@ -922,11 +922,13 @@ export class Abilities {
   // the hero who cast it, found by where it happened (the other screens only get the place), and their house colour
   casterNear(pos, within = 3.8) {
     let best = null, bd = within * within;
-    for (const h of this.g.humans) {
-      if (!h.alive) continue;
+    const near = (h) => {
+      if (!h || !h.alive) return;
       const dx = h.pos.x - pos.x, dz = h.pos.z - pos.z, d = dx * dx + dz * dz;
       if (d < bd) { bd = d; best = h; }
-    }
+    };
+    for (const h of this.g.humans) near(h);
+    for (const f of this.g.factions) if (f && f.hero && f.hero.kit) near(f.hero);   // (a lord the computer plays as a hero: lordkit.js)
     return best;
   }
   houseColor(who) {

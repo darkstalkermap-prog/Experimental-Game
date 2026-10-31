@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { WAR, UNIT_TYPES, DIFFICULTY, WORLD, clock } from './config.js';
 import { XP } from './heroes.js';
 import { Unit } from './units.js';
+import { attachKit, lordClass } from './lordkit.js';
 import { setSides, allied } from './teams.js';
 import { FIELD, sideSpot, sanitizeWar, warSides } from './warmap.js';
 export { sanitizeWar, warSides, warHills, menuPlan, planOf } from './warmap.js';   // (main.js and the lobby take them from here)
@@ -174,8 +175,9 @@ export class WarMode {
   }
 
   spawnLord(f) {
-    const g = this.g, s = f.war.spot, t = UNIT_TYPES.lord, k = g.diff.enemyStat;
-    const u = new Unit(g, 'lord', f.team, tmpV.set(s.x + s.fx * 4, 0, s.z + s.fz * 4), { name: f.lord, hp: Math.round(t.hp * k), dmg: t.dmg * k, armor: t.armor });
+    const g = this.g, s = f.war.spot, t = UNIT_TYPES.lord, k = g.diff.enemyStat, cls = lordClass(g, f);   // (a hero of a class, with its abilities: lordkit.js)
+    const u = new Unit(g, 'lord', f.team, tmpV.set(s.x + s.fx * 4, 0, s.z + s.fz * 4), { name: f.lord, hp: Math.round(t.hp * k), dmg: t.dmg * k, armor: t.armor, hero: cls });
+    attachKit(u, cls);
     u.yaw = s.yaw;
     u.army = true;
     this.holdAt(f, u, s.x + s.fx * 4, s.z + s.fz * 4, 0);

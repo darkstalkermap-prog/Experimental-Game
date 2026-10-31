@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { UNIT_TYPES } from './config.js';
 import { CLASS_IDS } from './classes.js';
 import { Unit } from './units.js';
+import { attachKit, netClass } from './lordkit.js';
 import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
 import { DIRS, DIR_IDX } from './combat.js';
@@ -170,7 +171,7 @@ export class HostSync {
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
           DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
           u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0), u.crewOf ? u.crewOf.id * 4 + u.crewSlot + 1 : 0];
-        if (u.isHero) a.push(u.name);
+        if (u.isHero) a.push(u.name, u.kit ? u.kit.net() : 0);   // (a lord's class, and his bow: lordkit.js)
         return a;
       }),
       s: g.siege.map((s) => [s.id, s.type === 'ram' ? 0 : 1, s.team, r1(s.pos.x), r2(s.pos.y), r1(s.pos.z), r2(s.yaw),
@@ -333,13 +334,14 @@ export class ClientSync {
     const list = g.war && s.u && !Array.isArray(s.u) ? unpackUnits(s.u, this.units, (x, z) => g.physics.terrainHeight(x, z)) : s.u;
     if (g.war && s.u && Number.isInteger(s.u.q)) this.heard(s.u.q);
     for (const a of list) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name] = a;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name, kit] = a;
       const rank = flags & 7;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
-        const type = TYPE_NAMES[ti];
-        u = new Unit(g, type, team, new THREE.Vector3(x, y, z), { variant, name });
+        const type = TYPE_NAMES[ti], cls = type === 'lord' && kit !== undefined ? netClass(kit) : null;
+        u = new Unit(g, type, team, new THREE.Vector3(x, y, z), { variant, name, hero: cls || undefined });
+        if (cls) attachKit(u, cls, { view: true });   // (a lord who fights as a hero: his look, and his bow shown as the host's)
         u.id = id;
         u.pos.set(x, y, z);
         u.yaw = yaw;
@@ -362,6 +364,7 @@ export class ClientSync {
       if (pend && g.time < pend.until) { u.lane = pend.role === 'lane'; u.army = pend.role === 'army'; }
       else { u.lane = !!(flags & 8); u.army = !!(flags & 16); if (pend) g.rolePending.delete(id); }
       u.crewRef = crewRef;   // engine id * 4 + seat + 1, or 0
+      if (u.kit) u.kitNet = kit | 0;
       u.hp = (hpPct / 100) * u.maxHp;
     }
     if (list.ids) for (let i = 0; i < list.count; i++) seen.add(list.ids[i]);   // (War Mode: every soldier the host still has, sent this time or not)

@@ -16,6 +16,7 @@ import { Projectiles } from './projectiles.js';
 import { Player } from './player.js';
 import { FX } from './fx.js';
 import { LordAI } from './ai.js';
+import { attachKit, lordClass } from './lordkit.js';
 import { buy, SHOP_BY_ID } from './economy.js';
 import { HostSync, ClientSync } from './netsync.js';
 import { PARRY_WINDOW, BLOCK_STAMINA } from './combat.js';
@@ -344,12 +345,15 @@ export class Game {
   spawnLord(f) {
     const t = UNIT_TYPES.lord;
     const k = (1 + 0.03 * Math.max(0, this.round - 1)) * this.diff.enemyStat;
+    const cls = lordClass(this, f);   // (he fights as a hero of a class, with its abilities: lordkit.js)
     const u = new Unit(this, 'lord', f.team, f.castle.spawnPoint, {
       name: f.lord,
       hp: Math.round(t.hp * k),
       dmg: t.dmg * k,
       armor: t.armor + Math.floor(this.round / 8),
+      hero: cls,
     });
+    attachKit(u, cls);
     u.homeCastle = f.castle;
     u.slot = 3;
     u.setOrder('defend');

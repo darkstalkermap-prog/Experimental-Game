@@ -91,8 +91,9 @@ export class Unit {
     this.hasteT = 0;
     this.hasteMul = 1;
     this.kills = 0;
+    this.kit = null;       // a lord the computer plays as a hero of a class: his abilities (lordkit.js); stats.hero is the class he looks
 
-    const m = buildSoldier(type, team, this.variant);
+    const m = buildSoldier(type, team, this.variant, 0, stats.hero ? { hero: stats.hero, cape: 'cape.long' } : null);
     this.model = m;
     if (this.mounted) {
       this.horse = buildHorse(team, this.variant, team !== RAIDER_TEAM);
@@ -125,6 +126,7 @@ export class Unit {
 
   takeDamage(amount, attacker, info = {}) {
     if (!this.alive) return;
+    if (this.kit) { amount = this.kit.soak(amount, attacker, info); if (amount <= 0) return; }   // (a lord's Bulwark or Frost Ward)
     if (this.guardT > 0) amount *= this.guardMul;
     this.hp -= amount;
     // heavy blows interrupt and knock the soldier back; heroes and riders are harder to shake
@@ -213,7 +215,7 @@ export class Unit {
   }
 
   stagger(sec, from) {
-    if (this.isGiant || this.crewOf) return;
+    if (this.isGiant || this.crewOf || (this.kit && this.kit.steady())) return;
     this.staggerT = Math.max(this.staggerT, sec);
     this.staggerMax = this.staggerT;
     this.swingT = -1;
@@ -356,7 +358,7 @@ export class Unit {
     if (this.ignore && g.time > this.ignoreT) this.ignore = null;
     // an archer defending the castle goes up onto the walls first, even with the enemy in sight: from a slot in the
     // battlements he can shoot and can't be hit. Only someone right on top of him makes him fight where he stands.
-    if (order === 'defend' && this.ranged && !this.post && home && !home.fallen && g.freePost(home, this)
+    if (order === 'defend' && this.ranged && !this.kit && !this.post && home && !home.fallen && g.freePost(home, this)   // (a Ranger lord does not man a wall post)
         && !(this.target && !this.target.isStructure && this.distTo(this.target) < 7)) this.target = null;
     else if (!this.target || this.target.isStructure) {
       const t = g.findEnemy(this, engage, anchor, leash, this.ignore);
@@ -366,7 +368,7 @@ export class Unit {
     if (!this.target || this.target.isStructure) {
       this.target = null;
       if (order === 'defend') {
-        if (this.ranged && !this.post) {
+        if (this.ranged && !this.kit && !this.post) {
           const post = g.freePost(home, this);
           if (post) {
             this.goal = post.base;
@@ -533,6 +535,7 @@ export class Unit {
     if (this.guardT > 0) this.guardT -= dt;
     if (this.hasteT > 0) this.hasteT -= dt;
     if (this.crewOf) { this.updateCrew(dt); return; }
+    if (this.kit && this.kit.update(dt)) return;   // (a lord's run, leap or bow draw carries him this frame: lordkit.js)
     this.thinkTimer -= dt;
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;
@@ -804,6 +807,7 @@ export class Unit {
     if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.blockFlash > 0) this.blockFlash -= dt;
+    if (this.kit) this.kit.netUpdate();
     this.animate(dt, has ? t.extra > 0.3 : false);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.yaw;
