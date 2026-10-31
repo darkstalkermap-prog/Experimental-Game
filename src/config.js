@@ -310,29 +310,30 @@ export const PINGS = {
 // War Mode (src/warmode.js): no castles, a hill for each army and one great battle. The "2-minute timer" is the army-building phase: every lord has
 // `buildTime` seconds (Ready ends it early once everybody is ready) to spend `gold` on an army and set it out; then the armies fight to the end and the
 // last army standing wins (the heroes fight too, and do not rise again). A fight still going after `fightLimit` seconds is decided on the worth of what
-// is left. Each kind of soldier has a gold cost and a cap of its own that falls with its power (up to 200 footmen, far fewer knights and riders); a house
-// fields at most `armyCap` soldiers in every format (`totalCap` over all houses: four full armies; README, War Mode).
+// is left. Each kind of soldier has a gold cost and a cap of its own that falls with its power (up to 500 footmen, far fewer knights and riders: the caps
+// are the old 200-soldier army's times 2.5); a house fields at most `armyCap` soldiers in every format (`totalCap` over all houses: four full armies, 2000
+// soldiers; README, War Mode). The gold buys a full army of the cheaper kinds with some to spare for knights, riders and the giants.
 export const WAR = {
   buildTime: 120,
   fightLimit: 6 * 60,
   // the clear-air haze and the valley mist, as a share of the usual land's (atmosphere.js). The war modes are seen across a few dozen metres, to the next
   // castle; War Mode's battle is watched from a hilltop across the whole field, 150 to 300 m, and at the usual density it melts into a white haze.
   haze: 0.55,
-  gold: 10000,
-  armyCap: 200,
-  totalCap: 800,
+  gold: 30000,
+  armyCap: 500,
+  totalCap: 2000,
   forward: 25,          // metres a group's Advance (and Fall back) order moves it towards (away from) the nearest enemy before it holds
   xpEvery: 30,          // seconds of battle a living hero is paid XP.wave for, as a war mode pays each wave lived through
   // the soldier types for sale (keys of UNIT_TYPES): the gold each costs and how many one house may field
   units: {
-    swordsman: { name: 'Footman', cost: 30, cap: 200, desc: 'Sword and shield: cheap and steady, the body of any army.' },
-    spearman: { name: 'Spearman', cost: 35, cap: 150, desc: 'Long reach; holds a line and stops riders.' },
-    archer: { name: 'Archer', cost: 45, cap: 100, desc: 'Shoots from 44 m. Keep them behind the infantry.' },
-    longbowman: { name: 'Longbowman', cost: 70, cap: 60, desc: 'Shoots further and harder than an archer, and wears mail.' },
-    knight: { name: 'Knight', cost: 100, cap: 60, desc: 'Plate armour: the strongest man on foot.' },
-    horseman: { name: 'Cavalry', cost: 120, cap: 50, desc: 'Fast riders that crash through a line.' },
-    lancer: { name: 'Lancer', cost: 170, cap: 25, desc: 'Armoured riders with lances: the heaviest charge.' },
-    giant: { name: 'Giant', cost: 1500, cap: 1, desc: 'One to an army. Smashes whole ranks.' },
+    swordsman: { name: 'Footman', cost: 30, cap: 500, desc: 'Sword and shield: cheap and steady, the body of any army.' },
+    spearman: { name: 'Spearman', cost: 35, cap: 375, desc: 'Long reach; holds a line and stops riders.' },
+    archer: { name: 'Archer', cost: 45, cap: 250, desc: 'Shoots from 44 m. Keep them behind the infantry.' },
+    longbowman: { name: 'Longbowman', cost: 70, cap: 150, desc: 'Shoots further and harder than an archer, and wears mail.' },
+    knight: { name: 'Knight', cost: 100, cap: 150, desc: 'Plate armour: the strongest man on foot.' },
+    horseman: { name: 'Cavalry', cost: 120, cap: 125, desc: 'Fast riders that crash through a line.' },
+    lancer: { name: 'Lancer', cost: 170, cap: 60, desc: 'Armoured riders with lances: the heaviest charge.' },
+    giant: { name: 'Giant', cost: 1500, cap: 2, desc: 'Two to an army at most. Smashes whole ranks.' },
   },
   presets: {
     line: { name: 'Battle line', desc: 'A broad line: infantry in front, archers behind it, cavalry on the wings.' },

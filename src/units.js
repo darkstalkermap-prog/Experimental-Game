@@ -646,19 +646,26 @@ export class Unit {
 
   applyMovement(dt, idle) {
     const g = this.game;
-    // separation from neighbours
+    // separation from neighbours (every soldier, every frame: the grid's cells walked here without a callback, which War Mode's thousands felt)
     let px = 0, pz = 0;
-    g.grid.query(this.pos.x, this.pos.z, 1.4, (o) => {
-      if (o === this || !o.alive || o.post) return;
-      const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z;
-      const d2 = dx * dx + dz * dz;
-      const r = this.radius + o.radius + 0.15;
-      if (d2 < r * r && d2 > 1e-6) {
-        const d = Math.sqrt(d2);
-        const push = (r - d) / r;
-        px += (dx / d) * push; pz += (dz / d) * push;
+    const G = g.grid, c = G.cell, x = this.pos.x, z = this.pos.z;
+    const x0 = Math.floor((x - 1.4) / c), x1 = Math.floor((x + 1.4) / c), z0 = Math.floor((z - 1.4) / c), z1 = Math.floor((z + 1.4) / c);
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const a = G.map.get(G.key(ix, iz));
+      if (!a) continue;
+      for (let i = 0; i < a.length; i++) {
+        const o = a[i];
+        if (o === this || !o.alive || o.post) continue;
+        const dx = x - o.pos.x, dz = z - o.pos.z;
+        const d2 = dx * dx + dz * dz;
+        const r = this.radius + o.radius + 0.15;
+        if (d2 < r * r && d2 > 1e-6) {
+          const d = Math.sqrt(d2);
+          const push = (r - d) / r;
+          px += (dx / d) * push; pz += (dz / d) * push;
+        }
       }
-    });
+    }
     const sep = idle ? 2.5 : 4;
     this.pos.x += (this.vel.x + px * sep) * dt;
     this.pos.z += (this.vel.z + pz * sep) * dt;

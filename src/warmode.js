@@ -48,6 +48,9 @@ const STYLES = [
 ];
 
 const tmpV = new THREE.Vector3();
+// where a lord stands at the start of the build, in metres from his army's spot: out in front of the front rank, to its right, and the point behind
+// the front rank he looks at (respawn)
+const REVIEW = [7, 12, 8];
 
 // a point a guest (or the crosshair) gives for Move here: finite, inside the play area -> [x, z], or null
 function clampSpot(x, z) {
@@ -105,6 +108,7 @@ export class WarMode {
     this.countT = 0;
     this.aiT = 0;
     this.panelOpen = false;
+    this.reviewPose = null;   // where the local hero was put for the build ({ x, z, yaw }: respawn)
     this.xpT = WAR.xpEvery;
     this.ui = new WarUI(this);
   }
@@ -132,7 +136,8 @@ export class WarMode {
       f.formation = 'line';
       f.troopCap = this.cap;
     }
-    // the heroes stand in front of their army
+    // the heroes stand in front of their army from the first moment, turned to it so its lord watches it muster as he buys (warui.js turns him to the
+    // enemy when the battle begins)
     for (const h of g.humans) if (g.factions[h.team].war) this.respawn(h);
     g.round = 0;
     g.phase = 'prep';
@@ -145,13 +150,27 @@ export class WarMode {
     }
   }
 
-  // put a hero at the front of their army (the start, and a guest whose host says it is alive again)
+  // put a hero at the front of their army (the start, and a guest whose host says it is alive again). In the fight: 5 m out, facing the enemy. In the
+  // build: REVIEW[0] m out and REVIEW[1] m to the right of its middle, turned to look back along the front rank, so from the first moment his own eyes
+  // see his soldiers muster as he buys them (the army panel opens over this view, on the right: the army's middle sits left of the screen's). The
+  // pose is kept (reviewPose) so the horn can turn a lord who has not moved round to the enemy (warui.js fightBegan).
   respawn(p) {
     const f = this.g.factions[p.team];
     const s = f && f.war && f.war.spot;
     if (!s) return;
-    const x = s.x + s.fx * 5, z = s.z + s.fz * 5;
-    p.spawn(tmpV.set(x, this.g.physics.terrainHeight(x, z), z), s.yaw);
+    if (this.fighting) {
+      const x = s.x + s.fx * 5, z = s.z + s.fz * 5;
+      p.spawn(tmpV.set(x, this.g.physics.terrainHeight(x, z), z), s.yaw);
+      return;
+    }
+    const rx = s.fz, rz = -s.fx, [d, side, back] = REVIEW;
+    const x = s.x + s.fx * d + rx * side, z = s.z + s.fz * d + rz * side;
+    // (looking at a point `back` metres behind the front rank's middle, turned a little right of it)
+    const tx = s.x - s.fx * back, tz = s.z - s.fz * back;
+    const yaw = Math.atan2(tx - x, tz - z) - 0.14;
+    p.spawn(tmpV.set(x, this.g.physics.terrainHeight(x, z), z), yaw);
+    p.pitch = -0.06;
+    if (p === this.g.player) this.reviewPose = { x, z, yaw };
   }
 
   spawnLord(f) {

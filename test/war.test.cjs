@@ -20,9 +20,11 @@ test('War Mode packs hundreds of soldiers into a short string and reads them bac
   const w = packUnits(units);
   const size = JSON.stringify(w).length;
   assert.ok(size < 10000, `600 soldiers in ${size} characters`);
+  // a guest who has none of them yet: every living one comes (with his fixed part), the fallen ones it never saw do not; the roster is everybody
+  const back = unpackUnits(JSON.parse(JSON.stringify(w)), new Map(), () => 3);
+  assert.equal(back.length, units.filter((u) => u.alive).length);
+  assert.deepEqual(back.ids.slice(0, back.count), units.map((u) => u.id));
   const known = new Map(units.map((u) => [u.id, u]));
-  const back = unpackUnits(JSON.parse(JSON.stringify(w)), known, () => 3);
-  assert.equal(back.length, units.length);
   const step = (2 * WORLD.half) / 4095;
   for (const a of back) {
     const u = known.get(a[0]);
@@ -43,6 +45,59 @@ test('War Mode packs hundreds of soldiers into a short string and reads them bac
     assert.equal(a[8] >= 0, u.swingT >= 0);
     if (u.isHero) assert.equal(a[17], 'Lord Varr');
   }
+});
+
+test('War Mode: four armies of 500 in a snapshot that fits the room transport; far and idle soldiers come less often, the fallen are laid down', async () => {
+  const { packUnits, unpackUnits } = await load('src/warnet.js');
+  const { UNIT_TYPES } = await load('src/config.js');
+  const types = Object.keys(UNIT_TYPES);
+  const units = [];
+  for (let i = 0; i < 2000; i++) {
+    units.push({
+      id: 500 + i + (i >= 1000 ? 7 : 0), type: types[i % 8], team: i % 4, variant: i % 6, alive: true,
+      pos: { x: ((i * 37) % 300) - 150, y: 1, z: ((i * 53) % 300) - 150 }, yaw: 0, vel: { x: 1, z: 0 },
+      swingT: -1, staggerT: 0, blockFlash: 0, braced: false, attackDir: 'over', hp: 100, maxHp: 100, rank: 1, army: true, lane: false,
+    });
+  }
+  const net = { seq: 0, eyes: [0, 0] };
+  const guest = new Map();
+  const take = (w) => {
+    const list = unpackUnits(JSON.parse(JSON.stringify(w)), guest, () => 1);
+    for (const a of list) {
+      let g = guest.get(a[0]);
+      if (!g) { g = { id: a[0], type: types[a[1]], team: a[2], variant: a[10], rank: a[15] & 7, army: true, lane: false, alive: true, pos: { x: 0, y: 0, z: 0 }, yaw: 0 }; guest.set(a[0], g); }
+      g.pos.x = a[3]; g.pos.z = a[5]; g.alive = !!a[7];
+    }
+    return list;
+  };
+  let most = 0;
+  for (let s = 0; s < 30; s++) {
+    for (const u of units) if (u.alive) { u.pos.x += 0.3; u.yaw += 0.01; }   // (everybody marching: the heaviest case)
+    if (s === 20) for (let i = 0; i < 2000; i += 3) units[i].alive = false;
+    net.seq++;
+    const w = packUnits(units, net);
+    most = Math.max(most, JSON.stringify(w).length);
+    take(w);
+  }
+  assert.ok(most < 13000, `the largest snapshot of 2000 marching soldiers: ${most} characters`);
+  assert.equal(guest.size, 2000, 'every soldier known to the guest');
+  const dead = units.filter((u) => !u.alive);
+  assert.ok(dead.every((u) => !guest.get(u.id).alive), 'the fallen lie down on the guest');
+  // nobody far off is more than a few snapshots behind
+  let worst = 0;
+  for (const u of units) if (u.alive) worst = Math.max(worst, Math.abs(guest.get(u.id).pos.x - u.pos.x));
+  assert.ok(worst <= 0.3 * 4 + 0.2, `the furthest behind: ${worst.toFixed(2)} m`);
+  // soldiers at rest: only the refreshes go
+  net.seq++; packUnits(units, net);
+  net.seq++;
+  const rest = JSON.stringify(packUnits(units, net)).length;
+  assert.ok(rest < 3000, `2000 soldiers at rest: ${rest} characters`);
+  // a soldier sold back (gone from the roster) is dropped
+  const sold = units.splice(10, 5);
+  net.seq++;
+  const list = take(packUnits(units, net));
+  const roster = new Set(list.ids.slice(0, list.count));
+  assert.ok(sold.every((u) => !roster.has(u.id)) && roster.size === units.length);
 });
 
 test('War Mode keeps only a few cosmetic effects in a snapshot', async () => {

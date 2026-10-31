@@ -61,24 +61,35 @@ import { tickArchers, livingOn } from './towerarchers.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
+const NEAR_LOOK = 10;   // metres a soldier looks round himself for a foe before looking further (findEnemy)
+const ANIM_CAP = 300;   // soldiers animated at once at the medium quality (updateLod)
+const SCAN_ALL = 400;   // soldiers at most looked at by one search of the whole field (findEnemy)
 const roleOf = (u) => (u.lane ? 'lane' : u.army ? 'army' : 'garrison');   // (the roster role a soldier holds: see assignRole)
 
+// Everybody on the ground, bucketed twice over: 4 m cells for the many short looks (a blow, a shove between neighbours) and COARSE m cells for the long ones
+// (an archer's 50 m, a soldier's look for the nearest foe). A long look through the fine cells visits some 700 of them; through the coarse ones 50, and
+// with War Mode's thousands of soldiers that was a large share of the frame.
+const COARSE = 16;
 class Grid {
-  constructor(cell = 4) { this.cell = cell; this.map = new Map(); }
+  constructor(cell = 4) { this.cell = cell; this.map = new Map(); this.big = new Map(); }
   key(ix, iz) { return (ix + 512) * 1024 + (iz + 512); }
-  clear() { for (const a of this.map.values()) a.length = 0; }
+  clear() { for (const a of this.map.values()) a.length = 0; for (const a of this.big.values()) a.length = 0; }
   insert(o) {
     const k = this.key(Math.floor(o.pos.x / this.cell), Math.floor(o.pos.z / this.cell));
     let a = this.map.get(k);
     if (!a) { a = []; this.map.set(k, a); }
     a.push(o);
+    const kb = this.key(Math.floor(o.pos.x / COARSE), Math.floor(o.pos.z / COARSE));
+    let b = this.big.get(kb);
+    if (!b) { b = []; this.big.set(kb, b); }
+    b.push(o);
   }
   query(x, z, r, fn) {
-    const c = this.cell;
+    const big = r >= 20, c = big ? COARSE : this.cell, m = big ? this.big : this.map;
     const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
     const z0 = Math.floor((z - r) / c), z1 = Math.floor((z + r) / c);
     for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-      const a = this.map.get(this.key(ix, iz));
+      const a = m.get(this.key(ix, iz));
       if (a) for (let i = 0; i < a.length; i++) fn(a[i]);
     }
   }
@@ -633,8 +644,20 @@ export class Game {
       if (unit.ranged && o.post) score += 6;
       if (score < bd) { bd = score; best = o; }
     };
-    if (radius <= 50) this.grid.query(unit.pos.x, unit.pos.z, radius, consider);
-    else { for (const u of this.units) consider(u); for (const h of this.humans) consider(h); }
+    // near first: anything found within NEAR (by a margin bigger than the scores' bonuses) is the nearest of all, and the long look is not needed
+    const r1 = Math.min(radius, NEAR_LOOK);
+    this.grid.query(unit.pos.x, unit.pos.z, r1, consider);
+    if (!(best && bd <= r1 - 4) && radius > r1) {
+      if (radius <= 50) this.grid.query(unit.pos.x, unit.pos.z, radius, consider);
+      else {
+        // (the whole field: with hundreds of soldiers every few one of them is looked at, a different few for each searcher. The nearest of those is
+        // a few steps from the nearest of all, he is far off anyway, and a look over two thousand soldiers by each of two thousand was most of War
+        // Mode's frame)
+        const n = this.units.length, step = n > SCAN_ALL ? Math.ceil(n / SCAN_ALL) : 1;
+        for (let i = step > 1 ? unit.id % step : 0; i < n; i += step) consider(this.units[i]);
+        for (const h of this.humans) consider(h);
+      }
+    }
     for (const s of this.siege) consider(s);
     return best;
   }
@@ -1752,22 +1775,28 @@ export class Game {
   updateLod() {
     const c = this.camera.position, lim = lodLimits();
     const k = this.nearK || 1;   // shrinks while more soldiers than Q.crowdRich would wear the rich shapes
-    let retier = 4, rich = 0;   // soldiers whose house has trained them further change into their new kit a few at a time
+    const km = this.midK || 1;   // and the animated ring while more than ANIM_CAP times the quality's LOD scale would be animated (War Mode's thousands)
+    let retier = 4, rich = 0, anim = 0;   // soldiers whose house has trained them further change into their new kit a few at a time
     for (const u of this.units) {
       const f = this.factions[u.team];
       if (f && retier > 0 && u.alive && !u.fixedTier && u.tier !== Math.min(5, f.training || 0) && !u.isHero && !u.isGiant && !u.isCrew) { u.setTier(Math.min(5, f.training || 0)); retier--; }
       const d2 = (u.pos.x - c.x) ** 2 + (u.pos.z - c.z) ** 2;
       const s = u.isGiant ? 3 : 1, h = u.lod;
       // (a little hysteresis, so a soldier on the edge does not flicker between two models)
-      const near = lim.near * s * k * (h === 0 ? 1.06 : 1), mid = lim.mid * s * (h <= 1 ? 1.06 : 1), far = lim.far * (h <= 2 ? 1.06 : 1);
+      const near = lim.near * s * k * (h === 0 ? 1.06 : 1), mid = lim.mid * s * km * (h <= 1 ? 1.06 : 1), far = lim.far * (h <= 2 ? 1.06 : 1);
       const lod = d2 < near * near ? 0 : d2 < mid * mid ? 1 : d2 < far * far ? 2 : 3;
       if (lod === 0 && u.alive) rich++;
+      if (lod <= 1 && u.alive) anim++;
       u.setLod(lod);
     }
     // the rich shapes are the costly ones: when a crowd stands round the camera the distance they are worn at shrinks (quickly), and it
     // grows back (slowly) once there is room again
     const cap = Q.crowdRich;
     this.nearK = rich > cap ? Math.max(0.35, k * 0.93) : rich < cap * 0.7 ? Math.min(1, k * 1.015) : k;
+    // (the same for the animated ones: past the ring a soldier is the static far model, a fraction of the CPU and of the triangles. Never inside
+    // the rich ring.)
+    const acap = ANIM_CAP * Q.lodScale;
+    this.midK = anim > acap ? Math.max(lim.near * 1.2 / lim.mid, km * 0.95) : anim < acap * 0.75 ? Math.min(1, km * 1.01) : km;
   }
 
   updateTowers(c, dt) {

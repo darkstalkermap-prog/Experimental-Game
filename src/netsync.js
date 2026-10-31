@@ -32,6 +32,7 @@ export class HostSync {
     this.t = 0;
     this.shared = [];
     this.priv = new Map();
+    this.warNet = { seq: 0, eyes: [] };   // (War Mode: the snapshot's number and where the guests' heroes stand, for whose turn it is: warnet.js)
     const net = game.net;
     net.on('data', ({ from, d }) => this.onData(from, d));
     net.on('leave', (id) => {
@@ -149,7 +150,7 @@ export class HostSync {
     const shared = {
       tm: r1(g.time), r: g.round, ph: g.phase, pt: r1(g.phaseT), ql: g.spawnQueue.length, hl: g.hill.netState(), rd: g.readyLive ? g.readyState() : 0,
       w: g.war ? g.war.netState() : 0,   // (War Mode: the phase and each army's formation and plan)
-      u: g.war ? packUnits(g.units) : g.units.map((u) => {   // (War Mode's hundreds of soldiers go packed: warnet.js)
+      u: g.war ? packUnits(g.units, this.warEyes()) : g.units.map((u) => {   // (War Mode's hundreds of soldiers go packed, the far and idle ones less often: warnet.js)
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
           DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
@@ -237,6 +238,15 @@ export class HostSync {
     this.priv.clear();
   }
 
+  // War Mode's snapshot: its number, and where the guests' living heroes stand (the soldiers near them go in every snapshot: warnet.js)
+  warEyes() {
+    const W = this.warNet;
+    W.seq++;
+    W.eyes.length = 0;
+    for (const h of this.g.humans) if (h.remote && h.alive) W.eyes.push(h.pos.x, h.pos.z);
+    return W;
+  }
+
   // (each guest is also sent its own numbers for the end screen: the host is the only one that sees every blow)
   // hl: the notable moments of the match, for the guests' highlight line (highlights.js) · quick: no keep fell for this ending (the clock of a Short war ran out),
   // so the guests' screens come up at once instead of looking for a falling keep (finale.js)
@@ -304,7 +314,7 @@ export class ClientSync {
         this.units.set(id, u);
         g.units.push(u);
       }
-      if (!u.interp) u.interp = new Interp();
+      if (!u.interp) { u.interp = new Interp(); u.interp.adapt = !!g.war; }   // (War Mode: a far soldier's records come less often: interpolation.js)
       u.interp.push(x, y, z, yaw, speed);
       if (u.alive && !alive) { u.alive = false; u.deathT = 0; }
       if (swingT >= 0 && u.swingT < 0) u.swingT = swingT;
@@ -320,6 +330,7 @@ export class ClientSync {
       u.crewRef = crewRef;   // engine id * 4 + seat + 1, or 0
       u.hp = (hpPct / 100) * u.maxHp;
     }
+    if (list.ids) for (let i = 0; i < list.count; i++) seen.add(list.ids[i]);   // (War Mode: every soldier the host still has, sent this time or not)
     for (const [id, u] of this.units) {
       if (!seen.has(id)) { u.remove(); this.units.delete(id); }
     }
