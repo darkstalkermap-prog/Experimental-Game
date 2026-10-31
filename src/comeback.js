@@ -27,7 +27,7 @@ export function startComeback(game) {
 
 // ---------------- Underdog's wage ----------------
 // What a house can fight with, in gold-worth points: the health of its keep, gate and walls, its soldiers and engines (their price, by health)
-// and half its purse. Heroes are left out (every house has one).
+// and half its purse (up to COMEBACK.strength.purseCap coins). Heroes are left out (every house has one).
 const worth = (type) => UNIT_TYPES[type].cost ?? (type === 'giant' ? GIANT_COST : type === 'longbowman' ? 100 : 0);
 export function strengthOf(game, f) {
   const c = f.castle, S = COMEBACK.strength;
@@ -36,7 +36,9 @@ export function strengthOf(game, f) {
   let p = S.keep * (c.keep.hp / c.keep.maxHp) + (c.gate.alive ? S.gate * (c.gate.hp / c.gate.maxHp) : 0) + (n ? S.walls * (walls / n) : 0);
   for (const u of game.units) if (u.team === f.team && u.alive && !u.isHero && !u.isCrew) p += worth(u.type) * (u.hp / u.maxHp);
   for (const s of game.siege) if (s.team === f.team && s.alive) p += (SIEGE_TYPES[s.type] ? SIEGE_TYPES[s.type].cost : 0) * (s.hp / s.maxHp);
-  return p + S.purse * f.gold;
+  // (a hoard counts only up to purseCap coins: gold a house cannot spend at once is not strength, and a rich lord sitting on 19,000 made every
+  // other house look beaten and paid them all the wage)
+  return p + S.purse * Math.min(f.gold, S.purseCap);
 }
 
 // what a standing house earns a minute without fighting: the trickle and the wave wage (the wage is the base the bonus is a share of)

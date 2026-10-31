@@ -590,7 +590,7 @@ and hero speed, respawn time, starting gold, and the shop prices in `src/economy
 **Comeback mechanics** (`src/comeback.js`, numbers in `COMEBACK` in `src/config.js`). Losing should be a fight, not a slow defeat.
 All three rules are decided by the host and apply to the AI lords exactly as to people.
 - **Underdog's wage.** From wave 3 on, every second the game weighs each house: the health of its keep, gate and walls, what its
-  soldiers and engines are worth (their price, by health) and half its purse. A house far behind the average of its enemies
+  soldiers and engines are worth (their price, by health) and half its purse (up to 3,000 coins: a hoard is not strength). A house far behind the average of its enemies
   (below 60%, until it climbs above 80%) is paid a bonus wage, 30% to 80% of what it already earns without fighting (the more it
   is behind the more it gets, about 60 to 200 gold a minute by mid-game), paid out in a lump every ten seconds. The HUD shows
   "Underdog's wage +N gold/min" beside the gold, and a toast explains it the first time.
