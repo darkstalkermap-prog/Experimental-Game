@@ -205,6 +205,22 @@ export class General {
     this.threat = null;
   }
 
+  // a general taking over in the battle (a lord who left: warmode.js dropHuman) carries on with what he had begun: a group he had sent charging goes on
+  // charging (at the army it was sent at), the others are planned from where they stand
+  adopt() {
+    const w = this.w;
+    for (const k of GROUP_KEYS) {
+      const l = w.groupList(this.f.team, k);
+      const on = l.filter((u) => u.order === 'charge');
+      if (!l.length || on.length < l.length / 2) continue;
+      const S = this[k];
+      S.task = 'charge'; S.since = w.clock; S.foe = on[0].foeTeam;
+      if (k === 'cav') S.mark = null;
+      this.posture = 'advance';
+    }
+    if (this.inf.task === 'charge' && this.inf.foe >= 0) this.foe = this.inf.foe;
+  }
+
   // every frame of the battle (warmode.js update); the looks come every L.every seconds
   update(dt) {
     if (this.f.war.allIn || this.f.eliminated) return;

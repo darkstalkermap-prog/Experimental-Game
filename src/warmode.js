@@ -710,7 +710,7 @@ export class WarMode {
     if (!f.war) return;
     if (!this.fighting && !f.eliminated) { this.spawnLord(f); this.aiBuy(f); return; }
     f.war.general = new General(this, f, 'steady', this.g.difficultyName);
-    f.war.foe = { ...NO_FOE };
+    f.war.general.adopt();   // (what the lord had begun goes on: a charge stays a charge)
   }
 
   // an AI general's army: a style, a formation, the purse spent down to the last coins; and the general (wartactics.js), whose temper follows the style
