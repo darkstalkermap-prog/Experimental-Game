@@ -61,6 +61,7 @@ import { tickArchers, livingOn } from './towerarchers.js';
 
 export const GROUP_NAMES = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' };
 const GROUPS = ['all', 'infantry', 'archers', 'cavalry'];
+const roleOf = (u) => (u.lane ? 'lane' : u.army ? 'army' : 'garrison');   // (the roster role a soldier holds: see assignRole)
 
 class Grid {
   constructor(cell = 4) { this.cell = cell; this.map = new Map(); }
@@ -392,10 +393,19 @@ export class Game {
     const f = this.factions[team];
     if (!f || !['garrison', 'army', 'lane'].includes(d.role)) return 0;
     const ids = Array.isArray(d.ids) ? new Set(d.ids) : null;
-    const list = this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf
-      && u.role !== d.role && (ids ? ids.has(u.id) : d.type ? u.type === d.type : true));
+    let list = this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf
+      && roleOf(u) !== d.role && (ids ? ids.has(u.id) : d.type ? u.type === d.type : true));
+    // the garrison and the army each have a limit: only as many as there is room for go over
+    const room = this.roleRoom(f, d.role), asked = list.length;
+    if (list.length > room) list = list.slice(0, room);
     for (const u of list) this.assignRole(f, u, d.role);
     this.reslot(team);
+    if (asked > list.length && f.player) {
+      const name = d.role === 'army' ? 'Army' : 'Garrison';
+      f.player.notify(`${name} full (${this.roleCap(f, d.role)}/${this.roleCap(f, d.role)})${list.length ? `: only ${list.length} more fit` : ''}`);
+      if (!list.length) f.player.sound('deny');
+      return list.length;
+    }
     if (list.length > 1 && f.player) {
       const label = { garrison: 'to the garrison', army: 'into your army', lane: 'out with the waves' }[d.role];
       f.player.notify(`${list.length} soldiers ${d.role === 'army' ? 'join' : 'go'} ${label}`);
@@ -416,9 +426,13 @@ export class Game {
       this.net.toHost({ a: 'role', ...d });
       // show the change at once; the host's next snapshot confirms it
       this.rolePending = this.rolePending || new Map();
+      let room = this.roleRoom(this.localFaction, d.role);   // (as many as the host will let over; it has the last word)
+      if (!room) { this.audio.play('deny'); this.ui.toast(`${d.role === 'army' ? 'Army' : 'Garrison'} full (${this.roleCap(this.localFaction, d.role)}/${this.roleCap(this.localFaction, d.role)})`); return; }
       for (const u of this.units) {
         if (!u.alive || u.team !== this.localTeam || u.isHero || u.isGiant || u.isCrew) continue;
         if (d.ids ? !d.ids.includes(u.id) : d.type ? u.type !== d.type : false) continue;
+        if (roleOf(u) === d.role) continue;
+        if (room-- <= 0) break;
         u.lane = d.role === 'lane'; u.army = d.role === 'army';
         this.rolePending.set(u.id, { role: d.role, until: this.time + 1.5 });
       }
@@ -454,12 +468,32 @@ export class Game {
     for (const u of this.units) if (u.alive && u.team === team && u.lane) n++;
     return n;
   }
-  // bought troops at the barracks: the garrison and the army that follows its lord (this is what the limit counts)
+  // bought troops staying home (what the barracks limit, f.troopCap, counts)
   garrisonCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane && !u.army) n++;
     return n;
   }
+  // bought troops who follow their lord (what the army limit counts)
+  armyCount(team) {
+    let n = 0;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane && u.army) n++;
+    return n;
+  }
+  // The most soldiers a house may have in the garrison or in the army (TROOP_CAP); the lane has no limit of its own.
+  roleCap(f, role) {
+    if (this.war || this.hero) return Infinity;   // (War Mode's army has its own limits, warmode.js; Hero Mode buys no soldiers)
+    return role === 'garrison' ? f.troopCap : role === 'army' ? TROOP_CAP.army : Infinity;
+  }
+  // How many more soldiers fit into a role. Every buy and every move between the roles asks the host (the host's own
+  // game, for a guest's buys and roster changes: netsync.js), so the limits hold online.
+  roleRoom(f, role) {
+    if (role === 'lane') return Infinity;
+    const c = this.roleCounts(f.team);
+    return Math.max(0, this.roleCap(f, role) - c[role]);
+  }
+  // the role a soldier bought now by this house joins (see recruit)
+  recruitRoleOf(f) { return f.isPlayer && f.recruitRole === 'army' ? 'army' : 'garrison'; }
   // how many soldiers hold each role: staying home, marching with the lord, or sent out with the waves
   roleCounts(team) {
     const c = { garrison: 0, army: 0, lane: 0 };

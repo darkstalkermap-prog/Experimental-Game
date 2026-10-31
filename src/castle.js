@@ -284,7 +284,7 @@ export class Castle {
     for (let row = 0; row < 3; row++) {
       for (let i = -3; i <= 3; i++) this.defendPts.push(this.toWorld(i * 2.3, 11 - row * 2.6));
     }
-    for (let i = 0; i < 16; i++) this.defendPts.push(this.toWorld(-9 + (i % 8) * 2.6, -14.5 + Math.floor(i / 8) * 2.4));
+    for (let i = 0; i < 16; i++) this.defendPts.push(this.toWorld(-9 + (i % 8) * 2.6, -15 + Math.floor(i / 8) * 2.2));
     this.posts = this.walls.flatMap((w) => w.posts);
     // front posts first
     this.posts.sort((a, b) => (b.front ? 1 : 0) - (a.front ? 1 : 0));

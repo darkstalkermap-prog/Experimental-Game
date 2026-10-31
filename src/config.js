@@ -240,7 +240,10 @@ export const HILL = {
   squadMax: 10,
 };
 
-export const TROOP_CAP = { start: 12, step: 6, max: 36 };
+// The garrison (bought soldiers who stay home) is limited by the barracks: `start`, `step` more for each Expand Barracks, up to `max`.
+// The field army (bought soldiers who follow their lord and take his orders) has a limit of its own, `army`, that the barracks do not
+// change. Soldiers sent out with the waves count against neither (the waves have their own size). Conquest and King of the Hill only.
+export const TROOP_CAP = { start: 12, step: 6, max: 36, army: 50 };
 
 // The practice courtyard (practice mode only): a walled yard on its own flat ground between the player's castle and the
 // next, with training dummies on fixed stands. Sizes are metres; the yard's centre is a share of the castle distance.
