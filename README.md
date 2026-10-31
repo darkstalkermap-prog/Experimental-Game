@@ -1035,7 +1035,11 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
   potions, where your soldiers are), and over the abilities a row of labels for the buffs on you; top left the houses, top centre
   the wave and its clock, top right the gold. The orders bar shows only while your army has soldiers; it sits centred in the gap
   between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. On a window
-  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. The tip line and the
+  toasts stand over the orders bar and its row of colour keys however many rows it takes, and a tip is never wider than the gap between the hero panel and the
+  minimap at the UI scale (it wraps). On a narrow HUD (a small window at a large UI scale) the bars under the top panel start below the houses' panel, the kill
+  feed starts below them with only the newest lines that fit above the minimap, and the toasts keep only the newest that fit under them (measured a few times a
+  second: `stackBottom` and `clearFeed` in `src/flow.js`). HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
   base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a
