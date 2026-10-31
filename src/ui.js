@@ -994,6 +994,9 @@ export class UI {
     // (marks, not classes: the HUD's class names say which mode it shows)
     const hz = parseFloat(getComputedStyle($('dock')).zoom) || 1;
     if (innerWidth / hz < 1320) hud.dataset.cmdwrap = '1'; else delete hud.dataset.cmdwrap;
+    // (the gap between the hero panel and the minimap, 562 HUD pixels less than the window: War Mode's command bar, which lives outside the HUD, packs its
+    // buttons tighter when it is narrow, warui.js)
+    document.body.classList.toggle('narrowgap', innerWidth / hz - 562 < 560);
     // (a window under 470 HUD pixels tall, 1024 x 600 at the largest UI scale: the hero panel with its abilities and buffs reaches the castle panel
     // under the top panel, so that one is not shown)
     if (innerHeight / hz < 470) hud.dataset.short = '1'; else delete hud.dataset.short;

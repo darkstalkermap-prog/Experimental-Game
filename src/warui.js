@@ -47,7 +47,7 @@ export const WAR_DESC = `No castles: each army musters on a hill of its own, and
 const CSS = `
 #hud.war #factions, #hud.war #top, #hud.war #goldbox, #hud.war #army, #hud.war #clsHint, #hud.war #hill, #hud.war #hint, #hud.war #command, #hud.war #respawn { display: none !important; }
 body.war-on #scoreboard { display: none !important; }
-body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
+body.war-on #toasts { bottom: max(196px, var(--toastlift, 0px)); }   /* (above the command bar, however tall it is: flow.js) */
 #warTop { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: none; text-align: center; min-width: 340px; max-width: calc(100% - 420px); }
 #warTop .wt-main { display: inline-flex; gap: 14px; align-items: center; justify-content: center; flex-wrap: wrap; }
 #warTop .wt-clock { font-family: Cinzel, Georgia, serif; font-size: 22px; color: var(--gold); letter-spacing: 0.05em; }
@@ -127,6 +127,12 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warCmd .wc-plan { font-size: 13px; color: var(--gold); text-align: center; }
 #warCmd .wc-hint kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
+/* a narrow gap between the hero panel and the minimap at this UI scale (ui.fitHero): tighter buttons, no row labels, the groups without their line of
+   numbers (the chosen group's order and formation are lit in the rows under it); and never taller than the room under the top bar (flow.js sets the
+   max-height: the rows scroll in the very last resort, 1024 x 600 at the largest scale) */
+body.narrowgap #warCmd button { min-width: 0; padding: 3px 7px 4px; }
+body.narrowgap #warCmd .wc-groups button small, body.narrowgap #warCmd .wc-label { display: none; }
+#warCmd { overflow-y: auto; scrollbar-width: thin; }
 .go-war { margin: 10px auto 4px; max-width: 620px; }
 .go-war table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .go-war th { font-family: Cinzel, Georgia, serif; font-size: 12px; text-align: left; opacity: 0.75; padding: 3px 6px; }

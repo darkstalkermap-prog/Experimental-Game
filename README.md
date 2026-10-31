@@ -166,6 +166,10 @@ around a minute. The included `Dockerfile` also works on Fly.io, Railway or any 
 The host's browser runs the whole battle. Other players control their own hero and receive about 10 updates
 a second. If the host leaves, the game ends. If someone else leaves, an AI lord takes over their castle.
 
+A Host or Join that has not been answered yet (a wrong code takes the claude.ai room 8 seconds and a browser-to-browser connection up to 25 seconds
+to give up on) is dropped when you press the other button or try another code, so its late answer cannot close the room you are in by then; pressing
+the same button twice, or Enter and the button, is one press (`connect` in `src/main.js`).
+
 ## How it works
 
 - **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a
@@ -844,7 +848,9 @@ Charge, Advance or Follow me. The AI generals keep their own plans. No place of 
 (a small map, Archers behind) is set out wider and shallower, and a group sent towards them (Move here, Fall back, an AI general's
 place) forms up at their foot, its shape kept.
 
-**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
+**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale, and
+where that gap is narrow its buttons pack tighter, without the row labels and the groups' line of numbers; it never reaches above the top bar, and the
+toasts and the kill feed keep clear of it) gives orders, as in Bannerlord but fewer of them. Choose a group:
 **1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). Each group has a colour of
 its own, the same everywhere: **yellow** infantry, **green** archers, **blue** cavalry (pale, so they are never taken for a house's).
 The chosen soldiers get a small arrow in their group's colour over their heads (Everyone: each man his group's), and the button lights
@@ -1038,7 +1044,13 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
   potions, where your soldiers are), and over the abilities a row of labels for the buffs on you; top left the houses, top centre
   the wave and its clock, top right the gold. The orders bar shows only while your army has soldiers; it sits centred in the gap
   between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. On a window
-  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. The tip line and the
+  toasts stand over the orders bar and its row of colour keys however many rows it takes; a tip is centred in the gap between the hero panel and the minimap
+  (as the bar) and never wider than it at the UI scale (it wraps), and where not even a narrow one fits (1024 × 600 at the largest scale) it is not shown. On a
+  narrow HUD (a small window at a large UI scale) the bars under the top panel start below the houses' panel, the kill feed starts below them, the kill feed
+  shows only the newest lines that fit above the minimap (or a command bar that reaches its column) and the toasts only the newest that fit under
+  those bars (measured a few times a second:
+  `stackBottom` and `clearFeed` in `src/flow.js`). HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
   base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a

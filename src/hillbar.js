@@ -18,7 +18,7 @@ function style() {
   styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#hill { width: min(460px, calc(100vw - 32px)); padding: 6px 10px 8px; box-sizing: border-box; }
+#hill { width: min(460px, calc(100% - 32px)); padding: 6px 10px 8px; box-sizing: border-box; }
 #hill .hh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; white-space: nowrap; margin-bottom: 5px; }
 #hill .hh span { font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; }
 #hill .hh span small { font-family: 'EB Garamond', Georgia, serif; font-size: 14px; opacity: 0.75; letter-spacing: 0; margin-left: 6px; }

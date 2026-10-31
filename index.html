@@ -176,7 +176,7 @@
   #command > .cg:last-child { padding-left: 10px; border-left: 1px solid var(--edge); opacity: 0.8; }
   #hud[data-cmdwrap] #command .orders, #hud[data-cmdwrap] #command > .cg:last-child { padding-left: 0; border-left: none; }   /* (wrapped: see ui.fitHero) */
   #hud[data-short] #castleBar { display: none; }   /* (no room for it over the hero panel: see ui.fitHero) */
-  @media (max-width: 1100px) { #toasts { bottom: 150px; } }   /* (above the orders bar when it wraps) */
+  @media (max-width: 1100px) { #toasts { bottom: max(150px, var(--toastlift, 0px)); } }   /* (above the orders bar when it wraps) */
   @media (max-width: 1000px) { #command { font-size: 12px; column-gap: 8px; } #command .orders { gap: 2px; } }
   .orders-grid { grid-column: 1 / -1; display: grid; gap: 14px; }
   .orders-grid h5 { margin: 0 0 6px; font-family: Cinzel, serif; font-size: 14px; color: var(--gold); }
@@ -278,7 +278,8 @@
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 64px; max-width: 300px; line-height: 1.4; font-size: 14px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.66); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
+  #hint { position: absolute; right: 16px; top: 64px; max-width: clamp(200px, calc(50% - 254px), 300px); line-height: 1.4;   /* (as #alerts: clear of the bars under the top panel) */
+    font-size: 14px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.66); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
   /* The key reminders: in a player's first two matches the full line shows while the castles prepare, and steps aside once the fighting has begun; after
      that (class keysfew, see main.js) only a small "I keys" note stays. I shows or hides the full line at any time (class keysopen). */
   #hud.inbattle #hint, #hud.inbattle #minimapWrap .mapHint, #hud.keysfew #hint, #hud.keysfew #minimapWrap .mapHint { display: none; }
@@ -339,13 +340,20 @@
   #pingWheel .hub small { display: block; font-size: 14px; opacity: 0.85; }
   #pingWheel .stick { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px #000; opacity: 0.85; }
 
-  #toasts { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
+  /* (--cmdtop: how far up the orders bar and its colour-key row reach, in HUD pixels, 0 while it is not shown, and --toastlift: that with a tip's room, or the top
+     of a taller tip: the tip and the toasts stand over them, see flow.js) */
+  #toasts { position: absolute; left: 50%; bottom: max(110px, var(--toastlift, 0px)); transform: translateX(-50%); width: min(560px, calc(100% - 32px)); display: flex; flex-direction: column-reverse; gap: 4px; align-items: center; }
   .toast { background: var(--panel); border-left: 4px solid var(--gold); border-radius: 0 4px 4px 0; padding: 5px 14px; font-size: 15.5px; transition: opacity 0.8s; text-align: center; text-shadow: 0 1px 2px #000; }
   .toast.important { font-size: 18px; color: #ffdcc8; border-left-color: var(--red); background: rgba(70,14,10,0.8); }
   .toast.fade { opacity: 0; }
   .toast.bump { animation: toastbump 0.25s ease-out; }
   @keyframes toastbump { 0% { transform: scale(1.06); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
-  #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
+  #killfeed { position: absolute; right: 16px; top: max(100px, var(--feedtop, 0px)); display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
+  /* (--feedtop: the kill feed moved down under the bars of the top panel or the key line; it and the toasts keep only their newest lines that fit: flow.js) */
+  #hud[data-feed="0"] #killfeed .kill, #hud[data-feed="1"] #killfeed .kill:nth-child(n+2), #hud[data-feed="2"] #killfeed .kill:nth-child(n+3), #hud[data-feed="3"] #killfeed .kill:nth-child(n+4),
+  #hud[data-feed="4"] #killfeed .kill:nth-child(n+5), #hud[data-feed="5"] #killfeed .kill:nth-child(n+6),
+  #hud[data-toasts="1"] #toasts .toast:nth-child(n+2), #hud[data-toasts="2"] #toasts .toast:nth-child(n+3), #hud[data-toasts="3"] #toasts .toast:nth-child(n+4),
+  #hud[data-toasts="4"] #toasts .toast:nth-child(n+5), #hud[data-toasts="5"] #toasts .toast:nth-child(n+6) { display: none; }
   .kill { background: rgba(0,0,0,0.7); padding: 3px 10px; }
   .kill .x { opacity: 0.6; }
   #banner { position: absolute; left: 0; right: 0; top: 24%; text-align: center; opacity: 0; }
@@ -354,7 +362,8 @@
   #banner.show { animation: ban 4s ease-out forwards; }
   @keyframes ban { 0% { opacity: 0; transform: scale(1.1); } 10% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
   /* alerts, tips and the away panel (src/alerts.js): callouts down the left, a kill-streak banner, a hint line at the bottom */
-  #alerts { position: absolute; left: 16px; top: 128px; width: min(300px, calc(50vw - 185px)); display: flex; flex-direction: column; gap: 5px; }
+  #alerts { position: absolute; left: 16px; top: 128px; width: clamp(200px, calc(50% - 254px), 300px);   /* (clear of the bars under the top panel, 460 px wide at most: flow.js) */
+    display: flex; flex-direction: column; gap: 5px; }
   .alert { display: flex; align-items: center; gap: 9px; padding: 6px 10px 6px 9px; background: var(--panel); border-left: 5px solid var(--gold); border-radius: 0 4px 4px 0;
     font-size: 15px; line-height: 1.25; text-shadow: 0 1px 2px #000; animation: alertIn 0.28s ease-out; transition: opacity 0.7s, transform 0.7s; }
   .alert i { font-style: normal; font-size: 19px; flex: none; }
@@ -372,14 +381,16 @@
   #streak.t3 b { font-size: 54px; color: #ff6a4a; text-shadow: 0 3px 12px #000, 0 0 26px rgba(255,60,30,0.7); }
   #streak.show { animation: streak 2.6s ease-out forwards; }
   @keyframes streak { 0% { opacity: 0; transform: scale(0.6); } 12% { opacity: 1; transform: scale(1.14); } 22% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-12px); } }
-  #tip { position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); width: max-content; max-width: clamp(240px, calc(100vw - 664px), 720px);
+  /* (centred in the gap between the hero panel and the minimap, as the orders bar under it, and never wider than that gap: % is the HUD's own width at its zoom) */
+  #tip { position: absolute; left: calc(50% + 67px); bottom: max(62px, var(--cmdtop, 0px)); transform: translateX(-50%); width: max-content; max-width: clamp(240px, calc(100% - 562px), 720px);
     padding: 5px 16px 6px; background: rgba(0,0,0,0.7); border-radius: 14px; font-size: 15px; line-height: 1.3; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity 0.6s; }
   #tip.show { opacity: 1; }
+  #hud.notip #tip { visibility: hidden; }   /* (no room for it on this window at this UI scale: flow.js) */
   #tip b { font-family: Cinzel, serif; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); margin-right: 9px; }
   #tip kbd { margin: 0 1px; }
-  @media (max-width: 1100px) { #tip { bottom: 16px; } }
-  @media (max-width: 900px) { #tip { left: auto; right: 16px; bottom: 214px; transform: none; max-width: 280px; text-align: left; } }
-  @media (max-width: 760px) { #tip { bottom: 150px; } }
+  @media (max-width: 1100px) { #tip { bottom: max(16px, var(--cmdtop, 0px)); } }
+  @media (max-width: 900px) { #tip { left: auto; right: 16px; bottom: max(214px, var(--cmdtop, 0px)); transform: none; max-width: 280px; text-align: left; } }
+  @media (max-width: 760px) { #tip { bottom: max(150px, var(--cmdtop, 0px)); } }
   .tipline { font-size: 17px; font-style: italic; max-width: 520px; margin: 12px auto 0; text-shadow: 0 2px 6px #000; }
   .tipline kbd { font-size: 13px; font-style: normal; }
   .scroll .tipline { color: var(--ink); text-shadow: none; margin: 4px auto 14px; }
@@ -511,7 +522,7 @@
   #hud:not(.practice) #pracStats, #hud:not(.practice) #dmgpops { display: none; }
   #hud.practice #factions, #hud.practice #goldbox, #hud.practice #hill, #hud.practice #army { display: none; }
   #practice .note { text-align: left; }
-  #pracStats { position: absolute; left: 16px; top: 12px; width: min(400px, calc(50vw - 150px)); font-size: 14px; line-height: 1.5; }
+  #pracStats { position: absolute; left: 16px; top: 12px; width: min(400px, calc(50% - 150px)); font-size: 14px; line-height: 1.5; }
   #pracStats b { color: var(--gold); font-family: Cinzel, serif; font-weight: 600; }
   #pracStats span { opacity: 0.75; font-size: 14px; }
   #dmgpops { position: absolute; inset: 0; overflow: hidden; }
@@ -669,7 +680,7 @@
      new UI scale or the start of a hero match): the roster and the key line drop below the score panel (its bottom is 94 px), the kill feed below
      the key line. The callouts under the roster keep only the newest ones that fit above the abilities (data-alerts, also measured). */
   #hud.heronarrow #heroRoster, #hud.heronarrow #hint { top: 104px; }
-  #hud.heronarrow #killfeed { top: 176px; }
+  #hud.heronarrow #killfeed { top: max(176px, var(--feedtop, 0px)); }
   #hud.heronarrow #alerts { top: 268px; }
   #hud[data-alerts="1"] #alerts .alert:nth-last-child(n+2), #hud[data-alerts="2"] #alerts .alert:nth-last-child(n+3),
   #hud[data-alerts="3"] #alerts .alert:nth-last-child(n+4) { display: none; }
