@@ -25,6 +25,15 @@ const r2 = (x) => Math.round(x * 100) / 100;
 const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
+// War Mode: a guest says which snapshots it has (the newest, and a bit for each of the 31 before it) in its pose; the host keeps the last 64 of them per
+// guest (h.warHeard[q & 63] = q). A guest is trusted with nothing here but how much it is sent again.
+function heardWar(p, q, mask) {
+  const r = p.warHeard || (p.warHeard = new Int32Array(64).fill(-1));
+  if (q < 0) return;
+  r[q & 63] = q;
+  mask = Number(mask) | 0;
+  for (let k = 0; k < 31; k++) if (mask & (1 << k)) r[(q - 1 - k) & 63] = q - 1 - k;
+}
 
 export class HostSync {
   constructor(game) {
@@ -32,7 +41,8 @@ export class HostSync {
     this.t = 0;
     this.shared = [];
     this.priv = new Map();
-    this.warNet = { seq: 0, eyes: [] };   // (War Mode: the snapshot's number and where the guests' heroes stand, for whose turn it is: warnet.js)
+    this.warNet = { seq: 0, eyes: [], ok: new Uint8Array(64) };   // (War Mode: the snapshot's number, where the guests' heroes stand and which recent
+    // snapshots every one of them has, for whose turn it is: warnet.js)
     const net = game.net;
     net.on('data', ({ from, d }) => this.onData(from, d));
     net.on('leave', (id) => {
@@ -92,7 +102,10 @@ export class HostSync {
     if (!p || !d) return;
     const f = g.factions[p.team];
     switch (d.a) {
-      case 'pose': if (!p.drive) p.netPose = d; break;
+      case 'pose':
+        if (!p.drive) p.netPose = d;
+        if (g.war && Number.isInteger(d.wq)) heardWar(p, d.wq, d.wm);   // (War Mode: the snapshots this guest has: warnet.js)
+        break;
       case 'swing': p.swingT = 0; if (DIRS[d.d]) { p.attackDir = DIRS[d.d]; p.atkDir = p.attackDir; } break;
       case 'strike':
         if (!p.alive) break;
@@ -239,11 +252,18 @@ export class HostSync {
   }
 
   // War Mode's snapshot: its number, and where the guests' living heroes stand (the soldiers near them go in every snapshot: warnet.js)
+  // and which of the last 64 snapshots every guest whose hero lives has said he has (a record in one he missed is sent again)
   warEyes() {
     const W = this.warNet;
     W.seq++;
     W.eyes.length = 0;
-    for (const h of this.g.humans) if (h.remote && h.alive) W.eyes.push(h.pos.x, h.pos.z);
+    W.ok.fill(1);
+    for (const h of this.g.humans) {
+      if (!h.remote || !h.alive) continue;
+      W.eyes.push(h.pos.x, h.pos.z);
+      const r = h.warHeard;
+      for (let i = 0; i < 64; i++) { const q = W.seq - 1 - i; if (!r || r[q & 63] !== q) W.ok[q & 63] = 0; }
+    }
     return W;
   }
 
@@ -271,6 +291,17 @@ export class ClientSync {
     this.t = 0;
     game.net.on('data', ({ d }) => this.onData(d));
     game.spawnQueue = [];
+    this.warQ = -1;     // War Mode: the newest snapshot applied here, and a bit for each of the 31 before it that was (sent back with the pose)
+    this.warMask = 0;
+  }
+
+  heard(q) {
+    const L = this.warQ;
+    if (q > L) {
+      const d = q - L;
+      this.warMask = L < 0 || d > 31 ? 0 : ((this.warMask << d) | (1 << (d - 1))) & 0x7fffffff;
+      this.warQ = q;
+    } else if (q < L && L - 1 - q < 31) this.warMask |= 1 << (L - 1 - q);
   }
 
   onData(d) {
@@ -298,6 +329,7 @@ export class ClientSync {
     const seen = new Set();
     if (g.war && s.w) g.war.applyNet(s.w);
     const list = g.war && s.u && !Array.isArray(s.u) ? unpackUnits(s.u, this.units, (x, z) => g.physics.terrainHeight(x, z)) : s.u;
+    if (g.war && s.u && Number.isInteger(s.u.q)) this.heard(s.u.q);
     for (const a of list) {
       const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name] = a;
       const rank = flags & 7;
@@ -523,7 +555,11 @@ export class ClientSync {
     if (this.t >= POSE_EVERY) {
       this.t = 0;
       const p = this.g.player;
-      if (p.alive) this.g.net.toHost(p.drive ? { a: 'drive', ...p.driveMsg() } : { a: 'pose', ...p.poseMsg() });
+      if (p.alive) {
+        const m = p.drive ? { a: 'drive', ...p.driveMsg() } : { a: 'pose', ...p.poseMsg() };
+        if (this.g.war && this.warQ >= 0) { m.wq = this.warQ; m.wm = this.warMask; }   // (War Mode: the snapshots this screen has: warnet.js)
+        this.g.net.toHost(m);
+      }
     }
   }
 }

@@ -64,12 +64,14 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warPanel .wp-stat .coin { color: var(--gold); }
 #warPanel .wp-body { flex: 1; overflow-y: auto; padding: 6px 14px 10px; }
 #warPanel h4 { margin: 10px 0 5px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); opacity: 0.9; }
-#warPanel .wp-unit { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(224,180,76,0.15); }
+#warPanel .wp-unit { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(224,180,76,0.15); }
 #warPanel .wp-unit .nm { font-family: Cinzel, Georgia, serif; font-size: 14px; }
 #warPanel .wp-unit .nm small { font-family: 'EB Garamond', Georgia, serif; font-size: 12px; opacity: 0.7; margin-left: 4px; }
-#warPanel .wp-unit .ct { font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
+#warPanel .wp-unit .ct { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 #warPanel .wp-unit .ct.full { color: var(--gold); }
 #warPanel .wp-unit .bt { display: flex; gap: 3px; }
+#warPanel .wp-unit .bt button { min-width: 0; padding: 3px 5px; }
+#warPanel .wp-unit .nm small { white-space: nowrap; }
 #warPanel .wp-unit .ds { grid-column: 1 / -1; font-size: 12px; opacity: 0.65; line-height: 1.2; }
 #warPanel button { padding: 3px 7px; font-size: 12px; min-width: 32px; }
 #warPanel .wp-row { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -241,7 +243,7 @@ export class WarUI {
     const units = TYPES.map((t) => {
       const d = WAR.units[t], T = UNIT_TYPES[t];
       return `<div class="wp-unit" data-t="${t}"><span class="nm">${esc(d.name)}<small>${d.cost} gold</small></span><span class="ct"></span>
-        <span class="bt"><button data-sell="${t}" data-n="10" title="Dismiss 10">−10</button><button data-sell="${t}" data-n="1" title="Dismiss 1">−1</button><button data-buy="${t}" data-n="1" title="Buy 1">+1</button><button data-buy="${t}" data-n="10" title="Buy 10">+10</button></span>
+        <span class="bt"><button data-sell="${t}" data-n="10" title="Dismiss 10">−10</button><button data-sell="${t}" data-n="1" title="Dismiss 1">−1</button><button data-buy="${t}" data-n="1" title="Buy 1">+1</button><button data-buy="${t}" data-n="10" title="Buy 10">+10</button><button data-buy="${t}" data-n="50" title="Buy 50 (as many as the gold and the caps allow)">+50</button></span>
         <span class="ds">${esc(d.desc)} ${T.hp} health${T.ranged ? `, ${T.range} m` : ''}.</span></div>`;
     }).join('');
     const presets = Object.entries(WAR.presets).map(([k, v]) => `<button data-preset="${k}" title="${esc(v.desc)}">${esc(v.name)}</button>`).join('');

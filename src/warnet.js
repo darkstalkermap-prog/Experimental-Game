@@ -4,12 +4,15 @@
 //   r  the roster: every soldier the host has (alive or a body), as runs of consecutive ids (a house's soldiers are bought together: a few dozen runs)
 //   a  who of the roster is alive, one bit each (2000 soldiers: 334 characters)
 //   u  records of soldiers' state, but only of the soldiers whose turn it is (packUnits' `net`):
-//        - every snapshot: one that moved, turned, swung or was hurt since he was last sent, within NEAR m of a guest's hero
-//        - every `far`-th snapshot (1 to 4, the fewest that keep the records within BUDGET): one that changed but is further off
+//        - every snapshot (every second one when even they would overfill it): one that moved, turned, swung or was hurt since he was last sent,
+//          within NEAR m of a guest's hero
+//        - every `far`-th snapshot (1 to 6, the fewest that keep the records within BUDGET): one that changed but is further off
 //        - every IDLE-th: one that did not change (a refresh, in case a piece of a snapshot was lost on the way)
 //      A record is the soldier's place in the roster (the step from the last record's, 1 character), then now and then (his first few records, every
 //      STATICS snapshots, and when his rank changes) what never changes (type, team, look, rank: 3 characters), then 8 characters:
 //        x 12, z 12 bits (over the whole map) · yaw 6 · swing 3, staggered 1, blocking 1 · speed 4, attack side 2 · health 6
+// Each guest says which snapshots it has (with its pose: netsync.js); a soldier whose last record went in a snapshot some guest did not get (the room
+// transport keeps only the latest of a burst) is sent again at his next turn, changed or not, and so is a fixed part until a guest has it.
 // A guest keeps every soldier of the roster (one with no record this time goes on along his last steps and stops: interpolation.js), lays down the ones
 // the bits call fallen, and drops the ones the roster no longer has (a body cleared away, a soldier sold back in the build). Four armies of 500
 // marching and fighting come to some 6 to 9 KB. The height is not sent: a guest puts the soldier on the ground (the bowl has no walls to stand on).
@@ -25,11 +28,12 @@ for (let i = 0; i < 64; i++) VAL[ABC.charCodeAt(i)] = i;
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
 const TYPE_IDX = Object.fromEntries(TYPE_NAMES.map((t, i) => [t, i]));
 const clampI = (v, a, b) => (v < a ? a : v > b ? b : v);
-const NEAR = 45;        // metres (each way) from a guest's hero within which a soldier who changed goes in every snapshot
-const BUDGET = 8000;    // characters of records a snapshot aims to stay under (past it the far soldiers' turn comes less often)
+const NEAR = 30;        // metres (each way) from a guest's hero within which a soldier who changed goes in every snapshot
+const BUDGET = 7000;    // characters of records a snapshot aims to stay under (past it the far soldiers' turn comes less often)
 const IDLE = 10;        // snapshots between two records of a soldier who has not changed
 const STATICS = 20;     // snapshots between two sendings of what never changes about a soldier
-const REC = 9;          // characters of a record without its fixed part
+const LAG = 4;          // snapshots a guest's word that it has one may take to come back
+const REC = 9.6;        // characters of a record on average (9, and its fixed part of 3 every so often)
 
 // put `bits` bits of v into the output, 6 at a time (most significant first)
 function put(out, v, chars) {
@@ -56,13 +60,14 @@ function quant(u, q) {
 }
 const Q = new Int32Array(6);
 // a soldier's memory of what was last sent of him (the host's): [0..5] as quant's, [6] the snapshot, [7] the snapshot of his fixed part, [8] its
-// rank, [9] how many records of him have gone
-const memo = (u) => u.netQ || (u.netQ = new Int32Array([-1, -1, -1, -1, -1, -1, -1e6, -1e6, -1, 0]));
+// rank, [9] how many records of him have gone, [10] 1 once every guest has had his fixed part
+const memo = (u) => u.netQ || (u.netQ = new Int32Array([-1, -1, -1, -1, -1, -1, -1e6, -1e6, -1, 0, 0]));
 
 const sorted = [];
 const byId = (a, b) => a.id - b.id;
 // -> { r: roster, a: alive bits, u: records, n: [[id, name]] (heroes) }.
-// net: { seq (the snapshot's number), eyes: [x, z, ...] the guests' living heroes }: only the soldiers whose turn it is go. Without it every living
+// net: { seq (the snapshot's number), eyes: [x, z, ...] the guests' living heroes, ok[q & 63]: every one of them has snapshot q (the 64 before this
+// one) }: only the soldiers whose turn it is go. Without it every living
 // soldier goes, with his fixed part (the unit tests; a measure of the whole).
 export function packUnits(units, net = null) {
   sorted.length = 0;
@@ -84,8 +89,9 @@ export function packUnits(units, net = null) {
     bits.push(ABC[v]);
   }
   // whose turn it is: counted first, so that the far soldiers' turn can be spaced out to keep the snapshot within BUDGET
-  const seq = net ? net.seq : 0, eyes = net ? net.eyes : null;
-  let far = 1;
+  const seq = net ? net.seq : 0, eyes = net ? net.eyes : null, ok = net ? net.ok : null;
+  const had = (q) => q < seq && q > seq - 64 && ok[q & 63] === 1;
+  let far = 1, nearEvery = 1;
   if (net) {
     let near = 0, farN = 0, idle = 0;
     for (let i = 0; i < n; i++) {
@@ -94,14 +100,19 @@ export function packUnits(units, net = null) {
       const m = memo(u);
       quant(u, Q);
       u.netWhy = 0;
-      if (m[6] < 0 || Q[0] !== m[0] || Q[1] !== m[1] || Q[2] !== m[2] || Q[3] !== m[3] || Q[4] !== m[4] || Q[5] !== m[5]) {
+      if (m[10] === 0 && m[7] >= 0 && had(m[7])) m[10] = 1;
+      // (changed since his last record, or that record went in a snapshot a guest did not get)
+      if (m[6] < 0 || Q[0] !== m[0] || Q[1] !== m[1] || Q[2] !== m[2] || Q[3] !== m[3] || Q[4] !== m[4] || Q[5] !== m[5] || (seq - m[6] > LAG && !had(m[6]))) {
         let close = false;
         for (let e = 0; e < eyes.length && !close; e += 2) close = Math.abs(u.pos.x - eyes[e]) < NEAR && Math.abs(u.pos.z - eyes[e + 1]) < NEAR;
         u.netWhy = close ? 1 : 2;
         if (close) near++; else farN++;
       } else idle++;
     }
-    while (far < 4 && (near + farN / far + idle / IDLE) * REC > BUDGET) far++;
+    const size = () => (near / nearEvery + farN / far + idle / IDLE) * REC;
+    while (far < 4 && size() > BUDGET) far++;
+    if (size() > BUDGET) nearEvery = 2;   // (three guests' heroes in the thick of four armies)
+    while (far < 6 && size() > BUDGET) far++;
   }
   let last = -1;
   for (let i = 0; i < n; i++) {
@@ -111,11 +122,11 @@ export function packUnits(units, net = null) {
     if (net) {
       // (his turn by the snapshot's number, a different turn for each soldier so that every snapshot carries a share, even the first one of a whole
       // army bought at once; or overdue)
-      const why = u.netWhy, every = why === 2 ? far : IDLE;
-      if (why !== 1 && (seq + u.id) % every !== 0 && (m[6] < 0 || seq - m[6] < every * 2)) continue;
+      const why = u.netWhy, every = why === 1 ? nearEvery : why === 2 ? far : IDLE;
+      if (every > 1 && (seq + u.id) % every !== 0 && (m[6] < 0 || seq - m[6] < every * 2)) continue;
     }
     quant(u, Q);
-    const fixed = !net || m[9] < 3 || seq - m[7] >= STATICS || m[8] !== u.rank;
+    const fixed = !net || m[9] < 3 || (m[10] === 0 && seq - m[7] > LAG) || seq - m[7] >= STATICS || m[8] !== u.rank;
     const step = i - last;
     if (step < 32) rec.push(ABC[step | (fixed ? 32 : 0)]);
     else { rec.push(ABC[fixed ? 32 : 0]); put(rec, i, 3); }
@@ -123,6 +134,7 @@ export function packUnits(units, net = null) {
     if (fixed) {
       put(rec, ((TYPE_IDX[u.type] & 31) << 6) | ((u.team & 7) << 3) | (u.variant & 7), 2);
       put(rec, ((u.rank & 7) << 3) | (u.army ? 4 : 0) | (u.lane ? 2 : 0), 1);
+      if (m[8] !== u.rank) m[10] = 0;
       m[7] = seq; m[8] = u.rank;
     }
     put(rec, Q[0], 2); put(rec, Q[1], 2);
@@ -132,7 +144,7 @@ export function packUnits(units, net = null) {
     if (u.isHero) names.push([u.id, u.name]);
   }
   sorted.length = 0;
-  return { r: roster.join(''), a: bits.join(''), u: rec.join(''), n: names };
+  return { q: seq, r: roster.join(''), a: bits.join(''), u: rec.join(''), n: names };
 }
 
 const pool = [];
@@ -195,7 +207,7 @@ export function unpackUnits(w, known, ground) {
 
 // The effects that ride along in a snapshot (netsync.js `shared`): in a battle of hundreds the blood, sparks and sounds of every blow would fill it, so
 // a snapshot carries at most a few of each kind (the arrows, which a guest sees fly, get more room; everything else goes as it is).
-const ROOM = { fx: 16, snd: 12, arrow: 32 };
+const ROOM = { fx: 12, snd: 10, arrow: 24 };   // (four armies of 500 loose more arrows than a guest can tell apart: these keep the volleys and a fifth of the snapshot)
 const seen = { fx: 0, snd: 0, arrow: 0 };
 export function thinEvents(list) {
   seen.fx = seen.snd = seen.arrow = 0;

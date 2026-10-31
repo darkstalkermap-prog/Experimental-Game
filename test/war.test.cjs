@@ -59,7 +59,7 @@ test('War Mode: four armies of 500 in a snapshot that fits the room transport; f
       swingT: -1, staggerT: 0, blockFlash: 0, braced: false, attackDir: 'over', hp: 100, maxHp: 100, rank: 1, army: true, lane: false,
     });
   }
-  const net = { seq: 0, eyes: [0, 0] };
+  const net = { seq: 0, eyes: [0, 0], ok: new Uint8Array(64).fill(1) };
   const guest = new Map();
   const take = (w) => {
     const list = unpackUnits(JSON.parse(JSON.stringify(w)), guest, () => 1);
@@ -92,6 +92,27 @@ test('War Mode: four armies of 500 in a snapshot that fits the room transport; f
   net.seq++;
   const rest = JSON.stringify(packUnits(units, net)).length;
   assert.ok(rest < 3000, `2000 soldiers at rest: ${rest} characters`);
+  // a guest who gets only one snapshot in three (the room transport keeps the latest of a burst) and says so: what it missed is sent again, and in a
+  // few snapshots it has everybody where the host has him, though the soldiers have stopped
+  const lossy = new Map(), got = new Set();
+  const N2 = { seq: 100, eyes: [], ok: new Uint8Array(64) };
+  for (const u of units) u.netQ = null;
+  for (let s = 0; s < 60; s++) {
+    if (s < 30) for (const u of units) if (u.alive) u.pos.x += 0.3;
+    N2.seq++;
+    for (let i = 0; i < 64; i++) { const q = N2.seq - 1 - i; N2.ok[q & 63] = got.has(q) ? 1 : 0; }
+    const w = packUnits(units, N2);
+    if (s % 3) continue;
+    got.add(w.q);
+    for (const a of unpackUnits(JSON.parse(JSON.stringify(w)), lossy, () => 1)) {
+      let g = lossy.get(a[0]);
+      if (!g) { g = { id: a[0], type: types[a[1]], team: a[2], variant: a[10], rank: a[15] & 7, army: true, lane: false, alive: true, pos: { x: 0, y: 0, z: 0 }, yaw: 0 }; lossy.set(a[0], g); }
+      g.pos.x = a[3]; g.pos.z = a[5]; g.alive = !!a[7];
+    }
+  }
+  const step2 = 0.2;
+  assert.equal([...lossy.values()].filter((g) => g.alive).length, units.filter((u) => u.alive).length, 'every living soldier reached the lossy guest');
+  assert.ok(units.every((u) => !u.alive || Math.abs(lossy.get(u.id).pos.x - u.pos.x) < step2), 'and stands where the host has him');
   // a soldier sold back (gone from the roster) is dropped
   const sold = units.splice(10, 5);
   net.seq++;
@@ -107,7 +128,7 @@ test('War Mode keeps only a few cosmetic effects in a snapshot', async () => {
   list.push({ k: 'toast' }, { k: 'banner' });
   thinEvents(list);
   const n = (k) => list.filter((e) => e.k === k).length;
-  assert.ok(n('fx') <= 16 && n('snd') <= 12 && n('arrow') <= 32);
+  assert.ok(n('fx') <= 12 && n('snd') <= 10 && n('arrow') <= 24);
   assert.equal(n('toast'), 1);
   assert.equal(n('banner'), 1);
 });
