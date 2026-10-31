@@ -166,6 +166,10 @@ around a minute. The included `Dockerfile` also works on Fly.io, Railway or any 
 The host's browser runs the whole battle. Other players control their own hero and receive about 10 updates
 a second. If the host leaves, the game ends. If someone else leaves, an AI lord takes over their castle.
 
+A Host or Join that has not been answered yet (a wrong code takes the claude.ai room 8 seconds and a browser-to-browser connection up to 25 seconds
+to give up on) is dropped when you press the other button or try another code, so its late answer cannot close the room you are in by then; pressing
+the same button twice, or Enter and the button, is one press (`connect` in `src/main.js`).
+
 ## How it works
 
 - **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a
