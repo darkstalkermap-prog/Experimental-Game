@@ -8,7 +8,7 @@ import { Input } from './input.js';
 import { Net } from './net.js';
 import { RoomNet } from './roomnet.js';
 import { PeerNet } from './peernet.js';
-import { setMapSize, setPracticeWorld, setWarWorld, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS, DIFFICULTY } from './config.js';
+import { setMapSize, setPracticeWorld, setWarWorld, warPlanOf, WORLD, MAP_SIZES, OBJECTIVES, LENGTHS, DIFFICULTY } from './config.js';
 import { HERO } from './herogame.js';
 import { settings, saveSettings, sensitivityOf } from './settings.js';
 import { initPerf } from './perf.js';
@@ -29,7 +29,7 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
   warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
-import { sanitizeWar, warHills, menuPlan } from './warmode.js';
+import { sanitizeWar, warHills, menuPlan, planOf } from './warmode.js';
 import { FramePacer } from './framepace.js';
 
 const $ = (id) => document.getElementById(id);
@@ -87,7 +87,8 @@ let palette = soloPalette();
 
 // the key of a world: its map size, the practice yard, War Mode's bowl and the land it is dressed as (a different land is another world, built again; so are
 // other colours, kept beside it in game.paletteBuilt)
-const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war ? '+war' + war : '') + (practice ? '' : landKey(o.biome, o.seed));
+// (War Mode's key is the plan of its hills, '+war22': a bowl laid out for other sides is another world)
+const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war && !practice ? '+war' + warPlanOf(war) : '') + (practice ? '' : landKey(o.biome, o.seed));
 
 function buildGame(size, practice = false, landOpts = null, war = false) {
   const o = sanitizeOptions(landOpts);
@@ -98,7 +99,7 @@ function buildGame(size, practice = false, landOpts = null, war = false) {
   setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
-  game.mapBuiltFor = worldKey(size, practice, o, war && !practice);
+  game.mapBuiltFor = worldKey(size, practice, o, war);
   game.paletteBuilt = paletteKey(palette);
   ui.mapBg = ui.bigBg = null;
   window.__game = game; // handy for debugging from the console
@@ -244,7 +245,7 @@ const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : warOn ? 'war' 
 // engines and upgrades are all dirty afterwards), so the next one is built as soon as a match ends (freshWorldSoon) and starting it is then instant.
 function ensureMap(size, practice = false, landOpts = null, war = false) {
   const o = sanitizeOptions(landOpts);
-  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o, war && !practice) && game.paletteBuilt === paletteKey(palette)) return;
+  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o, war) && game.paletteBuilt === paletteKey(palette)) return;
   const net0 = game.net;
   game.dispose();
   buildGame(size, practice, o, war);
@@ -305,7 +306,7 @@ function freshWorldSoon() {
     seen = endScreenUp() ? seen + 250 : 0;   // (the screen may be built before a finishing show has ended: wait until it is in view)
     if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
     const size = WORLD.size, practice = !!game.practice;   // (the world's key also carries the land now: do not parse it)
-    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? Math.max(2, game.war.sideList.length) : false);   // (the next battle's land: the end screen's row may have rolled it)
+    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? planOf(game.war.sideList) : false);   // (the next battle's land: the end screen's row may have rolled it; War Mode: the hills of this match's sides, which a Play Again repeats)
     // (a disposed world takes the shader programs of its own materials with it: compile the effect shaders of the new one now, a moment after the build as a task of
     // its own, while the end screen is still, instead of in the click that starts the match)
     const fresh = game;
@@ -750,7 +751,7 @@ function backToLobby(isHost) {
   if (game.state === 'playing') return;
   clearTimeout(freshTimer);
   const practice = !!game.practice;   // (the world's key also carries the land: it is not parsed; this asks for what freshWorldSoon builds)
-  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? Math.max(2, game.war.sideList.length) : false);   // (a fresh world for the next match, on the land the end screen rolled)
+  ensureMap(WORLD.size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? planOf(game.war.sideList) : false);   // (a fresh world for the next match, on the land the end screen rolled; War Mode: this match's hills)
   ui.reset();
   ui.hideHud();
   if (!isHost && net) net.toHost({ k: 'cos', cos: progress.loadout() });   // (the host is back in its lobby now: what this match earned is for the next battle)
