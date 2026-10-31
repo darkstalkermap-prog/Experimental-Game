@@ -279,15 +279,15 @@ function hudRefs() {
   const stand = mk('div', 'lastStand', '<kbd>L</kbd><span class="ls-t"><b>LAST STAND</b><small>Heal, rally your soldiers, call the militia</small></span>', 'hidden');
   const flash = mk('div', 'standFlash', '');
   stand.title = 'Once a battle, with your keep below a quarter of its health (key L)';
-  refs = { badge, stand, flash, text: '', game: null };
-  stand.addEventListener('click', () => { if (refs.game) standKey(refs.game); });
+  refs = { badge, stand, flash, text: '', ui: null };   // (the HUD, not its game: a game kept here held a finished world alive after its match)
+  stand.addEventListener('click', () => { const g = refs.ui && refs.ui.game; if (g) standKey(g); });
   return refs;
 }
 
 // every 0.12 s from the HUD: the wage badge, the Last Stand button and the golden glow while it lasts
 export function updateComebackHud(ui, game) {
   const r = hudRefs();
-  r.game = game;
+  r.ui = ui;
   const f = game.localFaction;
   const live = game.state === 'playing' && !game.hero && !game.practice && f;
   const wage = live && f.wage > 0 && !f.eliminated ? f.wage : 0;

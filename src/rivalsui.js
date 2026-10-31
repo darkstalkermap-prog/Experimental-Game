@@ -98,9 +98,9 @@ export function lobbyRivalName(team, ids) {
 }
 
 // ---------------- the card at the start of a match ----------------
-let current = null;   // the game the card and the menu list speak for
+let current = null;   // the game the card and the menu list speak for (held weakly: it kept a finished world alive)
 export function introduceRivals(game) {
-  current = game;
+  current = new WeakRef(game);
   const old = $('rivalsCard');
   if (old) old.remove();
   const list = rivalFactions(game);
@@ -119,7 +119,7 @@ export function introduceRivals(game) {
 
 // ---------------- the game menu ----------------
 function fillPauseList() {
-  const game = current;
+  const game = current && current.deref();
   let box = $('pauseRivals');
   const list = game && game.state === 'playing' ? rivalFactions(game) : [];
   if (!list.length) { if (box) box.classList.add('hidden'); return; }

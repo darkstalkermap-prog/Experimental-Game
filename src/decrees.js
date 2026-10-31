@@ -58,7 +58,7 @@ export function rollDecrees(avoid = [], rng = Math.random) {
 // ---------------- the decrees of the next battle ----------------
 let next = loadOptions().decrees.filter((id) => DECREE_BY_ID[id]);   // what the next match from this browser is set up with
 let heard = [];                                                       // a guest: what the host says the next battle will have (shown, never used)
-let lastGame = null;
+let lastGame = null;   // { mode, net, audio } of the last match that put decrees in force (not the Game itself: that kept a finished world, all its soldiers, alive)
 
 // what main.js puts in the options of a match it starts: nothing while the switch in the Options screen is off
 export function pendingDecrees() { return settings.decrees ? next.slice() : []; }
@@ -89,7 +89,7 @@ export function hearDecrees(ids) {
 // ---------------- the match ----------------
 // Game.start: put the decrees of the options in force (as mods sources, before the houses are built). Returns the decrees in force.
 export function startDecrees(game) {
-  lastGame = game;
+  lastGame = { mode: game.mode, net: game.net, audio: game.audio };
   const defs = (game.options.decrees || []).map((id) => DECREE_BY_ID[id]).filter(Boolean);
   for (const d of defs) mods.set('decree:' + d.id, d.rules);
   game.decrees = defs;

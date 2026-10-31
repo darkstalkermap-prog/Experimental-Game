@@ -211,7 +211,10 @@ function leaveHud() {
 }
 
 // ---------------- the match ----------------
-let liveWar = null;   // the War Mode of the match on screen (the end screen's section reads it)
+// the War Mode of the match on screen (the end screen's section reads it), held weakly: a strong hold kept the last War Mode world, its thousands of
+// soldiers, alive through every match after it
+let liveWarRef = null;
+const liveWar = () => (liveWarRef && liveWarRef.deref()) || null;
 
 export class WarUI {
   constructor(w) {
@@ -227,7 +230,7 @@ export class WarUI {
 
   begin() {
     style();
-    liveWar = this.w;
+    liveWarRef = new WeakRef(this.w);
     const g = this.g;
     $('hud').classList.add('war');
     $('shop').classList.add('waronly');   // (N: the shop is the Talents panel and nothing else, as in Hero Mode: ui.js)
@@ -256,7 +259,7 @@ export class WarUI {
       p = document.createElement('div');
       p.id = 'warPanel';
       document.body.append(p);
-      p.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && liveWar) { b.blur(); liveWar.ui.click(b); } });   // (blur: Enter is Ready, not another click)
+      p.addEventListener('click', (e) => { const b = e.target.closest('button'); const w = liveWar(); if (b && w) { b.blur(); w.ui.click(b); } });   // (blur: Enter is Ready, not another click)
     }
     p.classList.add('hidden');
     const units = TYPES.map((t) => {
@@ -290,7 +293,7 @@ export class WarUI {
       bar = document.createElement('div');
       bar.id = 'warCmd';
       document.body.append(bar);
-      bar.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && liveWar) { b.blur(); liveWar.ui.clickBar(b); } });
+      bar.addEventListener('click', (e) => { const b = e.target.closest('button'); const w = liveWar(); if (b && w) { b.blur(); w.ui.clickBar(b); } });
     }
     bar.classList.add('hidden');
     // the enemy houses of this battle, in house order: the Attack row's buttons (5, 6, 7), each in its house's colour and named by it
@@ -644,7 +647,7 @@ export class WarUI {
 
 // ---------------- the end screen ----------------
 onMatchEnd((summary) => {
-  const w = liveWar;
+  const w = liveWar();
   summary.war = w && !w.g.disposed && w.g.state === 'over' ? { rows: w.table(), format: w.format, clock: w.clock } : null;
 });
 

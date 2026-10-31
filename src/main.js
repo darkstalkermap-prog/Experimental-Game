@@ -102,6 +102,7 @@ function buildGame(size, practice = false, landOpts = null, war = false) {
   game.mapBuiltFor = worldKey(size, practice, o, war);
   game.paletteBuilt = paletteKey(palette);
   ui.mapBg = ui.bigBg = null;
+  ui.cmdFoesOf = null;   // (the command bar's houses were worked out for the last world: holding its Game kept that whole finished world alive)
   window.__game = game; // handy for debugging from the console
   window.__gfx = gfx;
   gfx.setGame(game);
