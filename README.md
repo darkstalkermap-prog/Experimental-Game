@@ -212,6 +212,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
   along its walls: a small band stays together on the face it comes at, a big host fans out over that face and the two
   beside it (`src/nav.js`).
+- **Slopes**: soldiers and riders do not walk up ground steeper than 45 degrees (the hills that ring the map; every battlefield
+  stays under about 35), and they stay on the ground coming down any slope (`SLOPE_MAX` in `src/units.js`).
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
