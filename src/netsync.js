@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { UNIT_TYPES } from './config.js';
 import { CLASS_IDS } from './classes.js';
 import { Unit } from './units.js';
+import { attachKit, netClass } from './lordkit.js';
 import { SiegeEngine } from './siege.js';
 import { Player } from './player.js';
 import { DIRS, DIR_IDX } from './combat.js';
@@ -25,6 +26,7 @@ const r2 = (x) => Math.round(x * 100) / 100;
 const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
+const ONCE = new Set(['abil', 'spell', 'bolt']);   // (the looks a live room sends again: HostSync.redo)
 // War Mode: a guest says which snapshots it has (the newest, and a bit for each of the 31 before it) in its pose; the host keeps the last 64 of them per
 // guest (h.warHeard[q & 63] = q). A guest is trusted with nothing here but how much it is sent again.
 function heardWar(p, q, mask) {
@@ -40,6 +42,7 @@ export class HostSync {
     this.g = game;
     this.t = 0;
     this.shared = [];
+    this.again = []; this.evN = 0;   // (a live room's snapshots: the one-off looks that ride along again, see redo)
     this.priv = new Map();
     this.warNet = { seq: 0, eyes: [], ok: new Uint8Array(64) };   // (War Mode: the snapshot's number, where the guests' heroes stand and which recent
     // snapshots every one of them has, for whose turn it is: warnet.js)
@@ -89,6 +92,18 @@ export class HostSync {
       rock(from, to, team, dmg, owner, time);
       this.shared.push({ k: 'rock', p: v3(from), to: v3(to), tm: time, t: team });
     };
+  }
+
+  // A live room (roomnet.js) keeps only the newest snapshot: one that comes too soon after another is never read. The looks a guest sees only once
+  // (an ability's effect, a spell, a bolt, a Power or Sniper Shot's arrow) ride along in the next two snapshots as well, numbered, and a guest shows
+  // each of them once (ClientSync.apply). Other transports deliver every snapshot.
+  redo(list) {
+    if (!this.g.net.viaRoom) return list;
+    const out = list.slice();
+    for (const a of this.again) out.push(a.e);
+    this.again = this.again.filter((a) => --a.left > 0);
+    for (const e of list) if (ONCE.has(e.k) || (e.k === 'arrow' && (e.pw || e.sn))) { e.n = ++this.evN; this.again.push({ e, left: 2 }); }
+    return out;
   }
 
   privateEvent(player, ev) {
@@ -171,7 +186,7 @@ export class HostSync {
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
           DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
           u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0), u.crewOf ? u.crewOf.id * 4 + u.crewSlot + 1 : 0];
-        if (u.isHero) a.push(u.name);
+        if (u.isHero) a.push(u.name, u.kit ? u.kit.net() : 0);   // (a lord's class, and his bow: lordkit.js)
         return a;
       }),
       s: g.siege.map((s) => [s.id, s.type === 'ram' ? 0 : 1, s.team, r1(s.pos.x), r2(s.pos.y), r1(s.pos.z), r2(s.yaw),
@@ -234,7 +249,7 @@ export class HostSync {
         bot: g.hero ? (h.isBot ? 1 : 0) : undefined,
         respawnT: g.hero && !h.alive ? r1(Math.max(0, h.respawnT || 0)) : undefined,
       })),
-      ev: g.war ? thinEvents(this.shared) : this.shared,   // (a War Mode battle keeps only a few blood and sound effects a snapshot)
+      ev: this.redo(g.war ? thinEvents(this.shared) : this.shared),   // (a War Mode battle keeps only a few blood and sound effects a snapshot)
     };
     this.shared = [];
     for (const h of g.humans) {
@@ -294,6 +309,7 @@ export class ClientSync {
     this.t = 0;
     game.net.on('data', ({ d }) => this.onData(d));
     game.spawnQueue = [];
+    this.seenEv = new Set(); this.seenOrder = [];   // (the numbered looks a live room sends again: each is shown once, HostSync.redo)
     this.warQ = -1;     // War Mode: the newest snapshot applied here, and a bit for each of the 31 before it that was (sent back with the pose)
     this.warMask = 0;
   }
@@ -334,13 +350,14 @@ export class ClientSync {
     const list = g.war && s.u && !Array.isArray(s.u) ? unpackUnits(s.u, this.units, (x, z) => g.physics.terrainHeight(x, z)) : s.u;
     if (g.war && s.u && Number.isInteger(s.u.q)) this.heard(s.u.q);
     for (const a of list) {
-      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name] = a;
+      const [id, ti, team, x, y, z, yaw, alive, swingT, speed, variant, hpPct, dirIdx, stag, blk, flags, crewRef, name, kit] = a;
       const rank = flags & 7;
       seen.add(id);
       let u = this.units.get(id);
       if (!u) {
-        const type = TYPE_NAMES[ti];
-        u = new Unit(g, type, team, new THREE.Vector3(x, y, z), { variant, name });
+        const type = TYPE_NAMES[ti], cls = type === 'lord' && kit !== undefined ? netClass(kit) : null;
+        u = new Unit(g, type, team, new THREE.Vector3(x, y, z), { variant, name, hero: cls || undefined });
+        if (cls) attachKit(u, cls, { view: true });   // (a lord who fights as a hero: his look, and his bow shown as the host's)
         u.id = id;
         u.pos.set(x, y, z);
         u.yaw = yaw;
@@ -363,6 +380,7 @@ export class ClientSync {
       if (pend && g.time < pend.until) { u.lane = pend.role === 'lane'; u.army = pend.role === 'army'; }
       else { u.lane = !!(flags & 8); u.army = !!(flags & 16); if (pend) g.rolePending.delete(id); }
       u.crewRef = crewRef;   // engine id * 4 + seat + 1, or 0
+      if (u.kit) u.kitNet = kit | 0;
       u.hp = (hpPct / 100) * u.maxHp;
     }
     if (list.ids) for (let i = 0; i < list.count; i++) seen.add(list.ids[i]);   // (War Mode: every soldier the host still has, sent this time or not)
@@ -533,7 +551,14 @@ export class ClientSync {
 
     // replay effects and messages
     const events = s.ev.concat(d.pev || []);
-    for (const ev of events) this.replay(ev);
+    for (const ev of events) {
+      if (ev.n) {
+        if (this.seenEv.has(ev.n)) continue;
+        this.seenEv.add(ev.n); this.seenOrder.push(ev.n);
+        if (this.seenOrder.length > 256) this.seenEv.delete(this.seenOrder.shift());
+      }
+      this.replay(ev);
+    }
   }
 
   replay(ev) {

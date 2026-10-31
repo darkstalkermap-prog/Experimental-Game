@@ -158,7 +158,7 @@ export function packUnits(units, net = null) {
     for (let k = 0; k < 6; k++) m[k] = Q[k];
     m[6] = seq; m[9]++;
     if (net) m[11] |= 1;   // (bit 0: this snapshot, m[12])
-    if (u.isHero) names.push([u.id, u.name]);
+    if (u.isHero) names.push(u.kit ? [u.id, u.name, u.kit.net(), u.kit.liftOf()] : [u.id, u.name]);   // (a lord's class and bow, and how high a leap has him: lordkit.js)
   }
   sorted.length = 0;
   return { q: seq, r: roster.join(''), a: bits.join(''), u: rec.join(''), n: names };
@@ -172,7 +172,7 @@ const ids = [];
 // the height. The list's `ids` (the first `count` of them) is the roster: every soldier the host still has.
 export function unpackUnits(w, known, ground) {
   const out = [];
-  const names = new Map(Array.isArray(w.n) ? w.n : []);
+  const names = new Map(Array.isArray(w.n) ? w.n.filter(Array.isArray).map((e) => [e[0], e]) : []);
   const r = typeof w.r === 'string' ? w.r : '', al = typeof w.a === 'string' ? w.a : '', s = typeof w.u === 'string' ? w.u : '';
   let n = 0;
   for (let at = 0; at + 6 <= r.length; at += 6) {
@@ -201,7 +201,9 @@ export function unpackUnits(w, known, ground) {
     a[11] = Math.round((get(s, at + 7, 1) / 63) * 100); a[12] = sp & 3; a[13] = fl & 4 ? 1 : 0; a[14] = fl & 2 ? 1 : 0;
     if (tt >= 0) { a[1] = tt >> 6; a[2] = (tt >> 3) & 7; a[10] = tt & 7; a[15] = (rk >> 3) | (rk & 2 ? 8 : 0) | (rk & 4 ? 16 : 0); }
     else { a[1] = TYPE_IDX[u.type]; a[2] = u.team; a[10] = u.variant; a[15] = u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0); }
-    a[16] = 0; a[17] = names.get(id);
+    const nm = names.get(id);
+    a[16] = 0; a[17] = nm ? nm[1] : undefined; a[18] = nm ? nm[2] : undefined;
+    if (nm && nm[3] > 0) a[4] += Math.min(12, +nm[3] || 0);   // (a lord in the air: the ground is not where he is)
     out.push(a);
     at += 8;
   }
@@ -214,7 +216,7 @@ export function unpackUnits(w, known, ground) {
     k++;
     a[0] = u.id; a[1] = TYPE_IDX[u.type]; a[2] = u.team; a[3] = u.pos.x; a[4] = u.pos.y; a[5] = u.pos.z; a[6] = u.yaw; a[7] = 0;
     a[8] = -1; a[9] = 0; a[10] = u.variant; a[11] = 0; a[12] = DIR_IDX[u.attackDir] || 0; a[13] = 0; a[14] = 0;
-    a[15] = u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0); a[16] = 0; a[17] = undefined;
+    a[15] = u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0); a[16] = 0; a[17] = undefined; a[18] = undefined;
     out.push(a);
   }
   out.ids = ids;

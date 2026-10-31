@@ -46,7 +46,12 @@ const SKILL = {
   turn: [7, 14],         // radians a second the bot can turn
   block: [0.35, 0.85],   // chance it guards against a blow it saw in time
   dirs: [0.4, 0.9],      // how readily a guard goes up at all (scales the block chance)
+  // (these three are [easy, normal and hard]: an Easy bot is slow to use its abilities, from Normal up they are used as soon as they are worth it)
+  look: [1.2, 0],        // seconds (at most, at random) between two looks for a moment to use Q or R
+  ready: [4, 0],         // seconds (at most, at random) an ability waits once it is ready
+  castGap: [1.6, 0.5],   // seconds after one ability before the next
 };
+const EASY_ONLY = new Set(['look', 'ready', 'castGap']);
 
 const SCAN = 50;         // how far a bot looks around it (metres)
 const TAU = Math.PI * 2;
@@ -112,7 +117,8 @@ export class HeroBot {
     const s = clamp((aggro - 0.7) / 0.6, 0, 1);
     this.skill = s;
     this.sk = {};
-    for (const k in SKILL) this.sk[k] = lerp(SKILL[k][0], SKILL[k][1], s);
+    for (const k in SKILL) this.sk[k] = lerp(SKILL[k][0], SKILL[k][1], EASY_ONLY.has(k) ? Math.min(1, s * 2) : s);
+    this.need = s < 0.34 ? 1 : 0;   // (Easy wants one more foe in a knot before a run, a leap, a volley or a Power Shot)
     this.bold = Math.random();
     this.retreatAt = lerp(0.36, 0.22, this.bold);
     this.returnAt = lerp(0.85, 0.7, this.bold);
@@ -143,7 +149,7 @@ export class HeroBot {
     this.guardAt = 0; this.guardUntil = 0;
     this.gapUntil = now + 0.6; this.hadAtk = false;
     this.wantHit = false; this.wantShoot = false; this.nockAt = 0; this.drawGoal = 0.7;
-    this.castOk = now + 0.5; this.drinkOk = 0; this.weaponOk = 0; this.mountOk = 0; this.noMount = 0; this.passAt = -9; this.meleeUntil = 0; this.backT = 0;
+    this.castOk = now + 0.5; this.readyAt = { q: -1, r: -1 }; this.lookAt = 0; this.drinkOk = 0; this.weaponOk = 0; this.mountOk = 0; this.noMount = 0; this.passAt = -9; this.meleeUntil = 0; this.backT = 0;
     this.sideT = 0; this.planted = false; this.sideUntil = 0; this.sideSign = 1; this.ghostUntil = 0; this.jumpAt = 0;
     this.stuckT = 0; this.stuckN = 0; this.px = p.pos.x; this.pz = p.pos.z; this.unstickLvl = 0; this.lastStuck = -99;
     this.recent = 0; this.lastHp = p.hp; this.hpf = 1;
@@ -290,7 +296,11 @@ export class HeroBot {
     if (mode !== this.mode) { this.mode = mode; this.modeT = now; }
 
     this.planGuard();
-    this.planAbilities();
+    for (const s of ['q', 'r']) {   // (an ability that has just come ready waits a moment, longer on Easy)
+      if (p.abilCd[s] > 0) this.readyAt[s] = -1;
+      else if (this.readyAt[s] < 0) this.readyAt[s] = now + this.sk.ready * Math.random();
+    }
+    if (now >= this.lookAt) { this.lookAt = now + this.sk.look * Math.random(); this.planAbilities(); }
     this.drink();
     switch (mode) {
       case 'fight': this.planFight(); break;
@@ -408,7 +418,7 @@ export class HeroBot {
     p.useAbility(slot, this.keys, at);
     if (!(p.abilCd[slot] > 0)) return false;   // refused
     this.stats[slot]++;
-    this.castOk = this.t + 0.5;
+    this.castOk = this.t + this.sk.castGap;
     return true;
   }
 
@@ -450,28 +460,29 @@ export class HeroBot {
 
   // Q and R, class by class: on groups and rival heroes, and the defence when it is needed.
   planAbilities() {
-    const p = this.p, n = this.n, now = this.t, hpf = this.hpf, t = this.target;
+    const p = this.p, n = this.n, now = this.t, hpf = this.hpf, t = this.target, need = this.need;
     if (now < this.castOk || p.staggerT > 0 || (p.abilCd.q > 0 && p.abilCd.r > 0)) return;
-    const q = p.abilCd.q <= 0, r = p.abilCd.r <= 0;
+    const q = p.abilCd.q <= 0 && now >= this.readyAt.q, r = p.abilCd.r <= 0 && now >= this.readyAt.r;
+    if (!q && !r) return;
     const foe = t && !t.isStructure ? t : null;
     const gap = foe ? this.gap : Infinity;
     const heavy = this.recent > p.maxHp * 0.12;   // taking a beating
     switch (p.classId) {
       case 'knight':
-        if (r && (n.c8 >= 3 || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r'); break; }
+        if (r && (n.c8 >= 3 + need || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r'); break; }
         // Shield Bash: at hand on a group or a rival hero; or a run at a rival hero, or a knot of foes, up to 40 m off
-        if (q && foe && gap < 5 && ((foe.isPlayer && gap < 4) || this.countAt(p.pos.x + Math.sin(p.yaw) * 3, p.pos.z + Math.cos(p.yaw) * 3, 3.4) >= 2)) {
+        if (q && foe && gap < 5 && ((foe.isPlayer && gap < 4) || this.countAt(p.pos.x + Math.sin(p.yaw) * 3, p.pos.z + Math.cos(p.yaw) * 3, 3.4) >= 2 + need)) {
           this.aimAtFoe(foe, 1e3); this.cast('q', foe.pos.clone());
-        } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3);
+        } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
         break;
       case 'berserker':
-        if (r && hpf > 0.4 && this.leapIn()) break;
-        if (q && hpf > 0.2 && (n.c3 >= 2 || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
+        if (r && hpf > 0.4 && this.leapIn(4 + need)) break;
+        if (q && hpf > 0.2 && (n.c3 >= 2 + need || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
         break;
       case 'ranger': {
         // the Sniper Shot at a far rival hero, giant or siege crew; Power Shot (or the Volley) at the ranks
         if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
-        if (q) { if (abilityOf(p, 'q').id === 'volley') this.volley(); else this.powerShot(); }
+        if (q) { if (abilityOf(p, 'q').id === 'volley') this.volley(3 + need); else this.powerShot(3 + need); }
         break;
       }
       case 'mage':
@@ -486,7 +497,7 @@ export class HeroBot {
         break;
       }
       case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short)
-        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2)) break;
+        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need)) break;
         if (r && ((this.friends.length >= 3 && n.c12 >= 2) || (hpf < 0.55 && n.c8 >= 1) || (n.heroes8 && this.friends.length >= 1))) this.cast('r');
         break;
       default: break;
@@ -511,7 +522,7 @@ export class HeroBot {
   }
 
   // The densest knot of foes in the Ranger's reach, with a little lead on where they are going.
-  volley() {
+  volley(need = 3) {
     const p = this.p;
     let best = null, bs = 0;
     for (let i = 0; i < this.foes.length; i++) {
@@ -521,7 +532,7 @@ export class HeroBot {
       for (const f of this.foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < 6) s += f.isPlayer ? 2 : 1;
       if (s > bs) { bs = s; best = o; }
     }
-    if (!best || bs < 3) return;
+    if (!best || bs < need) return;
     let cx = 0, cz = 0, c = 0;
     for (const f of this.foes) {
       if (f.isSiege || Math.hypot(f.pos.x - best.pos.x, f.pos.z - best.pos.z) >= 6) continue;
@@ -557,7 +568,7 @@ export class HeroBot {
 
   // Leap: into a rival hero or a knot of foes a fair way off (where they will be when he comes down), to open a fight or join one;
   // never at a lone soldier, and not when the foes are already at hand (Whirlwind is for that).
-  leapIn() {
+  leapIn(need = 4) {
     const p = this.p, n = this.n;
     if (p.mounted || p.climb || p.leap || n.c5 >= 2) return false;
     let best = null, bs = 0;
@@ -568,8 +579,8 @@ export class HeroBot {
       for (const f of this.foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < LEAP.radius) s += f.isPlayer ? 2 : 1;
       if (s > bs) { bs = s; best = o; }
     }
-    if (!best || bs < 4) return false;
-    const T = this.g.abilities.leapArc(this.gapTo(best)).dur;
+    if (!best || bs < need) return false;
+    const T = this.g.abilities.leapArc(this.gapTo(best)).dur * (0.5 + 0.5 * Math.min(1, this.skill * 2));   // (an Easy bot leads them less)
     const x = best.pos.x + (best.vel ? best.vel.x * T * 0.6 : 0), z = best.pos.z + (best.vel ? best.vel.z * T * 0.6 : 0);
     const plan = this.g.abilities.leapPlan(p, p.pos, V3.set(x, best.pos.y, z));
     if (!plan || Math.hypot(plan.to.x - x, plan.to.z - z) > LEAP.radius * 0.8) return false;   // (a wall in the way: walk round instead)
@@ -599,12 +610,12 @@ export class HeroBot {
     p.beginScope();
     if (!p.scope) return false;
     this.stats.r++;
-    this.castOk = this.t + 0.5;
+    this.castOk = this.t + this.sk.castGap;
     return true;
   }
 
   // Power Shot: along the line with the most foes in it (a rival hero is worth three), from the bow
-  powerShot() {
+  powerShot(need = 3) {
     const p = this.p;
     if (p.weapon !== 'bow' || p.power || p.mounted) return;
     const e = p.eyePos(V1);
@@ -622,11 +633,11 @@ export class HeroBot {
       }
       if (s > bs) { bs = s; best = o; }
     }
-    if (!best || bs < 3) return;
+    if (!best || bs < need) return;
     this.powerAt = best;
     this.aimAtFoe(best, 95);
     p.useAbility('q', this.keys);
-    if (p.power) { this.stats.q++; this.castOk = this.t + 0.5; }
+    if (p.power) { this.stats.q++; this.castOk = this.t + this.sk.castGap; }
   }
 
   // ===================================================================================================== planning
