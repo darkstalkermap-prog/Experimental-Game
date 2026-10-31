@@ -869,8 +869,10 @@ A general fights the army at its throat, else the nearest (Normal and Hard: the 
 a third army), and when the enemy is broken, or the time is nearly up, everybody charges. The AI lord stays a few steps behind his
 infantry and charges with it. Each general has a temper that follows the army it bought: a balanced army is *steady*, a host of footmen
 *bold* (charges from further, never waits), a mass of bows an *archer's* general (waits on its hill longest), a horde of riders a
-*raider's*. Easy does none of the waiting, walls, flanking or picking: it marches straight at the nearest army in a line with its
-archers behind and its riders beside it, which is about the old generals' strength.
+*raider's*. Easy does none of the waiting, walls, flanking or picking: its infantry and riders charge the nearest army at once and its
+archers stay on their hill for the first 22 s (or until an enemy comes within 60 m), then come up behind the infantry, which is the old
+generals' strength. Measured AI against AI (the same armies of 200, the sides swapped every battle, four makes of army): Normal beat the
+old generals in 15 battles of 16 with 63% of its army left (they kept 2%), Hard 12 of 12, Easy 7 of 12 (22% left against their 26%).
 
 **Talents.** **N** opens the Talents panel (alone, as in Hero Mode) in the build and in the battle; B goes back to the army
 panel. A hero earns experience from kills (and a share of those of soldiers fighting near them) and 10 more for every 30

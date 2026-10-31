@@ -160,13 +160,15 @@ export const TEMPERS = {
 };
 const STYLE_TEMPER = ['steady', 'bold', 'archer', 'raider'];   // (warmode.js STYLES, in order)
 export const temperOfStyle = (i) => STYLE_TEMPER[i] || 'steady';
-// what the difficulty lets a general do: how often it looks again (seconds), and whether it waits on its hill when that serves it (posture), puts a shield
-// wall up under arrows (wall), sends its riders round to strike (flank), pulls a beaten band back to gather (rally) and picks the weakest army to fight
-// (focus). Easy marches straight at the nearest enemy as the generals always did, in a line with its archers behind and its riders beside it.
+// what the difficulty lets a general do: how often it looks again (seconds), and whether it advances in bounds, waiting for its stragglers (march), waits
+// on its hill when that serves it (posture), puts a shield wall up under arrows and riders (wall), sends its riders round to strike (flank), pulls a beaten
+// band back to gather (rally) and picks the weakest army to fight (focus). Easy charges at the nearest army at once with its infantry and riders, as the
+// generals always did, and its archers stay on their hill for the first `shoot` seconds of the battle (or until an enemy comes within 60 m), then come up
+// behind the infantry: about as strong as the old generals, so Easy stays easy (aisim measures it against them).
 export const LEVELS = {
-  easy: { every: 2.5, posture: false, wall: false, flank: false, rally: false, focus: false },
-  normal: { every: 1, posture: true, wall: true, flank: true, rally: true, focus: true },
-  hard: { every: 0.6, posture: true, wall: true, flank: true, rally: true, focus: true },
+  easy: { every: 2.5, march: false, posture: false, wall: false, flank: false, rally: false, focus: false, shoot: 22 },
+  normal: { every: 1, march: true, posture: true, wall: true, flank: true, rally: true, focus: true },
+  hard: { every: 0.6, march: true, posture: true, wall: true, flank: true, rally: true, focus: true },
 };
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -350,6 +352,7 @@ export class General {
     // (a shield wall at Normal and Hard), and fights where it stands; it is not drawn out after them. Our archers shoot them, our riders hit them
     // once they are at grips with it (cavalry, below).
     const riders = eC.n >= 6 && foot !== eC && dist(eC, I) - eC.r - I.r < 55 && dist(eC, I) < dist(foot, I) - 10;
+    if (!this.L.march) { this.chargeGroup('inf', I, this.foe); return; }   // (Easy: straight at them)
     const close = this.T.close + (c.rush ? 15 : 0);
     if (this.posture === 'hold' || riders) {
       if (contact && !riders) {
@@ -384,6 +387,7 @@ export class General {
   archers(c) {
     const A = c.A, S = this.arch, I = c.I;
     if (!A.n || S.task === 'charge') return;
+    if (this.L.shoot && this.w.clock < this.L.shoot && c.gap(A) > 60) { if (S.task !== 'hold') this.holdGroup('arch', A, A.x, A.z, c.yaw, 'line'); return; }   // (Easy)
     let x, z;
     const guard = c.eC.worth > c.E.worth * 0.22 ? 9 : 15;   // (riders about: close behind the infantry)
     if (this.threat && I.n >= 5) {
