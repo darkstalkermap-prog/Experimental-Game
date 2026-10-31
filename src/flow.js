@@ -276,7 +276,7 @@ function clearFeed(bars, W) {
     const r = el.getBoundingClientRect();
     if (r.height > 0 && r.right > colL) foot = Math.min(foot, r.top);
   }
-  const fit = kf.offsetParent ? Math.max(1, Math.min(6, Math.floor((foot / z - 8 - kf.offsetTop + 3) / FEED_LINE))) : 6;
+  const fit = kf.offsetParent ? Math.max(0, Math.min(6, Math.floor((foot / z - 8 - kf.offsetTop + 3) / FEED_LINE))) : 6;   // (none at all where not one fits)
   if (fit !== last.feedFit) { last.feedFit = fit; if (fit < 6) hud.dataset.feed = String(fit); else delete hud.dataset.feed; }
 }
 
