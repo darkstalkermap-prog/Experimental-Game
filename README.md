@@ -425,7 +425,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit. Whatever
   an arrow reaches is hit: a man on a tower roof, on a wall top or a merlon, in a crenel, or an archer of the towers.
   A wall that is badly damaged loses its merlons.
-- **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
+- **Gates** can be broken by anyone. **Walls** can only be breached with catapults. A catapult shells from about 52 m out, or from nearer
+  where that would be off the land (the back walls of the castles on the Small map). When a keep falls its gate goes with it: the ruin stands open.
 - **Death**: your hero respawns in the courtyard of your own keep, wherever you fell (in an enemy castle, at the
   wheel of an engine, on horseback). Each death makes the wait longer. Once your keep falls, you can no longer
   respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
