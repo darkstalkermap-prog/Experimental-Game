@@ -1494,7 +1494,10 @@ export class Game {
     if (!left.length) this.endGame(-1);
     else if (left.every((f) => allied(f.team, left[0].team))) this.endGame(left[0].team); // one side is left standing
     else if (this.coop && !humansLeft.length) this.endGame(-1, `Your alliance has fallen. You held out for ${this.round} waves together.`);
-    else if (!this.spectator && (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length)) this.endGame(-1);   // (a spectator watches to the last house)
+    // (a spectator watches to the last house. Other castles still stand: the end screen must not say that none is left)
+    else if (!this.spectator && (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length)) {
+      this.endGame(-1, this.mode === 'single' ? 'Your house has been destroyed: your keep has fallen and your hero with it.' : 'Every house led by a player has been destroyed: the rival lords hold the realm.');
+    }
   }
 
   eliminate(f) {
