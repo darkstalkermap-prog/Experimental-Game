@@ -431,7 +431,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
 - **Cavalry**: mounted troops ride through their targets, and their charges hit harder. Waves bring riders
   from about wave 7, and Elite Levies add them to every wave.
-- **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, E whistles it over.
+- **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, or a wall or a shut gate stands between you
+  (or you are up on the wall walk), E whistles it over: it comes round by the gate, the way the soldiers go.
   Shift gallops. Charging adds damage and tramples enemies on foot. The horse takes half the hits you'd take,
   and if it dies a Cavalier gets a fresh one the next time they respawn. Any other class can buy one in the shop
   (Class tab, 400 gold).
