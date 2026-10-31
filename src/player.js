@@ -608,7 +608,11 @@ export class Player {
     if (input.hit('KeyH')) this.drinkPotion();
     // Q and R: most abilities go off at once; the Ranger's volley and the Berserker's Leap are aimed with a circle (hold the key, let
     // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
-    if (input.hit('KeyQ')) { this.endScope(); if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input); }
+    if (input.hit('KeyQ')) {
+      this.endScope();
+      if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
+      else if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input);
+    }
     if (input.hit('KeyR')) {
       const r = abilityOf(this, 'r');
       this.cancelAim();

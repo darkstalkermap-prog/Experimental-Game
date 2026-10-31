@@ -267,7 +267,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     where you will land, up to 120 m away (as far as a Mage's Fireball flies: `FIREBALL_RANGE` in `src/config.js`); let go and you
     leap there in a high arc over the soldiers (longer leaps go higher, up to 7 m over the line, and take up to 2.3 s; nothing staggers
     you in the air). Walls, towers and hills in the way cut the leap short in front of them (the circle turns to the warning colour), and
-    it never ends on an enemy castle's walls or towers or inside anything; your own wall walk is fine. Landing slams the ground: 2.2x
+    it never ends on an enemy castle's walls or towers, inside anything, or more than 6 m above where it began (no leaping up a
+    cliff); an enemy's walls are never leapt over, whatever the arc. Your own wall walk is fine. Landing slams the ground: 2.2x
     your sword damage at the centre (half that at the rim of 5 m), a 1 s stagger (0.7 s for a hero) and soldiers thrown back. Not on
     horseback. Numbers: `LEAP` in `src/classes.js`.
   - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter: her bow makes the most of **headshots**

@@ -441,7 +441,7 @@ export class ViewModel {
     this.zoomAmt = smooth(this.zoomAmt, p.zoomed || p.scope ? 1 : 0, 10, dt);
     // the Sniper Shot: the bow comes up to the eye, and once the view is narrow the kit is out of sight behind the scope's ring
     this.scopeAmt = smooth(this.scopeAmt, p.scope ? 1 : 0, p.scope ? 9 : 14, dt);
-    const hide = this.scopeAmt > 0.9 && !!p.scope;
+    const hide = !!p.scope && !!p.scopeShown;   // (out of sight from the moment the scope's ring is up: Player.showScope)
     if (hide !== this.scopeHid) { this.scopeHid = hide; this.root.visible = !hide; }
     this.castAmt = smooth(this.castAmt, casting ? 1 : 0, casting ? 24 : 9, dt);
     p.vmDown += ((p.climb ? 1 : 0) - p.vmDown) * Math.min(1, dt * 8);   // (the camera tips up with this while climbing)

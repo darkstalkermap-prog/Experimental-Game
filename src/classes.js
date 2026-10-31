@@ -30,7 +30,7 @@ export const CLASSES = {
     mods: { hp: 1.1, armor: -1, speed: 1.07, melee: 1.3, bow: 0.6, spell: 1, bloodied: 0.15 },
     passive: 'Below half health you hit 15% harder.',
     q: { id: 'whirl', icon: '🌀', name: 'Whirlwind', cd: 9, desc: 'Spin with your blade for a second, cutting everyone around you three times.' },
-    r: { id: 'leap', icon: '🦘', name: 'Leap', cd: 11, aimed: true, desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
+    r: { id: 'leap', icon: '⤴', name: 'Leap', cd: 11, aimed: true, kind: 'Attack', desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
@@ -38,7 +38,7 @@ export const CLASSES = {
     mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8, marksman: 1 },
     passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
     q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
-    r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
+    r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, kind: 'Attack', desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -87,10 +87,10 @@ export const RANGER = {
 
 // The Berserker's Leap: hold R for a circle where he will land (up to `range` m: as far as a Fireball flies), let go and he leaps there.
 // The arc rises `apex` m above the line (from `apexMin`, `apexK` m more for every metre of the leap, up to `apexMax`) and takes as long
-// as a body falling under `grav` m/s² would; a leap is at least `min` m. Walls, towers and hills in the way cut it short, and it never
+// as a body falling under `grav` m/s² would; a leap is at least `min` m, and ends at most `up` m higher than it began (not up a cliff). Walls, towers and hills in the way cut it short, and it never
 // ends on an enemy castle's walls or towers or inside anything. The landing slams the ground: `dmg` of his melee damage (less toward the
 // edge, `edge` at the rim) to every foe within `radius` m, who is staggered `stagger` s (a hero `hero` s) and thrown back `knock` m/s.
-export const LEAP = { range: FIREBALL_RANGE, min: 3, apexMin: 2, apexK: 0.055, apexMax: 7, grav: 11, dmg: 2.2, edge: 0.5, radius: 5, stagger: 1, hero: 0.7, knock: 10 };
+export const LEAP = { range: FIREBALL_RANGE, min: 3, up: 6, apexMin: 2, apexK: 0.055, apexMax: 7, grav: 11, dmg: 2.2, edge: 0.5, radius: 5, stagger: 1, hero: 0.7, knock: 10 };
 
 // Arrow Volley, the Ranger's old Q: a tier-4 talent (talents.js) puts it back in Power Shot's place.
 export const VOLLEY_Q = { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' };
@@ -186,6 +186,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SEE_THROUGH = new Set(['tree']);   // a trunk does not stop you putting a volley on the ground behind it
 const LAND_H = [0.3, 1, 1.7];   // (the heights a landing Berserker's body is tested at, and the ring round his middle)
 const LAND_RING = [1, 0, -1, 0, 0, 1, 0, -1];
+const WALL_KINDS = new Set(['wall', 'gate', 'lintel', 'tower', 'keep', 'yard']);   // (the stone a Leap does not go over: Abilities.overWall)
 const v3 = (p) => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100];
 const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
 const C = {
@@ -417,7 +418,7 @@ export class Abilities {
         if (d < L.min - 1e-6) return null;
         tx = from.x + dx * d; tz = from.z + dz * d;
         ty = phys.groundHeight(tx, tz, footY, p.team);
-        if (this.leapLandOk(p, tx, ty, tz)) break;
+        if (ty - from.y <= L.up && this.leapLandOk(p, tx, ty, tz)) break;
         d -= 1; cut = true;
       }
       // the arc: the first sample that meets something cuts it short a metre before it
@@ -427,7 +428,7 @@ export class Abilities {
       for (let i = 1; i < n; i++) {
         const s = i / n, x = from.x + dx * d * s, z = from.z + dz * d * s;
         const y = from.y + (ty - from.y) * s + 4 * apex * s * (1 - s);
-        if (y + 0.5 < phys.terrainHeight(x, z) || phys.pointHit(x, y + 0.5, z, p.team) || phys.pointHit(x, y + 1.6, z, p.team)) { block = s; break; }
+        if (y + 0.5 < phys.terrainHeight(x, z) || phys.pointHit(x, y + 0.5, z, p.team) || phys.pointHit(x, y + 1.6, z, p.team) || this.overWall(p, x, z, tx, ty, tz)) { block = s; break; }
       }
       if (block < 0) {
         const { dur } = this.leapArc(d);
@@ -436,6 +437,32 @@ export class Abilities {
       d = d * block - 1; cut = true;
     }
     return null;
+  }
+
+  // Walls are not leapt over, however high the arc: one that passes over an enemy castle's wall, gate, tower or keep (or the practice
+  // yard's walls) is stopped by it, unless the leap ends up on top of that very stone (the yard's wall top: an enemy's battlements are
+  // refused by leapLandOk). Your own castle's stone does not stop you: its walls are too high to clear from the ground anyway, and from
+  // the wall walk you may leap down outside.
+  overWall(p, x, z, lx, ly, lz) {
+    const g = this.g, phys = g.physics;
+    for (const c of g.castles) {
+      if (!c || allied(c.team, p.team) || !c.inFootprint({ x, z }, 1)) continue;
+      if (this.overStone(c.bucket.list, x, z, lx, ly, lz, p.team)) return true;
+    }
+    const cell = phys.grid.get(phys.gridKey(Math.floor(x / phys.cell), Math.floor(z / phys.cell)));
+    return !!cell && this.overStone(cell, x, z, lx, ly, lz, p.team);
+  }
+  overStone(list, x, z, lx, ly, lz, team) {
+    const phys = this.g.physics;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ || !c.active || !WALL_KINDS.has(c.kind)) continue;
+      if (c.kind === 'gate' && phys.lets(c, team)) continue;
+      const top = c.heightFn ? c.heightFn(x, z) : c.top;
+      const onIt = lx >= c.minX && lx <= c.maxX && lz >= c.minZ && lz <= c.maxZ && ly >= top - 0.1;   // (the leap ends up on this stone)
+      if (!onIt) return true;
+    }
+    return false;
   }
 
   // Is this open ground for a leap to end on? Inside the world, nothing solid where the body would be, and not on top of an enemy
