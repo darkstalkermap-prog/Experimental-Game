@@ -178,6 +178,33 @@ test('War Mode: a hill for every army, allies on neighbouring hills, walkable sl
   setMapSize('medium');
 });
 
+test('War Mode: the field its places stay in (fieldHalf) ends at the foot of the mountains round the map, every army\'s spot well inside it', async () => {
+  const { setMapSize, setWarWorld } = await load('src/config.js');
+  const { layoutField, sideSpot, fieldHalf } = await load('src/warmap.js');
+  const { wallHeight } = await load('src/landscape.js');
+  const flat = { noise: () => 0, fbm: () => 0 };
+  for (const size of ['small', 'medium', 'large']) {
+    for (const plan of ['11', '1111', '22', '31']) {
+      setMapSize(size);
+      setWarWorld(plan);
+      layoutField();
+      const E = fieldHalf();
+      // (inside it the ring of mountains has not begun; a few metres past it, it has)
+      assert.equal(wallHeight(E, E, 0, flat), 0, `${size}/${plan}: no mountain at the edge of the field`);
+      assert.ok(wallHeight(E + 8, E + 8, 0, flat) > 0, `${size}/${plan}: the mountains begin just past it`);
+      const sizes = [...plan].map(Number);
+      sizes.forEach((of, side) => {
+        for (let slot = 0; slot < of; slot++) {
+          const s = sideSpot(side, sizes.length, slot, of);
+          assert.ok(Math.max(Math.abs(s.x), Math.abs(s.z)) < E - 25, `${size}/${plan}: side ${side}.${slot}'s spot (${s.x.toFixed(0)}, ${s.z.toFixed(0)}) has room behind it inside ${E}`);
+        }
+      });
+    }
+  }
+  setWarWorld(0);
+  setMapSize('medium');
+});
+
 test('War Mode: the sides of a match and the hills its world needs', async () => {
   const { warSides, warHills, menuPlan } = await load('src/warmap.js');
   const { setWarWorld, WAR_WORLD } = await load('src/config.js');
