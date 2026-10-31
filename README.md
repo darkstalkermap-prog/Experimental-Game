@@ -751,7 +751,8 @@ rival is picked first and the guard goes up against blows and arrows they can se
 looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
 close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
-fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
+fight (to a sword, foes in an enemy courtyard behind a gate that will not open for them, with no breach, are out of reach), and spend
+their talents from a list for each class. Their stamina drains and returns as a person's does. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
 also looks for a chance to use Q or R less often, waits a moment once one is ready, wants a bigger knot of foes and leads them less.
 They do not climb, duck or drive engines.
 
