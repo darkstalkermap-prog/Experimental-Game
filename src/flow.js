@@ -249,8 +249,8 @@ export function updateHud(g, ui) {
 }
 
 // The kill feed (the top right, under the gold and the keys) and the bars under the top panel: on a narrow HUD the bars reach into the feed's column, and the
-// feed then starts under them (and under the full key line when that shows). Whether moved or not, it shows only as many of its newest lines as fit above the minimap (a short window at a large UI scale;
-// index.html: data-feed).
+// feed then starts under them (and under the full key line when that shows). Whether moved or not, it shows only as many of its newest lines as fit above the
+// minimap (a short window at a large UI scale; index.html: --feedtop and data-feed).
 const FEED_W = 270;   // HUD pixels kept free for the feed's lines (a long name against a long name), so a new line never lands on a bar
 const FEED_LINE = 27;   // HUD pixels a line of the feed takes, with the gap under it
 function clearFeed(bars, W) {
