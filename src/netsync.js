@@ -114,6 +114,7 @@ export class HostSync {
           g.abilities.use(p, d.s, vec(d.f), vec(d.d), Array.isArray(d.at) && d.at.length === 3 ? vec(d.at) : null);
         }
         break;
+      case 'rushEnd': p.rushEnd = true; break;   // (a guest's run has ended on its screen: Abilities.rushOver)
       case 'class': g.switchClass(p, String(d.cls)); break;
       case 'talent': g.askTalent(p, String(d.id)); break;
       case 'respec': g.askRespec(p); break;

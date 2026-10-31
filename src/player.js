@@ -610,7 +610,7 @@ export class Player {
     // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
     if (input.hit('KeyQ')) {
       this.endScope();
-      if (this.dash && this.dash.rush) this.dash = null;   // (Q again: the Knight bashes where he is, the Cavalier reins in: Abilities.rushOver)
+      if (this.dash && this.dash.rush) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (Q again: the Knight bashes where he is, the Cavalier reins in: Abilities.rushOver)
       else if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
       else if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input);
     }
@@ -646,6 +646,10 @@ export class Player {
       this.climbTop = !!(l && l.low);   // (the prompt says where to: the wall walk, or the top of the battlements)
     }
     if (this.aiming) this.updateAim(dt, input);
+    // a guest's Shield Bash run or Lance Charge has ended on its own screen (the foe, Q again, the end): the host bashes or reins in there
+    const rushing = !!(this.dash && this.dash.rush);
+    if (this.wasRush && !rushing && this.netClient) g.net.toHost({ a: 'rushEnd' });
+    this.wasRush = rushing;
 
     // combat
     if (this.staggerT > 0) {
@@ -754,11 +758,11 @@ export class Player {
       this.vel.z += (tz - this.vel.z) * k;
     }
 
-    if (this.dash && this.dash.rush === 'bash' && this.foeAhead(this.dash)) this.dash = null;   // (the run ends against the first foe)
+    if (this.dash && this.dash.rush === 'bash' && this.foeAhead(this.dash)) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (the run ends against the first foe)
     if (this.dash) {
       const d = this.dash;
       d.t -= dt;
-      if (d.t <= 0) this.dash = null;
+      if (d.t <= 0) { this.dash = null; if (d.rush && this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (the horse is reined in at the end of a run)
       else {
         this.vel.x = d.x * d.v; this.vel.z = d.z * d.v;
         if (this.mounted) { this.heading = Math.atan2(d.x, d.z); this.rideSpeed = d.v; }

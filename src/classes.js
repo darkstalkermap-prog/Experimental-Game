@@ -380,9 +380,12 @@ export class Abilities {
 
   // Is the run over? Its time is up, he has stopped (reined in, or held against something: no headway for a quarter of a second), or
   // (the Knight's) a foe is right in front of his shield.
+  // A guest's hero (remote) is where its pose messages put him, which come in bursts: there the guest's own word ends the run (it sends
+  // 'rushEnd' when its screen stops him: Player.update, NetSync), or the time allowed for it, and the foe in front of the shield.
   rushOver(p, e, dt, foes = true) {
-    if (e.t >= e.dur) return true;
-    if ((e.chk -= dt) <= 0) {
+    if (p.rushEnd) { p.rushEnd = false; return true; }
+    if (e.t >= e.dur + (p.remote ? 0.5 : 0)) return true;
+    if (!p.remote && (e.chk -= dt) <= 0) {
       e.chk = 0.25;
       const moved = Math.hypot(p.pos.x - e.last.x, p.pos.z - e.last.z);
       e.last.copy(p.pos);
@@ -405,6 +408,7 @@ export class Abilities {
     if (!plan) { this.bashHit(p, f); return; }
     const dur = plan.d / this.rushSpeed(p, 'bash') + 0.3;
     p.buffs.add('charging', dur);
+    p.rushEnd = false;
     this.active.push({ kind: 'rush', p, t: 0, dur, f, chk: 0.25, last: p.pos.clone() });
     this.emit('rush', p.pos, f, [plan.to]);
   }
@@ -848,6 +852,7 @@ export class Abilities {
     if (!plan) return false;
     const f = plan.f, dur = plan.d / this.rushSpeed(p, 'lancecharge') + 0.15;
     p.buffs.add('charging', dur);
+    p.rushEnd = false;
     this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set(), chk: 0.25, last: p.pos.clone() });
     const rush = talentFx(p, 'chargeRush', null);   // Vanguard! (Cavalier talent): the army rides with the charge
     if (rush) this.eachFriend(p.team, p.pos.x, p.pos.z, rush.radius, (o) => { if (o !== p) this.haste(o, rush.time, rush.speed); });
@@ -860,9 +865,21 @@ export class Abilities {
     return true;
   }
 
+  // Everyone the charge has gone over since the last frame: along the stretch from where he was to where he is now, every 1.5 m (a
+  // guest's hero moves in the steps its pose messages bring, several metres at a time at a gallop)
   chargeSweep(p, e) {
+    const prev = e.prev || (e.prev = p.pos.clone());
+    const d = Math.hypot(p.pos.x - prev.x, p.pos.z - prev.z), n = Math.min(80, Math.max(1, Math.ceil(d / 1.5)));
+    const c = this.sweepV || (this.sweepV = new THREE.Vector3());
+    for (let i = 1; i <= n; i++) {
+      c.copy(prev).lerp(p.pos, i / n).addScaledVector(e.f, 1.2);
+      this.chargeHit(p, e, c);
+    }
+    prev.copy(p.pos);
+  }
+
+  chargeHit(p, e, c) {
     const g = this.g;
-    const c = p.pos.clone().addScaledVector(e.f, 1.2);
     this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
