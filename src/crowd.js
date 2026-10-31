@@ -27,6 +27,15 @@ export function lodLimits(out = LOD) {
 
 const _sphere = new THREE.Sphere(), _frustum = new THREE.Frustum(), _proj = new THREE.Matrix4();
 const STATIC = ['position', 'normal', 'color', 'aSurf', 'aFx'];
+// One update range for each instance buffer, kept for good: three.js empties a buffer's list of ranges after each upload, so the list and a range
+// were made again for every batch, every frame (garbage). The range's count is set before each upload instead.
+const noop = () => {};
+function keptRange(attr) {
+  const r = { start: 0, count: 0 };
+  attr.updateRanges = [r];
+  attr.clearUpdateRanges = noop;
+  return r;
+}
 
 class Batch {
   constructor(crowd, geo, open, shadow, plain = null) {
@@ -57,6 +66,7 @@ class Batch {
     mesh.count = this.n;
     mesh.visible = false;
     this.buf = buf; this.mesh = mesh;
+    this.matRange = keptRange(mesh.instanceMatrix); this.lookRange = keptRange(buf);
     const scene = this.crowd.scene;
     scene.add(limitShadow(scene, mesh));
     if (this.plain) {
@@ -89,9 +99,8 @@ class Batch {
     mesh.count = n;
     mesh.castShadow = this.shadow && cast && !proxy;
     if (proxy) { proxy.count = n; proxy.userData.on = this.shadow && cast; }
-    const im = mesh.instanceMatrix;
-    im.clearUpdateRanges(); im.addUpdateRange(0, n * 16); im.needsUpdate = true;
-    this.buf.clearUpdateRanges(); this.buf.addUpdateRange(0, n * 16); this.buf.needsUpdate = true;
+    this.matRange.count = n * 16; mesh.instanceMatrix.needsUpdate = true;
+    this.lookRange.count = n * 16; this.buf.needsUpdate = true;
   }
 }
 

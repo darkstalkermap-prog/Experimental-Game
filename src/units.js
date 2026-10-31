@@ -26,6 +26,10 @@ function marchYaw(h) {
 // the rule modifier `speed` (a Battle Decree), read from the rules only when they change and not for every step of every soldier
 let marchVer = -1, marchMul = 1;
 let NEXT_ID = 1;
+// the pose a soldier is drawn in this frame (Unit.animate): one object filled in for each soldier, not a new one for each of them every frame
+// (with War Mode's thousands that was a large share of the frame's garbage); poseSoldier reads it at once and keeps nothing of it
+// (its numbers start as -0, a fraction to the engine: see Z in the constructor)
+const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0 };
 
 export class Unit {
   constructor(game, type, team, pos, stats = {}) {
@@ -53,16 +57,16 @@ export class Unit {
     this.variant = stats.variant ?? Math.floor(Math.random() * 6);
     this.idleT = Math.random() * 10;
     this.attackDir = 'over';
-    this.staggerT = 0;
+    this.staggerT = -0;   // (-0, not 0: see Z below)
     this.strafeSide = Math.random() < 0.5 ? 1 : -1;
-    this.strafeT = 0;
+    this.strafeT = -0;
     this.hasShield = !!t.shield;
     this.isGiant = !!t.giant;
     this.stuckCount = 0;
-    this.ghostT = 0;
-    this.xp = 0;
+    this.ghostT = -0;
+    this.xp = -0; this.xp = 0;   // (Z: a fraction's field, then its value)
     this.rank = 1;
-    this.slowT = 0;
+    this.slowT = -0;
     this.braced = false;
     this.siegeBonus = t.siegeBonus || 1;   // vs siege engines
     this.structMult = t.structMult || 0.6; // vs gates and keeps (hand weapons are poor at this)
@@ -77,18 +81,18 @@ export class Unit {
     this.goal = null;
     this.waypoint = null;
     this.nav = null;
-    this.avoid = {};       // which corner of a castle this soldier is going round by (see nav.avoidCastles)
+    this.avoid = { goal: null, corner: null, left: null, castle: null };   // which corner of a castle this soldier is going round by (see nav.avoidCastles)
     this.blockedBy = null;
     this.attackTimer = Math.random() * this.cd;
-    this.swingT = -1;
+    this.swingT = -0; this.swingT = -1;   // (Z)
     this.struck = false;
     this.thinkTimer = Math.random() * 0.3;
     this.walkPhase = Math.random() * 6;
-    this.deathT = 0;
+    this.deathT = -0;
     this.post = null;
     this.slot = 0;
     this.los = true;
-    this.stuckT = 0;
+    this.stuckT = -0;
     this.lastPos = this.pos.clone();
     this.homeCastle = null;
     this.lane = false;     // a wave soldier marching on the enemy, rather than a bought troop in the garrison
@@ -98,17 +102,31 @@ export class Unit {
     this.foeTeam = -1;     // the house his group was sent at (War Mode: Charge and Attack; Conquest: an Assault by colour), -1 for none, and how near a
     this.foeNear = 0;      // man of another house must be to be fought on the way (warmode.js charge, Game.order)
     this.foeKind = '';     // (War Mode: one group of that house, 'inf', 'arch' or 'cav': an AI general's riders sent at its archers; '' for any)
-    this.lookT = 0;        // (a charge's next look for a nearer foe)
+    this.lookT = -0;       // (a charge's next look for a nearer foe)
     this.isCrew = !!t.crew;
     this.crewOf = null;    // the siege engine this soldier is manning, and which seat
     this.crewSlot = 0;
     this.crewRef = 0;      // (network clients) engine id * 4 + seat + 1
-    this.guardT = 0;       // class abilities: damage taken is multiplied by guardMul while guardT runs
+    this.guardT = -0;      // class abilities: damage taken is multiplied by guardMul while guardT runs
     this.guardMul = 1;
-    this.hasteT = 0;
+    this.hasteT = -0;
     this.hasteMul = 1;
     this.kills = 0;
     this.kit = null;       // a lord the computer plays as a hero of a class: his abilities (lordkit.js); stats.hero is the class he looks
+    // Every field a soldier comes to have, here at once with a value that means "not yet" (the same as the field missing): fields added later, in
+    // whatever order a fight brings them, gave the soldiers dozens of different shapes in the engine, and the hottest loops (update, applyMovement,
+    // animate, think) were thrown out of their optimised code ("wrong map") again and again through a big battle, running slow and making garbage.
+    // Z: a field that will hold fractions (a timer) starts as -0, which is 0 to every test here (> 0, <= 0, || ...) but is already a fraction to the
+    // engine: one that starts as a whole 0 has its kind changed by the first fraction, and with it every soldier's shape, at the first clash.
+    this.horse = null;
+    this.blockFlash = -0; this.staggerMax = -0; this.noLosT = -0; this.lastStep = -1;
+    this.lastAttacker = null; this.ignore = null; this.ignoreT = -0; this.reservedPost = null;
+    this.keepPt = null; this.keepAt = null; this.keepS = -0; this.keepFan = false;   // (a keep's attackers: nav.keepSpot)
+    this.gateLook = null; this.gateD = -0;  // (Game.gateShouldOpen)
+    this.hillDuty = false;                  // (King of the Hill: hill.js)
+    this.bought = -0;                       // (War Mode: when it was bought, warmode.js)
+    this.interp = null; this.kitNet = 0;    // (a guest's copy: netsync.js)
+    this.fixedTier = false; this.noXp = false; this.practiceKey = null;   // (the practice yard: practice.js)
 
     const m = buildSoldier(type, team, this.variant, 0, stats.hero ? { hero: stats.hero, cape: 'cape.long' } : null);
     this.model = m;
@@ -126,7 +144,7 @@ export class Unit {
     if (this.horse) poseHorse(this.horse, 0, 0);
     this.tier = 0;         // Drill Sergeants: the house's training level shows in the soldier's kit (see setTier)
     this.lod = 0;
-    this.shownHp = this.hp; this.hurtT = 0; this.lookS = 0;   // (what the model shows of a hit, and where the head turns)
+    this.shownHp = this.hp; this.hurtT = -0; this.lookS = -0;   // (what the model shows of a hit, and where the head turns)
     this.mesh.position.copy(this.pos);
     this.mesh.userData.unit = this;
   }
@@ -693,9 +711,9 @@ export class Unit {
     const G = g.grid, c = G.cell, x = this.pos.x, z = this.pos.z;
     const x0 = Math.floor((x - 1.4) / c), x1 = Math.floor((x + 1.4) / c), z0 = Math.floor((z - 1.4) / c), z1 = Math.floor((z + 1.4) / c);
     for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-      const a = G.map.get(G.key(ix, iz));
-      if (!a) continue;
-      for (let i = 0; i < a.length; i++) {
+      const cell = G.map.get(G.key(ix, iz));
+      if (!cell) continue;
+      for (let i = 0, a = cell.a, n = cell.n; i < n; i++) {
         const o = a[i];
         if (o === this || !o.alive || o.post) continue;
         const dx = x - o.pos.x, dz = z - o.pos.z;
@@ -834,10 +852,10 @@ export class Unit {
       if (dx * dx + dz * dz < 900) { look = Math.atan2(dx, dz) - this.yaw; while (look > Math.PI) look -= Math.PI * 2; while (look < -Math.PI) look += Math.PI * 2; }
     }
     this.lookS += (look - this.lookS) * Math.min(1, dt * 6);
-    poseSoldier(m, {
-      phase: this.walkPhase, speed: sp, moving, swingT: this.swingT, attackDir: this.attackDir,
-      stagger: stag, hurt: this.hurtT, blocking: this.blockFlash > 0 || this.braced, mounted: this.mounted, idle: this.idleT, look: this.lookS,
-    });
+    const st = POSE;
+    st.phase = this.walkPhase; st.speed = sp; st.moving = moving; st.swingT = this.swingT; st.attackDir = this.attackDir;
+    st.stagger = stag; st.hurt = this.hurtT; st.blocking = this.blockFlash > 0 || this.braced; st.mounted = this.mounted; st.idle = this.idleT; st.look = this.lookS;
+    poseSoldier(m, st);
   }
 
   // network client: glide toward the host's latest position and animate

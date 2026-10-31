@@ -446,18 +446,18 @@ export class Physics {
       const b = buckets[i], rr = b.r + 0.5;
       if (x1 <= b.cx - rr || x0 >= b.cx + rr || z1 <= b.cz - rr || z0 >= b.cz + rr) continue;   // no sample can be inside this castle's square
       let w = near[n];
-      if (!w) w = near[n] = { b: null, list: [], shots: [] };
-      w.b = b; w.list.length = 0; w.shots.length = 0;
+      if (!w) w = near[n] = { b: null, list: [], shots: [], nl: 0, ns: 0 };
+      w.b = b; w.nl = 0; w.ns = 0;   // (counts, not length = 0: that hands the lists' storage back and every line made them again)
       for (const c of b.list) {
         if (c.maxX < x0 || c.minX > x1 || c.maxZ < z0 || c.minZ > z1 || y1 <= c.bottom || (!c.heightFn && y0 >= c.top)) continue;
         if (!c.active || c.noProjectile) continue;
         if (c.kind === 'gate' && this.lets(c, ignoreTeam)) continue;
-        w.list.push(c);
+        w.list[w.nl++] = c;
       }
       for (const c of b.shots) {
         if (c.maxX < x0 || c.minX > x1 || c.maxZ < z0 || c.minZ > z1 || y1 <= c.bottom || y0 >= c.top) continue;
         if (!c.active || allied(c.team, ignoreTeam)) continue;
-        w.shots.push(c);
+        w.shots[w.ns++] = c;
       }
       n++;
     }
@@ -469,14 +469,14 @@ export class Physics {
         const w = near[k], b = w.b;
         if (Math.abs(x - b.cx) >= b.r + 0.5 || Math.abs(z - b.cz) >= b.r + 0.5) continue;
         const list = w.list;
-        for (let m = 0; m < list.length; m++) {
+        for (let m = 0, nl = w.nl; m < nl; m++) {
           const c = list[m];
           if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
           if (y < (c.heightFn ? c.heightFn(x, z) : c.top) && y > c.bottom) return false;
         }
         if (y > 1) {
           const shots = w.shots;
-          for (let m = 0; m < shots.length; m++) {
+          for (let m = 0, ns = w.ns; m < ns; m++) {
             const c = shots[m];
             if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
             if (y < c.top && y > c.bottom) return false;

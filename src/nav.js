@@ -9,24 +9,31 @@ const OB = TC + CASTLE.towerR + 0.2;  // obstacle square incl. corner towers
 const CORNER = OB + 3.5;
 
 function segHitsSquare(ax, az, bx, bz, cx, cz, h) {
-  // slab test of segment a->b against the square centred at c with half-size h
+  // slab test of segment a->b against the square centred at c with half-size h: x, then z (written out, without a closure: this runs for every
+  // soldier on the move and every castle, each frame, and the closure and its context were garbage each time)
   let t0 = 0, t1 = 1;
   const dx = bx - ax, dz = bz - az;
-  const check = (p, d, lo, hi) => {
-    if (Math.abs(d) < 1e-9) return p >= lo && p <= hi;
-    let ta = (lo - p) / d, tb = (hi - p) / d;
-    if (ta > tb) [ta, tb] = [tb, ta];
+  let lo = cx - h, hi = cx + h;
+  if (Math.abs(dx) < 1e-9) { if (!(ax >= lo && ax <= hi)) return false; }
+  else {
+    let ta = (lo - ax) / dx, tb = (hi - ax) / dx;
+    if (ta > tb) { const s = ta; ta = tb; tb = s; }
     t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
-    return t0 <= t1;
-  };
-  return check(ax, dx, cx - h, cx + h) && check(az, dz, cz - h, cz + h);
+    if (!(t0 <= t1)) return false;
+  }
+  lo = cz - h; hi = cz + h;
+  if (Math.abs(dz) < 1e-9) return az >= lo && az <= hi;
+  let ta = (lo - az) / dz, tb = (hi - az) / dz;
+  if (ta > tb) { const s = ta; ta = tb; tb = s; }
+  t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+  return t0 <= t1;
 }
 
+// (the four corners written out: the loops over [-1, 1] made three arrays a call, and this is asked for every soldier on the move, every frame)
 function crossesTower(ax, az, bx, bz, c) {
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    if (segHitsSquare(ax, az, bx, bz, c.center.x + sx * TC, c.center.z + sz * TC, CASTLE.towerR + 0.3)) return true;
-  }
-  return false;
+  const x = c.center.x, z = c.center.z, r = CASTLE.towerR + 0.3;
+  return segHitsSquare(ax, az, bx, bz, x - TC, z - TC, r) || segHitsSquare(ax, az, bx, bz, x - TC, z + TC, r)
+    || segHitsSquare(ax, az, bx, bz, x + TC, z - TC, r) || segHitsSquare(ax, az, bx, bz, x + TC, z + TC, r);
 }
 
 // (the walls reach out 1 m with the Thicken Walls upgrade, so the keep-clear square is a little wider than the wall)
@@ -39,7 +46,7 @@ function blocked(ax, az, bx, bz, c) {
 // turns straight back to the corner it has just left, so nobody dithers between two corners or stalls on one.
 export function avoidCastles(game, pos, goal, mem = null) {
   if (mem && mem.goal && Math.hypot(goal.x - mem.goal.x, goal.z - mem.goal.z) > 6) { mem.corner = null; mem.left = null; }
-  if (mem) mem.goal = { x: goal.x, z: goal.z };
+  if (mem) { if (mem.goal) { mem.goal.x = goal.x; mem.goal.z = goal.z; } else mem.goal = { x: goal.x, z: goal.z }; }   // (kept, not made anew at every step)
   for (const c of game.castles) {
     const cx = c.center.x, cz = c.center.z;
     const dx = pos.x - cx, dz = pos.z - cz;

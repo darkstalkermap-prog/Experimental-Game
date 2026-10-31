@@ -71,31 +71,35 @@ const roleOf = (u) => (u.lane ? 'lane' : u.army ? 'army' : 'garrison');   // (th
 // Everybody on the ground, bucketed twice over: 4 m cells for the many short looks (a blow, a shove between neighbours) and COARSE m cells for the long ones
 // (an archer's 50 m, a soldier's look for the nearest foe). A long look through the fine cells visits some 700 of them; through the coarse ones 50, and
 // with War Mode's thousands of soldiers that was a large share of the frame.
+// A cell is { n, a }: its first n entries of a are this frame's. (The lists were emptied with length = 0 every frame, which hands an array's
+// storage back, so every cell's list was made again by the next frame's inserts: garbage for every soldier, every frame.)
 const COARSE = 16;
 class Grid {
   constructor(cell = 4) { this.cell = cell; this.map = new Map(); this.big = new Map(); }
   key(ix, iz) { return (ix + 512) * 1024 + (iz + 512); }
-  clear() { for (const a of this.map.values()) a.length = 0; for (const a of this.big.values()) a.length = 0; }
+  clear() { for (const c of this.map.values()) empty(c); for (const c of this.big.values()) empty(c); }
   insert(o) {
     const k = this.key(Math.floor(o.pos.x / this.cell), Math.floor(o.pos.z / this.cell));
     let a = this.map.get(k);
-    if (!a) { a = []; this.map.set(k, a); }
-    a.push(o);
+    if (!a) { a = { n: 0, a: [] }; this.map.set(k, a); }
+    a.a[a.n++] = o;
     const kb = this.key(Math.floor(o.pos.x / COARSE), Math.floor(o.pos.z / COARSE));
     let b = this.big.get(kb);
-    if (!b) { b = []; this.big.set(kb, b); }
-    b.push(o);
+    if (!b) { b = { n: 0, a: [] }; this.big.set(kb, b); }
+    b.a[b.n++] = o;
   }
   query(x, z, r, fn) {
     const big = r >= 20, c = big ? COARSE : this.cell, m = big ? this.big : this.map;
     const x0 = Math.floor((x - r) / c), x1 = Math.floor((x + r) / c);
     const z0 = Math.floor((z - r) / c), z1 = Math.floor((z + r) / c);
     for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-      const a = m.get(this.key(ix, iz));
-      if (a) for (let i = 0; i < a.length; i++) fn(a[i]);
+      const cell = m.get(this.key(ix, iz));
+      if (cell) for (let i = 0, a = cell.a; i < cell.n; i++) fn(a[i]);
     }
   }
 }
+// (the entries are let go of, so that a cell nobody walks through any more does not keep a soldier who has been removed)
+function empty(c) { for (let i = 0, a = c.a; i < c.n; i++) a[i] = null; c.n = 0; }
 
 export class Game {
   constructor(renderer, ui, audio, input, opts = {}) {
