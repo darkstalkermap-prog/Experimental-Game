@@ -1034,7 +1034,8 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 - **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
   potions, where your soldiers are), and over the abilities a row of labels for the buffs on you; top left the houses, top centre
   the wave and its clock, top right the gold. The orders bar shows only while your army has soldiers; it sits centred in the gap
-  between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. On a window
+  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
   base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a

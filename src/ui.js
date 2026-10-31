@@ -988,6 +988,13 @@ export class UI {
   // bottom; a fixed reserve, as the stack's own height changes with what it shows), 44 px each, at least the newest one, at most the usual 4.
   fitHero() {
     const hud = $('hud');
+    // (the orders bar wraps in a narrow gap between the hero panel and the minimap, index.html #command: its separators would stand at the start
+    // of a row, so they go; below about 1320 HUD pixels its longest words no longer fit on one row)
+    const hz = parseFloat(getComputedStyle($('dock')).zoom) || 1;
+    hud.classList.toggle('cmdwrap', innerWidth / hz < 1320);
+    // (a window under 470 HUD pixels tall, 1024 x 600 at the largest UI scale: the hero panel with its abilities and buffs reaches the castle panel
+    // under the top panel, so that one is not shown)
+    hud.classList.toggle('hudshort', innerHeight / hz < 470);
     hud.classList.remove('heronarrow');
     delete hud.dataset.alerts;
     if (!hud.classList.contains('hero')) return;
