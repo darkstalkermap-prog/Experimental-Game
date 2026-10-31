@@ -162,7 +162,11 @@
   #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.28); color: #fff; }
   #command kbd { padding: 0 4px; }
   #command b { font-weight: 600; color: var(--gold); }
-  #command .orders span.foes { opacity: 1; padding: 0 0 0 2px; display: inline-flex; gap: 3px; }
+  /* (the colour keys sit in a small row just above the bar: the bar itself has no room to spare between the hero panel and the minimap) */
+  #command .orders span.foes { position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); opacity: 1; display: inline-flex; gap: 4px;
+    align-items: center; padding: 2px 8px; background: var(--panel); border: 1px solid var(--edge); border-radius: 4px; }
+  #command .orders span.foes::before { content: 'Assault'; opacity: 0.8; margin-right: 2px; }
+  #command .orders span.foes:empty { display: none; }
   #command .foes kbd { background: var(--hc); color: #fff; border-color: rgba(255,255,255,0.55); text-shadow: 0 1px 2px rgba(0,0,0,0.8); opacity: 0.75; }
   #command .foes kbd.active { opacity: 1; box-shadow: 0 0 0 2px #fff; }
   #command .foes kbd.out { opacity: 0.25; }
