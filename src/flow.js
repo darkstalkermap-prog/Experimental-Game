@@ -117,7 +117,7 @@ export function offerFor(g) {
   if (g.mode === 'host' && g.humans.some((h) => h !== g.player && !h.isBot)) return null;   // (friends are still fighting: the host does not end it for them)
   if (me.castle.fallen) return { kind: 'concede', text: 'You cannot rise again.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
   if (g.coop) return null;
-  const standing = g.factions.filter((f) => !f.castle.fallen);
+  const standing = g.factions.filter((f) => !f.castle.fallen && !f.empty);   // (a castle left empty is no house of the war)
   if (standing.length !== 2 || !standing.includes(me)) return null;
   const foe = standing.find((f) => f !== me);
   const a = houseNumbers(g, me), b = houseNumbers(g, foe);
@@ -162,13 +162,19 @@ export function confirmOffer(g, ui) {
 }
 
 // ---------------------------------------------------------------- the HUD pieces (called a few times a second by ui.update)
-const last = { ready: '', offer: '', hillY: 0, castleY: 0, targetY: 0, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
+const last = { ready: '', offer: '', hillY: 0, castleY: 0, targetY: 0, topShift: 0, feedY: 0, feedFit: 6, cmdTop: -1, toastLift: -1, toasts: 6, noTip: false, warRoom: -1, told: new Set() };   // told: the kinds of offer that have been announced in a toast this match
 const setText = (el, t) => { if (el.textContent !== t) el.textContent = t; };
 // a new match starts with nothing shown (ui.reset)
 export function resetHud() {
   last.ready = last.offer = '';
   last.hillY = last.castleY = last.targetY = 0;
+  last.cmdTop = last.toastLift = -1;
+  last.feedY = 0; last.feedFit = 6; last.toasts = 6; last.topShift = 0; $('top').style.transform = '';
   $('hill').style.top = $('target').style.top = '';
+  $('hud').style.setProperty('--feedtop', '0px');
+  delete $('hud').dataset.feed; delete $('hud').dataset.toasts;
+  last.noTip = false; $('hud').classList.remove('notip');
+  last.warRoom = -1;
   if ($('castleBar')) $('castleBar').style.top = '';
   last.told.clear();
   armedUntil = 0;
@@ -215,16 +221,112 @@ export function updateHud(g, ui) {
   // (decrees.js): they follow its real bottom edge instead of a fixed place (measured last, after the rows above have been shown or hidden)
   if (!g.hero) {
     const top = $('top'), hill = $('hill'), tg = $('target');
-    let y = top.offsetTop + top.offsetHeight + 8;
+    // (a large UI scale on a small window: a bar under the top panel can be wider than the gap beside the houses' panel at the top left; it then starts
+    // under that panel instead of covering its corner. All in HUD pixels: these pieces share one zoom.)
+    const fac = $('factions'), W = innerWidth / (parseFloat(getComputedStyle(top).zoom) || 1);
+    const facR = fac.offsetParent ? fac.offsetLeft + fac.offsetWidth + 8 : -1e9, facB = fac.offsetTop + fac.offsetHeight + 6;
+    const clear = (el, y) => (W / 2 - el.offsetWidth / 2 < facR ? Math.max(y, facB) : y);
+    // (the top panel itself is centred: when the houses' panel reaches under it, it moves right just enough, as far as the gold allows)
+    const gb = $('goldbox'), tw = top.offsetWidth;
+    let shift = Math.max(0, Math.ceil(facR - (W / 2 - tw / 2)));
+    if (shift && gb.offsetParent) shift = Math.min(shift, Math.max(0, Math.floor(gb.offsetLeft - 8 - (W / 2 + tw / 2))));
+    if (shift !== last.topShift) { last.topShift = shift; top.style.transform = shift ? `translateX(calc(-50% + ${shift}px))` : ''; }
+    let y = clear(hill, top.offsetTop + top.offsetHeight + 8);
     if (y !== last.hillY) { last.hillY = y; hill.style.top = `${y}px`; }
-    if (!hill.classList.contains('hidden')) y += hill.offsetHeight + 6;
+    const shown = [];   // (the bars shown under the top panel: the kill feed keeps clear of them below)
+    if (!hill.classList.contains('hidden')) { shown.push(hill); y += hill.offsetHeight + 6; }
     const cb = $('castleBar');   // (the castle you are at: castlebar.js)
     if (cb) {
+      y = clear(cb, y);
       if (y !== last.castleY) { last.castleY = y; cb.style.top = `${y}px`; }
-      if (cb.classList.contains('on')) y += cb.offsetHeight + 6;
+      if (cb.classList.contains('on')) { shown.push(cb); y += cb.offsetHeight + 6; }
     }
+    const under = y;   // (the foot of the bars: the toasts keep below it)
+    y = clear(tg, y);
     if (y !== last.targetY) { last.targetY = y; tg.style.top = `${y}px`; }
+    clearFeed(shown, W);
+    stackBottom(under);
+  } else { clearFeed([], 0); stackBottom(0); }
+}
+
+// The kill feed (the top right, under the gold and the keys) and the bars under the top panel: on a narrow HUD the bars reach into the feed's column, and the
+// feed then starts under them (and under the full key line when that shows). Whether moved or not, it shows only as many of its newest lines as fit above the
+// minimap (a short window at a large UI scale; index.html: --feedtop and data-feed).
+const FEED_W = 270;   // HUD pixels kept free for the feed's lines (a long name against a long name), so a new line never lands on a bar
+const FEED_LINE = 27;   // HUD pixels a line of the feed takes, with the gap under it
+function clearFeed(bars, W) {
+  const kf = $('killfeed'), hud = $('hud');
+  let y = 0;
+  for (const b of bars) if (W / 2 + b.offsetWidth / 2 > W - 16 - Math.max(FEED_W, kf.offsetWidth) - 6) y = Math.max(y, b.offsetTop + b.offsetHeight + 6);
+  const hint = $('hint');   // (the full key line, in the same column: in the first preparations, and on I)
+  if (hint.offsetParent) y = Math.max(y, hint.offsetTop + hint.offsetHeight + 6);
+  const mm = $('minimapWrap'), z = parseFloat(getComputedStyle(kf).zoom) || 1;
+  const wt = $('warTop');   // (War Mode's top bar, outside the HUD at the same zoom: wide with four armies)
+  if (wt && document.body.classList.contains('war-on') && !wt.classList.contains('hidden')) {
+    const r = wt.getBoundingClientRect();
+    if (r.width > 0 && r.right / z > innerWidth / z - 16 - Math.max(FEED_W, kf.offsetWidth) - 6) y = Math.max(y, Math.ceil(r.bottom / z) + 6);
   }
+  if (y !== last.feedY) { last.feedY = y; hud.style.setProperty('--feedtop', `${y}px`); }   // (index.html: never above its own place)
+  // (its foot: the minimap, or a command bar at the bottom that reaches into its column: War Mode's, or the orders bar with its colour keys)
+  const colL = innerWidth - (16 + Math.max(FEED_W, kf.offsetWidth)) * z;
+  let foot = mm.offsetParent ? mm.getBoundingClientRect().top : innerHeight;
+  const wc = $('warCmd');
+  for (const el of [document.body.classList.contains('war-on') && wc && !wc.classList.contains('hidden') ? wc : null, $('command'), $('cmdFoes')]) {
+    if (!el || (el !== wc && !el.offsetParent)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.height > 0 && r.right > colL) foot = Math.min(foot, r.top);
+  }
+  const fit = kf.offsetParent ? Math.max(0, Math.min(6, Math.floor((foot / z - 8 - kf.offsetTop + 3) / FEED_LINE))) : 6;   // (none at all where not one fits)
+  if (fit !== last.feedFit) { last.feedFit = fit; if (fit < 6) hud.dataset.feed = String(fit); else delete hud.dataset.feed; }
+}
+
+// The tip line (alerts.js) and the toasts stand over the middle of the bottom edge, above the orders bar. That bar wraps onto more rows at a large UI scale or on
+// a narrow window, and its row of colour keys sits over it while your army has houses to assault; a tip runs to two or three lines in a narrow gap. So they follow
+// what is really there (index.html: --cmdtop and --toastlift, in HUD pixels from the bottom edge) instead of fixed places. Measured with the HUD (a few times a
+// second), only written when it changes.
+// under: how far down the bars under the top panel reach (HUD pixels from the top; 0 for none): the toasts show only as many of the newest as fit below it
+// (index.html: data-toasts).
+const TOAST_LINE = 38;   // HUD pixels a toast takes, with the gap over it (an important one, the tallest)
+function stackBottom(under) {
+  const hud = $('hud'), cmd = $('command'), keys = $('cmdFoes'), tip = $('tip'), dock = $('dock');
+  const z = parseFloat(getComputedStyle(tip).zoom) || 1;
+  const up = (r) => Math.ceil((innerHeight - r.top) / z);   // (how far above the bottom edge a box reaches, in HUD pixels)
+  let lift = 0;
+  if (cmd.offsetParent) {   // (shown: not display none, itself or the HUD)
+    lift = up(cmd.getBoundingClientRect());
+    if (keys && keys.offsetParent) lift = Math.max(lift, up(keys.getBoundingClientRect()));
+    lift += 8;
+  }
+  // War Mode's command bar (outside the HUD, same zoom): the toasts stand over it too, and it is never taller than the room under the top bar
+  const wc = $('warCmd'), wt = $('warTop');
+  if (wc && document.body.classList.contains('war-on') && !wc.classList.contains('hidden') && !$('hud').classList.contains('hidden')) {
+    const wr = wc.getBoundingClientRect();
+    if (wr.height > 0) {
+      const top = wt && !wt.classList.contains('hidden') ? wt.getBoundingClientRect().bottom : 0;
+      const room = Math.floor((wr.bottom - top) / z) - 8;
+      if (room !== last.warRoom) { last.warRoom = room; wc.style.maxHeight = `${Math.max(60, room)}px`; }
+      if (top) under = Math.max(under, Math.ceil(top / z) + 6);   // (and the toasts keep under the top bar)
+      lift = Math.max(lift, up(wc.getBoundingClientRect()) + 8);
+    }
+  }
+  // (a window so narrow at its UI scale that even the narrowest tip reaches the hero panel at the bottom left: the tip goes over that panel, or, when that
+  // would take it past the middle of the screen, it is not shown at all: tips are only hints. It keeps its box, hidden, so this can be measured again.)
+  const tr0 = tip.getBoundingClientRect();
+  let off = false;
+  if (dock.offsetParent && tr0.width > 0 && tr0.left < dock.getBoundingClientRect().right + 4 * z && tr0.right > innerWidth / 2) {
+    const over = up(dock.getBoundingClientRect()) + 8;
+    if (over + tr0.height / z > innerHeight / z / 2) off = true; else lift = Math.max(lift, over);
+  }
+  if (off !== last.noTip) { last.noTip = off; hud.classList.toggle('notip', off); }
+  if (lift !== last.cmdTop) { last.cmdTop = lift; hud.style.setProperty('--cmdtop', `${lift}px`); }
+  // the toasts: over the bar with the room of a one-line tip, or over the tip itself when it stands under them (it keeps its box while faded out)
+  let tl = lift ? lift + 48 : 0;
+  const tr = tip.getBoundingClientRect();
+  const half = Math.min(280, innerWidth / z / 2 - 16) * z;   // (the toasts' column: centred, 560 HUD pixels wide at most)
+  if (!off && tr.width > 0 && tr.left < innerWidth / 2 + half && tr.right > innerWidth / 2 - half) tl = Math.max(tl, up(tr) + 6);
+  if (tl !== last.toastLift) { last.toastLift = tl; hud.style.setProperty('--toastlift', `${tl}px`); }
+  const fit = under ? Math.max(1, Math.floor(($('toasts').getBoundingClientRect().bottom / z - under - 6 + 4) / TOAST_LINE)) : 6;
+  if (fit !== last.toasts) { last.toasts = fit; if (fit < 6) hud.dataset.toasts = String(fit); else delete hud.dataset.toasts; }
 }
 
 // the keys that act in the match: Enter is Ready, K ends a decided battle (twice to confirm). They act through this one listener, not through Input, so that

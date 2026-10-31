@@ -516,6 +516,7 @@ for (const id of ['pname', 'joinCode']) {
   $(id).addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
+    if (e.repeat) return;   // (Enter held down is one press)
     $($('joinCode').value.trim().length === 4 ? 'joinBtn' : 'hostBtn').click();
   });
 }
@@ -528,22 +529,34 @@ $('copyInvite').addEventListener('click', async () => {
   setTimeout(() => { $('copyInvite').textContent = 'Copy Invite'; }, 1500);
 });
 
+// A try that has not answered yet (a code nobody hosts takes a live room 8 s and a direct connection up to 25 s to give up on) is dropped when the player tries
+// again or hosts instead: its late "no such game" must not close the room the player is in by then. So the last connection is closed first, and each one's
+// handlers act only while it is the page's connection. Resolves to the connection, or to null when another try has replaced this one meanwhile.
 async function connect() {
   if (!(await onlineReady)) throw new Error('Online play is not available here.');
-  net = liveRoom ? new RoomNet(liveRoom) : direct ? new PeerNet() : new Net();
-  game.net = net;
-  await net.connect();
-  net.on('error', (msg) => { ui.lobbyError(msg); net.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });
-  net.on('closed', () => {
+  if (net) { const old = net; net = null; try { old.close(); } catch (e) { /* already gone */ } }
+  const n = liveRoom ? new RoomNet(liveRoom) : direct ? new PeerNet() : new Net();
+  net = n;
+  game.net = n;
+  try { await n.connect(); } catch (e) { if (n !== net) return null; throw e; }
+  if (n !== net) return null;   // (dropped meanwhile for another try: that one goes on)
+  n.on('error', (msg) => { if (n !== net) return; asking = null; ui.lobbyError(msg); n.close(); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); });
+  n.on('closed', () => {
+    if (n !== net) return;
     if (game.state === 'playing' && game.mode === 'client') { game.finish(-1, 'Lost connection to the server.'); roomGone('The connection to the room was lost.'); }   // (the end screen is up now: its button must not wait for a room that is gone)
     else if (endScreenBuilt() && !flow.left) roomGone('The connection to the room was lost.');
   });
-  net.on('hostleft', () => {
+  n.on('hostleft', () => {
+    if (n !== net) return;
     if (game.state === 'playing') { game.finish(-1, 'The host left the game.'); roomGone('The host left the game.'); }
     else if (endScreenBuilt()) roomGone('The host left the game.');
     else { ui.lobbyError('The host closed the game.'); $('lobby').classList.add('hidden'); $('menu').classList.remove('hidden'); }
   });
+  return n;
 }
+// The Host or the Join that has not been answered yet: 'host', or the code asked for. A second click on it (a double click, Enter and a click) is the same
+// click; the other button, or another code, drops it and asks anew.
+let asking = null;
 
 // ---------------- the room's seating (the host decides; seats.js has the rules) ----------------
 const heroRoom = () => (heroOn ? { win: heroWin, size: room.size, seats: room.seats } : null);
@@ -647,9 +660,11 @@ function hostHears({ from, d }) {
 }
 
 $('hostBtn').addEventListener('click', async () => {
+  if (asking === 'host') return;
+  asking = 'host';
   rememberName();
   ui.lobbyError('');
-  try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
+  try { if (!(await connect())) return; } catch (e) { asking = null; ui.lobbyError(e.message); return; }
   room.size = heroCount;
   lobby = [{ team: 0, hs: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout(), col: myColor }];
   reseat(seated(), room.slots, room.seats, room.size);
@@ -661,7 +676,7 @@ $('hostBtn').addEventListener('click', async () => {
   for (const b of document.querySelectorAll('#lobbyLength button')) {
     b.onclick = () => { selectLength(b.dataset.l); lobbyBroadcast(); };
   }
-  net.on('created', (m) => { ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); lobbyBroadcast(); });
+  net.on('created', (m) => { asking = null; ui.showLobby(m.code, true); showLobbyClassPicker(); showLobbyLand(true); lobbyBroadcast(); });
   net.on('peer', (m) => {
     if (lobby.some((p) => p.netId === m.id)) return;
     const team = firstFreeSlot(room.slots, seated()), hs = firstFreeSeat(room.seats, room.size, seated());
@@ -694,8 +709,10 @@ $('joinBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   const code = $('joinCode').value.trim().toUpperCase();
   if (code.length !== 4) { ui.lobbyError('Enter the 4-letter room code from the host.'); return; }
-  try { await connect(); } catch (e) { ui.lobbyError(e.message); return; }
-  net.on('joined', (m) => { ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); net.toHost({ k: 'col', col: myColor }); });
+  if (asking === code) return;
+  asking = code;
+  try { if (!(await connect())) return; } catch (e) { asking = null; ui.lobbyError(e.message); return; }
+  net.on('joined', (m) => { asking = null; ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); net.toHost({ k: 'col', col: myColor }); });
   guestData = ({ d }) => {
     if (!d) return;
     if (d.k === 'rematch') guestRematch();

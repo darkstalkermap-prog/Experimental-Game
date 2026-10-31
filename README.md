@@ -166,6 +166,10 @@ around a minute. The included `Dockerfile` also works on Fly.io, Railway or any 
 The host's browser runs the whole battle. Other players control their own hero and receive about 10 updates
 a second. If the host leaves, the game ends. If someone else leaves, an AI lord takes over their castle.
 
+A Host or Join that has not been answered yet (a wrong code takes the claude.ai room 8 seconds and a browser-to-browser connection up to 25 seconds
+to give up on) is dropped when you press the other button or try another code, so its late answer cannot close the room you are in by then; pressing
+the same button twice, or Enter and the button, is one press (`connect` in `src/main.js`).
+
 ## How it works
 
 - **You are the hero** of your castle, in first person, with a sword and shield or a bow, and optionally a
@@ -212,6 +216,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
   along its walls: a small band stays together on the face it comes at, a big host fans out over that face and the two
   beside it (`src/nav.js`).
+- **Slopes**: soldiers and riders do not walk up ground steeper than 45 degrees (the hills that ring the map; every battlefield
+  stays under about 35), and they stay on the ground coming down any slope (`SLOPE_MAX` in `src/units.js`).
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
@@ -425,7 +431,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit. Whatever
   an arrow reaches is hit: a man on a tower roof, on a wall top or a merlon, in a crenel, or an archer of the towers.
   A wall that is badly damaged loses its merlons.
-- **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
+- **Gates** can be broken by anyone. **Walls** can only be breached with catapults. A catapult shells from about 52 m out, or from nearer
+  where that would be off the land (the back walls of the castles on the Small map). When a keep falls its gate goes with it: the ruin stands open.
 - **Death**: your hero respawns in the courtyard of your own keep, wherever you fell (in an enemy castle, at the
   wheel of an engine, on horseback). Each death makes the wait longer. Once your keep falls, you can no longer
   respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
@@ -583,7 +590,7 @@ and hero speed, respawn time, starting gold, and the shop prices in `src/economy
 **Comeback mechanics** (`src/comeback.js`, numbers in `COMEBACK` in `src/config.js`). Losing should be a fight, not a slow defeat.
 All three rules are decided by the host and apply to the AI lords exactly as to people.
 - **Underdog's wage.** From wave 3 on, every second the game weighs each house: the health of its keep, gate and walls, what its
-  soldiers and engines are worth (their price, by health) and half its purse. A house far behind the average of its enemies
+  soldiers and engines are worth (their price, by health) and half its purse (up to 3,000 coins: a hoard is not strength). A house far behind the average of its enemies
   (below 60%, until it climbs above 80%) is paid a bonus wage, 30% to 80% of what it already earns without fighting (the more it
   is behind the more it gets, about 60 to 200 gold a minute by mid-game), paid out in a lump every ten seconds. The HUD shows
   "Underdog's wage +N gold/min" beside the gold, and a toast explains it the first time.
@@ -672,8 +679,8 @@ and the crosshair go. A lord who is out still has the shop, the map and the orde
 
 **Spectate a whole battle.** **Spectate** in the quiet row of the main menu starts the battle the setup describes with nobody of yours in
 it: every house an AI lord (castles set to empty stay empty), War Mode's armies all AI generals', Hero Mode's seats all bots. The first
-preparation is short (10 seconds, War Mode's build 6: the AI has its armies at once). Nothing is earned (no Renown, no records); the end
-screen names the winner and offers **Watch Again**.
+preparation is short (10 seconds, War Mode's build 6: the AI has its armies at once). Nothing is earned (no Renown, no records, and no
+War Mode army is remembered for Repeat last army); the end screen names the winner and offers **Watch Again**.
 
 **Online: the spectator seat.** In the room's lobby, under the castles (or the hero seats), a **Watching** line lists who watches; **Watch
 instead** takes you off your place (it takes no castle or hero seat), **Play instead** (or **Take** on a free place) brings you back. The host
@@ -839,9 +846,14 @@ Soldiers appear in their places at once (+1, +10, +50); −1 / −10 dismiss the
 Archers behind (a deep infantry block, the archers on a long line well behind it, the riders held back). The **battle plan**
 says what infantry, archers and cavalry do when the battle begins: **Hold** (the default: they stay where they were set out
 and fight what comes, archers shoot from where they stand, until you give an order; your hero is free to walk the field),
-Charge, Advance or Follow me. The AI generals keep their own plans.
+Charge, Advance or Follow me. The AI generals keep their own plans. No place of any soldier is ever up the mountains round the map
+(`fieldHalf` in `src/warmap.js`, a few metres inside their foot): a big army whose formation would reach them from a hill near the edge
+(a small map, Archers behind) is set out wider and shallower, and a group sent towards them (Move here, Fall back, an AI general's
+place) forms up at their foot, its shape kept.
 
-**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
+**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale, and
+where that gap is narrow its buttons pack tighter, without the row labels and the groups' line of numbers; it never reaches above the top bar, and the
+toasts and the kill feed keep clear of it) gives orders, as in Bannerlord but fewer of them. Choose a group:
 **1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). Each group has a colour of
 its own, the same everywhere: **yellow** infantry, **green** archers, **blue** cavalry (pale, so they are never taken for a house's).
 The chosen soldiers get a small arrow in their group's colour over their heads (Everyone: each man his group's), and the button lights
@@ -854,7 +866,7 @@ out when the battle begins (Hold, Charge, Advance, Follow me and Attack; Move he
 | F2 | Follow me | Form up behind your hero and follow him (archers behind the infantry, riders on the right), facing the way he walks: he can turn and look round without his men running round him. |
 | F3 | Charge | March on the enemy army nearest the group and fight: each man looks round himself (anyone within 20 m), then marches on a man of that army wherever it stands; archers stop where their bows reach and shoot. |
 | 5 / 6 / 7 | Attack | The **Attack** row has a button for each enemy army in its house's colour, named by it and with its soldiers left (Red 312, Green 280, ...), on 5, 6 and 7 in house order (a beaten army's is struck through). The group marches on that army and fights it: other armies only when they stand in its way (5 m). |
-| F4 | Hold | Stop: form up where they are, facing the enemy. |
+| F4 | Hold | Stop: form up where they are, facing the enemy. A group whose block would stand in another's (riders set out on both wings have their middle among the infantry) forms up where Everyone's Move here puts it: the archers behind the infantry, the riders on its right (else its left); Everyone's middle stays where the order puts it. The same for Advance and Fall back. |
 | T / G | Advance / Fall back | 25 m towards / away from the nearest enemy army (`WAR.forward`), formed up, then hold. |
 | F | Formation | The next formation for the group (or click one): **Line** (a broad front a few ranks deep), **Shield wall** (shoulder to shoulder, shields locked when holding: blocks far more, melee men keep their place, marches slower), **Loose** (3.4 m apart: a giant's club or a fireball catches fewer; good for archers), **Wedge** (an arrowhead that closes a little quicker). |
 
@@ -1035,7 +1047,13 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
   potions, where your soldiers are), and over the abilities a row of labels for the buffs on you; top left the houses, top centre
   the wave and its clock, top right the gold. The orders bar shows only while your army has soldiers; it sits centred in the gap
   between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. On a window
-  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  under 470 HUD pixels tall (1024 × 600 at the largest UI scale) the castle panel is not shown: the hero panel reaches up to it. The tip line and the
+  toasts stand over the orders bar and its row of colour keys however many rows it takes; a tip is centred in the gap between the hero panel and the minimap
+  (as the bar) and never wider than it at the UI scale (it wraps), and where not even a narrow one fits (1024 × 600 at the largest scale) it is not shown. On a
+  narrow HUD (a small window at a large UI scale) the bars under the top panel start below the houses' panel, the kill feed starts below them, the kill feed
+  shows only the newest lines that fit above the minimap (or a command bar that reaches its column) and the toasts only the newest that fit under
+  those bars (measured a few times a second:
+  `stackBottom` and `clearFeed` in `src/flow.js`). HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
   base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a
@@ -1152,7 +1170,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   ready, a bot hero always is, and the timer still ends the preparation by itself. The Hero Game Mode's 30 seconds can be
   skipped the same way; the practice courtyard has no preparation.
 - **Concede / Next battle** (K, twice to confirm, or the button in the game menu) is offered, never forced, when a battle is
-  decided: your keep has fallen; or you are one of the last two castles and the other is clearly winning (the rule and the
+  decided: your keep has fallen; or you are one of the last two castles (castles left empty do not count) and the other is clearly winning (the rule and the
   numbers are `DECIDED` in `src/flow.js`; not while your Last Stand can still be called, that comes first); or, the other way round, you are clearly winning, and the button says **Finish
   the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
   Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
@@ -1161,7 +1179,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   **timed war**. Its tempo is faster, by a `mods` source named `length:short`: a shorter preparation (36 s), a wave every 21 s
   instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
   wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
-  a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
+  a draw; allied lords count as one side; a castle left empty is no side at all). A war that is won sooner ends sooner; the top panel shows the time left, with a word
   of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
   `src/config.js`) the lords hold out, with the comeback rules even more than before: the first castle of a Standard war fell
   after about 12 minutes and only two wars in six were over within 30, while in Short wars the clock decided all six. A

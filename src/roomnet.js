@@ -63,6 +63,7 @@ export class RoomNet {
     try {
       const results = await Promise.allSettled(names.map((n) => this.room.join(n)));
       this.rooms = results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
+      if (this.closed) { this.close(); throw new Error('closed'); }   // (dropped while it was joining: the page has moved on, nothing may be published)
       const failed = results.find((r) => r.status === 'rejected');
       if (failed) {
         this.close();

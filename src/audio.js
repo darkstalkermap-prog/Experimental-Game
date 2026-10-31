@@ -81,7 +81,7 @@ export class Audio {
   gainFor(pos) {
     if (!pos || !this.listener) return 1;
     const d = Math.hypot(pos.x - this.listener.x, pos.z - this.listener.z);
-    return Math.max(0, 1 - d / 90) ** 2;
+    return d < 90 ? (1 - d / 90) ** 2 : 0;   // (a position that is not a number is silent: a NaN gain throws inside the Web Audio calls, and took the frame down)
   }
 
   noise(dur, freq, q, gain, type = 'bandpass', t0 = 0) {

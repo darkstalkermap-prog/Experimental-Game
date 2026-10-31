@@ -309,7 +309,7 @@ export class GroundFX {
       for (const e of list) {
         if (!e.on) continue;
         const age = this.t - e.born;
-        if (age >= e.life || (e.follow && e.follow.alive === false)) { e.on = false; e.mesh.visible = false; continue; }
+        if (age >= e.life || (e.follow && e.follow.alive === false)) { e.on = false; e.mesh.visible = false; e.follow = null; continue; }   // (a shell put away lets go of its hero)
         e.mat.uniforms.uAge.value = age;
         if (e.follow) e.mesh.position.set(e.follow.pos.x, e.follow.pos.y + e.dy, e.follow.pos.z);
         else if (list === this.pillars) { const k = age / e.life, s = e.r0 * (1 - 0.55 * k); e.mesh.scale.set(s, e.h0, s); }

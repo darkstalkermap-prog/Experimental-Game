@@ -31,7 +31,9 @@ function style() {
   styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#specBar { position: absolute; left: 16px; bottom: 16px; width: 360px; padding: 7px 12px 8px; font-size: 14px; line-height: 1.3; }
+/* (as wide as the hero panel it stands in for, 16 + 324 px: the orders bar beside it, Conquest's #command and War Mode's #warCmd, which a lord who has
+   fallen still has, starts at 348 px; at 360 px the two covered each other) */
+#specBar { position: absolute; left: 16px; bottom: 16px; width: 324px; padding: 7px 12px 8px; font-size: 14px; line-height: 1.3; }
 #specBar .sb-out { font-family: Cinzel, Georgia, serif; font-size: 14px; color: #ffb39a; margin-bottom: 4px; }
 #specBar .sb-out:empty { display: none; }
 #specBar .sb-who { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }

@@ -42,6 +42,10 @@ export function layoutField() {
   });
 }
 
+// How far from the middle of the map (each way, x and z) War Mode's places may lie: inside the foot of the ring of mountains round the map (landscape.js:
+// it rises from WORLD.half - 45 and is steeper than 45 degrees a few metres on), with a few metres to spare. The field and the hills are well inside it.
+export const fieldHalf = () => WORLD.half - 50;
+
 // The middle of hill i and the way it faces (towards the middle of the map)
 export function hillAt(i) {
   const a = FIELD.angles[i] || 0;

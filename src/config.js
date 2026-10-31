@@ -109,7 +109,7 @@ export const COMEBACK = {
   // soldiers and engines, and half its purse. Clearly behind the enemy houses' average (below `enter`) it is paid a bonus wage, a share of what
   // it already earns without fighting (`min` when only just behind, `max` when almost beaten), until it climbs back (above `leave`).
   wage: { from: 3, enter: 0.6, leave: 0.8, min: 0.3, max: 0.8, every: 1 },   // `from`: no wage before this wave (the opening is level); `every`: seconds between looks
-  strength: { keep: 1500, gate: 300, walls: 300, purse: 0.5 },   // points for a whole keep, a whole gate, whole walls; a coin counts for `purse` points
+  strength: { keep: 1500, gate: 300, walls: 300, purse: 0.5, purseCap: 3000 },   // points for a whole keep, a whole gate, whole walls; a coin counts for `purse` points (up to `purseCap` coins)
   gateRepair: 0.5,   // rebuilding a gate that has fallen costs this share of GATE_REPAIR_COST
   // Last Stand: once a match, when the keep is below `keep` of its health. The hero is healed (and rises at once if it had fallen); for `time` seconds
   // the house's soldiers and the hero hit `dmg` times as hard and move `speed` times as fast, and the hero takes `heroGuard` of the damage for `heroTime`

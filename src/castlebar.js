@@ -21,7 +21,7 @@ function style() {
   styled = true;
   const s = document.createElement('style');
   s.textContent = `
-#castleBar { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); width: min(400px, calc(100vw - 32px)); box-sizing: border-box; padding: 5px 10px 7px;
+#castleBar { position: absolute; left: 50%; top: 116px; transform: translateX(-50%); width: min(400px, calc(100% - 32px)); box-sizing: border-box; padding: 5px 10px 7px;
   opacity: 0; visibility: hidden; transition: opacity 0.35s, visibility 0s linear 0.35s; pointer-events: none; }
 #castleBar.on { opacity: 1; visibility: visible; transition: opacity 0.35s; }
 #castleBar .ch { display: flex; align-items: baseline; gap: 7px; white-space: nowrap; margin-bottom: 4px; }

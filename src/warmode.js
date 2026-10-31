@@ -12,12 +12,12 @@
 // AI generals command the houses nobody plays. With hundreds of soldiers the snapshot's unit list is packed into a short string (warnet.js).
 // The HUD, the shop panel, the menu rows and the end screen section live in warui.js.
 import * as THREE from 'three';
-import { WAR, UNIT_TYPES, DIFFICULTY, WORLD, clock } from './config.js';
+import { WAR, UNIT_TYPES, DIFFICULTY, clock } from './config.js';
 import { XP } from './heroes.js';
 import { Unit } from './units.js';
 import { attachKit, lordClass } from './lordkit.js';
 import { setSides, allied } from './teams.js';
-import { FIELD, sideSpot, sanitizeWar, warSides } from './warmap.js';
+import { FIELD, sideSpot, sanitizeWar, warSides, fieldHalf } from './warmap.js';
 export { sanitizeWar, warSides, warHills, menuPlan, planOf } from './warmap.js';   // (main.js and the lobby take them from here)
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
@@ -57,12 +57,19 @@ const tmpV = new THREE.Vector3();
 // the front rank he looks at (respawn)
 const REVIEW = [7, 12, 8];
 
-// a point a guest (or the crosshair) gives for Move here: finite, inside the play area -> [x, z], or null
+// a point a guest (or the crosshair) gives for Move here: finite, inside the field (not up the mountains round it: fieldHalf) -> [x, z], or null
 function clampSpot(x, z) {
   x = Number(x); z = Number(z);
   if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
-  const P = WORLD.playHalf - 4;
+  const P = fieldHalf() - 4;
   return [Math.max(-P, Math.min(P, x)), Math.max(-P, Math.min(P, z))];
+}
+// (cx, cz) moved so that a shape reaching r = [minX, maxX, minZ, maxZ] round it lies on the field (fieldHalf) -> [x, z]
+function fitIn(cx, cz, r) {
+  const E = fieldHalf();
+  if (r[1] > E) cx -= r[1] - E; else if (r[0] < -E) cx += -E - r[0];
+  if (r[3] > E) cz -= r[3] - E; else if (r[2] < -E) cz += -E - r[2];
+  return [cx, cz];
 }
 // how many soldiers a rank of formation F holds for n of them, and how wide and deep the block is (riders: WAR.ride times the spacing)
 const rankOf = (n, F) => Math.max(1, Math.min(F.cols || 36, Math.ceil(n / (F.deep || 4))));
@@ -285,8 +292,9 @@ export class WarMode {
         if (why) { if (!quiet) { g.audio.play('deny'); g.ui.toast(why); } return; }
         const n = Math.min(b, d.cap - c[a], this.cap - c.total, Math.floor(f.gold / d.cost));
         f.gold -= n * d.cost;
-        f.war.goldUntil = g.time + 0.6;
+        f.war.goldUntil = g.time + 1.5;   // (a snapshot the host sent before it had the purchase does not undo it: netsync.js)
       }
+      if (op === 'sell') f.war.goldUntil = 0;   // (the refund is the host's to give: its next word on the gold is taken as it is)
       if (op === 'preset') { f.war.preset = a; f.war.pickUntil = g.time + 1.5; }
       if (op === 'plan') { f.war.plan[a] = b; f.war.pickUntil = g.time + 1.5; }
       g.net.toHost({ a: 'war', op, t: a, n: b });
@@ -396,7 +404,13 @@ export class WarMode {
     }
     if (!n) return;
     if (order === 'charge' || order === 'attack') { for (const k of groups) this.charge(lists[k], order === 'attack' ? foe : -1); return; }
-    if (order === 'follow') { this.follow(f, lists); return; }
+    if (order === 'follow') {
+      // (every group that follows him now, not only the ones just ordered: each takes its place beside the others, as Everyone's does. A group sent
+      // after another one was placed as if it were alone, right behind him, in the places the first group already stood in)
+      for (const k of WAR_GROUPS) if (!lists[k] && f.war.plan[k] === 'follow') lists[k] = this.groupList(team, k);
+      this.follow(f, lists);
+      return;
+    }
     ax /= n; az /= n;
     if (order === 'move') {
       const dir = this.towardsEnemy(team, at[0], at[1]), yaw = Math.atan2(dir[0], dir[1]);
@@ -407,22 +421,53 @@ export class WarMode {
       const I = size('inf'), A = size('arch'), C = size('cav');
       const ib = lists.inf.length ? I.d / 2 + 3 + A.d / 2 : 0;
       const cs = lists.inf.length ? I.w / 2 + 6 + C.w / 2 : lists.arch.length ? A.w / 2 + 6 + C.w / 2 : 0;
-      this.formUp(f, 'inf', lists.inf, at[0], at[1], yaw);
-      this.formUp(f, 'arch', lists.arch, at[0] - fx * ib, at[1] - fz * ib, yaw);
-      this.formUp(f, 'cav', lists.cav, at[0] + rx * cs, at[1] + rz * cs, yaw);
+      this.formUpAll(f, [{ k: 'inf', list: lists.inf, x: at[0], z: at[1] }, { k: 'arch', list: lists.arch, x: at[0] - fx * ib, z: at[1] - fz * ib }, { k: 'cav', list: lists.cav, x: at[0] + rx * cs, z: at[1] + rz * cs }], yaw);
       return;
     }
     // hold, forward, back: every group from where its own middle is now, the way to the enemy measured from the middle of all of them
     const dir = this.towardsEnemy(team, ax, az), yaw = Math.atan2(dir[0], dir[1]);
     const step = order === 'forward' ? WAR.forward : order === 'back' ? -WAR.forward : 0;
+    const fx = dir[0], fz = dir[1], rx = fz, rz = -fx;
+    // a group whose block would stand in another's (riders set out on both wings have their middle among the infantry; a group formed up before
+    // may stand there) forms up where Everyone's Move here puts it instead: the archers behind the infantry, the riders on its right, else its left.
+    // Before, the two blocks were given the same places and their men jostled for them for good.
+    const size = (k) => formSize(this.groupList(team, k).length, WAR.formations[f.war.form[k]] || WAR.formations.line, k === 'cav');
+    const blocks = [];   // { k, x, z, w, d }: the blocks of this house that stand formed up (placed now, or before and not ordered now)
+    for (const k of WAR_GROUPS) { const d = f.war.dest[k]; if (!groups.includes(k) && d && FORM_UP[f.war.plan[k]]) blocks.push({ k, x: d.x, z: d.z, ...size(k) }); }
+    const clash = (x, z, S) => blocks.some((b) => {
+      const dx = x - b.x, dz = z - b.z;
+      return Math.abs(dx * rx + dz * rz) < (S.w + b.w) / 2 + 2 && Math.abs(dx * fx + dz * fz) < (S.d + b.d) / 2 + 2;
+    });
+    const items = [];
+    let wx = 0, wz = 0, wn = 0;   // (where the groups ordered together stand, all of them: see below)
     for (const k of groups) {
       const l = lists[k];
       if (!l.length) continue;
       let x = 0, z = 0;
       for (const u of l) { x += u.pos.x; z += u.pos.z; }
-      x /= l.length; z /= l.length;
-      this.formUp(f, k, l, x + dir[0] * step, z + dir[1] * step, yaw);
+      wx += x; wz += z; wn += l.length;
+      x = x / l.length + fx * step; z = z / l.length + fz * step;
+      const S = size(k), I = blocks.find((b) => b.k === 'inf') || blocks.find((b) => b.k === 'arch');
+      if (k !== 'inf' && I && clash(x, z, S)) {
+        if (k === 'arch' && I.k === 'inf') { const b = I.d / 2 + 3 + S.d / 2; x = I.x - fx * b; z = I.z - fz * b; }
+        else {
+          const c = I.w / 2 + 6 + S.w / 2;
+          x = I.x + rx * c; z = I.z + rz * c;
+          if (clash(x, z, S)) { x = I.x - rx * c; z = I.z - rz * c; }
+        }
+      }
+      blocks.push({ k, x, z, ...S });
+      items.push({ k, list: l, x, z });
     }
+    // (several groups ordered together keep the middle of all of them where the order puts it, Hold where they are: a group moved out of another's
+    // block moves the others a little the other way, not the whole army's place)
+    if (items.length > 1) {
+      let ax2 = 0, az2 = 0;
+      for (const it of items) { ax2 += it.x * it.list.length; az2 += it.z * it.list.length; }
+      const sx = wx / wn + fx * step - ax2 / wn, sz = wz / wn + fz * step - az2 / wn;
+      for (const it of items) { it.x += sx; it.z += sz; }
+    }
+    this.formUpAll(f, items, yaw);
   }
 
   // the soldiers in `list` (one group) march on the enemy: on the army of house `foe`, or (-1) on the enemy army nearest the group's middle. Each looks
@@ -491,13 +536,17 @@ export class WarMode {
 
   // group k of house f forms up round (cx, cz) facing yaw, each soldier to the nearest place of the new shape row by row (so the ranks do not cross
   // through each other); the giants stand behind it. spears: the spearmen go to the front ranks (a line that receives riders: config SPEAR)
-  formUp(f, k, list, cx, cz, yaw, spears = false) {
+  // fitted: the caller has already moved the place onto the field (formUpAll)
+  formUp(f, k, list, cx, cz, yaw, spears = false, fitted = false) {
     if (!list.length) return;
-    f.war.dest[k] = { x: cx, z: cz, yaw };
+    // the whole shape on the field: moved in (not pressed out of shape) when a part of it would stand up the mountains round the map (fieldHalf). Fall
+    // back or Move here near the edge, a deep formation on a hill near it, sent groups up the mountainside, where they stood far from their places.
+    if (!fitted) [cx, cz] = fitIn(cx, cz, this.reach(f, k, list, cx, cz, yaw));
     const F = WAR.formations[f.war.form[k]] || WAR.formations.line;
     const men = list.filter((u) => u.alive && !u.isGiant), giants = list.filter((u) => u.alive && u.isGiant);
     const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = fz, rz = -fx;
     const spots = formSpots(men.length, F, k === 'cav');
+    f.war.dest[k] = { x: cx, z: cz, yaw };
     // the soldiers in order: front to back by how far forward each stands, then each rank of them left to right
     const fwd = (u) => (u.pos.x - cx) * fx + (u.pos.z - cz) * fz, lat = (u) => (u.pos.x - cx) * rx + (u.pos.z - cz) * rz;
     const sp = (u) => (spears && u.def.weapon === 'spear' ? 1 : 0);
@@ -509,6 +558,27 @@ export class WarMode {
       i += row;
     }
     giants.forEach((u, j) => { const b = spots.d / 2 + 6, x = (j - (giants.length - 1) / 2) * 8; u.warForm = null; this.holdAt(f, u, cx + rx * x - fx * b, cz + rz * x - fz * b, j, yaw); });
+  }
+
+  // how far group k of house f would reach formed up round (cx, cz) facing yaw (its block, and the giants behind it) -> [minX, maxX, minZ, maxZ]
+  reach(f, k, list, cx, cz, yaw, r = [Infinity, -Infinity, Infinity, -Infinity]) {
+    let men = 0, giants = 0;
+    for (const u of list) if (u.alive) { if (u.isGiant) giants++; else men++; }
+    const S = formSize(men, WAR.formations[f.war.form[k]] || WAR.formations.line, k === 'cav');
+    const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = fz, rz = -fx;
+    const at = (a, b) => { const x = cx + rx * a + fx * b, z = cz + rz * a + fz * b; r[0] = Math.min(r[0], x); r[1] = Math.max(r[1], x); r[2] = Math.min(r[2], z); r[3] = Math.max(r[3], z); };
+    at(-S.w / 2, -S.d / 2); at(S.w / 2, -S.d / 2); at(-S.w / 2, S.d / 2); at(S.w / 2, S.d / 2);
+    if (giants) { const gw = (giants - 1) * 4, gb = S.d / 2 + 6; at(-gw, -gb); at(gw, -gb); }
+    return r;
+  }
+
+  // several groups formed up together ([{ k, list, x, z }], facing yaw), moved onto the field as one so that their shape is kept (one group near the edge
+  // moved in on its own would stand in another's places)
+  formUpAll(f, items, yaw) {
+    const r = [Infinity, -Infinity, Infinity, -Infinity];
+    for (const it of items) if (it.list.length) this.reach(f, it.k, it.list, it.x, it.z, yaw, r);
+    const [x0, z0] = fitIn(0, 0, r);
+    for (const it of items) this.formUp(f, it.k, it.list, it.x + x0, it.z + z0, yaw, false, true);
   }
 
   // the way from (x, z) to the middle of the nearest enemy army (its own facing if there is none) -> [dx, dz], unit length
@@ -553,49 +623,62 @@ export class WarMode {
     const I = [1.55, 1.8], A = [1.8, 2.0], C = [2.9, 3.6];
     const nI = by.inf.length, nA = by.arch.length, nC = by.cav.length;
     const preset = f.war.preset;
-    let back = 0;
-    if (preset === 'wedge') {
-      // an arrowhead: row r holds 2r + 1 men
-      let r = 0, j = 0;
-      for (const u of by.inf) {
-        spots.set(u, [(j - r) * I[0], -r * I[1] * 0.9]);
-        if (++j > 2 * r) { r++; j = 0; }
+    const s = f.war.spot, rx = s.fz, rz = -s.fx, E = fieldHalf();
+    // the preset's shape k times as wide as its own (and so shallower) -> how far its worst place lies past the edge of the field (fieldHalf; 0: none).
+    // A big army on a hill near the edge of a small map (Archers behind, its riders at the back) had its back ranks set out up the mountains round the
+    // map: it is laid out wider instead, as many times as it takes
+    const shape = (k) => {
+      spots.clear();
+      let back = 0;
+      if (preset === 'wedge') {
+        // an arrowhead: row r holds 2r + 1 men
+        let r = 0, j = 0;
+        for (const u of by.inf) {
+          spots.set(u, [(j - r) * I[0], -r * I[1] * 0.9]);
+          if (++j > 2 * r) { r++; j = 0; }
+        }
+        const depth = (r + 1) * I[1] * 0.9;
+        const a = block(by.arch, clampI(Math.sqrt(nA * 2.5) * k, 6, 22 * k), A[0], A[1], 0, -depth - 3);
+        const half = Math.ceil(nC / 2);
+        const c1 = block(by.cav.slice(0, half), clampI((half / 2) * k, 2, 8 * k), C[0], C[1], -(a.w / 2 + 8), -depth - 3);
+        block(by.cav.slice(half), clampI((half / 2) * k, 2, 8 * k), C[0], C[1], a.w / 2 + 8, -depth - 3);
+        back = depth + 3 + Math.max(a.d, c1.d);
+      } else if (preset === 'archers') {
+        const i = block(by.inf, clampI(Math.sqrt(nI * 2.2) * k, 8, 22 * k), I[0], I[1], 0, 0);
+        const a = block(by.arch, clampI((nA / 2) * k, 10, 50 * k), A[0], A[1], 0, -i.d - 12);
+        const c = block(by.cav, clampI((nC / 2) * k, 4, 12 * k), C[0], C[1], 0, -i.d - 12 - a.d - 4);
+        back = i.d + 16 + a.d + c.d;
+      } else {
+        const i = block(by.inf, clampI((nI / 5) * k, 12, 36 * k), I[0], I[1], 0, 0);
+        const a = block(by.arch, clampI(Math.max(i.w / A[0], (nA / 3) * k), 8, 40 * k), A[0], A[1], 0, -i.d - 2.5);
+        const half = Math.ceil(nC / 2), wc = Math.round(3 * k);
+        block(by.cav.slice(0, half), wc, C[0], C[1], -(Math.max(i.w, a.w) / 2 + 3 + C[0]), 0);
+        block(by.cav.slice(half), wc, C[0], C[1], Math.max(i.w, a.w) / 2 + 3 + C[0], 0);
+        back = i.d + 2.5 + a.d;
       }
-      const depth = (r + 1) * I[1] * 0.9;
-      const a = block(by.arch, clampI(Math.sqrt(nA * 2.5), 6, 22), A[0], A[1], 0, -depth - 3);
-      const half = Math.ceil(nC / 2);
-      const c1 = block(by.cav.slice(0, half), clampI(half / 2, 2, 8), C[0], C[1], -(a.w / 2 + 8), -depth - 3);
-      block(by.cav.slice(half), clampI(half / 2, 2, 8), C[0], C[1], a.w / 2 + 8, -depth - 3);
-      back = depth + 3 + Math.max(a.d, c1.d);
-    } else if (preset === 'archers') {
-      const i = block(by.inf, clampI(Math.sqrt(nI * 2.2), 8, 22), I[0], I[1], 0, 0);
-      const a = block(by.arch, clampI(nA / 2, 10, 50), A[0], A[1], 0, -i.d - 12);
-      const c = block(by.cav, clampI(nC / 2, 4, 12), C[0], C[1], 0, -i.d - 12 - a.d - 4);
-      back = i.d + 16 + a.d + c.d;
-    } else {
-      const i = block(by.inf, clampI(nI / 5, 12, 36), I[0], I[1], 0, 0);
-      const a = block(by.arch, clampI(Math.max(i.w / A[0], nA / 3), 8, 40), A[0], A[1], 0, -i.d - 2.5);
-      const half = Math.ceil(nC / 2);
-      block(by.cav.slice(0, half), 3, C[0], C[1], -(Math.max(i.w, a.w) / 2 + 3 + C[0]), 0);
-      block(by.cav.slice(half), 3, C[0], C[1], Math.max(i.w, a.w) / 2 + 3 + C[0], 0);
-      back = i.d + 2.5 + a.d;
-    }
-    by.giant.forEach((u, i) => spots.set(u, [(i - (by.giant.length - 1) / 2) * 8, -back - 6]));
-    const s = f.war.spot, rx = s.fz, rz = -s.fx;
+      by.giant.forEach((u, i) => spots.set(u, [(i - (by.giant.length - 1) / 2) * 8, -back - 6]));
+      let past = 0;
+      for (const p of spots.values()) past = Math.max(past, Math.abs(s.x + rx * p[0] + s.fx * p[1]) - E, Math.abs(s.z + rz * p[0] + s.fz * p[1]) - E);
+      return past;
+    };
+    let bestK = 1, best = Infinity, lastK = 1;
+    for (let k = 1; k < 6; k *= 1.4) { lastK = k; const past = shape(k); if (past < best) { best = past; bestK = k; } if (past <= 0) break; }
+    if (bestK !== lastK) shape(bestK);   // (none fits: the one that comes nearest, and holdAt keeps its odd places on the field)
     let slot = 0;
     for (const u of list) {
       const p = spots.get(u);
       if (!p) continue;
-      const x = s.x + rx * p[0] + s.fx * p[1], z = s.z + rz * p[0] + s.fz * p[1];
-      this.holdAt(f, u, x, z, slot++);
-      if (jump && u.bought >= this.g.time - 0.5) { u.pos.set(x, this.g.physics.terrainHeight(x, z), z); u.mesh.position.copy(u.pos); }
+      this.holdAt(f, u, s.x + rx * p[0] + s.fx * p[1], s.z + rz * p[0] + s.fz * p[1], slot++);
+      const d = u.orderData.pos;
+      if (jump && u.bought >= this.g.time - 0.5) { u.pos.set(d.x, this.g.physics.terrainHeight(d.x, d.z), d.z); u.mesh.position.copy(u.pos); }
     }
   }
 
   // tell u to hold the spot (x, z) itself (exact: units.js takes it as it is), facing yaw (the army's own way by default)
   holdAt(f, u, x, z, slot, yaw = f.war.spot.yaw) {
     u.slot = slot;
-    const data = { pos: new THREE.Vector3(x, 0, z), yaw, exact: true };
+    const E = fieldHalf();   // (never a place up the mountains round the map: formUp and layout keep whole shapes inside, this is for the odd one)
+    const data = { pos: new THREE.Vector3(Math.max(-E, Math.min(E, x)), 0, Math.max(-E, Math.min(E, z))), yaw, exact: true };
     u.setOrder('hold', data);
     u.orderData = data;
     u.foeKind = '';
@@ -767,7 +850,7 @@ export class WarMode {
     const g = this.g;
     return g.factions.filter((f) => f.war).map((f) => {
       const s = this.standing(f.team);
-      return { team: f.team, name: f.name, lord: f.lord, side: f.war.side, start: f.war.start, left: s.n, hero: s.hero, kills: f.kills, mine: f.team === g.localTeam, won: this.result ? this.result.winner >= 0 && allied(f.team, this.result.winner) : false };
+      return { team: f.team, name: f.name, lord: f.lord, side: f.war.side, start: f.war.start, left: s.n, hero: s.hero, kills: f.kills, mine: !g.spectator && f.team === g.localTeam, won: this.result ? this.result.winner >= 0 && allied(f.team, this.result.winner) : false };
     });
   }
 
