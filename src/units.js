@@ -151,7 +151,6 @@ export class Unit {
     if (this.hp > 0 && !this.isGiant && info.melee && (info.parry || amount >= this.maxHp * (sturdy ? 0.2 : 0.12) || info.charge >= 0.9)) {
       this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
     }
-    this.lastAttacker = attacker;
     if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && !allied(attacker.team, this.team)) {
       const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4 || !!this.game.war;   // (War Mode has no walls: a man higher up stands on a slope)
       const closer = !this.target || this.target.isStructure || this.distTo(attacker) < this.distTo(this.target) - 1;
@@ -265,8 +264,12 @@ export class Unit {
     return true;
   }
 
+  // (gone for good: let go of the others, so that a soldier who is gone keeps nobody else's body alive in a chain of the fallen)
   remove() {
     this.game.scene.remove(this.mesh);
+    this.target = this.ignore = this.blockedBy = this.reservedPost = null;
+    const c = this.homeCastle;
+    if (c && c.posts) for (const p of c.posts) if (p.reserved === this) p.reserved = null;
   }
 
   setOrder(order, data = null) {
