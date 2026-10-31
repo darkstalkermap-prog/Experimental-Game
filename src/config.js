@@ -326,6 +326,8 @@ export const WAR = {
   armyCap: 500,
   totalCap: 2000,
   forward: 25,          // metres a group's Advance (and Fall back) order moves it towards (away from) the nearest enemy before it holds
+  // the picture of the battle (wartactics.js: where every house's groups stand, drawn every `look` seconds) and the AI generals who plan from it
+  tactics: { look: 0.5 },
   xpEvery: 30,          // seconds of battle a living hero is paid XP.wave for, as a war mode pays each wave lived through
   // the soldier types for sale (keys of UNIT_TYPES): the gold each costs and how many one house may field
   units: {
@@ -352,6 +354,7 @@ export const WAR = {
     follow: { name: 'Follow me', plan: true, desc: 'Follow your hero, formed up behind him.' },
     move: { name: 'Move here', desc: 'March to the spot on the ground you are looking at, form up there and hold.' },
     back: { name: 'Fall back', desc: 'Fall back 25 m away from the enemy, still facing it, then hold there.' },
+    attack: { name: 'Attack', desc: 'March on that army (the button in its colour) and fight it, whoever else is about; archers shoot it from where their bows reach.' },
   },
   // the formation of each group (the command bar's lower row, F cycles it): the spacing across (sx) and between ranks (sz) in metres for men on foot
   // (riders take `ride` times that), how wide the front is (about `deep` ranks, at most `cols` men a rank) and what else it does (units.js reads the flags)

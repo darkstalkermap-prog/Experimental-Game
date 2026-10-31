@@ -1,14 +1,22 @@
-// War Mode's marks in the world, for the lord giving orders (warui.js drives them; nothing here decides anything):
-//   selection   a small gold arrowhead over the head of every soldier of the group(s) chosen on the command bar (1 / 2 / 3 / 4), none over the others.
-//               One instanced mesh for the whole army (WAR.armyCap instances, one draw call), drawn over everything so it shows through a crowd.
-//   aim         while a group is chosen, a ring on the ground where the crosshair meets it: where Move here (F1) sends them.
-//   banners     where each group was sent (Move here, Advance, Fall back): a banner in the house's colour with the group's number (1 infantry, 2
-//               archers, 3 cavalry) on a ring, as Bannerlord marks a formation's place. Bright while that group is chosen, faint otherwise.
+// War Mode's marks in the world, for the lord giving orders (warui.js drives them; nothing here decides anything). Each group has a colour of its own
+// (GROUP_CSS: infantry yellow, archers green, cavalry blue, pale so they are never taken for a house's), the same on the command bar's buttons, over its
+// men and on its banner:
+//   selection   a small arrowhead in the group's colour over the head of every soldier of the group(s) chosen on the command bar (1 / 2 / 3 / 4; all
+//               three colours for Everyone), none over the others. One instanced mesh for the whole army (WAR.armyCap instances, one draw call), drawn
+//               over everything so it shows through a crowd.
+//   aim         while a group is chosen, a ring on the ground in its colour where the crosshair meets it: where Move here (F1) sends them.
+//   banners     where each group was sent (Move here, Advance, Fall back): a banner in the group's colour with its number (1 infantry, 2 archers, 3
+//               cavalry) under a band of the house's colour, on a ring, as Bannerlord marks a formation's place. Bright while that group is chosen,
+//               faint otherwise.
 // Made once per world (a rematch on the same ground reuses them) and hidden whenever War Mode is not being fought on screen.
 import * as THREE from 'three';
 import { WAR, TEAM_CSS, UNIT_TYPES } from './config.js';
 
 const GROUPS = ['inf', 'arch', 'cav'];
+export const GROUP_CSS = { inf: '#ffd84a', arch: '#7ee08c', cav: '#74c8ff' };
+const GROUP_HEX = GROUPS.map((k) => new THREE.Color(GROUP_CSS[k]));
+const GROUP_DIM = GROUP_HEX.map((c) => c.clone().multiplyScalar(0.62));
+const AIM_ALL = new THREE.Color(0xfff2b0);
 const KIND = { archer: 'arch', cavalry: 'cav' };
 const groupKey = (u) => (u.isGiant ? 'inf' : KIND[UNIT_TYPES[u.type].kind] || 'inf');
 const tmpM = new THREE.Matrix4();
@@ -18,16 +26,18 @@ const tmpD = new THREE.Vector3();
 // a ring keeps about the same size on screen: small at the hero's feet, a few metres across far down the field
 const ringScale = (cam, x, y, z) => Math.max(0.3, Math.min(2.2, Math.hypot(x - cam.x, y - cam.y, z - cam.z) * 0.018));
 
-function flagTexture(n, css) {
+// a group's banner: its colour with its number in dark ink, under a band of the house's colour
+function flagTexture(n, css, house) {
   const c = document.createElement('canvas');
   c.width = 64; c.height = 96;
   const x = c.getContext('2d');
   x.fillStyle = css; x.fillRect(0, 0, 64, 96);
-  x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(0, 0, 64, 6); x.fillRect(0, 90, 64, 6);
-  x.strokeStyle = '#f3e3b0'; x.lineWidth = 4; x.strokeRect(5, 5, 54, 86);
-  x.font = 'bold 54px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.lineWidth = 6; x.strokeStyle = 'rgba(0,0,0,0.6)'; x.strokeText(String(n), 32, 50);
-  x.fillStyle = '#fff6da'; x.fillText(String(n), 32, 50);
+  x.fillStyle = house; x.fillRect(0, 0, 64, 20);
+  x.fillStyle = 'rgba(0,0,0,0.25)'; x.fillRect(0, 20, 64, 3); x.fillRect(0, 90, 64, 6);
+  x.strokeStyle = '#3a2a14'; x.lineWidth = 4; x.strokeRect(5, 5, 54, 86);
+  x.font = 'bold 50px Georgia, serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 5; x.strokeStyle = 'rgba(255,255,255,0.55)'; x.strokeText(String(n), 32, 58);
+  x.fillStyle = '#20160a'; x.fillText(String(n), 32, 58);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
@@ -42,9 +52,11 @@ class Marks {
     // the arrowheads: a four-sided cone pointing down
     const cone = new THREE.ConeGeometry(0.3, 0.6, 4);
     cone.rotateX(Math.PI);
-    const selMat = new THREE.MeshBasicMaterial({ color: 0xffd34d, fog: false, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
+    const selMat = new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false, depthTest: false, depthWrite: false, transparent: true, opacity: 0.95 });
     this.sel = over(new THREE.InstancedMesh(cone, selMat, WAR.armyCap + 8), 20);
     this.sel.count = 0;
+    this.sel.setColorAt(0, GROUP_HEX[0]);   // (a colour per arrow: its man's group)
+    this.selKey = new Int8Array(WAR.armyCap + 8).fill(-1);
     this.group.add(this.sel);
     // the rings (three banners and the aim) and the banners' poles: instanced, a colour each
     const ring = new THREE.RingGeometry(1.6, 2.1, 32);
@@ -73,11 +85,11 @@ class Marks {
     this.group.visible = false;
   }
 
-  // the banners in this house's colour (the palette is the match's own)
+  // the banners: each group's colour under a band of this house's (the palette is the match's own)
   colour(team) {
     if (this.team === team && this.css === TEAM_CSS[team]) return;
     this.team = team; this.css = TEAM_CSS[team];
-    this.flags.forEach((m, i) => { if (m.material.map) m.material.map.dispose(); m.material.map = flagTexture(i + 1, this.css); m.material.needsUpdate = true; });
+    this.flags.forEach((m, i) => { if (m.material.map) m.material.map.dispose(); m.material.map = flagTexture(i + 1, GROUP_CSS[GROUPS[i]], this.css); m.material.needsUpdate = true; });
   }
 
   hide() { this.group.visible = false; }
@@ -93,15 +105,20 @@ class Marks {
     if (sel) {
       const max = this.sel.instanceMatrix.count;
       const bob = Math.sin(t * 4) * 0.12;
+      let recolour = false;
       for (const u of g.units) {
         if (n >= max) break;
         if (!u.alive || u.team !== f.team || u.isHero || u.isCrew) continue;
-        if (sel !== 'all' && groupKey(u) !== sel) continue;
+        const k = groupKey(u);
+        if (sel !== 'all' && k !== sel) continue;
         const d = Math.hypot(u.pos.x - cam.x, u.pos.y - cam.y, u.pos.z - cam.z);
         const s = Math.max(0.35, Math.min(3.2, d * 0.02));   // (about the same size on screen near and far)
         tmpM.makeScale(s, s, s).setPosition(u.pos.x, u.pos.y + (u.height || 1.8) + 0.45 + 0.35 * s + bob, u.pos.z);
+        const ki = k === 'inf' ? 0 : k === 'arch' ? 1 : 2;
+        if (this.selKey[n] !== ki) { this.selKey[n] = ki; this.sel.setColorAt(n, GROUP_HEX[ki]); recolour = true; }   // (only where an arrow changes group)
         this.sel.setMatrixAt(n++, tmpM);
       }
+      if (recolour) this.sel.instanceColor.needsUpdate = true;
     }
     if (this.sel.count !== n || n) { this.sel.count = n; this.sel.instanceMatrix.needsUpdate = true; }
     // the banners where the groups were sent, and the aim
@@ -123,13 +140,14 @@ class Marks {
       const rs = ringScale(cam, d.x, y, d.z);
       tmpM.makeScale(rs, 1, rs).setPosition(d.x, y + 0.15, d.z);
       this.rings.setMatrixAt(r, tmpM);
-      this.rings.setColorAt(r++, tmpC.set(bright ? 0xffd34d : 0xb89a50));
+      this.rings.setColorAt(r++, bright ? GROUP_HEX[i] : GROUP_DIM[i]);
     });
     if (aim) {
       const s = ringScale(cam, aim[0], aim[1], aim[2]) * (0.9 + Math.sin(t * 5) * 0.06);
       tmpM.makeScale(s, 1, s).setPosition(aim[0], aim[1] + 0.15, aim[2]);
       this.rings.setMatrixAt(r, tmpM);
-      this.rings.setColorAt(r++, tmpC.set(0xfff2b0));
+      const gi = GROUPS.indexOf(sel);
+      this.rings.setColorAt(r++, gi >= 0 ? GROUP_HEX[gi] : AIM_ALL);   // (the chosen group's colour; Everyone: pale gold)
     }
     this.rings.count = r; this.poles.count = p;
     this.rings.instanceMatrix.needsUpdate = true;

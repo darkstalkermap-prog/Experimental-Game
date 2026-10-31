@@ -6,9 +6,12 @@
 import { WAR, TEAM_CSS, UNIT_TYPES, clock } from './config.js';
 import { pressReady, readyView, offerFor } from './flow.js';
 import { registerEndSection, onMatchEnd } from './endscreen.js';
-import { warMarks, aimGround } from './warmarks.js';
+import { warMarks, aimGround, GROUP_CSS } from './warmarks.js';
+import { allied, colorName } from './teams.js';
 
 const $ = (id) => document.getElementById(id);
+// a '#rrggbb' colour darker (k < 1) or lighter (k > 1), as 'rgb(...)'
+const shade = (css, k) => { const v = parseInt(String(css).slice(1), 16) || 0; const c = (x) => Math.round(Math.min(255, k <= 1 ? x * k : x + (255 - x) * (k - 1))); return `rgb(${c(v >> 16)},${c((v >> 8) & 255)},${c(v & 255)})`; };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const TYPES = Object.keys(WAR.units);
 const GROUPS = [['inf', 'Infantry'], ['arch', 'Archers'], ['cav', 'Cavalry']];
@@ -19,6 +22,10 @@ const BAR_ORDERS = [['F1', 'move', 'F1'], ['F2', 'follow', 'F2'], ['F3', 'charge
 const FORMS = Object.keys(WAR.formations);
 const PLAN_ORDERS = Object.keys(WAR.orders).filter((k) => WAR.orders[k].plan);
 const GROUP_NAME = { inf: 'Infantry', arch: 'Archers', cav: 'Cavalry', all: 'Everyone' };
+// the Attack row: a button in each enemy house's colour, on 5, 6 and 7 in the order of the houses (the same keys all battle, a beaten army's greyed)
+const FOE_KEYS = ['5', '6', '7'];
+// the orders the bar gives in the build: they are the battle plan (warmode.js BUILD_ORDERS)
+const BUILD_OK = { hold: 1, charge: 1, forward: 1, follow: 1, attack: 1 };
 const groupOfUnit = (u) => (u.isGiant ? 'inf' : UNIT_TYPES[u.type].kind === 'archer' ? 'arch' : UNIT_TYPES[u.type].kind === 'cavalry' ? 'cav' : 'inf');
 // the army each lord led last time, per format (Repeat last army): { counts: { type: n }, preset, plan }
 const lastKey = (fmt) => 'cw-warlast-' + fmt;
@@ -33,7 +40,6 @@ const plural = (n, name) => `${n} ${(n === 1 || name === 'Cavalry' ? name : name
 function saveLast(fmt, o) {
   try { localStorage.setItem(lastKey(fmt), JSON.stringify(o)); } catch (e) { /* storage unavailable */ }
 }
-const COLOR_NAMES = ['Blue', 'Red', 'Green', 'Gold'];
 
 export const WAR_DESC = `No castles: each army musters on a hill of its own, and the battle is fought in the field between. You have ${clock(WAR.buildTime)} (the timer) to buy an army with ${WAR.gold} gold and set it out (Ready starts the battle sooner), then the armies fight to the last man. Your hero fights too.`;
 
@@ -106,6 +112,19 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warCmd .wc-label kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 #warCmd .wc-label { align-self: center; font-family: Cinzel, Georgia, serif; font-size: 14px; color: var(--gold); text-align: right; padding-right: 4px; white-space: nowrap; }
 #warCmd .wc-hint { font-size: 14px; opacity: 0.8; text-align: center; }
+#warCmd .wc-groups button { border-bottom: 3px solid var(--gc, var(--edge)); }
+#warCmd .wc-groups button span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; background: var(--gc, transparent); box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
+#warCmd .wc-groups button[data-g="all"] span::before { background: conic-gradient(${GROUP_CSS.inf} 0 33%, ${GROUP_CSS.arch} 0 66%, ${GROUP_CSS.cav} 0); }
+#warCmd .wc-foes { border-top: 1px solid rgba(224,180,76,0.25); padding-top: 5px; }
+#warCmd .wc-foes button { min-width: 0; padding: 3px 10px 4px; font-size: 14px; white-space: nowrap; flex-direction: row; gap: 6px; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,0.85);
+  background: linear-gradient(var(--hm), var(--hd)); border-color: var(--hl); }
+#warCmd .wc-foes button:hover:not(:disabled) { background: linear-gradient(var(--hc), var(--hd)); border-color: #fff; }
+#warCmd .wc-foes button.on { box-shadow: 0 0 0 2px #fff inset, 0 0 12px var(--hc); }
+#warCmd .wc-foes button:disabled { opacity: 0.35; text-decoration: line-through; cursor: default; }
+#warCmd .wc-foes button i { font-style: normal; font-size: 12px; opacity: 0.9; }
+#warCmd .wc-foes button kbd { margin-right: 0; }
+#warCmd .wc-orders button:disabled { opacity: 0.35; cursor: default; }
+#warCmd .wc-plan { font-size: 13px; color: var(--gold); text-align: center; }
 #warCmd .wc-hint kbd { font-family: inherit; font-size: 14px; border: 1px solid var(--edge); border-radius: 3px; padding: 0 4px; background: rgba(0,0,0,0.35); }
 @media (max-width: 760px) { #warCmd button { min-width: 64px; font-size: 12px; padding: 3px 5px; } #warCmd .wc-label { display: none; } }
 .go-war { margin: 10px auto 4px; max-width: 620px; }
@@ -274,10 +293,16 @@ export class WarUI {
       bar.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && liveWar) { b.blur(); liveWar.ui.clickBar(b); } });
     }
     bar.classList.add('hidden');
-    bar.innerHTML = `<div class="wc-row wc-groups">${BAR_GROUPS.map(([k, id, n]) => `<button data-g="${id}" title="Choose ${id === 'all' ? 'the whole army' : n.toLowerCase()} (${k}): gold arrows mark them"><span><kbd>${k}</kbd>${n}</span><small></small></button>`).join('')}</div>
+    // the enemy houses of this battle, in house order: the Attack row's buttons (5, 6, 7), each in its house's colour and named by it
+    const me = this.g.localTeam;
+    this.foes = this.g.spectator ? [] : this.w.houses.filter((t) => !allied(t, me)).slice(0, FOE_KEYS.length);
+    const foeBtns = this.foes.map((t, i) => `<button data-foe="${t}" style="--hc:${TEAM_CSS[t]};--hm:${shade(TEAM_CSS[t], 0.78)};--hd:${shade(TEAM_CSS[t], 0.45)};--hl:${shade(TEAM_CSS[t], 1.35)}" title="Send the chosen group at ${esc(colorName(t))}'s army (${FOE_KEYS[i]}): its men are fought, others only when they stand in the way"><kbd>${FOE_KEYS[i]}</kbd><span>${esc(colorName(t))}</span><i></i></button>`).join('');
+    bar.innerHTML = `<div class="wc-plan hidden">Orders given now are your battle plan: they are carried out when the battle begins</div>
+      <div class="wc-row wc-groups">${BAR_GROUPS.map(([k, id, n]) => `<button data-g="${id}" style="--gc:${id === 'all' ? 'var(--gold)' : GROUP_CSS[id]}" title="Choose ${id === 'all' ? 'the whole army' : n.toLowerCase()} (${k}): arrows in ${id === 'all' ? 'each group\'s' : 'its'} colour mark them"><span><kbd>${k}</kbd>${n}</span><small></small></button>`).join('')}</div>
       <div class="wc-row wc-orders hidden">${BAR_ORDERS.map(([k, id]) => `<button data-c="${id}" title="${esc(WAR.orders[id].desc)}"><span><kbd>${k}</kbd>${esc(WAR.orders[id].name)}</span></button>`).join('')}</div>
+      <div class="wc-row wc-foes hidden"><span class="wc-label">Attack</span>${foeBtns}</div>
       <div class="wc-row wc-forms hidden"><span class="wc-label">Formation <kbd>F</kbd></span>${FORMS.map((id) => `<button data-f="${id}" title="${esc(WAR.formations[id].desc)}"><span>${esc(WAR.formations[id].name)}</span></button>`).join('')}</div>
-      <div class="wc-hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> choose a group, then <kbd>F1</kbd> move here · <kbd>F2</kbd> follow · <kbd>F3</kbd> charge · <kbd>F4</kbd> hold · <kbd>T</kbd> / <kbd>G</kbd> advance / fall back · <kbd>F</kbd> formation</div>`;
+      <div class="wc-hint"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> choose a group, then <kbd>F1</kbd> move here · <kbd>F2</kbd> follow · <kbd>F3</kbd> charge · <kbd>F4</kbd> hold · <kbd>T</kbd> / <kbd>G</kbd> advance / fall back · ${this.foes.map((t, i) => `<kbd>${FOE_KEYS[i]}</kbd>`).join(' ')} attack ${this.foes.length > 1 ? 'an army by its colour' : 'the enemy'} · <kbd>F</kbd> formation</div>`;
     this.el.bar = bar;
     this.el.barGroups = [...bar.querySelectorAll('[data-g]')].map((b) => ({ b, id: b.dataset.g, small: b.querySelector('small'), txt: '' }));
     this.el.barOrders = [...bar.querySelectorAll('[data-c]')];
@@ -285,6 +310,9 @@ export class WarUI {
     this.el.barOrderRow = bar.querySelector('.wc-orders');
     this.el.barFormRow = bar.querySelector('.wc-forms');
     this.el.barHint = bar.querySelector('.wc-hint');
+    this.el.barPlan = bar.querySelector('.wc-plan');
+    this.el.barFoeRow = bar.querySelector('.wc-foes');
+    this.el.barFoes = [...bar.querySelectorAll('[data-foe]')].map((b) => ({ b, team: +b.dataset.foe, i: b.querySelector('i'), txt: '' }));
     this.shown = {};
   }
 
@@ -293,13 +321,19 @@ export class WarUI {
     this.sel = this.sel === id && id !== 'all' ? 'all' : id;   // (the same key twice: everyone)
     this.t = 0;
   }
-  order(cmd) {
+  order(cmd, foe = -1) {
     if (!this.sel) this.sel = 'all';   // (an order before any group was chosen goes to everyone)
     const at = cmd === 'move' ? aimGround(this.g) : null;
-    if (!this.w.localCommand(this.sel, cmd, at && [at[0], at[2]])) return;
-    const say = { move: 'move there and hold!', charge: 'charge!', hold: 'hold where you stand!', forward: `advance ${WAR.forward} m and hold!`, back: `fall back ${WAR.forward} m and hold!`, follow: 'follow me!' }[cmd];
-    this.g.ui.toast(`${GROUP_NAME[this.sel]}: ${say}`);
+    if (!this.w.localCommand(this.sel, cmd, at && [at[0], at[2]], foe)) return;
+    const say = { move: 'move there and hold!', charge: 'charge!', hold: 'hold where you stand!', forward: `advance ${WAR.forward} m and hold!`, back: `fall back ${WAR.forward} m and hold!`, follow: 'follow me!', attack: `attack ${colorName(foe)}!` }[cmd];
+    this.g.ui.toast(`${GROUP_NAME[this.sel]}: ${say}${this.w.fighting ? '' : ' (when the battle begins)'}`);
     this.t = 0;
+  }
+  // the Attack row's i-th army (5, 6, 7 or a click)
+  attack(i) {
+    const t = this.foes[i];
+    if (t === undefined) return;
+    this.order('attack', t);
   }
   // a formation for the chosen group (F: the next one after its own; everyone: after the infantry's)
   form(id) {
@@ -312,36 +346,65 @@ export class WarUI {
     this.t = 0;
   }
   clickBar(b) {
-    if (this.g.state !== 'playing' || !this.w.fighting) return;
+    if (this.g.state !== 'playing' || this.w.panelOpen) return;
     if (b.dataset.g) this.select(b.dataset.g);
     else if (b.dataset.c) this.order(b.dataset.c);
+    else if (b.dataset.foe) this.order('attack', +b.dataset.foe);
     else if (b.dataset.f) this.form(b.dataset.f);
   }
+  // the bar: in the fight, and in the build while the army panel is closed (its orders are then the battle plan)
   refreshBar() {
     const g = this.g, w = this.w, f = g.localFaction, el = this.el;
-    const show = w.fighting && g.state === 'playing' && !g.spectator && !!f && !!f.war && !f.eliminated;
+    const show = g.state === 'playing' && (w.fighting || !w.panelOpen) && !g.spectator && !!f && !!f.war && !f.eliminated;
     if (this.shown.bar !== show) { this.shown.bar = show; el.bar.classList.toggle('hidden', !show); }
     if (!show) return;
+    const build = !w.fighting;
+    if (this.shown.build !== build) {
+      this.shown.build = build;
+      el.barPlan.classList.toggle('hidden', !build);
+      for (const b of el.barOrders) b.disabled = build && !BUILD_OK[b.dataset.c];
+    }
     const n = this.barN || (this.barN = { inf: 0, arch: 0, cav: 0, all: 0 });
     n.inf = n.arch = n.cav = 0;
-    for (const u of g.units) if (u.alive && u.team === f.team && !u.isHero && !u.isCrew) n[groupOfUnit(u)]++;
+    const foeN = this.foeN || (this.foeN = [0, 0, 0, 0]);
+    foeN.fill(0);
+    for (const u of g.units) {
+      if (!u.alive || u.isHero || u.isCrew) continue;
+      if (u.team === f.team) n[groupOfUnit(u)]++;
+      else if (u.team >= 0 && u.team < 4) foeN[u.team]++;
+    }
     n.all = n.inf + n.arch + n.cav;
-    const plan = f.war.plan, fm = f.war.form;
-    const same = plan.inf === plan.arch && plan.arch === plan.cav ? plan.inf : null;
+    const plan = f.war.plan, fm = f.war.form, foe = f.war.foe;
+    const name = (k) => (plan[k] === 'attack' && foe[k] >= 0 ? `Attack ${colorName(foe[k])}` : WAR.orders[plan[k]].name);
+    const same = name('inf') === name('arch') && name('arch') === name('cav') ? name('inf') : null;
     const sameF = fm.inf === fm.arch && fm.arch === fm.cav ? fm.inf : null;
     for (const o of el.barGroups) {
-      const cur = o.id === 'all' ? same : plan[o.id], cf = o.id === 'all' ? sameF : fm[o.id];
-      const txt = `${n[o.id]} · ${cur ? WAR.orders[cur].name : 'mixed orders'}${o.id === 'all' && !cf ? '' : ' · ' + WAR.formations[cf].name}`;
+      const cur = o.id === 'all' ? same : name(o.id), cf = o.id === 'all' ? sameF : fm[o.id];
+      const txt = `${n[o.id]} · ${cur || 'mixed orders'}${o.id === 'all' && !cf ? '' : ' · ' + WAR.formations[cf].name}`;
       if (o.txt !== txt) { o.txt = txt; o.small.textContent = txt; }
       o.b.classList.toggle('sel', this.sel === o.id);
       o.b.classList.toggle('none', !n[o.id]);
     }
     const on = !!this.sel;
-    if (this.shown.barOn !== on) { this.shown.barOn = on; el.barOrderRow.classList.toggle('hidden', !on); el.barFormRow.classList.toggle('hidden', !on); el.barHint.classList.toggle('hidden', on); }
+    if (this.shown.barOn !== on) {
+      this.shown.barOn = on;
+      for (const r of [el.barOrderRow, el.barFormRow, el.barFoeRow]) r.classList.toggle('hidden', !on);
+      el.barHint.classList.toggle('hidden', on);
+    }
     if (!on) return;
-    const cur = this.sel === 'all' ? same : plan[this.sel], curF = this.sel === 'all' ? sameF : fm[this.sel];
+    const ks = this.sel === 'all' ? ['inf', 'arch', 'cav'] : [this.sel];
+    const cur = ks.every((k) => plan[k] === plan[ks[0]]) ? plan[ks[0]] : null;
+    const curFoe = cur === 'attack' && ks.every((k) => foe[k] === foe[ks[0]]) ? foe[ks[0]] : -1;
+    const curF = this.sel === 'all' ? sameF : fm[this.sel];
     for (const b of el.barOrders) b.classList.toggle('on', b.dataset.c === cur);
     for (const b of el.barForms) b.classList.toggle('on', b.dataset.f === curF);
+    for (const o of el.barFoes) {
+      const F = g.factions[o.team], out = !F || F.eliminated;
+      const txt = out ? 'beaten' : String(foeN[o.team]);
+      if (o.txt !== txt) { o.txt = txt; o.i.textContent = txt; }
+      if (o.b.disabled !== out) o.b.disabled = out;
+      o.b.classList.toggle('on', o.team === curFoe);
+    }
   }
 
   // ---- Repeat last army ----
@@ -351,7 +414,10 @@ export class WarUI {
     if (!f || !f.war) return;
     const c = w.counts(f.team), counts = {};
     for (const t of TYPES) if (c[t]) counts[t] = c[t];
-    if (c.total) saveLast(w.format, { counts, preset: f.war.preset, plan: { ...f.war.plan } });
+    // (an army sent at a house is remembered as a charge: next battle's houses are others)
+    const plan = {};
+    for (const [k] of GROUPS) plan[k] = f.war.plan[k] === 'attack' ? 'charge' : f.war.plan[k];
+    if (c.total) saveLast(w.format, { counts, preset: f.war.preset, plan });
   }
   // buy it again, as much as the gold and the caps allow (worked out here, so a guest can say at once what could not be bought; the host checks every
   // buy again), then the formation and the plan
@@ -436,10 +502,11 @@ export class WarUI {
     }
     if (w.panelOpen || g.ui.shopOpen) return;
     if (i.hit('KeyM')) g.ui.toggleMap();
-    if (g.ui.mapOpen || !w.fighting) return;
-    // the command bar (the hero's weapon is on the wheel or X in War Mode: player.js)
+    if (g.ui.mapOpen || g.spectator) return;
+    // the command bar, in the fight and in the build (its orders are then the battle plan); the hero's weapon is on the wheel or X in War Mode: player.js
     for (const [k, id] of BAR_GROUPS) if (i.hit('Digit' + k)) this.select(id);
     for (const [, id, code] of BAR_ORDERS) if (i.hit(code)) this.order(id);
+    FOE_KEYS.forEach((k, j) => { if (i.hit('Digit' + k)) this.attack(j); });
     if (i.hit('KeyF')) this.form(null);
   }
 
@@ -479,13 +546,13 @@ export class WarUI {
   // the marks in the world (warmarks.js): over the chosen soldiers, where the crosshair would send them, and where each group was sent
   marks(dt) {
     const g = this.g, w = this.w, f = g.localFaction;
-    const on = w.fighting && !g.spectator && !!f && !!f.war && !f.eliminated && !w.panelOpen;
+    const on = !g.spectator && !!f && !!f.war && !f.eliminated && !w.panelOpen;
     if (!on) { if (this.mk) this.mk.hide(); return; }
     if (!this.mk) this.mk = warMarks(g.scene);
     this.markT = (this.markT || 0) + dt;
     const n = this.barN || { inf: 1, arch: 1, cav: 1 };
     // (the aim ring only while a group is chosen and the hero looks out over the field: Move here goes there)
-    const aim = this.sel && g.player.alive && !g.ui.shopOpen && !g.ui.mapOpen ? aimGround(g) : null;
+    const aim = this.sel && w.fighting && g.player.alive && !g.ui.shopOpen && !g.ui.mapOpen ? aimGround(g) : null;
     this.mk.update(g, f, this.sel, aim, this.markT, n);
   }
 
@@ -527,7 +594,7 @@ export class WarUI {
         let n = 0, start = 0;
         for (const t of side) { n += w.standing(t).n; start += g.factions[t].war.start || 0; }
         const out = side.every((t) => g.factions[t].eliminated);
-        const name = side.length > 1 ? side.map((t) => COLOR_NAMES[t]).join(' + ') : side[0] === g.localTeam && !g.spectator ? 'You' : g.factions[side[0]].name.replace(/^House /, '');
+        const name = side.length > 1 ? side.map((t) => colorName(t)).join(' + ') : side[0] === g.localTeam && !g.spectator ? 'You' : g.factions[side[0]].name.replace(/^House /, '');
         const k = start ? Math.max(0, Math.min(1, n / start)) : 0;
         return `<span class="wt-side${out ? ' out' : ''}"><b style="color:${TEAM_CSS[side[0]]}">${esc(name)}</b><span>${n} / ${start}</span><span class="wt-bar"><i style="width:${(k * 100).toFixed(0)}%;background:${TEAM_CSS[side[0]]}"></i></span></span>`;
       });

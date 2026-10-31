@@ -622,8 +622,9 @@ export class Game {
     return null;
   }
 
-  // Nearest hostile character or siege engine for an AI unit.
-  findEnemy(unit, radius, anchor, leash, skip = null) {
+  // Nearest hostile character or siege engine for an AI unit. only: a team (War Mode: the army a charge was sent at) whose men alone are looked for,
+  // others only within `near` metres (in the way); -1 for anyone
+  findEnemy(unit, radius, anchor, leash, skip = null, only = -1, near = 0) {
     let best = null, bd = Infinity;
     // a swordsman of the garrison inside his sealed castle (the gate standing, no breach) cannot reach anyone outside the
     // walls: the gate does not open for him (gateShouldOpen), so he leaves them to the archers instead of crowding the gateway
@@ -635,7 +636,8 @@ export class Game {
       if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
-      if (!unit.ranged && o.pos.y - unit.pos.y > 2.4) return; // up on a wall: unreachable
+      if (only >= 0 && o.team !== only && d > near) return;
+      if (!unit.ranged && o.pos.y - unit.pos.y > 2.4 && !this.war) return; // up on a wall: unreachable (War Mode has no walls: higher up a slope is not out of reach)
       if (sealed && !sealed.isInside(o.pos, -1)) return;
       if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;
       let score = d;
@@ -659,6 +661,24 @@ export class Game {
       }
     }
     for (const s of this.siege) consider(s);
+    return best;
+  }
+
+  // The nearest foe out in the field (not behind his own walls: an army is sent at those with Assault) for an army soldier on Charge with nobody within
+  // reach (Conquest, King of the Hill), looked for over a sample of the field as findEnemy does; null when there is none
+  fieldFoe(unit) {
+    let best = null, bd = Infinity;
+    const look = (o) => {
+      if (!o.alive || allied(o.team, unit.team) || o.drive || o.isCrew) return;
+      const c = o.homeCastle || (o.isPlayer && this.castles[o.team]);
+      if (c && !c.fallen && c.isInside(o.pos, 1)) return;
+      if (o.post) return;
+      const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
+      if (d < bd) { bd = d; best = o; }
+    };
+    const n = this.units.length, step = n > SCAN_ALL ? Math.ceil(n / SCAN_ALL) : 1;
+    for (let i = step > 1 ? unit.id % step : 0; i < n; i += step) look(this.units[i]);
+    for (const h of this.humans) look(h);
     return best;
   }
 
@@ -1128,6 +1148,7 @@ export class Game {
       if (!data) return;
       label = `Assault ${this.factions[data.team].name}!`;
     } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
+    if (cmd === 'follow' && f.hero) f.hero.march = null;   // (the column forms up behind him as he faces now, then follows the way he walks: units.js followSpot)
     troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
     // soldiers drafted into the army later take up the standing order
     if (group === 'all') f.armyOrder = { cmd, data: cmd === 'hold' || cmd === 'assault' ? data : null };

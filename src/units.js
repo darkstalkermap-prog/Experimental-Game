@@ -10,6 +10,19 @@ import { mods } from './mods.js';
 import { groundMul } from './biometwist.js';
 
 const tmp = new THREE.Vector3();
+// how far a War Mode soldier on Charge looks round himself for a foe before he marches on the army his group was sent at (an archer looks as far as he
+// shoots): Unit.think, warmode.js chargeFoe
+const CHARGE_LOOK = 24;
+// the way a hero has been walking, for the column behind him (followSpot): his facing until he has walked MARCH_STEP metres, then the way he went, kept
+// until he has gone as far again. A jump (a respawn) starts it again from his facing.
+const MARCH_STEP = 5;
+function marchYaw(h) {
+  let m = h.march;
+  const dx = m ? h.pos.x - m.x : 0, dz = m ? h.pos.z - m.z : 0, d2 = dx * dx + dz * dz;
+  if (!m || d2 > 900) m = h.march = { x: h.pos.x, z: h.pos.z, yaw: h.yaw };
+  else if (d2 > MARCH_STEP * MARCH_STEP) { m.yaw = Math.atan2(dx, dz); m.x = h.pos.x; m.z = h.pos.z; }
+  return m.yaw;
+}
 // the rule modifier `speed` (a Battle Decree), read from the rules only when they change and not for every step of every soldier
 let marchVer = -1, marchMul = 1;
 let NEXT_ID = 1;
@@ -82,6 +95,9 @@ export class Unit {
     this.army = false;     // a bought troop that follows its lord and takes orders (otherwise it holds the garrison)
     this.warForm = null;   // War Mode: the formation of the soldier's group (WAR.formations) and, while it follows the hero, its place behind him
     this.warFollow = null;
+    this.foeTeam = -1;     // War Mode, on Charge: the house whose army his group marches on (-1: none chosen), and how near a man of another house
+    this.foeNear = 0;      // must be to be fought on the way (warmode.js command)
+    this.lookT = 0;        // (a charge's next look for a nearer foe)
     this.isCrew = !!t.crew;
     this.crewOf = null;    // the siege engine this soldier is manning, and which seat
     this.crewSlot = 0;
@@ -134,7 +150,7 @@ export class Unit {
     }
     this.lastAttacker = attacker;
     if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && !allied(attacker.team, this.team)) {
-      const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4;
+      const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4 || !!this.game.war;   // (War Mode has no walls: a man higher up stands on a slope)
       const closer = !this.target || this.target.isStructure || this.distTo(attacker) < this.distTo(this.target) - 1;
       if (reachable && closer) this.target = attacker;
     }
@@ -285,6 +301,20 @@ export class Unit {
     this.takeDamage(25, null);
   }
 
+  // A soldier's place in the column behind a hero he follows (out: a vector to fill). The column faces the way the hero has been walking, not where he
+  // looks: turning on the spot or looking round (a lord watching the field) used to swing the whole column round him, and his men ran in circles about
+  // him. W: War Mode's place of the soldier's group (warmode.js follow), or null for the house's formation (Conquest).
+  followSpot(hero, out) {
+    const fac = this.game.factions[this.team];
+    const W = this.warFollow;
+    const F = W || FORMATIONS[fac.formation] || FORMATIONS.line;
+    const cols = W ? W.cols : Math.min(F.cols, 6);
+    const row = Math.floor(this.slot / cols), col = (this.slot % cols) - (cols - 1) / 2;
+    const yaw = marchYaw(hero), fx = Math.sin(yaw), fz = Math.cos(yaw);
+    const back = 3 + row * F.sz + (W ? W.back : 0), side = col * F.sx + (W ? W.side : 0);
+    return out.set(hero.pos.x - fx * back + fz * side, 0, hero.pos.z - fz * back - fx * side);
+  }
+
   // --- decision making (runs a few times per second) ---
   think() {
     const g = this.game;
@@ -298,6 +328,8 @@ export class Unit {
     const home = this.homeCastle;
     let anchor = null, engage = 0, leash = Infinity;
     const rng = this.ranged ? this.range : 0;
+    // a War Mode soldier on Charge (or Attack: foeTeam is the army he was sent at) marches on a real enemy wherever he stands (warmode.js chargeFoe)
+    const far = order === 'charge' && this.army && !!g.war;
 
     switch (order) {
       case 'defend': {
@@ -308,13 +340,8 @@ export class Unit {
       }
       case 'follow': {
         const hero = fac.hero;
-        const W = this.warFollow;   // (War Mode: the group's own formation and its place behind the hero, beside the other groups: warmode.js)
-        const F = W || FORMATIONS[fac.formation] || FORMATIONS.line;
-        const cols = W ? W.cols : Math.min(F.cols, 6);
-        const row = Math.floor(this.slot / cols), col = (this.slot % cols) - (cols - 1) / 2;
-        const fx = Math.sin(hero.yaw), fz = Math.cos(hero.yaw);
-        const back = 3 + row * F.sz + (W ? W.back : 0), side = col * F.sx + (W ? W.side : 0);
-        tmp.set(hero.pos.x - fx * back + fz * side, 0, hero.pos.z - fz * back - fx * side);
+        // (War Mode: the group's own formation and its place behind the hero, beside the other groups: warmode.js)
+        this.followSpot(hero, tmp);
         this.goal = outOfKeep(g.castleAt(tmp), tmp, this.radius).clone();   // (his place behind a lord who stands with his back to a keep is at its foot)
         engage = this.ranged ? Math.min(this.range, 32) : 10;
         anchor = hero.pos; leash = 18;
@@ -339,7 +366,8 @@ export class Unit {
         break;
       }
       case 'charge':
-        engage = 160; anchor = null;
+        // (War Mode: a look round himself, as far as his bow carries; past it the enemy army his group was sent at, wherever it stands: see below)
+        engage = far ? Math.max(rng, CHARGE_LOOK) : 160; anchor = null;
         break;
       case 'assault':
         engage = this.ranged ? this.range * 0.9 : 13;
@@ -347,11 +375,20 @@ export class Unit {
     }
 
     // keep current target if still reasonable
+    const charging = order === 'charge' && this.army;   // (an army sent on the enemy by its lord: it hunts it down, see below)
     if (this.target && !this.target.isStructure) {
       const d = this.distTo(this.target);
-      const tooFar = d > Math.max(engage, rng) * 1.5 + 4 || (anchor && leash < Infinity && Math.hypot(this.target.pos.x - anchor.x, this.target.pos.z - anchor.z) > leash + 8);
-      const unreachable = !this.ranged && this.target.pos.y - this.pos.y > 2.4;
-      if (tooFar || unreachable) this.target = null;
+      if (charging) {
+        // a charge marches on its man however far off he is; while he is far, once a second it looks round for a nearer one, so the first foe it
+        // meets is the one it fights (not a man in the back ranks it picked from across the field)
+        if (d > rng + 6 && g.time > this.lookT) {
+          this.lookT = g.time + 1;
+          const n = g.findEnemy(this, engage, null, Infinity, this.ignore, this.foeTeam, this.foeNear);
+          if (n && this.distTo(n) < d - 2) this.target = n;
+        }
+      } else if (d > Math.max(engage, rng) * 1.5 + 4 || (anchor && leash < Infinity && Math.hypot(this.target.pos.x - anchor.x, this.target.pos.z - anchor.z) > leash + 8)) this.target = null;
+      // (a man up on a wall is out of a sword's reach; War Mode has no walls, only slopes, and a foe higher up the hill is fought like any other)
+      if (this.target && !this.ranged && !g.war && this.target.pos.y - this.pos.y > 2.4) this.target = null;
     }
     if (this.ignore && g.time > this.ignoreT) this.ignore = null;
     // an archer defending the castle goes up onto the walls first, even with the enemy in sight: from a slot in the
@@ -359,8 +396,11 @@ export class Unit {
     if (order === 'defend' && this.ranged && !this.post && home && !home.fallen && g.freePost(home, this)
         && !(this.target && !this.target.isStructure && this.distTo(this.target) < 7)) this.target = null;
     else if (!this.target || this.target.isStructure) {
-      const t = g.findEnemy(this, engage, anchor, leash, this.ignore);
+      const t = g.findEnemy(this, engage, anchor, leash, this.ignore, charging ? this.foeTeam : -1, this.foeNear);
+      // nobody within reach: a charge marches on a real foe all the same (War Mode: a man of the army his group was sent at, wherever it is; Conquest:
+      // the nearest foe out in the field). Before, it went back to its lord and stood about him, the whole army crowded round his feet.
       if (t) this.target = t;
+      else if (charging) this.target = (far ? g.war.chargeFoe(this) : g.fieldFoe(this)) || null;
     }
 
     if (!this.target || this.target.isStructure) {
@@ -377,8 +417,10 @@ export class Unit {
           this.goal = home.defendPts[this.slot % home.defendPts.length];
         }
       } else if (order === 'charge') {
-        // nothing to fight anywhere: regroup with the hero or go home
-        if (fac && fac.hero && fac.hero.alive) this.goal = fac.hero.pos.clone();
+        // nothing to fight anywhere: regroup in the column behind the hero (not on his feet: a whole army made for one point and milled round him), or
+        // go home; a War Mode army with nobody left to fight stands where it is
+        if (g.war) this.goal = null;
+        else if (fac && fac.hero && fac.hero.alive) this.goal = this.followSpot(fac.hero, new THREE.Vector3());
         else if (home && !home.fallen) this.goal = home.defendPts[this.slot % home.defendPts.length];
         else this.goal = null;
       } else if (order === 'assault') {

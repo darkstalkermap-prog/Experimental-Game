@@ -21,6 +21,7 @@ export { sanitizeWar, warSides, warHills, menuPlan, planOf } from './warmap.js';
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
 import { WarUI } from './warui.js';
+import { Picture, chargeFoe } from './wartactics.js';
 
 export const WAR_TYPES = Object.keys(WAR.units);
 export const isWarType = (t) => typeof t === 'string' && Object.prototype.hasOwnProperty.call(WAR.units, t);
@@ -35,8 +36,12 @@ export const FORMS = Object.keys(WAR.formations);
 const DEFAULT_PLAN = { inf: 'hold', arch: 'hold', cav: 'hold' };
 const AI_PLAN = { inf: 'charge', arch: 'hold', cav: 'charge' };
 const DEFAULT_FORM = { inf: 'line', arch: 'line', cav: 'line' };
+const NO_FOE = { inf: -1, arch: -1, cav: -1 };   // (the army each group was sent at with Attack: a house's team, -1 for none)
 // the orders that end with the group formed up and holding at a spot (the spot is kept in f.war.dest: the command bar's marker shows it)
 const FORM_UP = { hold: 1, forward: 1, back: 1, move: 1 };
+// the orders the command bar gives in the build: they are the battle plan, carried out when the battle begins (a spot to go to, or back from, is for
+// the battle itself)
+const BUILD_ORDERS = { hold: 1, charge: 1, forward: 1, follow: 1, attack: 1 };
 const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
 
 // AI generals: how each likes to spend its gold (shares of the purse by type)
@@ -110,6 +115,8 @@ export class WarMode {
     this.panelOpen = false;
     this.reviewPose = null;   // where the local hero was put for the build ({ x, z, yaw }: respawn)
     this.xpT = WAR.xpEvery;
+    this.picture = new Picture(this);   // (where every house's groups stand, drawn a few times a second: wartactics.js)
+    this.lookT = 0;
     this.ui = new WarUI(this);
   }
 
@@ -129,7 +136,7 @@ export class WarMode {
       if (!houses.includes(f.team)) { f.eliminated = true; f.gold = 0; f.hero = null; continue; }
       const si = sides.findIndex((s) => s.includes(f.team)), side = sides[si];
       const spot = sideSpot(si, sides.length, side.indexOf(f.team), side.length);
-      f.war = { side: si, spot, preset: 'line', plan: { ...DEFAULT_PLAN }, form: { ...DEFAULT_FORM }, dest: { inf: null, arch: null, cav: null }, start: 0, worth: 0, pickUntil: 0 };
+      f.war = { side: si, spot, preset: 'line', plan: { ...DEFAULT_PLAN }, form: { ...DEFAULT_FORM }, dest: { inf: null, arch: null, cav: null }, foe: { ...NO_FOE }, start: 0, worth: 0, pickUntil: 0 };
       // (an AI side with fewer houses than the biggest side, e.g. one general against three lords in co-op, gets more gold: it buys better soldiers)
       const outnumbered = Math.max(...sides.map((x) => x.length)) / side.length;
       f.gold = f.isPlayer ? WAR.gold : Math.round(WAR.gold * (DIFFICULTY[g.difficultyName] || DIFFICULTY.normal).aiGold * outnumbered);
@@ -256,6 +263,13 @@ export class WarMode {
     if (!f || !f.war || !WAR_GROUPS.includes(group) || !PLAN_ORDERS.includes(order)) return;
     if (order === 'follow' && !f.isPlayer) return;
     f.war.plan[group] = order;
+    f.war.foe[group] = -1;
+  }
+
+  // is `foe` a house that `team` can send an army at (in this battle, of another side, not yet beaten)?
+  isFoe(team, foe) {
+    const F = Number.isInteger(foe) ? this.g.factions[foe] : null;
+    return !!(F && F.war && this.houses.includes(foe) && !allied(foe, team) && !F.eliminated);
   }
 
   // the local lord's clicks in the shop and the command bar: done at once in the battle's own simulation, asked of the host by a guest (shown at once,
@@ -298,33 +312,43 @@ export class WarMode {
     else if (d.op === 'preset') this.setPreset(p.team, d.t);
     else if (d.op === 'plan' && WAR_GROUPS.includes(d.t)) this.setPlan(p.team, d.t, d.n);
     else if (d.op === 'cmd' && (d.t === 'all' || WAR_GROUPS.includes(d.t)) && own(WAR.orders, d.n)) {
-      // (Move here: the spot the guest looked at, a finite point inside the field, or nothing)
-      const at = d.n === 'move' ? clampSpot(d.x, d.z) : null;
-      if (d.n !== 'move' || at) this.command(p.team, d.t, d.n, at);
+      // (Move here: the spot the guest looked at, a finite point inside the field, or nothing; Attack: a house of another side still in the field)
+      const at = d.n === 'move' ? clampSpot(d.x, d.z) : null, foe = d.n === 'attack' ? Number(d.f) : -1;
+      if ((d.n !== 'move' || at) && (d.n !== 'attack' || this.isFoe(p.team, foe))) this.command(p.team, d.t, d.n, at, foe);
     } else if (d.op === 'form' && (d.t === 'all' || WAR_GROUPS.includes(d.t)) && own(WAR.formations, d.n)) this.formation(p.team, d.t, d.n);
   }
 
   // ---------------- orders in the fight (the command bar: warui.js) ----------------
   // the local lord orders `group` ('inf', 'arch', 'cav' or 'all') to `order` (a key of WAR.orders); at: [x, z] the spot of Move here
-  localCommand(group, order, at = null) {
+  // foe: Attack's army (a house's team). In the build an order is the battle plan (BUILD_ORDERS), carried out when the battle begins.
+  localCommand(group, order, at = null, foe = -1) {
     const g = this.g, f = g.localFaction;
-    if (!this.fighting || g.spectator || !f || !f.war || f.eliminated || !(group === 'all' || WAR_GROUPS.includes(group)) || !own(WAR.orders, order)) return false;
-    if (order === 'follow' && !(g.player && g.player.alive)) { g.audio.play('deny'); g.ui.toast('Your hero has fallen: nobody to follow'); return false; }
-    if (order === 'move' && !(at = clampSpot(at && at[0], at && at[1]))) { g.audio.play('deny'); g.ui.toast('Look at the ground where they should go, then Move here'); return false; }
+    if (g.state !== 'playing' || g.spectator || !f || !f.war || f.eliminated || !(group === 'all' || WAR_GROUPS.includes(group)) || !own(WAR.orders, order)) return false;
+    const deny = (why) => { g.audio.play('deny'); g.ui.toast(why); return false; };
+    if (!this.fighting && !BUILD_ORDERS[order]) return deny(`${WAR.orders[order].name} is for the battle: in the build an order is the battle plan (hold, charge, advance, follow me or attack an army)`);
+    if (order === 'follow' && !(g.player && g.player.alive)) return deny('Your hero has fallen: nobody to follow');
+    if (order === 'move' && !(at = clampSpot(at && at[0], at && at[1]))) return deny('Look at the ground where they should go, then Move here');
+    if (order === 'attack' && !this.isFoe(f.team, foe)) return deny('That army is no longer in the field');
     const groups = group === 'all' ? WAR_GROUPS : [group];
-    for (const k of groups) f.war.plan[k] = order;   // (the bar shows it at once; a guest's host confirms it)
+    for (const k of groups) { f.war.plan[k] = order; f.war.foe[k] = order === 'attack' ? foe : -1; }   // (the bar shows it at once; a guest's host confirms it)
     if (order === 'move') for (const k of groups) f.war.dest[k] = { x: at[0], z: at[1], yaw: 0 };   // (the marker, at once)
     f.war.pickUntil = g.time + 1.5;
     g.audio.play('order');
-    if (g.mode === 'client') { g.net.toHost(order === 'move' ? { a: 'war', op: 'cmd', t: group, n: order, x: Math.round(at[0] * 10) / 10, z: Math.round(at[1] * 10) / 10 } : { a: 'war', op: 'cmd', t: group, n: order }); return true; }
-    this.command(f.team, group, order, at);
+    if (g.mode === 'client') {
+      const m = { a: 'war', op: 'cmd', t: group, n: order };
+      if (order === 'move') { m.x = Math.round(at[0] * 10) / 10; m.z = Math.round(at[1] * 10) / 10; }
+      if (order === 'attack') m.f = foe;
+      g.net.toHost(m);
+      return true;
+    }
+    this.command(f.team, group, order, at, foe);
     return true;
   }
 
-  // the local lord's formation for a group (or everyone)
+  // the local lord's formation for a group (or everyone); in the build it is the formation the group takes when the battle begins
   localFormation(group, form) {
     const g = this.g, f = g.localFaction;
-    if (!this.fighting || g.spectator || !f || !f.war || f.eliminated || !(group === 'all' || WAR_GROUPS.includes(group)) || !own(WAR.formations, form)) return false;
+    if (g.state !== 'playing' || g.spectator || !f || !f.war || f.eliminated || !(group === 'all' || WAR_GROUPS.includes(group)) || !own(WAR.formations, form)) return false;
     for (const k of group === 'all' ? WAR_GROUPS : [group]) f.war.form[k] = form;
     f.war.pickUntil = g.time + 1.5;
     g.audio.play('order');
@@ -346,24 +370,32 @@ export class WarMode {
   //   hold       stop: each group forms up where its middle is now, facing the nearest enemy army
   //   forward    each group forms up WAR.forward metres nearer the enemy (back: further from it, still facing it), keeping the army's shape
   //   move       the group forms up round the spot (everyone: the infantry on it, the archers behind, the riders on the right flank)
-  command(team, group, order, at = null) {
+  //   attack     as charge, at the army of house `foe` (the command bar's button in its colour): its men are fought, others only when they stand in the way
+  // In the build (BUILD_ORDERS) the order is the group's battle plan, carried out when the battle begins.
+  command(team, group, order, at = null, foe = -1) {
     const g = this.g, f = g.factions[team];
-    if (!f || !f.war || !this.fighting || !own(WAR.orders, order)) return;
+    if (!f || !f.war || !own(WAR.orders, order)) return;
     if (order === 'follow' && !(f.isPlayer && f.player && f.player.alive)) return;
     if (order === 'move' && !at) return;
+    if (order === 'attack' && !this.isFoe(team, foe)) { if (!this.fighting) return; order = 'charge'; }   // (an army beaten since: at the nearest instead)
     const groups = group === 'all' ? WAR_GROUPS : WAR_GROUPS.includes(group) ? [group] : null;
     if (!groups) return;
+    if (!this.fighting) {
+      if (BUILD_ORDERS[order]) for (const k of groups) { f.war.plan[k] = order; f.war.foe[k] = order === 'attack' ? foe : -1; }
+      return;
+    }
     const lists = {};
     let n = 0, ax = 0, az = 0;
     for (const k of groups) {
       f.war.plan[k] = order;
+      f.war.foe[k] = order === 'attack' ? foe : -1;
       if (!FORM_UP[order]) f.war.dest[k] = null;
       const l = lists[k] = this.groupList(team, k);
       for (const u of l) { u.warForm = WAR.formations[f.war.form[k]] || WAR.formations.line; u.warFollow = null; ax += u.pos.x; az += u.pos.z; }
       n += l.length;
     }
     if (!n) return;
-    if (order === 'charge') { for (const k of groups) for (const u of lists[k]) u.setOrder('charge'); return; }
+    if (order === 'charge' || order === 'attack') { for (const k of groups) this.charge(lists[k], order === 'attack' ? foe : -1); return; }
     if (order === 'follow') { this.follow(f, lists); return; }
     ax /= n; az /= n;
     if (order === 'move') {
@@ -393,6 +425,28 @@ export class WarMode {
     }
   }
 
+  // the soldiers in `list` (one group) march on the enemy: on the army of house `foe`, or (-1) on the enemy army nearest the group's middle. Each looks
+  // round himself first (a foe of any house close by is fought: 20 m, or for Attack only one in the way, 5 m), then marches on a man of that army
+  // wherever it stands (units.js think, chargeFoe below)
+  charge(list, foe = -1) {
+    if (!list.length) return;
+    const P = this.picture;
+    P.fresh();
+    let x = 0, z = 0;
+    for (const u of list) { x += u.pos.x; z += u.pos.z; }
+    const t = foe >= 0 ? foe : P.nearestFoe(list[0].team, x / list.length, z / list.length);
+    const near = foe >= 0 ? 5 : 20;
+    for (const u of list) {
+      u.setOrder('charge');
+      u.foeTeam = t; u.foeNear = near; u.lookT = 0;
+      u.warFollow = null;
+      if (foe >= 0 && u.target && u.target.team !== foe && u.distTo(u.target) > near) u.target = null;   // (sent at another army: it leaves this one)
+    }
+  }
+
+  // a man of the army a charging soldier with nobody in reach marches on (units.js think)
+  chargeFoe(u) { return chargeFoe(this.picture, u); }
+
   // a group's formation: every soldier of it takes his place in the new shape (where it holds, or behind the hero while it follows)
   formation(team, group, form) {
     const f = this.g.factions[team];
@@ -421,6 +475,7 @@ export class WarMode {
   // the right flank (units.js reads u.warFollow)
   follow(f, lists) {
     const L = (k) => lists[k] || [];
+    if (f.player) f.player.march = null;   // (the column forms up behind him as he faces now, then follows the way he walks: units.js followSpot)
     const size = (k) => { const F = WAR.formations[f.war.form[k]] || WAR.formations.line; const c = followCols(L(k).length, F); const m = k === 'cav' ? WAR.ride : 1; return { F, cols: c, sx: F.sx * m, sz: F.sz * m, w: c * F.sx * m, d: Math.ceil(L(k).length / c) * F.sz * m }; };
     const I = size('inf'), A = size('arch'), C = size('cav');
     const place = { inf: [0, 0], arch: [L('inf').length ? I.d + 3 : 0, 0], cav: [0, (L('inf').length ? I.w / 2 : L('arch').length ? A.w / 2 : 0) + 6 + C.w / 2] };
@@ -550,6 +605,8 @@ export class WarMode {
       return;
     }
     this.clock += dt;
+    this.lookT -= dt;
+    if (this.lookT <= 0) { this.lookT = WAR.tactics.look; this.picture.update(); }
     // a hero who lives through the battle grows with it, as one does through the waves of the war modes (the kills pay besides)
     this.xpT -= dt;
     if (this.xpT <= 0) { this.xpT = WAR.xpEvery; for (const h of g.humans) if (h.alive) h.gainXp(XP.wave, 'wave'); }
@@ -564,6 +621,7 @@ export class WarMode {
     const g = this.g;
     this.fighting = true;
     this.clock = 0;
+    this.picture.update();   // (what each house mustered, and where)
     g.round = 1;
     g.phase = 'wave';
     g.phaseT = 0;
@@ -576,14 +634,14 @@ export class WarMode {
       if (f.isPlayer) {
         // a lord's groups do what his battle plan says (Hold, unless he chose otherwise: they stay where they were set out), in their formations
         for (const u of army) u.warForm = WAR.formations[f.war.form[u.isGiant ? 'inf' : groupOf(u.type)]] || null;
-        for (const k of WAR_GROUPS) if (f.war.plan[k] !== 'hold') this.command(f.team, k, f.war.plan[k]);
+        for (const k of WAR_GROUPS) if (f.war.plan[k] !== 'hold') this.command(f.team, k, f.war.plan[k], null, f.war.foe[k]);
       } else for (const u of army) this.applyPlan(f, u, f.war.plan[groupOf(u.type)]);
       if (f.hero && !f.isPlayer && f.hero.alive) f.hero.setOrder('charge');   // (an AI lord leads from the front)
       if (!army.length && !(f.hero && f.hero.alive)) f.eliminated = true;
     }
     this.ui.fightBegan();
     g.audio.play('horn', g.camera.position);
-    g.bannerAll('To battle!', 'The last army standing wins: your hero fights too, and does not rise again. Your army holds until you order it: 1 / 2 / 3 / 4 choose infantry, archers, cavalry or everyone, then F1 move here · F2 follow me · F3 charge · F4 hold.', 'The armies march. The last army standing wins.');
+    g.bannerAll('To battle!', 'The last army standing wins: your hero fights too, and does not rise again. Your army holds until you order it: 1 / 2 / 3 / 4 choose infantry, archers, cavalry or everyone, then F1 move here · F2 follow me · F3 charge · F4 hold, or 5 / 6 / 7 attack an army by its colour.', 'The armies march. The last army standing wins.');
   }
 
   // an AI general's soldier at the start (hold: he keeps the place he was given)
@@ -691,12 +749,14 @@ export class WarMode {
 
   // ---------------- network ----------------
   // the host's word on the battle, in every snapshot: [fighting, clock, per house [preset, plan, start, formations, and for a lord's house where each
-  // group is going (x, z per group, whole metres, null: nowhere; his command bar's markers)]]
+  // group is going (x, z per group, whole metres, null: nowhere; his command bar's markers) and the army each group was sent at with Attack (a digit
+  // per group, '-' for none)]]
   netState() {
     const g = this.g;
     return [this.fighting ? 1 : 0, Math.round(this.clock), g.factions.map((f) => (f.war
       ? [PRESETS.indexOf(f.war.preset), WAR_GROUPS.map((k) => ORDERS.indexOf(f.war.plan[k])).join(''), f.war.start, WAR_GROUPS.map((k) => FORMS.indexOf(f.war.form[k])).join(''),
-        f.isPlayer && this.fighting ? WAR_GROUPS.map((k) => { const d = f.war.dest[k]; return d ? [Math.round(d.x), Math.round(d.z)] : 0; }) : 0]
+        f.isPlayer && this.fighting ? WAR_GROUPS.map((k) => { const d = f.war.dest[k]; return d ? [Math.round(d.x), Math.round(d.z)] : 0; }) : 0,
+        f.isPlayer ? WAR_GROUPS.map((k) => (f.war.foe[k] >= 0 ? f.war.foe[k] : '-')).join('') : 0]
       : 0))];
   }
 
@@ -714,6 +774,7 @@ export class WarMode {
       String(h[1] || '').split('').forEach((c, i) => { if (ORDERS[c]) f.war.plan[WAR_GROUPS[i]] = ORDERS[c]; });
       String(h[3] || '').split('').forEach((c, i) => { if (FORMS[c]) f.war.form[WAR_GROUPS[i]] = FORMS[c]; });
       if (Array.isArray(h[4])) WAR_GROUPS.forEach((k, i) => { const d = h[4][i]; f.war.dest[k] = Array.isArray(d) ? { x: +d[0] || 0, z: +d[1] || 0, yaw: 0 } : null; });
+      if (typeof h[5] === 'string') WAR_GROUPS.forEach((k, i) => { const c = h[5][i]; f.war.foe[k] = c >= '0' && c <= '3' ? +c : -1; });
     });
   }
 
