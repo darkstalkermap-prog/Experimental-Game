@@ -33,6 +33,11 @@ export class Interp {
   constructor() {
     this.s = [];   // the samples, oldest first (the objects are reused: no allocation per snapshot)
     this.n = 0;
+    // adapt: samples may come further apart than the snapshots (War Mode sends a far soldier every few snapshots: warnet.js). Shown at the usual
+    // delay he would reach his latest place and stand until the next one: stop-start. So he is shown `lag` in the past instead, a little more than
+    // the time between his last two samples that moved him (rising at once, easing back down as they come closer together again).
+    this.adapt = false;
+    this.lag = 0;
   }
   // the latest two (kept for callers and tests that look at them)
   get a() { return this.n ? this.s[Math.max(0, this.n - 2)] : null; }
@@ -49,6 +54,14 @@ export class Interp {
     const prev = this.n > 1 ? this.s[this.n - 2] : null;
     o.t = prev && t <= prev.t ? prev.t + 0.001 : t;
     o.x = x; o.y = y; o.z = z; o.yaw = yaw; o.extra = extra;
+    if (this.adapt && prev) {
+      // (only two samples that both moved him say how far apart his moving ones come: one at rest is sent rarely, and a soldier who starts off
+      // after a rest is shown at once)
+      const pp = this.n > 2 ? this.s[this.n - 3] : null;
+      const moved = Math.abs(x - prev.x) + Math.abs(z - prev.z) > 0.02 && !!pp && Math.abs(prev.x - pp.x) + Math.abs(prev.z - pp.z) > 0.02;
+      const want = moved ? Math.min(0.6, o.t - prev.t + 0.04) : 0;
+      this.lag = want > this.lag ? want : this.lag + (want - this.lag) * 0.25;
+    }
     return this;
   }
 
@@ -57,7 +70,7 @@ export class Interp {
     if (!n) return false;
     const b = s[n - 1];
     if (n === 1) { out.x = b.x; out.y = b.y; out.z = b.z; out.yaw = b.yaw; out.extra = b.extra; return true; }
-    const rt = now() - DELAY;
+    const rt = now() - (this.lag > DELAY ? this.lag : DELAY);
     // the two samples either side of the moment shown (past the latest: carry on a little along the last leg)
     let i = n - 2;
     while (i > 0 && s[i].t > rt) i--;

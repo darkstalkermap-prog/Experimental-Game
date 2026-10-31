@@ -29,8 +29,8 @@ Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** 
   talents while the armies march by themselves, round after round tougher. Win by 25 hero kills, by destroying the enemy
   keep, or by the most hero kills in 20 minutes (see **Hero Game Mode** below). Single player for now.
 - **War Mode**: no castles, one great battle: every army musters on a hill of its own and marches down into the field
-  between. Two minutes to buy an army of up to 200 with 10,000 gold and set it out, then the armies fight to the last man;
-  your hero fights too.
+  between. Two minutes to buy an army of up to 500 with 30,000 gold and set it out (your hero stands in front of it from the
+  first moment), then the armies fight to the last man; your hero fights too.
   Single player against AI generals or online with 2 to 4 players (see **War Mode** below).
 
 ## Play
@@ -206,7 +206,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   ("Army 32/50 · Garrison 18/36"). A recruit for a full role is refused ("Army full 50/50"; the recruit card says to
   switch new recruits to the other role), and a roster move into a full role moves only as many as fit. Lane soldiers
   count against neither (the waves have their own size). The rival lords keep to the same limits, and online every
-  guest's buys and roster moves are checked by the host. War Mode has its own limits (up to 200), Hero Mode buys none.
+  guest's buys and roster moves are checked by the host. War Mode has its own limits (up to 500), Hero Mode buys none.
 - **Round the keep**: inside a courtyard soldiers go round the keep by its corners rather than walking into its wall
   (a defender sent to a place behind it, the army behind a lord who stands with his back to it), and a place that
   would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
@@ -764,8 +764,11 @@ starts **on top of a hill of its own**: a broad, flat-topped ridge (about 26 m h
 steeper than about 26 degrees, so infantry, riders and heroes all walk up and down them. The armies march down their hill and
 meet in the low field between, and may push up the other side. Two armies get two hills face to face; three or four get one
 hill each round the field; allies (Two against two, Co-op) get **neighbouring hills of their own**, close together with a
-saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero starts at the front edge of
-his own army's hill. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
+saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero is **there from the first
+moment**, in his own eyes with his arms and weapon in hand: he stands a few metres in front of his army's front rank and off to
+its right, turned to look back along it, so he watches it muster as he buys (the army panel opens over this view, on the right;
+online every other player sees him standing there). When the battle begins a hero who has not moved from that spot turns round to
+face the enemy with the horn; one who has walked off keeps his way. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
 stay open. The hills come from the match's sides (one digit per side, the armies on it: `'22'`, `'1111'`, `'31'`), so they are
 part of the world and of its key (`small+war22`, `src/warmap.js`; the same ground on every screen): a world laid out for other
 sides (the menu's, the last match's for a Play Again or a rematch of another format, a guest's own menu) is always built again,
@@ -782,22 +785,23 @@ and is fought to the end: the **last army standing wins** (allies win together).
 once they fall (the camera then circles the battle, and a lord whose army is gone may concede from the game menu). A fight
 still going after six minutes is decided on the worth of what each side has left. Nobody can be hurt during the build.
 
-**The army panel** (open during the build; B closes it to walk among your soldiers and opens it again) shows the view over
-your army, down your hill, and sells soldiers for gold (10,000 to start; the AI generals get more or less with the
-difficulty). Each type has a cap that falls with its power, and every army has at most 200 soldiers in every format:
+**The army panel** (open during the build over the hero's own view; B closes it to walk among your soldiers and opens it again)
+sells soldiers for gold (30,000 to start; the AI generals get more or less with the difficulty). Each type has a cap that falls
+with its power (the caps are the old 200-soldier army's times 2.5), and every army has at most 500 soldiers in every format, so
+a free-for-all can field 2000:
 
 | Soldier | Gold | Cap |  | Soldier | Gold | Cap |
 | --- | --- | --- | --- | --- | --- | --- |
-| Footman | 30 | 200 |  | Knight | 100 | 60 |
-| Spearman | 35 | 150 |  | Cavalry | 120 | 50 |
-| Archer | 45 | 100 |  | Lancer | 170 | 25 |
-| Longbowman | 70 | 60 |  | Giant | 1500 | 1 |
+| Footman | 30 | 500 |  | Knight | 100 | 150 |
+| Spearman | 35 | 375 |  | Cavalry | 120 | 125 |
+| Archer | 45 | 250 |  | Lancer | 170 | 60 |
+| Longbowman | 70 | 150 |  | Giant | 1500 | 2 |
 
 **Repeat last army** (beside Soldiers) buys the army you led into your last War Mode battle of the same format again, with
 its formation and battle plan (remembered in this browser), as far as the gold and the caps allow, and says what it could
 not buy. Online it goes through the host like any other purchase.
 
-Soldiers appear in their places at once; −1 / −10 dismiss them for a full refund. Three **formations**: Battle line
+Soldiers appear in their places at once (+1, +10, +50); −1 / −10 dismiss them for a full refund. Three **formations**: Battle line
 (infantry in front, archers behind, cavalry on the wings), Wedge (an arrowhead of infantry with the knights at the tip) and
 Archers behind (a deep infantry block, the archers on a long line well behind it, the riders held back). The **battle plan**
 says what infantry, archers and cavalry do when the battle begins: **Hold** (the default: they stay where they were set out
@@ -829,9 +833,14 @@ seconds of battle lived through (`WAR.xpEvery`), so the levels and talent points
 the battle begins (there is no castle to go home to).
 
 Online the host decides everything: a guest's purchases, formation and plan go to the host and come back in the snapshots
-(nothing a guest sends is trusted: types and counts are checked). With hundreds of soldiers the snapshot's soldiers are
-packed into a short string (15 characters a soldier, `src/warnet.js`) instead of the war modes' JSON arrays, and only a few
-blood and sound effects ride in each snapshot, so four armies of 200 make about 13 KB. The end screen has a table of the
+(nothing a guest sends is trusted: types and counts are checked). With up to 2000 soldiers the snapshot does not list them all
+(`src/warnet.js`): it carries the roster (runs of soldier ids), an alive bit each, and 9-character records only for the soldiers
+whose turn it is: every snapshot for one who changed within 30 m of a guest's hero, every 2nd to 6th for one who changed further
+off (as few as keep the records near 7 KB), every 10th for one who stands still. Each guest says with its pose which snapshots it
+got, and what went in one it missed is sent again; a guest shows each soldier as far in the past as his own records come apart
+(`src/interpolation.js`), so the far ones still move smoothly. Only a few blood, sound and arrow effects ride in each snapshot.
+Four armies of 500 marching and fighting make snapshots of about 8 to 14 KB (relay and room alike; the room sends them in 4 or 5
+pieces, one round), against 13 to 15 KB for four armies of 200 before. The end screen has a table of the
 armies (mustered, standing, lost, kills, the lord) above the usual sections. A War Mode battle counts towards the same
 **personal bests, class mastery and Renown** as the war modes (kills, streak, damage, army kills, the longest battle, the
 fastest victory; it has no waves or gold), shown in Your battle and Renown below the table. Play Again starts War Mode again
@@ -1179,9 +1188,11 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   in chunks, and trees, rocks, arrows and grass are instanced. Crowds, engines and the first-person kit cast shadows
   into the near shadow map only, drawn there as their plainest model. The profiler overlay (backquote) shows where a
   frame goes.
-- War Mode's biggest battles (two armies of 200, or four of 150: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine:
-  the simulation of 400 soldiers in melee takes about 8 to 12 ms a frame and of 600 about 5 to 9 ms (it falls as they fall); the crowd draws them in
-  about 75 to 85 draw calls.
+- War Mode's biggest battles (two armies of 500, four of 500: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine: the
+  simulation of 1000 soldiers in melee takes about 7 ms a frame and of 1600 about 12 ms (8 µs a soldier, less than the 10 to 12 of the old 200-soldier
+  armies): long looks for a foe go through a coarse second grid (16 m cells), a soldier looks round himself before he looks across the field (and
+  across it at a sample of 400 at most), and the shove between neighbours walks the grid without a callback. Past 300 soldiers animated at once (times
+  the quality's LOD scale) the animated ring shrinks and the rest are the static far model; the crowd stays at about 75 to 80 draw calls.
 - Grass regrows a slice at a time across frames, effect shaders are compiled at match start, and soldier
   models are prepared in the background during the preparation minute, so nothing stutters on first use.
 - Online, other players and soldiers are interpolated between the host's updates for smooth movement (each keeps its last

@@ -1,7 +1,7 @@
 // War Mode on screen: the menu and lobby rows, the army panel of the build phase (the War Mode shop, Repeat last army, the formation, the battle plan,
 // Ready), the bar across the top (the countdown, then every side's soldiers), the command bar of the fight (1 / 2 / 3 / 4 choose a group, F1 to F4, T
-// and G or a click give it an order, F or a click its formation; the chosen soldiers are marked in the world: warmarks.js), the cameras (the view over your army while the panel is open; the view over the battle once your hero has fallen) and the
-// end screen's section. N opens the Talents panel (the shop with only its Talents tab, as in Hero Mode). The rules are in warmode.js; this file only
+// and G or a click give it an order, F or a click its formation; the chosen soldiers are marked in the world: warmarks.js), the cameras (your hero's own eyes from the first moment, the army panel open over them; the view over the battle once your hero has
+// fallen) and the end screen's section. N opens the Talents panel (the shop with only its Talents tab, as in Hero Mode). The rules are in warmode.js; this file only
 // shows them and passes on clicks.
 import { WAR, TEAM_CSS, UNIT_TYPES, clock } from './config.js';
 import { pressReady, readyView, offerFor } from './flow.js';
@@ -64,12 +64,14 @@ body.war-on #toasts { bottom: 196px; }   /* (above the command bar) */
 #warPanel .wp-stat .coin { color: var(--gold); }
 #warPanel .wp-body { flex: 1; overflow-y: auto; padding: 6px 14px 10px; }
 #warPanel h4 { margin: 10px 0 5px; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); opacity: 0.9; }
-#warPanel .wp-unit { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(224,180,76,0.15); }
+#warPanel .wp-unit { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 6px; align-items: center; padding: 5px 0; border-bottom: 1px solid rgba(224,180,76,0.15); }
 #warPanel .wp-unit .nm { font-family: Cinzel, Georgia, serif; font-size: 14px; }
 #warPanel .wp-unit .nm small { font-family: 'EB Garamond', Georgia, serif; font-size: 12px; opacity: 0.7; margin-left: 4px; }
-#warPanel .wp-unit .ct { font-variant-numeric: tabular-nums; min-width: 62px; text-align: right; }
+#warPanel .wp-unit .ct { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 #warPanel .wp-unit .ct.full { color: var(--gold); }
 #warPanel .wp-unit .bt { display: flex; gap: 3px; }
+#warPanel .wp-unit .bt button { min-width: 0; padding: 3px 5px; }
+#warPanel .wp-unit .nm small { white-space: nowrap; }
 #warPanel .wp-unit .ds { grid-column: 1 / -1; font-size: 12px; opacity: 0.65; line-height: 1.2; }
 #warPanel button { padding: 3px 7px; font-size: 12px; min-width: 32px; }
 #warPanel .wp-row { display: flex; gap: 5px; flex-wrap: wrap; }
@@ -201,6 +203,7 @@ export class WarUI {
     this.centre = { x: 0, z: 0, t: 0 };
     this.cam = null;
     this.opened = false;
+    this.turn = null;   // the hero's turn to the enemy as the battle begins ({ yaw, t })
   }
 
   begin() {
@@ -240,7 +243,7 @@ export class WarUI {
     const units = TYPES.map((t) => {
       const d = WAR.units[t], T = UNIT_TYPES[t];
       return `<div class="wp-unit" data-t="${t}"><span class="nm">${esc(d.name)}<small>${d.cost} gold</small></span><span class="ct"></span>
-        <span class="bt"><button data-sell="${t}" data-n="10" title="Dismiss 10">−10</button><button data-sell="${t}" data-n="1" title="Dismiss 1">−1</button><button data-buy="${t}" data-n="1" title="Buy 1">+1</button><button data-buy="${t}" data-n="10" title="Buy 10">+10</button></span>
+        <span class="bt"><button data-sell="${t}" data-n="10" title="Dismiss 10">−10</button><button data-sell="${t}" data-n="1" title="Dismiss 1">−1</button><button data-buy="${t}" data-n="1" title="Buy 1">+1</button><button data-buy="${t}" data-n="10" title="Buy 10">+10</button><button data-buy="${t}" data-n="50" title="Buy 50 (as many as the gold and the caps allow)">+50</button></span>
         <span class="ds">${esc(d.desc)} ${T.hp} health${T.ranged ? `, ${T.range} m` : ''}.</span></div>`;
     }).join('');
     const presets = Object.entries(WAR.presets).map(([k, v]) => `<button data-preset="${k}" title="${esc(v.desc)}">${esc(v.name)}</button>`).join('');
@@ -404,7 +407,7 @@ export class WarUI {
     if (open) g.input.unlock();
     else if (g.state === 'playing' && relock) g.input.lock();
     const vm = g.player.viewModel;
-    if (vm) vm.visible = !open && g.player.alive;
+    if (vm) vm.visible = g.player.alive;   // (the panel opens over the hero's own view: his arms and weapon stay in hand)
     this.t = 0;
   }
 
@@ -412,6 +415,9 @@ export class WarUI {
     if (this.w.panelOpen) this.setPanel(false, false);   // (the timer ran out: the next click on the field takes the mouse back)
     this.remember();
     this.t = 0;
+    // a hero still where the build put him, looking at his own soldiers, turns round to the enemy with the horn (one who has moved keeps his way)
+    const p = this.g.player, f = this.g.localFaction, s = f && f.war && f.war.spot, r = this.w.reviewPose;
+    if (s && r && p.alive && !this.g.spectator && Math.hypot(p.pos.x - r.x, p.pos.z - r.z) < 0.5 && Math.abs(Math.atan2(Math.sin(p.yaw - r.yaw), Math.cos(p.yaw - r.yaw))) < 0.05) this.turn = { yaw: s.yaw, t: 0.9 };
   }
 
   handleInput(i) {
@@ -449,6 +455,7 @@ export class WarUI {
     }
     if (!this.opened && !w.fighting && !g.spectator) { this.opened = true; this.setPanel(true); }   // (a spectator has no army to build: spectate.js)
     if (w.panelOpen && g.input.locked) g.input.unlock();
+    if (this.turn) this.turnTo(dt);
     this.marks(dt);
     this.t -= dt;
     if (this.t > 0) return;
@@ -456,6 +463,17 @@ export class WarUI {
     if (w.panelOpen) this.refreshPanel();
     this.refreshTop();
     this.refreshBar();
+  }
+
+  // the turn to the enemy as the battle begins: eased over a moment (a snap of the whole view reads as a glitch)
+  turnTo(dt) {
+    const p = this.g.player, T = this.turn;
+    T.t -= dt;
+    if (!p.alive || T.t <= 0) { if (p.alive) { p.yaw = T.yaw; p.pitch = 0; } this.turn = null; return; }
+    const d = Math.atan2(Math.sin(T.yaw - p.yaw), Math.cos(T.yaw - p.yaw));
+    const k = Math.min(1, dt * 6);
+    p.yaw += d * k;
+    p.pitch += (0 - p.pitch) * k;
   }
 
   // the marks in the world (warmarks.js): over the chosen soldiers, where the crosshair would send them, and where each group was sent
@@ -532,13 +550,8 @@ export class WarUI {
     if (g.state !== 'playing' || !f || !f.war) return;
     const p = g.player;
     let want = null, look = null;
-    if (w.panelOpen) {
-      // over your army: behind it and above, looking over the front rank down your hill to the field
-      const s = f.war.spot;
-      want = [s.x - s.fx * 42, 22, s.z - s.fz * 42];
-      look = [s.x + s.fx * 26, 0, s.z + s.fz * 26];
-      if (p.viewModel && p.viewModel.visible) p.viewModel.visible = false;
-    } else if (!p.alive) {
+    // (the army panel opens over the hero's own eyes: he stands in front of his army, turned to it, so he sees it muster: warmode.js respawn)
+    if (!p.alive) {
       // the battle: circling slowly over where the soldiers are
       const c = this.centre;
       c.t -= dt;
