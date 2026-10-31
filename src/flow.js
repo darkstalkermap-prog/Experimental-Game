@@ -117,7 +117,7 @@ export function offerFor(g) {
   if (g.mode === 'host' && g.humans.some((h) => h !== g.player && !h.isBot)) return null;   // (friends are still fighting: the host does not end it for them)
   if (me.castle.fallen) return { kind: 'concede', text: 'You cannot rise again.', label: 'Concede · Next battle', ask: 'Concede this battle? You will see the results and can start the next one.', yes: 'Concede' };
   if (g.coop) return null;
-  const standing = g.factions.filter((f) => !f.castle.fallen);
+  const standing = g.factions.filter((f) => !f.castle.fallen && !f.empty);   // (a castle left empty is no house of the war)
   if (standing.length !== 2 || !standing.includes(me)) return null;
   const foe = standing.find((f) => f !== me);
   const a = houseNumbers(g, me), b = houseNumbers(g, foe);

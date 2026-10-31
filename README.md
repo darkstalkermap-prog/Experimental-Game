@@ -216,6 +216,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
   along its walls: a small band stays together on the face it comes at, a big host fans out over that face and the two
   beside it (`src/nav.js`).
+- **Slopes**: soldiers and riders do not walk up ground steeper than 45 degrees (the hills that ring the map; every battlefield
+  stays under about 35), and they stay on the ground coming down any slope (`SLOPE_MAX` in `src/units.js`).
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
@@ -429,7 +431,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   stone. Enemy arrows and spells are stopped by the merlons, so only a head showing over the top can be hit. Whatever
   an arrow reaches is hit: a man on a tower roof, on a wall top or a merlon, in a crenel, or an archer of the towers.
   A wall that is badly damaged loses its merlons.
-- **Gates** can be broken by anyone. **Walls** can only be breached with catapults.
+- **Gates** can be broken by anyone. **Walls** can only be breached with catapults. A catapult shells from about 52 m out, or from nearer
+  where that would be off the land (the back walls of the castles on the Small map). When a keep falls its gate goes with it: the ruin stands open.
 - **Death**: your hero respawns in the courtyard of your own keep, wherever you fell (in an enemy castle, at the
   wheel of an engine, on horseback). Each death makes the wait longer. Once your keep falls, you can no longer
   respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
@@ -1167,7 +1170,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   ready, a bot hero always is, and the timer still ends the preparation by itself. The Hero Game Mode's 30 seconds can be
   skipped the same way; the practice courtyard has no preparation.
 - **Concede / Next battle** (K, twice to confirm, or the button in the game menu) is offered, never forced, when a battle is
-  decided: your keep has fallen; or you are one of the last two castles and the other is clearly winning (the rule and the
+  decided: your keep has fallen; or you are one of the last two castles (castles left empty do not count) and the other is clearly winning (the rule and the
   numbers are `DECIDED` in `src/flow.js`; not while your Last Stand can still be called, that comes first); or, the other way round, you are clearly winning, and the button says **Finish
   the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
   Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
@@ -1176,7 +1179,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   **timed war**. Its tempo is faster, by a `mods` source named `length:short`: a shorter preparation (36 s), a wave every 21 s
   instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
   wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
-  a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
+  a draw; allied lords count as one side; a castle left empty is no side at all). A war that is won sooner ends sooner; the top panel shows the time left, with a word
   of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
   `src/config.js`) the lords hold out, with the comeback rules even more than before: the first castle of a Standard war fell
   after about 12 minutes and only two wars in six were over within 30, while in Short wars the clock decided all six. A

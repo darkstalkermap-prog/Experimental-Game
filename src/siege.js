@@ -13,6 +13,16 @@ import { limitShadow } from './shadows.js';
 
 let NEXT_ID = 1;
 
+// A catapult's spot to shoot from: `d` metres out from `from` along `dir`, or nearer when that is off the land (on the Small map a castle's back wall
+// is 36 m from the edge and the spot 52 m out: the engine used to roll into the edge of the map and never shoot). Short of the steep hills that ring the
+// map, too: they rise steeper than 45 degrees from about 30 m inside its edge.
+function onLand(from, dir, d) {
+  const lim = WORLD.playHalf - 34;
+  if (Math.abs(dir.x) > 1e-3) d = Math.min(d, (Math.sign(dir.x) * lim - from.x) / dir.x);
+  if (Math.abs(dir.z) > 1e-3) d = Math.min(d, (Math.sign(dir.z) * lim - from.z) / dir.z);
+  return from.clone().addScaledVector(dir, Math.max(8, d));
+}
+
 export class SiegeEngine {
   constructor(game, type, team, pos, targetCastle, stats = {}) {
     this.game = game;
@@ -279,12 +289,12 @@ export class SiegeEngine {
         let aim, fire;
         if (seg) {
           const n = tc.dirToWorld(seg.nx, seg.nz);
-          fire = seg.pos.clone().addScaledVector(n, this.range - 10);
+          fire = onLand(seg.pos, n, this.range - 10);
           aim = seg.pos.clone();
           aim.y = tc.center.y + 4.5;
         } else {
           const away = this.pos.clone().sub(tc.center).setY(0).normalize();
-          fire = tc.center.clone().addScaledVector(away, this.range - 12);
+          fire = onLand(tc.center, away, this.range - 12);
           aim = tc.keep.pos.clone();
           aim.y = tc.center.y + 10;
         }
@@ -304,7 +314,8 @@ export class SiegeEngine {
     }
     if (this.thinkT <= 0) {
       this.thinkT = 0.4;
-      this.waypoint = this.type === 'ram' ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal, this.avoid);
+      // (a catapult goes round the castles; one that finds itself in a castle's walls leaves by the gate or a breach, as a ram does)
+      this.waypoint = this.type === 'ram' || g.castles.some((c) => c.inFootprint(this.pos, 0)) ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal, this.avoid);
     }
     const wp = this.waypoint || goal;
     const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;
@@ -320,6 +331,16 @@ export class SiegeEngine {
       this.lastPos.copy(this.pos);
       this.stuckT = 0;
     }
+    // and one that has got no nearer its goal in a while is wedged in a gap too narrow for it (two rocks with the way on between them: it swung out
+    // and rolled back into the same gap, again and again, for the rest of the match): it slips past the stones for a moment, as a stuck soldier does
+    this.progT = (this.progT || 0) + dt;
+    if (this.progT > 4) {
+      const d = Math.hypot(goal.x - this.pos.x, goal.z - this.pos.z);
+      this.wedged = this.progD !== undefined && d > this.progD - 1.5 ? (this.wedged || 0) + 1 : 0;
+      if (this.wedged >= 3) { this.slipT = 2.5; this.wedged = 0; }
+      this.progD = d; this.progT = 0;
+    }
+    if (this.slipT > 0) this.slipT -= dt;
     if (this.detourT > 0) {
       this.detourT -= dt;
       const sx = -uz * this.detourSide, sz = ux * this.detourSide;
@@ -333,7 +354,7 @@ export class SiegeEngine {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true); // engines roll past trunks
+    g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true, this.slipT > 0); // engines roll past trunks (and, wedged, past stones)
     this.turn(Math.atan2(ux, uz), dt);
     return true;
   }

@@ -744,7 +744,16 @@ export class Game {
       }
     };
     this.grid.query(p.x, p.z, GATE.far, look);
-    for (const s of this.siege) if (s.alive && !s.abandoned && !allied(s.team, team)) look(s);   // (an engine of its own never asks for it: they are built outside)
+    for (const s of this.siege) {
+      if (!s.alive) continue;
+      if (!allied(s.team, team)) { if (!s.abandoned) look(s); continue; }
+      // (an engine of its own is built outside and never asks for it, unless it has rolled in through the open gate on its way somewhere: then it has to get
+      // out again, and the gate must not shut on it in the gateway, or it stays in the courtyard for the rest of the match)
+      if ((s.abandoned && !s.driver) || !castle.inFootprint(s.pos, 0.5)) continue;   // (one left standing there goes nowhere)
+      users++;
+      const l = castle.toLocal(s.pos.x, s.pos.z);
+      if (Math.abs(l.x) < CASTLE.gateW / 2 + 2 && l.z > CASTLE.H - CASTLE.wallT - 2.5) wedged = true;
+    }
     let open;
     if (slip) open = false;
     else if (wedged && castle.gate.openAmt > 0.05) open = true;   // (let him finish going through)
@@ -1494,7 +1503,10 @@ export class Game {
     if (!left.length) this.endGame(-1);
     else if (left.every((f) => allied(f.team, left[0].team))) this.endGame(left[0].team); // one side is left standing
     else if (this.coop && !humansLeft.length) this.endGame(-1, `Your alliance has fallen. You held out for ${this.round} waves together.`);
-    else if (!this.spectator && (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length)) this.endGame(-1);   // (a spectator watches to the last house)
+    // (a spectator watches to the last house. Other castles still stand: the end screen must not say that none is left)
+    else if (!this.spectator && (this.mode === 'single' ? this.localFaction.eliminated : !humansLeft.length)) {
+      this.endGame(-1, this.mode === 'single' ? 'Your house has been destroyed: your keep has fallen and your hero with it.' : 'Every house led by a player has been destroyed: the rival lords hold the realm.');
+    }
   }
 
   eliminate(f) {
@@ -1637,12 +1649,13 @@ export class Game {
 
   // How the sides stand: a side is a house, or the houses that fight together (co-op). A war that runs out of time is decided on, in this order: the castles that
   // still stand, the health of their keeps, the kills, the soldiers alive. (Keeps within half a percent count as equal. In King of the Hill the seconds held on the
-  // hill count before all of that.)
+  // hill count before all of that. A castle left empty is nobody's side: its keep is whole because nobody ever had a reason to attack it, and it used to win
+  // the verdict, or tie with another empty one for a draw.)
   warStandings() {
     const groups = [];
     const seen = new Set();
     for (const side of this.sides) { groups.push(side.slice()); for (const t of side) seen.add(t); }
-    for (const f of this.factions) if (!seen.has(f.team)) groups.push([f.team]);
+    for (const f of this.factions) if (!seen.has(f.team) && !f.empty) groups.push([f.team]);
     return groups.map((teams) => {
       const fs = teams.map((t) => this.factions[t]);
       const standing = fs.filter((f) => !f.castle.fallen);
@@ -1665,8 +1678,8 @@ export class Game {
   // The clock has run out: the war is decided on points. No show: nothing falls, the horn sounds and the screen comes up.
   timeUp() {
     const [best, next] = this.warStandings();
-    const draw = Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
-    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.`;
+    const draw = !!next && Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
+    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : next ? `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.` : `Time is up. ${best.name} holds the field.`;
     const winner = draw ? -1 : best.teams[0];
     matchlog.record('timeup', { winner });
     this.audio.play('horn', this.camera.position);

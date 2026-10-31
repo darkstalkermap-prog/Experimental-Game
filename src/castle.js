@@ -778,8 +778,17 @@ export class Castle {
 
   fall(attacker) {
     if (this.fallen) return;
+    // the gate goes down with the keep: the ruin stands open. (It is broken before `fallen` is set, without a word or a bounty of its own: damageGate refuses
+    // a fallen castle, and the gate used to stand for the rest of the match, shut on whoever was inside and unbreakable to whoever was outside.)
+    const gate = this.gate;
+    if (gate.alive) {
+      gate.hp = 0;
+      gate.alive = false;
+      this.applyGateVisual();
+      this.gateBar.visible = false;
+      this.game.fx.splinters(gate.pos, 30);
+    }
     this.fallen = true;
-    if (this.gate.alive) this.damageGate(1e9, attacker);
     this.applyFallenVisual();
     this.game.onCastleFallen(this, attacker);
   }

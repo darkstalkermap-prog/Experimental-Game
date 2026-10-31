@@ -13,6 +13,9 @@ const tmp = new THREE.Vector3();
 // how far a War Mode soldier on Charge looks round himself for a foe before he marches on the army his group was sent at (an archer looks as far as he
 // shoots): Unit.think, warmode.js chargeFoe
 const CHARGE_LOOK = 24;
+// the steepest ground a soldier or a horse walks up (rise over run: 45 degrees; the battlefields stay under about 35, War Mode's hills included), and the
+// drop over a step that is a fall rather than a slope (75 degrees, steeper than any ground of the maps)
+const SLOPE_MAX = 1.0, FALL_RISE = 3.8;
 // the way a hero has been walking, for the column behind him (followSpot): his facing until he has walked MARCH_STEP metres, then the way he went, kept
 // until he has gone as far again. A jump (a respawn) starts it again from his facing.
 const MARCH_STEP = 5;
@@ -151,7 +154,6 @@ export class Unit {
     if (this.hp > 0 && !this.isGiant && info.melee && (info.parry || amount >= this.maxHp * (sturdy ? 0.2 : 0.12) || info.charge >= 0.9)) {
       this.stagger(info.parry ? 0.9 : sturdy ? 0.3 : 0.5, attacker);
     }
-    this.lastAttacker = attacker;
     if (attacker && attacker.alive && attacker.chest && !attacker.isStructure && !allied(attacker.team, this.team)) {
       const reachable = this.ranged || attacker.pos.y - this.pos.y < 2.4 || !!this.game.war;   // (War Mode has no walls: a man higher up stands on a slope)
       const closer = !this.target || this.target.isStructure || this.distTo(attacker) < this.distTo(this.target) - 1;
@@ -265,8 +267,12 @@ export class Unit {
     return true;
   }
 
+  // (gone for good: let go of the others, so that a soldier who is gone keeps nobody else's body alive in a chain of the fallen)
   remove() {
     this.game.scene.remove(this.mesh);
+    this.target = this.ignore = this.blockedBy = this.reservedPost = null;
+    const c = this.homeCastle;
+    if (c && c.posts) for (const p of c.posts) if (p.reserved === this) p.reserved = null;
   }
 
   setOrder(order, data = null) {
@@ -709,14 +715,29 @@ export class Unit {
       }
     }
     const sep = idle ? 2.5 : 4;
+    const P = g.physics, ox = this.pos.x, oz = this.pos.z;
     this.pos.x += (this.vel.x + px * sep) * dt;
     this.pos.z += (this.vel.z + pz * sep) * dt;
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0, this.ghostT > 0);
-    const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
-    if (ground < this.pos.y - 0.05) this.pos.y = Math.max(ground, this.pos.y - 12 * dt);
+    // no walking up ground steeper than SLOPE_MAX (the hills that ring the map climb at 60 to 75 degrees inside the play area, and riders chasing a hero
+    // rode straight up them): along the slope where one direction is walkable, else not at all. Downhill is always fine.
+    const run = Math.hypot(this.pos.x - ox, this.pos.z - oz);
+    if (run > 1e-5) {
+      const h0 = P.terrainHeight(ox, oz);
+      if (P.terrainHeight(this.pos.x, this.pos.z) - h0 > run * SLOPE_MAX) {
+        if (P.terrainHeight(this.pos.x, oz) - h0 <= Math.abs(this.pos.x - ox) * SLOPE_MAX) this.pos.z = oz;
+        else if (P.terrainHeight(ox, this.pos.z) - h0 <= Math.abs(this.pos.z - oz) * SLOPE_MAX) this.pos.x = ox;
+        else { this.pos.x = ox; this.pos.z = oz; }
+      }
+    }
+    P.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0, this.ghostT > 0);
+    const ground = P.groundHeight(this.pos.x, this.pos.z, this.pos.y);
+    // off a wall or a ledge (a drop far bigger than the step taken) he falls; walking down a slope, however steep and however fast he rides, he stays on
+    // the ground (he used to come down at most 12 m/s and floated metres over a steep slope)
+    const drop = this.pos.y - ground;
+    if (drop > 0.05 && drop > run * FALL_RISE + 0.15) this.pos.y = Math.max(ground, this.pos.y - 12 * dt);
     else this.pos.y = ground;
   }
 
