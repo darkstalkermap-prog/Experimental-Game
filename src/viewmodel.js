@@ -92,7 +92,7 @@ const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new TH
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
 const CAST_MACE = { x: 0.12, y: -0.05, z: -0.5, rx: -0.35, ry: 0.1, rz: -0.1 };
-const CAST_PALM = { x: 0.13, y: -0.1, z: -0.56, rx: -0.1, ry: 0.0, rz: -0.25 };   // the Cleric's Smite: the right hand thrust out, open
+const CAST_PALM = { x: 0.12, y: -0.1, z: -0.52, rx: -1.0, ry: 0.3, rz: 0.5 };   // the Cleric's Smite: the right hand thrust out, open
 const FLASK_A = { x: 0.06, y: -0.2, z: -0.34, rx: 0.9, ry: 0.0, rz: -0.1 }, FLASK_B = { x: 0.04, y: -0.15, z: -0.28, rx: 1.45, ry: 0.0, rz: -0.1 };
 const CLIMB_R = { x: 0.2, y: 0.1, z: -0.44, rx: 1.45, ry: -0.5, rz: 0.0 }, CLIMB_L = { x: -0.2, y: 0.1, z: -0.44, rx: 1.45, ry: 0.5, rz: 0.0 };
 

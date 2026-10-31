@@ -1047,7 +1047,7 @@ export class Abilities {
       }
       case 'smite': {
         const r = SPELLS.smite.radius * sz;
-        gf.pillar(at.x, at.y, at.z, 0xffe9a0, 0.55, 1.5 * sz, 46, 1.8);
+        gf.pillar(at.x, at.y, at.z, 0xffe9a0, 0.5, 0.9 * sz, 3.5, 0.6);   // (a short flare where the bolt strikes: the bolt itself comes from the hand)
         gf.glyph('rune', at.x, at.y, at.z, r, 0xffe08a, 1.2, { arms: 8, strength: 1.5 });
         gf.glyph('shock', at.x, at.y, at.z, r * 1.15, 0xfff0c0, 0.55);
         gf.glyph('pulse', at.x, at.y, at.z, r, 0xffd870, 0.5, { strength: 1.8 });
