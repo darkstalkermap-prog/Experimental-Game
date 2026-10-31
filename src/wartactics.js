@@ -1,7 +1,7 @@
 // War Mode's picture of the battle and the AI generals who read it (warmode.js drives both; the battle's own simulation only: single player and the
 // host). Nothing here runs per soldier per frame:
 //   Picture   every WAR.tactics.look seconds one pass over the soldiers: for every house its living men and hero, and for each of its groups (infantry,
-//             archers, cavalry) how many are left, where its middle is and how far it spreads, how fast it moves, how many of it are in a fight, its
+//             archers, cavalry) how many are left (and mustered), where its middle is and how far it spreads, how many of it are in a fight, its
 //             strength. A charging soldier with nobody in reach marches on a man of the army his group was sent at (chargeFoe: a look over a few dozen of
 //             that army, not the whole field), and the generals plan from it.
 //   General   one per AI house: every second or so (the difficulty) it reads the picture and gives its groups their orders through warmode.js, only when
@@ -15,7 +15,7 @@ export const kindGroup = (u) => (u.isGiant ? 'inf' : u.kind === 'archer' ? 'arch
 // a soldier's worth in the fight, by his type: what the generals weigh groups with (gold is a fair measure of it: WAR.units)
 const worthOf = (u) => (WAR.units[u.type] ? WAR.units[u.type].cost : UNIT_TYPES[u.type] ? 40 : 0);
 
-function emptyGroup(k) { return { k, n: 0, start: 0, x: 0, z: 0, r: 0, vx: 0, vz: 0, hp: 0, worth: 0, fight: 0, men: [], px: 0, pz: 0, seen: false, spear: 0 }; }
+function emptyGroup(k) { return { k, n: 0, start: 0, x: 0, z: 0, r: 0, worth: 0, fight: 0, men: [] }; }
 
 export class Picture {
   constructor(w) {
@@ -31,13 +31,12 @@ export class Picture {
   // the soldiers' places now (cheap: one pass over them, and an array per group reused)
   update() {
     const g = this.g, w = this.w;
-    const dt = Math.max(0.05, g.time - this.t);
     this.t = g.time; this.ver++;
     for (const t of w.houses) {
       let H = this.houses.get(t);
       if (!H) { H = { team: t, n: 0, men: [], hero: null, x: 0, z: 0, worth: 0, groups: { inf: emptyGroup('inf'), arch: emptyGroup('arch'), cav: emptyGroup('cav') } }; this.houses.set(t, H); }
       H.n = 0; H.men.length = 0; H.x = H.z = H.worth = 0;
-      for (const k of GROUP_KEYS) { const G = H.groups[k]; G.px = G.x; G.pz = G.z; G.n = 0; G.x = G.z = G.hp = G.worth = G.fight = G.r = G.spear = 0; G.men.length = 0; }
+      for (const k of GROUP_KEYS) { const G = H.groups[k]; G.n = 0; G.x = G.z = G.worth = G.fight = G.r = 0; G.men.length = 0; }
       const f = g.factions[t];
       const hero = f.isPlayer ? f.player : f.hero;
       H.hero = hero && hero.alive ? hero : null;
@@ -48,10 +47,8 @@ export class Picture {
       if (!H) continue;
       const G = H.groups[kindGroup(u)] || H.groups.inf;
       G.men.push(u); H.men.push(u);
-      G.n++; G.x += u.pos.x; G.z += u.pos.z; G.hp += u.hp;
-      const v = worthOf(u) * Math.max(0.25, u.hp / u.maxHp);
-      G.worth += v;
-      if (u.type === 'spearman') G.spear++;
+      G.n++; G.x += u.pos.x; G.z += u.pos.z;
+      G.worth += worthOf(u) * Math.max(0.25, u.hp / u.maxHp);
       // (in a fight: his man within a few steps, or an archer loosing at someone in range)
       const T = u.target;
       if (T && T.alive && !T.isStructure && Math.abs(T.pos.x - u.pos.x) + Math.abs(T.pos.z - u.pos.z) < (u.ranged ? u.range : 5)) G.fight++;
@@ -61,13 +58,12 @@ export class Picture {
         const G = H.groups[k];
         H.n += G.n; H.worth += G.worth;
         if (!w.fighting || !G.start) G.start = G.n;   // (what it mustered: the share left tells a beaten group)
-        if (!G.n) { G.vx = G.vz = 0; G.seen = false; continue; }
+        if (!G.n) continue;
         G.x /= G.n; G.z /= G.n;
         H.x += G.x * G.n; H.z += G.z * G.n;
         let r = 0;
         for (const u of G.men) r += Math.hypot(u.pos.x - G.x, u.pos.z - G.z);
         G.r = (r / G.n) * 1.6 + 2;   // (about where its outer men stand)
-        if (G.seen) { G.vx = G.vx * 0.5 + ((G.x - G.px) / dt) * 0.5; G.vz = G.vz * 0.5 + ((G.z - G.pz) / dt) * 0.5; } else { G.vx = G.vz = 0; G.seen = true; }
       }
       if (H.n) { H.x /= H.n; H.z /= H.n; } else if (H.hero) { H.x = H.hero.pos.x; H.z = H.hero.pos.z; }
     }
@@ -144,19 +140,18 @@ function nearestOf(H, u, step, hero = H.hero) {
 }
 
 // ---------------- the AI generals ----------------
-// How each kind of general fights. In War Mode it follows from the army it bought (warmode.js aiBuy's style: a balanced army is steady, a host of footmen
-// bold, a mass of bows an archer's general, a horde of riders a raider's); a rival lord's personality (rivals.js) picks one too (Game.waveList's houses
-// have none in War Mode, but the table is the same).
+// How each kind of general fights: its temper follows from the army it bought (warmode.js aiBuy's style: a balanced army is steady, a host of footmen
+// bold, a mass of bows an archer's general, a horde of riders a raider's). (War Mode's houses have no rival lords: Conquest's personalities lead their
+// field armies in ai.js.)
 //   hold    how much it leans to waiting on its own hill for the enemy to come up to it (its archers shooting all the way): 0 never, 1 when it can
 //   close   metres between the two fronts at which its infantry charges (the bounds of the advance stop short of it)
 //   wait    the share of its line that must stand in its place before the next bound (the rest catch up: no trickling in one by one)
 //   stall   seconds it waits on its hill for an enemy who does not come, before it marches after all
-//   strike  whether its riders go round to strike (0: they ride in with the infantry)
 export const TEMPERS = {
-  steady: { hold: 0.45, close: 28, wait: 0.75, stall: 40, strike: 1 },
-  bold: { hold: 0, close: 40, wait: 0.6, stall: 20, strike: 1 },
-  archer: { hold: 0.9, close: 24, wait: 0.8, stall: 60, strike: 1 },
-  raider: { hold: 0.3, close: 30, wait: 0.7, stall: 35, strike: 1 },
+  steady: { hold: 0.45, close: 28, wait: 0.75, stall: 40 },
+  bold: { hold: 0, close: 40, wait: 0.6, stall: 20 },
+  archer: { hold: 0.9, close: 24, wait: 0.8, stall: 60 },
+  raider: { hold: 0.3, close: 30, wait: 0.7, stall: 35 },
 };
 const STYLE_TEMPER = ['steady', 'bold', 'archer', 'raider'];   // (warmode.js STYLES, in order)
 export const temperOfStyle = (i) => STYLE_TEMPER[i] || 'steady';
@@ -179,12 +174,14 @@ const BOUND_DWELL = 1.5;   // seconds a marching line stands formed at each boun
 //   posture    wait on its own hill (the start: the high ground, its archers shooting at an enemy who climbs to them) or march; it waits when its bows
 //              outshoot the enemy's or the enemy is the stronger, never when the enemy's archers would shoot it to pieces where it stands, and not for
 //              longer than its temper's patience
-//   infantry   the body of the army: on its hill it holds a line (a shield wall when the enemy has archers) and fights there; marching, it goes in bounds
-//              of about 20 m, the line formed up at each and the stragglers waited for, and charges all together from `close` metres
+//   infantry   the body of the army: on its hill it holds a line (a shield wall when the enemy has archers or riders) and fights there; marching, it
+//              goes in bounds of about 20 m, the line formed up at each and the stragglers waited for, and charges all together from `close` metres of
+//              the enemy's foot; riders coming at it are received standing, not chased; cut down to a third, it gathers at its archers
 //   archers    a few steps behind the infantry, moved up behind the fight once it begins, back behind it when an enemy band comes for them
-//   cavalry    beside the infantry until there is a mark worth the ride: the enemy's archers out in the open, or its infantry locked in a fight with
-//              ours (struck from the side, where no shield is: never head-on into a formed line); it rides round to the mark's flank, then charges
-//              it. It meets an enemy band that comes for our archers, and a band of riders cut down to a third rides back behind the infantry to gather.
+//   cavalry    beside the infantry until there is a mark worth the ride: the enemy's infantry locked in a fight with ours (struck from the side, where
+//              no shield is: never head-on into a formed line), or its archers out in the open near the fight; it rides round to the mark's flank,
+//              then charges it. It meets riders at grips with our line and bands that come for our archers, stays by the infantry while the enemy's
+//              riders are loose, and cut down to a third rides back behind the infantry to gather.
 //   the foe    the nearest army; at Normal and Hard the weakest or the one already in a fight with a third (in a free-for-all), but always the one at its
 //              throat; when the enemy is broken, or the time is nearly up, everybody charges (allIn: the general has nothing more to plan)
 //   the lord   with his infantry, a few steps behind its middle; he charges when it does
