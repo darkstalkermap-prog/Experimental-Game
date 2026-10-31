@@ -366,6 +366,12 @@ export class General {
       this.holdGroup('inf', I, at.x, at.z, yaw, form);
       return;
     }
+    // cut down to a third and not at grips, against a stronger foot: back to the archers to gather (they shoot over it), until the enemy comes on
+    if (this.L.rally && I.n <= I.start * 0.3 && !contact && eI.worth > I.worth * 1.5 && c.A.n >= 5) {
+      const x = c.A.x + c.dx * (c.A.r + 6), z = c.A.z + c.dz * (c.A.r + 6);
+      if (S.task !== 'hold' || !S.at || Math.hypot(S.at.x - x, S.at.z - z) > 8) this.holdGroup('inf', I, x, z, c.yaw, this.L.wall ? 'wall' : 'line');
+      return;
+    }
     // marching: in bounds, the line formed up at each; the charge from `close` metres of the enemy's foot, all together
     if (gapFoot <= close || contact) { this.chargeGroup('inf', I, this.foe); return; }
     if (S.task !== 'bound' || this.reached(I, this.T.wait) || w.clock - S.since > 9) {
@@ -460,6 +466,8 @@ export class General {
   cavMark(c) {
     const { E, eI, eA, eC, I, A, C } = c;
     if (eI.n >= 8 && eI.fight >= eI.n * 0.2 && I.fight > 0) return { team: E.team, k: 'inf' };
+    // (no infantry of ours left to wait beside: the riders go for the nearest of them, round its flank)
+    if (I.n < 5) { const n = nearestGroup(E, C); if (n) return { team: E.team, k: n.G.k }; }
     if (eC.n >= 6 && eC.fight < eC.n * 0.3 && eC.worth > C.worth * 0.6) return null;
     if (eA.n >= 5) {
       const guarded = eI.n >= 8 && dist(eI, eA) < eI.r + eA.r + 10 && eI.fight < eI.n * 0.15;
