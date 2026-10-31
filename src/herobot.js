@@ -657,7 +657,7 @@ export class HeroBot {
         this.backT += this.sk.think;
         if (this.backT > 2.5 && this.n.c3 >= 1) { this.meleeUntil = now + 3; this.backT = 0; }   // cornered: fight it out
         this.stepAround(t, 1, this.side * 0.4);
-        this.sprint = gap < 4;
+        this.sprint = gap < (p.classId === 'ranger' ? 7 : 4);   // (the Ranger, quick and with no trap to hold them off, runs sooner)
       } else if (gap > st.hi) {
         this.backT = 0;
         this.goTo(t.pos.x, t.pos.z, gap < 10);
