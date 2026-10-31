@@ -194,12 +194,21 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   The tab lists every soldier with a health bar and three buttons, so you can move them one at a time, move
   everyone, or move every soldier of one type (all the archers up on the walls, all the swordsmen into your army).
   A switch decides where **new recruits** go: the garrison or straight into your army. Orders only reach your
-  army, and a soldier drafted into it later takes up the army's standing order. The troop limit (12, raised by
-  Expand Barracks up to 36) counts the garrison and the army together; lane soldiers are counted separately.
+  army, and a soldier drafted into it later takes up the army's standing order. The garrison and the army each
+  have a limit of their own: the **garrison** limit is 12, raised by Expand Barracks up to 36; the **army** limit is
+  50 (`TROOP_CAP.army` in `src/config.js`) and does not change. The shop, the roster and the HUD show both
+  ("Army 32/50 · Garrison 18/36"). A recruit for a full role is refused ("Army full 50/50"; the recruit card says to
+  switch new recruits to the other role), and a roster move into a full role moves only as many as fit. Lane soldiers
+  count against neither (the waves have their own size). The rival lords keep to the same limits, and online every
+  guest's buys and roster moves are checked by the host. War Mode has its own limits (up to 200), Hero Mode buys none.
+- **Round the keep**: inside a courtyard soldiers go round the keep by its corners rather than walking into its wall
+  (a defender sent to a place behind it, the army behind a lord who stands with his back to it), and a place that
+  would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
+  along its walls, spread over the face they come at and the two beside it (`src/nav.js`).
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
-    recruit. **Expand Barracks** raises the troop limit and adds a soldier to every wave. **Elite Levies** has
+    recruit. **Expand Barracks** raises the garrison limit and adds a soldier to every wave. **Elite Levies** has
     3 levels, and each adds one more elite to every wave: a knight, then a cavalry rider, then a lancer.
     **Drill Sergeants** give all your troops, waves included, +15% health and damage per level. Veterans can
     be promoted.
@@ -1081,7 +1090,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, a shot with the bow (side-on, the bow arm at the mark, the string drawn to the jaw on a bent bow, the loose), three deaths; a cape hangs toward the ground and lies along the back of a man fallen on his face), and the catalogue of parts they wear (a body of lofted rings that swells at the muscles and tapers at the joints, a skull with a face, helmets fitted to it, armour, weapons, shields, heraldry) built from primitives with baked shading |
 | `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints (so it takes the same poses and is drawn by the same crowd batches), its own shapes (bald scowling heads with long beards, a bare muscled trunk, fur kilt with an iron boss and the house banner, rag-bound shins and forearms, bare feet, a stone hammer) and a hunched, heavy layer over the soldier's walk, swing and deaths |
 | `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn steel; cloth that sways, capes that stream behind a runner, skirts and tassets that ride up onto the thighs in a crouch) and its face and emblem atlases |
-| `src/nav.js` | Routing around castles and through gates and breaches |
+| `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
 | `src/rangertrap.js` | How the Ranger's Snare Trap looks on every screen: thrown, lying open, snapping shut |

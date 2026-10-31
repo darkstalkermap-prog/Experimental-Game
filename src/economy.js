@@ -9,12 +9,16 @@ function recruit(type) {
     id: 'recruit_' + type, tab: 'army', name: UNIT_TYPES[type].name,
     desc: (g, f) => {
       const t = UNIT_TYPES[type];
-      return `Joins your ${f.recruitRole === 'army' ? 'army and follows you' : 'garrison and defends the castle'}. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}`;
+      const role = g.recruitRoleOf(f), other = role === 'army' ? 'garrison' : 'army';
+      const full = !g.roleRoom(f, role) && g.roleRoom(f, other) ? ` Your ${role} is full: set "New recruits join the" to ${other === 'army' ? 'Army' : 'Garrison'} to keep recruiting.` : '';
+      return `Joins your ${role === 'army' ? 'army and follows you' : 'garrison and defends the castle'}. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}${full ? '.' + full : ''}`;
     },
     cost: () => UNIT_TYPES[type].cost,
     can: (g, f) => {
       if (f.castle.fallen) return 'Castle has fallen';
-      if (g.garrisonCount(f.team) >= f.troopCap) return 'Barracks full';
+      // the garrison and the army each have their own limit (TROOP_CAP); a buy into a full one is refused, on the host for a guest too
+      const role = g.recruitRoleOf(f);
+      if (!g.roleRoom(f, role)) return `${role === 'army' ? 'Army' : 'Garrison'} full ${g.roleCap(f, role)}/${g.roleCap(f, role)}`;
       return true;
     },
     apply: (g, f) => g.recruit(f, type),
@@ -37,7 +41,7 @@ export const SHOP = [
   recruit('swordsman'), recruit('spearman'), recruit('archer'), recruit('knight'), recruit('horseman'), recruit('lancer'),
   {
     id: 'barracks', tab: 'army', name: 'Expand Barracks',
-    desc: (g, f) => `Barracks limit (garrison + army) ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}, and one more soldier in every wave`,
+    desc: (g, f) => `Garrison limit ${f.troopCap} → ${Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step)}, and one more soldier in every wave`,
     cost: (g, f) => 200 + 120 * ((f.troopCap - TROOP_CAP.start) / TROOP_CAP.step),
     can: (g, f) => (f.troopCap >= TROOP_CAP.max ? 'Maximum size' : true),
     apply: (g, f) => { f.troopCap = Math.min(TROOP_CAP.max, f.troopCap + TROOP_CAP.step); },

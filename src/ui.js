@@ -465,7 +465,7 @@ export class UI {
     const g = this.game, f = g.localFaction;
     const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant && !u.isCrew).sort((a, b) => a.id - b.id);
     const c = g.roleCounts(g.localTeam);
-    const counts = `🏰 Garrison ${c.garrison} · ⚔ Army ${c.army} · ➤ Lane ${c.lane} · barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap}`;
+    const counts = `⚔ Army ${c.army}/${g.roleCap(f, 'army')} · 🏰 Garrison ${c.garrison}/${f.troopCap} · ➤ Lane ${c.lane}`;
     if (r.counts.textContent !== counts) r.counts.textContent = counts;
     for (const b of r.recruitBtns) b.classList.toggle('active', b.dataset.role === (f.recruitRole || 'garrison'));
     const perType = {};
@@ -575,7 +575,7 @@ export class UI {
     const f = g.localFaction;
     $('shopGold').textContent = Math.floor(f.gold);
     const rc = g.roleCounts(g.localTeam);
-    $('shopTroops').textContent = `garrison ${rc.garrison} · army ${rc.army} · lane ${rc.lane} (barracks ${g.garrisonCount(g.localTeam)}/${f.troopCap})`;
+    $('shopTroops').textContent = `Army ${rc.army}/${g.roleCap(f, 'army')} · Garrison ${rc.garrison}/${f.troopCap} · lane ${rc.lane}`;
     this.refreshAllyBar();
     this.refreshRoster();
     refreshTalentTab(this);
@@ -818,7 +818,8 @@ export class UI {
       // where your soldiers are (the group, formation and order are on the orders bar, which shows while the army has soldiers)
       const vets = g.units.filter((u) => u.alive && u.team === g.localTeam && u.rank >= 3).length;
       const rc = g.roleCounts(g.localTeam);
-      setText($('army'), `🏰 Garrison ${rc.garrison} · ⚔ Army ${rc.army} · ➤ Lane ${rc.lane}/${f.troopCap}${vets ? ` · ${vets}★` : ''}`);
+      const caps = !(g.war || g.hero);   // (War Mode and Hero Mode have limits of their own)
+      setText($('army'), `⚔ Army ${rc.army}${caps ? '/' + g.roleCap(f, 'army') : ''} · 🏰 Garrison ${rc.garrison}${caps ? '/' + f.troopCap : ''} · ➤ Lane ${rc.lane}${vets ? ` · ${vets}★` : ''}`);
       // the HUD's quieter states: no orders bar without an army, no key reminders once the fighting has begun
       const hud = $('hud'), noArmy = rc.army === 0, inBattle = !!g.practice || g.phase !== 'prep';
       if (noArmy !== this.noArmy) { this.noArmy = noArmy; hud.classList.toggle('noarmy', noArmy); }
@@ -922,7 +923,7 @@ export class UI {
       const rc = g.roleCounts(f.team);
       const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)} Lv ${f.player.level})` : '';
       rows += `<tr style="color:${TEAM_CSS[f.team]}"><td><img class="arms" style="${CHIP}" src="${armsChip(f.player ? f.player.cos : null, TEAM_COLORS[f.team], f.team)}" alt="">${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
-        <td>${rc.garrison + rc.army}/${f.troopCap} · ${rc.army} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
+        <td>${rc.army}/${g.roleCap(f, 'army')} · ${rc.garrison}/${f.troopCap} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
         ${g.objective === 'koth' ? `<td>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}${g.hill.owner === f.team ? ' ★' : ''}</td>` : ''}<td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
     }
     $('hillTh').style.display = g.objective === 'koth' ? '' : 'none';
