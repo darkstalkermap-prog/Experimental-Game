@@ -151,7 +151,8 @@ export class HostSync {
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;
       case 'order':
         if (d.target >= 0 && g.castles[d.target]) f.siegeTarget = g.castles[d.target];
-        if (['follow', 'hold', 'charge', 'defend', 'assault'].includes(d.cmd) && (d.cmd !== 'hold' || d.hold)) g.order(p.team, d.cmd, d.group || 'all', d.hold);
+        // (at: the house an Assault by colour marches on; Game.order checks it is a castle of another side still standing)
+        if (['follow', 'hold', 'charge', 'defend', 'assault'].includes(d.cmd) && (d.cmd !== 'hold' || d.hold)) g.order(p.team, d.cmd, d.group || 'all', d.hold, Number.isInteger(d.at) ? d.at : -1);
         break;
       default: break;
     }

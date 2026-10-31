@@ -95,8 +95,8 @@ export class Unit {
     this.army = false;     // a bought troop that follows its lord and takes orders (otherwise it holds the garrison)
     this.warForm = null;   // War Mode: the formation of the soldier's group (WAR.formations) and, while it follows the hero, its place behind him
     this.warFollow = null;
-    this.foeTeam = -1;     // War Mode, on Charge: the house whose army his group marches on (-1: none chosen), and how near a man of another house
-    this.foeNear = 0;      // must be to be fought on the way (warmode.js command)
+    this.foeTeam = -1;     // the house his group was sent at (War Mode: Charge and Attack; Conquest: an Assault by colour), -1 for none, and how near a
+    this.foeNear = 0;      // man of another house must be to be fought on the way (warmode.js charge, Game.order)
     this.lookT = 0;        // (a charge's next look for a nearer foe)
     this.isCrew = !!t.crew;
     this.crewOf = null;    // the siege engine this soldier is manning, and which seat
@@ -396,7 +396,8 @@ export class Unit {
     if (order === 'defend' && this.ranged && !this.post && home && !home.fallen && g.freePost(home, this)
         && !(this.target && !this.target.isStructure && this.distTo(this.target) < 7)) this.target = null;
     else if (!this.target || this.target.isStructure) {
-      const t = g.findEnemy(this, engage, anchor, leash, this.ignore, charging ? this.foeTeam : -1, this.foeNear);
+      // (a charge, or a Conquest army sent at a house by its colour, looks for that house's men: others only when they stand in the way)
+      const t = g.findEnemy(this, engage, anchor, leash, this.ignore, charging || order === 'assault' ? this.foeTeam : -1, this.foeNear);
       // nobody within reach: a charge marches on a real foe all the same (War Mode: a man of the army his group was sent at, wherever it is; Conquest:
       // the nearest foe out in the field). Before, it went back to its lord and stood about him, the whole army crowded round his feet.
       if (t) this.target = t;

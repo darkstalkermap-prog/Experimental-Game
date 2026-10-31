@@ -108,8 +108,21 @@ export function chargeFoe(P, u) {
     H = t >= 0 ? P.house(t) : null;
     if (!H) return null;
   }
+  let best = nearestOf(H, u, Math.max(1, Math.ceil(H.men.length / SAMPLE)));
+  // (the picture is up to half a second old: when every man of that sample has fallen since, all of that army is looked at, then the next army)
+  if (!best) best = nearestOf(H, u, 1);
+  if (!best) {
+    const t = P.nearestFoe(u.team, u.pos.x, u.pos.z, H.team);
+    const H2 = t >= 0 ? P.house(t) : null;
+    if (H2) { u.foeTeam = t; best = nearestOf(H2, u, 1); }
+  }
+  return best;
+}
+
+// the nearest living man of house H to u, of every step-th of its men (from u.id on), or its hero when he is the nearer
+function nearestOf(H, u, step) {
   let best = null, bd = Infinity;
-  const men = H.men, n = men.length, step = Math.max(1, Math.ceil(n / SAMPLE));
+  const men = H.men, n = men.length;
   for (let i = n ? u.id % step : 0; i < n; i += step) {
     const o = men[i];
     if (!o.alive) continue;

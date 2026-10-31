@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { TEAM_CSS, TEAM_COLORS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, clock } from './config.js';
 import { armsChip } from './heraldry.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
-import { allied } from './teams.js';
+import { allied, colorName } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH, abilityOf } from './classes.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
@@ -218,12 +218,19 @@ export class UI {
     const grp = { all: 'Everyone', infantry: 'Infantry', archers: 'Archers', cavalry: 'Cavalry' }[p.group || 'all'];
     const form = FORMATIONS[(g.localFaction && g.localFaction.formation) || 'line'].name;
     const ord = p.lastOrder || 'defend';
-    const key = grp + form + ord;
+    // the colour keys (5, 6, 7: an enemy house's castle, game.js localAttack): one key in each house's colour, the one the army marches on lit
+    // (the houses are the match's: worked out once; War Mode and Hero Mode have none here)
+    if (this.cmdFoesOf !== g) { this.cmdFoesOf = g; this.cmdFoes = g.war || g.hero ? [] : g.foeHouses(g.localTeam); }
+    const foes = this.cmdFoes, out = (t) => !g.castles[t] || g.castles[t].fallen || g.factions[t].eliminated;
+    let fk = ord === 'assault' ? p.lastFoe + 2 : 0;
+    for (let j = 0; j < foes.length; j++) if (out(foes[j])) fk += 8 << j;
+    const key = grp + form + ord + fk;
     if (key !== this.lastCmdKey) {
       this.lastCmdKey = key;
       $('cmdGroup').textContent = grp;
       $('cmdForm').textContent = form;
       document.querySelectorAll('#command .orders span').forEach((e) => e.classList.toggle('active', e.dataset.o === ord));
+      $('cmdFoes').innerHTML = foes.map((t, j) => `<kbd style="--hc:${TEAM_CSS[t]}" title="${j + 5}: assault ${colorName(t)}" class="${ord === 'assault' && p.lastFoe === t ? 'active' : ''}${out(t) ? ' out' : ''}">${j + 5}</kbd>`).join('');
     }
   }
 
@@ -538,9 +545,10 @@ export class UI {
       { key: 'F2', label: 'Hold here', act: () => g.localOrder('hold'), active: () => p.lastOrder === 'hold' },
       { key: 'F3', label: 'Charge', act: () => g.localOrder('charge'), active: () => p.lastOrder === 'charge' },
       { key: 'F4', label: 'Defend castle', act: () => g.localOrder('defend'), active: () => (p.lastOrder || 'defend') === 'defend' },
-      { key: 'T', label: 'Assault target', act: () => g.localOrder('assault'), active: () => p.lastOrder === 'assault' },
+      { key: 'T', label: 'Assault target', act: () => g.localOrder('assault'), active: () => p.lastOrder === 'assault' && !(p.lastFoe >= 0) },
+      ...g.foeHouses(g.localTeam).map((t, j) => ({ key: String(5 + j), label: `Assault ${colorName(t)}`, act: () => g.localAttack(j), active: () => p.lastOrder === 'assault' && p.lastFoe === t })),
       ...(g.objective === 'koth' ? [{ key: 'Y', label: 'Take the hill', act: () => g.localHillOrder(), active: () => false }] : []),
-    ], 'Hold here places them 6 m in front of where you are looking. Assault sends them at the target chosen in the Siege tab.' + (g.objective === 'koth' ? ' Take the hill sends them to the hill in the middle of the map to hold it.' : ''));
+    ], 'Hold here places them 6 m in front of where you are looking. Assault sends them at the target chosen in the Siege tab; 5, 6 and 7 at a house by its colour (they fight whoever stands in the way).' + (g.objective === 'koth' ? ' Take the hill sends them to the hill in the middle of the map to hold it.' : ''));
     const setForm = (f) => () => { if ((g.localFaction.formation || 'line') !== f) { while ((g.localFaction.formation || 'line') !== f) g.localFormation(); } };
     section('Formation', [
       { key: 'F', label: 'Line', act: setForm('line'), active: () => (g.localFaction.formation || 'line') === 'line' },

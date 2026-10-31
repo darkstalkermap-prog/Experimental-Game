@@ -29,7 +29,7 @@ import { Pings } from './pings.js';
 import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
 import { disposeWorld } from './resources.js';
-import { allied, setSides } from './teams.js';
+import { allied, setSides, colorName } from './teams.js';
 import { applyQuality, Q } from './quality.js';
 import { gfx } from './gfx.js';
 import { Crowd, lodLimits } from './crowd.js';
@@ -1127,8 +1127,9 @@ export class Game {
   }
 
   // ---------------- orders ----------------
-  // Give an order to a team's troops. hold = { pos: [x,y,z], yaw } for 'hold'.
-  order(team, cmd, group = 'all', hold = null) {
+  // Give an order to a team's troops. hold = { pos: [x,y,z], yaw } for 'hold'. at: for 'assault', the house whose castle they march on (the colour keys
+  // 5, 6, 7: foeHouses); -1 for the house's target (the Siege tab's, or the lanes')
+  order(team, cmd, group = 'all', hold = null, at = -1) {
     if (this.hero) return;   // (nobody commands an army in the Hero Game Mode)
     const f = this.factions[team];
     const p = f.player;
@@ -1144,16 +1145,24 @@ export class Game {
       data = { pos: new THREE.Vector3(...hold.pos), yaw: hold.yaw };
       label = hold.hill ? 'Take the hill!' : 'Hold this position!';
     } else if (cmd === 'assault') {
-      data = this.siegeTarget(f);
+      const c = Number.isInteger(at) ? this.castles[at] : null;
+      data = c && !c.fallen && !allied(c.team, team) && !this.factions[c.team].eliminated && !this.factions[c.team].empty ? c : this.siegeTarget(f);
       if (!data) return;
       label = `Assault ${this.factions[data.team].name}!`;
     } else label = { follow: 'Follow me!', charge: 'Charge!', defend: 'Defend the castle!' }[cmd];
     if (cmd === 'follow' && f.hero) f.hero.march = null;   // (the column forms up behind him as he faces now, then follows the way he walks: units.js followSpot)
-    troops.forEach((u, i) => { u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data; });
+    // (sent at a house by its colour, they leave a fight with another house and pass its men by, unless one stands in their way: units.js think)
+    const only = cmd === 'assault' && Number.isInteger(at) && at >= 0 && data.team === at ? at : -1;
+    troops.forEach((u, i) => {
+      u.slot = i; u.setOrder(cmd, data); if (cmd === 'hold') u.orderData = data;
+      u.foeTeam = only; u.foeNear = 5;
+      if (only >= 0 && u.target && !u.target.isStructure && u.target.team !== only && u.distTo(u.target) > 5) u.target = null;
+    });
     // soldiers drafted into the army later take up the standing order
     if (group === 'all') f.armyOrder = { cmd, data: cmd === 'hold' || cmd === 'assault' ? data : null };
     p.notify(`${group === 'all' ? 'Army' : GROUP_NAMES[group]}: ${label}`);
     p.lastOrder = cmd;
+    p.lastFoe = cmd === 'assault' ? data.team : -1;   // (the colour key lit on the command bar: ui.js)
     p.sound('order');
   }
 
@@ -1243,8 +1252,23 @@ export class Game {
     return true;
   }
 
-  // The local player presses an order key.
-  localOrder(cmd, holdAt = null) {
+  // the houses an army can be sent at by colour (5, 6, 7 in Conquest and King of the Hill), in house order: every other house of another side that
+  // takes part (a castle left empty is nobody's)
+  foeHouses(team) {
+    return this.factions.filter((f) => f.team !== team && !allied(f.team, team) && !f.empty).map((f) => f.team).slice(0, 3);
+  }
+
+  // the local player's colour key: the army (or the chosen group) marches on that house's castle and fights whoever stands in its way
+  localAttack(j) {
+    const t = this.foeHouses(this.localTeam)[j];
+    if (t === undefined) return;
+    const c = this.castles[t];
+    if (!c || c.fallen || this.factions[t].eliminated) { this.player.notify(`${colorName(t)} has fallen: nothing is left there to attack`); this.player.sound('deny'); return; }
+    this.localOrder('assault', null, t);
+  }
+
+  // The local player presses an order key (at: Assault's house, the colour keys).
+  localOrder(cmd, holdAt = null, at = -1) {
     const p = this.player;
     let hold = holdAt;
     if (cmd === 'hold' && !hold) {
@@ -1253,11 +1277,12 @@ export class Game {
       hold = { pos: [at.x, at.y, at.z], yaw: p.yaw };
     }
     if (this.mode === 'client') {
-      this.net.toHost({ a: 'order', cmd, group: p.group || 'all', hold, target: this.localFaction.siegeTarget ? this.localFaction.siegeTarget.team : -1 });
+      this.net.toHost({ a: 'order', cmd, group: p.group || 'all', hold, target: this.localFaction.siegeTarget ? this.localFaction.siegeTarget.team : -1, at });
       p.lastOrder = cmd;
+      p.lastFoe = cmd === 'assault' ? at : -1;
       return;
     }
-    this.order(p.team, cmd, p.group || 'all', hold);
+    this.order(p.team, cmd, p.group || 'all', hold, at);
   }
 
   // Army: go up to the hill in the middle and hold it (standing on your own house's side of it)
@@ -1397,6 +1422,7 @@ export class Game {
     if (i.hit('F3')) this.localOrder('charge');
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');
     if (i.hit('KeyT')) this.localOrder('assault');
+    for (let j = 0; j < 3; j++) if (i.hit('Digit' + (5 + j))) this.localAttack(j);   // (an enemy house by its colour: the command bar's coloured keys)
     if (i.hit('KeyY')) this.localHillOrder();
     if (i.hit('KeyF')) this.localFormation();
     if (i.hit('KeyO')) { this.ui.openOrders(); return; }
