@@ -1798,7 +1798,10 @@ export class Game {
 
     const p = this.player;
     if (p.alive) p.update(dt, controlling && !this.ui.shopOpen && !this.ui.practiceOpen && !(this.war && this.war.panelOpen) ? this.input : this.input.idle, ownDt);
-    else if (!this.spectate.on) this.deathCamera(dt);
+    else {
+      p.dropAims();   // (no scope ring or Leap circle left up while he is down)
+      if (!this.spectate.on) this.deathCamera(dt);
+    }
     this.finale.camera();   // (the ending frames the falling keep: after the hero has placed the camera, before anything looks through it)
     if (this.war) this.war.camera(dt);   // (War Mode: the view over your army while its panel is open, over the battle once your hero has fallen)
     this.spectate.camera(dt);   // (out of the fight, or only watching: the follow, free and overview cameras, last so they win; spectate.js)

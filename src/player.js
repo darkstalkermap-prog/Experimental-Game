@@ -4,7 +4,7 @@ import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY } fr
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y } from './models.js';
-import { avoidCastles } from './nav.js';
+import { navigate } from './nav.js';
 import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, RUSH, abilityOf } from './classes.js';
@@ -24,6 +24,7 @@ let walkVer = -1, walkM = 1;
 const walkMul = () => { if (walkVer !== rules.version) { walkVer = rules.version; walkM = rules.mul('heroSpeed'); } return walkM; };
 
 export const HORSE = { hp: 320, walk: 7, gallop: 13.5, back: 2.5, accel: 5, brake: 10, turn: 2.2, eye: 2.85 };
+const SEE_PAST = new Set(['tree']);   // (a trunk between a rider and his horse does not stop him getting on: Player.horseAtHand)
 
 const SWORDS = [
   { name: 'Arming Sword', dmg: 34, len: 0.95 },
@@ -93,7 +94,7 @@ export class Player {
     this.abilCd = { q: 0, r: 0 };
     this.classAt = -99;        // when this hero last changed class
     this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
-    this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks and stones while this runs)
+    this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks while this runs)
     this.castFlash = 0;        // the spell hand is raised while this runs down
     this.castColor = 0xff8a2a;
     this.drive = null;         // the siege engine this hero is steering
@@ -266,9 +267,12 @@ export class Player {
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.game.mode !== 'client' && this.alive) {
       if (this.game.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
-      // (blocks on the shield cost stamina here, where the battle is run: it comes back as it does on the guest's own screen)
-      this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
-      if (this.mounted) this.trample(dt);
+      // (blocks on the shield cost stamina here, where the battle is run: it comes back as it does on the guest's own screen. A bot moves
+      // itself through Player.move, which gives its stamina back and tramples as it does for a person: not twice)
+      if (!this.isBot) {
+        this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
+        if (this.mounted) this.trample(dt);
+      }
       this.tickAbilities(dt);
     }
     this.updateBody(dt);
@@ -442,6 +446,10 @@ export class Player {
     this.climb = null; this.climbing = false; this.climbCd = 0;
     this.duck = 0; this.ducking = false; this.height = BODY.height; this.eye = BODY.eye;
     this.cancelAim(); this.endScope();
+    // whatever the fall cut short ends with it: a stagger, a swing or a Power Shot being drawn (it would loose itself at the keep), a
+    // guard; and a guest's run (its end must not be reported to the host after the rise, where it would end the next run at once)
+    this.staggerT = 0; this.atk = null; this.blocking = false; this.drawT = 0; this.power = null; this.zoomed = false; this.castFlash = 0;
+    this.rushEnd = false; this.wasRush = false;
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
@@ -492,7 +500,7 @@ export class Player {
       return;
     }
     const d = Math.hypot(this.horsePos.x - this.pos.x, this.horsePos.z - this.pos.z);
-    if (d < 3.5) {
+    if (d < 3.5 && this.horseAtHand(d)) {
       this.mounted = true;
       this.horseComing = false;
       this.radius = 0.8;
@@ -505,6 +513,20 @@ export class Player {
       this.notify('You whistle for your horse.');
       this.sound('order');
     }
+  }
+
+  // Is the horse, d metres off, really at hand: on about the same level and with no stone between (a wall is 2 m thick, so a horse
+  // against its outside is within reach of a rider against its inside, and mounting would put him through it; or off the wall walk
+  // onto a horse below)? Otherwise it is whistled and comes round.
+  horseAtHand(d) {
+    const ph = this.game.physics, h = this.horsePos;
+    if (Math.abs(h.y - this.pos.y) > 1.5) return false;
+    const n = Math.ceil(d / 0.25);
+    for (let i = 1; i < n; i++) {
+      const k = i / n;
+      if (ph.pointHit(this.pos.x + (h.x - this.pos.x) * k, this.pos.y + (h.y - this.pos.y) * k + 1.2, this.pos.z + (h.z - this.pos.z) * k, this.team, SEE_PAST)) return false;
+    }
+    return true;
   }
 
   loseHorse(silent = false) {
@@ -548,7 +570,7 @@ export class Player {
       const d = Math.hypot(this.pos.x - this.horsePos.x, this.pos.z - this.horsePos.z);
       if (d < 2.6) this.horseComing = false;
       else {
-        const wp = avoidCastles(g, this.horsePos, this.pos, this.horseAvoid || (this.horseAvoid = {}));
+        const wp = this.horseWay(dt);
         const dx = wp.x - this.horsePos.x, dz = wp.z - this.horsePos.z;
         const dl = Math.hypot(dx, dz) || 1;
         sp = d > 12 ? 11 : 5;
@@ -565,6 +587,15 @@ export class Player {
     h.root.position.copy(this.horsePos);
     h.root.rotation.set(0, this.horseYaw, 0);
     poseHorse(h, sp, dt);
+  }
+
+  // Where a whistled horse makes for: its rider, by the gate when he is in a courtyard and it is not (or the other way round), as the
+  // soldiers go (nav.js); straight at him it would trot on the spot against the outside of the wall. Looked up five times a second.
+  horseWay(dt) {
+    const a = this.horseNav || (this.horseNav = { pos: this.horsePos, team: this.team, nav: null, avoid: {}, blockedBy: null, radius: 0.8, way: new THREE.Vector3(), t: 0 });
+    a.team = this.team;
+    if ((a.t -= dt) <= 0 || Math.hypot(a.way.x - this.horsePos.x, a.way.z - this.horsePos.z) < 1) { a.t = 0.2; a.way.copy(navigate(this.game, a, this.pos)); }
+    return a.way;
   }
 
   // ---------- view model ----------
@@ -780,7 +811,9 @@ export class Player {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, this.ghostT > 0) && this.mounted) {
+    // (a wedged bot slips past trunks, never through a standing stone or a rock: those are big enough to be walked round, and a hero
+    // passing through one was there for everyone to see)
+    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, false) && this.mounted) {
       this.rideSpeed *= 0.6; // ran into a wall
     }
 
@@ -1008,6 +1041,14 @@ export class Player {
       else if (def.id === 'bash') this.useAbility(a.slot, input);   // (no room to run: the bash where he stands)
       else g.audio.play('deny');
     } else if (!input.down(key)) this.cancelAim();   // the menu opened or the window lost focus: never loose it by accident
+  }
+
+  // A hero who is down holds nothing up: the circle of an aim, the scope at the eye and its ring over the screen (Game.update, every frame he
+  // is down: a fall comes from a blow here, or in a guest's snapshot, and neither path ran through these)
+  dropAims() {
+    this.cancelAim();
+    this.endScope();
+    this.showScope(false);
   }
 
   cancelAim() {

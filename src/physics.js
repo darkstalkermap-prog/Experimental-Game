@@ -301,6 +301,11 @@ export class Physics {
         // centre inside a battlement rail (dropped into a crenel from the top of a merlon): back onto the walk it guards
         if (c.inX) pos.x = c.inX > 0 ? c.maxX + radius : c.minX - radius;
         else pos.z = c.inZ > 0 ? c.maxZ + radius : c.minZ - radius;
+      } else if (c.kind === 'gate') {
+        // a gate shutting on someone in its passage: out in front of it or behind it, by its short side (the shallowest way out of a man
+        // beside a post is sideways, into the wall next to the gate)
+        if (c.maxX - c.minX < c.maxZ - c.minZ) pos.x = pos.x - c.minX < c.maxX - pos.x ? c.minX - radius : c.maxX + radius;
+        else pos.z = pos.z - c.minZ < c.maxZ - pos.z ? c.minZ - radius : c.maxZ + radius;
       } else {
         // centre inside the box: push out along the shallowest axis
         const l = pos.x - c.minX, r = c.maxX - pos.x, b = pos.z - c.minZ, f = c.maxZ - pos.z;

@@ -360,14 +360,16 @@ export class Abilities {
     let dx = want.x - from.x, dz = want.z - from.z, d = Math.hypot(dx, dz);
     if (d < 0.01) { dx = Math.sin(p.yaw); dz = Math.cos(p.yaw); d = R.range; } else { dx /= d; dz /= d; }
     d = Math.min(R.range, d);
-    let y = from.y, last = 0;
+    let y = from.y, last = 0, yBack = from.y;
     for (let s = 0.5; s <= d + 1e-6; s += 0.5) {
       const x = from.x + dx * s, z = from.z + dz * s;
       const gy = phys.groundHeight(x, z, y + 0.3, p.team);
       if (gy > y + R.climb || phys.pointHit(x, gy + 0.6, z, p.team) || phys.pointHit(x, gy + 1.5, z, p.team) || this.overWall(p, x, z, NaN, NaN, NaN)) break;
-      y = gy; last = s;
+      yBack = y; y = gy; last = s;
     }
-    if (last < d - 0.25) last = Math.max(0, last - 0.5);   // (stopped by something: a step short of it)
+    // (stopped by something: a step short of it, at the height of the ground there: on a slope, or where the wall walk ends at a tower,
+    // the ground half a metre back is not where the last step was)
+    if (last < d - 0.25) { last = Math.max(0, last - 0.5); y = yBack; }
     if (last < R.min) return null;
     return { to: new THREE.Vector3(from.x + dx * last, y, from.z + dz * last), d: last, f: new THREE.Vector3(dx, 0, dz) };
   }
@@ -405,6 +407,7 @@ export class Abilities {
     const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
     const f = plan ? plan.f : flat(dir);
     if (p.dash) p.dash.fresh = false;
+    p.rushEnd = false;   // (a guest's word that an earlier run ended, come after the host had ended it: not this run's end)
     // no room to run, or a foe already at the shield (the host's copy of a guest may be closer to one than the guest's screen shows):
     // the bash at once
     if (!plan || this.rushOver(p, { t: 0, dur: 1, chk: 1, f, last: p.pos }, 0)) { this.bashHit(p, f); if (p.dash && p.dash.rush) p.dash = null; return; }

@@ -25,6 +25,17 @@ const r1 = (x) => Math.round(x * 10) / 10;
 const r2 = (x) => Math.round(x * 100) / 100;
 const v3 = (p) => [r2(p.x), r2(p.y), r2(p.z)];
 const vec = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+// a point or direction a GUEST sent: three finite numbers, or null (a guest's message is never trusted: a missing or broken field must not throw in the host's loop)
+// an id or name a GUEST sent: a string (or number), else '' (String() of an object can throw or run its code)
+const gstr = (v) => (typeof v === 'string' ? v.slice(0, 64) : typeof v === 'number' && Number.isFinite(v) ? String(v) : '');
+// a guest's pose (Player.poseMsg): every number in it finite, and the place, yaw and pitch present; otherwise the whole pose is refused
+// (a NaN there would put the guest's hero nowhere on the host and spread to whatever touches it)
+const POSE_NUM = ['x', 'y', 'z', 'yaw', 'pitch', 'vx', 'vz', 'ba', 'h', 'rs', 'dr', 'hx', 'hy', 'hz', 'hyaw'];
+const goodPose = (d) => {
+  for (const k of POSE_NUM) if (d[k] !== undefined && !Number.isFinite(d[k])) return false;
+  return Number.isFinite(d.x) && Number.isFinite(d.y) && Number.isFinite(d.z) && Number.isFinite(d.yaw) && Number.isFinite(d.pitch);
+};
+const gvec = (a) => (Array.isArray(a) && a.length === 3 && Number.isFinite(a[0]) && Number.isFinite(a[1]) && Number.isFinite(a[2]) ? new THREE.Vector3(a[0], a[1], a[2]) : null);
 const QUIET_SOUNDS = new Set(['arrowHit', 'stomp']);
 const ONCE = new Set(['abil', 'spell', 'bolt']);   // (the looks a live room sends again: HostSync.redo)
 // War Mode: a guest says which snapshots it has (the newest, and a bit for each of the 31 before it) in its pose; the host keeps the last 64 of them per
@@ -112,19 +123,26 @@ export class HostSync {
     this.priv.get(player.netId).push(ev);
   }
 
+  // A guest's message, never trusted: a malformed field drops that one message (a warning, once) instead of throwing in the host's loop.
   onData(from, d) {
+    try { this.handle(from, d); } catch (e) {
+      if (!this.warned) { this.warned = true; console.warn('Castle Wars: a guest message was dropped:', e && e.message); }
+    }
+  }
+
+  handle(from, d) {
     const g = this.g;
     const p = g.humans.find((h) => h.netId === from);
     if (!p || !d) return;
     const f = g.factions[p.team];
     switch (d.a) {
       case 'pose':
-        if (!p.drive) p.netPose = d;
+        if (!p.drive && goodPose(d)) p.netPose = d;
         if (g.war && Number.isInteger(d.wq)) heardWar(p, d.wq, d.wm);   // (War Mode: the snapshots this guest has: warnet.js)
         break;
       case 'swing': p.swingT = 0; if (DIRS[d.d]) { p.attackDir = DIRS[d.d]; p.atkDir = p.attackDir; } break;
       case 'strike':
-        if (!p.alive) break;
+        if (!p.alive || !goodPose(d)) break;
         p.netPose = d;
         p.pos.set(d.x, d.y, d.z);
         p.yaw = d.yaw;
@@ -133,19 +151,25 @@ export class HostSync {
         if (p.staggerT <= 0) p.meleeStrike(DIRS[d.d] || 'right', Math.max(0, Math.min(1, d.ch || 0)));
         break;
       case 'shoot':
-        if (p.alive && p.arrows > 0) p.fireFrom(vec(d.f), vec(d.d).normalize(), Math.max(0, Math.min(1, d.draw)));
+        if (p.alive && p.arrows > 0) {
+          const f = gvec(d.f), dir = gvec(d.d);
+          if (f && dir && dir.lengthSq() > 1e-6) p.fireFrom(f, dir.normalize(), Math.max(0, Math.min(1, Number(d.draw) || 0)));
+        }
         break;
       case 'potion': p.drinkPotion(); break;
       case 'abil':
         // class ability: the client has already moved itself; the host works out the rest
         if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r') && !p.drive) {
-          p.mounted = !!d.m && p.hasHorse;
-          g.abilities.use(p, d.s, vec(d.f), vec(d.d), Array.isArray(d.at) && d.at.length === 3 ? vec(d.at) : null);
+          const f = gvec(d.f), dir = gvec(d.d);
+          if (f && dir) {
+            p.mounted = !!d.m && p.hasHorse;
+            g.abilities.use(p, d.s, f, dir, gvec(d.at));
+          }
         }
         break;
       case 'rushEnd': p.rushEnd = true; break;   // (a guest's run has ended on its screen: Abilities.rushOver)
-      case 'class': g.switchClass(p, String(d.cls)); break;
-      case 'talent': g.askTalent(p, String(d.id)); break;
+      case 'class': g.switchClass(p, gstr(d.cls)); break;
+      case 'talent': g.askTalent(p, gstr(d.id)); break;
       case 'respec': g.askRespec(p); break;
       case 'ping': g.pings.fromClient(p, d); break;
       case 'role': g.setRoles(p.team, d); break;
@@ -154,13 +178,13 @@ export class HostSync {
       case 'unboard': g.leaveEngine(p); break;
       case 'drive':
         if (p.drive && p.drive.driver === p) {
-          p.drive.input = { f: Math.max(-1, Math.min(1, d.f || 0)), t: Math.max(-1, Math.min(1, d.t || 0)), fire: !!d.fire, cam: d.c ? vec(d.c) : null, dir: d.d ? vec(d.d).normalize() : null };
+          p.drive.input = { f: Math.max(-1, Math.min(1, Number(d.f) || 0)), t: Math.max(-1, Math.min(1, Number(d.t) || 0)), fire: !!d.fire, cam: gvec(d.c), dir: gvec(d.d) ? gvec(d.d).normalize() : null };
         }
         break;
-      case 'formation': g.setFormation(p.team, String(d.f)); break;
+      case 'formation': g.setFormation(p.team, gstr(d.f)); break;
       case 'gate': g.toggleGate(p.team); break;
       case 'ready': g.setReady(p.team, p); break;
-      case 'buy': g.buyFor(p.team, String(d.id)); break;
+      case 'buy': g.buyFor(p.team, gstr(d.id)); break;
       case 'stand': standFor(g, p.team); break;   // the Last Stand (comeback.js)
       case 'war': if (g.war) g.war.fromClient(p, d); break;   // War Mode's army panel (warmode.js)
       case 'target': f.siegeTarget = g.castles[d.team] || null; break;

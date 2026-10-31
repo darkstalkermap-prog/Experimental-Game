@@ -179,6 +179,7 @@ export class HeroMode {
     if (p.drive) g.leaveEngine(p);
     const name = p.name;
     p.netId = null;
+    p.netPose = null;   // (his last pose would pull the hero back to where he left every frame: Player.remoteUpdate)
     p.isBot = true;
     p.bot = new HeroBot(g, p, { enemyTeam: 1 - p.team });
     if (p.alive) this.guard(p, (b) => b.reset());
