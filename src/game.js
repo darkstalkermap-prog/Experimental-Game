@@ -68,6 +68,25 @@ const ANIM_CAP = 300;   // soldiers animated at once at the medium quality (upda
 const SCAN_ALL = 400;   // soldiers at most looked at by one search of the whole field (findEnemy)
 const roleOf = (u) => (u.lane ? 'lane' : u.army ? 'army' : 'garrison');   // (the roster role a soldier holds: see assignRole)
 
+// Game.findEnemy's search: what it looks for and the best foe so far (numbers start as -0: a fraction's field, see units.js), and the test of one candidate
+const SEARCH = { unit: null, radius: -0, anchor: null, leash: -0, skip: null, only: -1, near: -0, sealed: null, war: false, best: null, bd: -0 };
+function consider(o) {
+  const S = SEARCH, unit = S.unit;
+  if (o === S.skip || !o.alive || allied(o.team, unit.team) || o.drive) return;
+  if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
+  const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
+  if (d > S.radius) return;
+  if (S.only >= 0 && d > S.near && (o.team !== S.only || (unit.foeKind && kindGroup(o) !== unit.foeKind))) return;
+  if (!unit.ranged && o.pos.y - unit.pos.y > 2.4 && !S.war) return; // up on a wall: unreachable (War Mode has no walls: higher up a slope is not out of reach)
+  if (S.sealed && !S.sealed.isInside(o.pos, -1)) return;
+  if (S.anchor && S.leash < Infinity && Math.hypot(o.pos.x - S.anchor.x, o.pos.z - S.anchor.z) > S.leash) return;
+  let score = d;
+  if (o.isSiege) score -= 1;
+  if (o.crewOf) score -= 3;   // cut down the crew
+  if (unit.ranged && o.post) score += 6;
+  if (score < S.bd) { S.bd = score; S.best = o; }
+}
+
 // Everybody on the ground, bucketed twice over: 4 m cells for the many short looks (a blow, a shove between neighbours) and COARSE m cells for the long ones
 // (an archer's 50 m, a soldier's look for the nearest foe). A long look through the fine cells visits some 700 of them; through the coarse ones 50, and
 // with War Mode's thousands of soldiers that was a large share of the frame.
@@ -634,31 +653,20 @@ export class Game {
   // Nearest hostile character or siege engine for an AI unit. only: a team (War Mode: the army a charge was sent at; and unit.foeKind, one group of it)
   // whose men alone are looked for, others only within `near` metres (in the way); -1 for anyone
   findEnemy(unit, radius, anchor, leash, skip = null, only = -1, near = 0) {
-    let best = null, bd = Infinity;
     // a swordsman of the garrison inside his sealed castle (the gate standing, no breach) cannot reach anyone outside the
     // walls: the gate does not open for him (gateShouldOpen), so he leaves them to the archers instead of crowding the gateway
     const home = unit.homeCastle;
     const sealed = !unit.ranged && !unit.lane && !unit.army && !unit.isHero && home && !home.fallen && home.gate.alive &&
       home.isInside(unit.pos, 0) && !home.walls.some((w) => !w.alive) ? home : null;
-    const consider = (o) => {
-      if (o === skip || !o.alive || allied(o.team, unit.team) || o.drive) return;
-      if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
-      const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
-      if (d > radius) return;
-      if (only >= 0 && d > near && (o.team !== only || (unit.foeKind && kindGroup(o) !== unit.foeKind))) return;
-      if (!unit.ranged && o.pos.y - unit.pos.y > 2.4 && !this.war) return; // up on a wall: unreachable (War Mode has no walls: higher up a slope is not out of reach)
-      if (sealed && !sealed.isInside(o.pos, -1)) return;
-      if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;
-      let score = d;
-      if (o.isSiege) score -= 1;
-      if (o.crewOf) score -= 3;   // cut down the crew
-      if (unit.ranged && o.post) score += 6;
-      if (score < bd) { bd = score; best = o; }
-    };
+    // (the search's state is one object kept for good and `consider` a function of the module: a closure made for each search, and the best score
+    // kept in it, were garbage for every soldier's every look)
+    const S = SEARCH;
+    S.unit = unit; S.radius = radius; S.anchor = anchor; S.leash = leash; S.skip = skip; S.only = only; S.near = near; S.sealed = sealed; S.war = !!this.war;
+    S.best = null; S.bd = Infinity;
     // near first: anything found within NEAR (by a margin bigger than the scores' bonuses) is the nearest of all, and the long look is not needed
     const r1 = Math.min(radius, NEAR_LOOK);
     this.grid.query(unit.pos.x, unit.pos.z, r1, consider);
-    if (!(best && bd <= r1 - 4) && radius > r1) {
+    if (!(S.best && S.bd <= r1 - 4) && radius > r1) {
       if (radius <= 50) this.grid.query(unit.pos.x, unit.pos.z, radius, consider);
       else {
         // (the whole field: with hundreds of soldiers every few one of them is looked at, a different few for each searcher. The nearest of those is
@@ -670,6 +678,8 @@ export class Game {
       }
     }
     for (const s of this.siege) consider(s);
+    const best = S.best;
+    S.unit = S.anchor = S.skip = S.sealed = S.best = null;   // (nothing of the search is held on to)
     return best;
   }
 

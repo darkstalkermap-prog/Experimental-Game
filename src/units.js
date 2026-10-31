@@ -26,6 +26,7 @@ function marchYaw(h) {
 // the rule modifier `speed` (a Battle Decree), read from the rules only when they change and not for every step of every soldier
 let marchVer = -1, marchMul = 1;
 let NEXT_ID = 1;
+const DEATH_POSED = 2.6;   // s after a death by which every fall has come to rest (poseDeath 1.3 s, a giant's 1.15, poseHorseDead 2.5)
 // the pose a soldier is drawn in this frame (Unit.animate): one object filled in for each soldier, not a new one for each of them every frame
 // (with War Mode's thousands that was a large share of the frame's garbage); poseSoldier reads it at once and keeps nothing of it
 // (its numbers start as -0, a fraction to the engine: see Z in the constructor)
@@ -89,6 +90,7 @@ export class Unit {
     this.thinkTimer = Math.random() * 0.3;
     this.walkPhase = Math.random() * 6;
     this.deathT = -0;
+    this.deadPosed = false;   // (the fallen pose is final: animateDeath)
     this.post = null;
     this.slot = 0;
     this.los = true;
@@ -182,6 +184,7 @@ export class Unit {
     this.hp = 0;
     this.alive = false;
     this.deathT = 0;
+    this.deadPosed = false;
     if (this.crewOf) this.crewOf.crewDied(this);
     this.leavePost();
     this.game.audio.play('death', this.pos);
@@ -892,8 +895,13 @@ export class Unit {
     const m = this.model;
     const t = Math.min(1, this.deathT / 0.55);
     if (m) {
-      poseDeath(m, this.deathT, this.mounted ? 2 : this.id % 3, this.id & 2 ? 1 : -1);
-      if (this.horse) poseHorseDead(this.horse, this.deathT);
+      // (the fall is over by DEATH_POSED seconds, the horse's last kick too: from then on the pose is the same, and the dead of a big battle, a
+      // few hundred of them lying there for 12 s, are not posed again every frame)
+      if (!this.deadPosed) {
+        poseDeath(m, this.deathT, this.mounted ? 2 : this.id % 3, this.id & 2 ? 1 : -1);
+        if (this.horse) poseHorseDead(this.horse, this.deathT);
+        if (this.deathT >= DEATH_POSED) this.deadPosed = true;
+      }
       const fade = Math.max(0, Math.min(1, (this.deathT - 8) / 3.2));
       m.inst[14] = 0; m.inst[15] = fade;
       if (this.horse) this.horse.inst[15] = fade;

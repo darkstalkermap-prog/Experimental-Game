@@ -818,14 +818,15 @@ export class UI {
     this.hudT -= dt;
     if (this.hudT <= 0) {
       this.hudT = 0.12;
-      $('hpText').textContent = `${Math.ceil(p.hp)} / ${p.maxHp}`;
-      $('gold').textContent = Math.floor(f.gold);
+      // (each field is written only when it changes: a text written again is a new node and a layout to redo, eight times a second)
+      setText($('hpText'), `${Math.ceil(p.hp)} / ${p.maxHp}`);
+      setText($('gold'), String(Math.floor(f.gold)));
       updateDecreeHud(this, g);     // (the decrees in force, the underdog's wage, the Last Stand: see decrees.js and comeback.js)
       updateComebackHud(this, g);
-      $('round').textContent = `${g.round ? `Wave ${g.round}` : 'Preparation'}${g.timeLimit ? ` · ${clock(g.timeLeft)} left` : ''}`;   // (a Short war has a clock)
-      if (g.phase === 'prep') $('phase').textContent = `Battle begins in ${clock(g.phaseT)}`;
-      else $('phase').textContent = `Next wave in ${clock(g.phaseT)}`;
-      $('war').textContent = f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`;
+      setText($('round'), `${g.round ? `Wave ${g.round}` : 'Preparation'}${g.timeLimit ? ` · ${clock(g.timeLeft)} left` : ''}`);   // (a Short war has a clock)
+      if (g.phase === 'prep') setText($('phase'), `Battle begins in ${clock(g.phaseT)}`);
+      else setText($('phase'), `Next wave in ${clock(g.phaseT)}`);
+      setText($('war'), f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`);
       if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: the practice panel'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
       setText($('weapon'), p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
@@ -840,18 +841,19 @@ export class UI {
       const hud = $('hud'), noArmy = rc.army === 0, inBattle = !!g.practice || g.phase !== 'prep';
       if (noArmy !== this.noArmy) { this.noArmy = noArmy; hud.classList.toggle('noarmy', noArmy); }
       if (inBattle !== this.inBattle) { this.inBattle = inBattle; hud.classList.toggle('inbattle', inBattle); }
-      $('clsName').textContent = `${p.cls.icon} ${p.cls.name}`;
+      setText($('clsName'), `${p.cls.icon} ${p.cls.name}`);
       $('clsName').style.color = p.cls.color;
-      $('lvl').textContent = ` · Lv ${p.level}`;
+      setText($('lvl'), ` · Lv ${p.level}`);
       $('xpFill').style.width = `${(levelProgress(p.xp, p.level) * 100).toFixed(1)}%`;
       $('xpbar').classList.toggle('max', p.level >= MAX_LEVEL);
-      $('xpbar').title = p.level >= MAX_LEVEL ? 'Level 5: the highest level' : `Level ${p.level}: ${Math.floor(p.xp)} / ${XP_FOR_LEVEL[p.level + 1]} experience`;
+      const xpTip = p.level >= MAX_LEVEL ? 'Level 5: the highest level' : `Level ${p.level}: ${Math.floor(p.xp)} / ${XP_FOR_LEVEL[p.level + 1]} experience`;
+      if ($('xpbar').title !== xpTip) $('xpbar').title = xpTip;
       if (g.hero) this.updateHeroHud(); else this.renderFactions();
       this.updateHill(dt);
       if (!p.alive) {
         $('respawn').classList.remove('hidden');
         $('respawnT').textContent = f.castle.fallen ? `Your keep has fallen – no respawn${g.callableBack(f) ? ` (an ally can call you back for ${SUMMON.cost} gold)` : ''}` : `Respawning in ${Math.ceil(g.hero ? this.heroRespawn() : f.respawnT)}s`;
-      } else $('respawn').classList.add('hidden');
+      } else if (!$('respawn').classList.contains('hidden')) $('respawn').classList.add('hidden');
       $('scoreboard').classList.toggle('hidden', !g.input.down('Tab'));
       if (g.input.down('Tab')) this.renderScoreboard();
       updateFlowHud(g, this);   // (Ready in the first preparation, the offer to end a decided battle: src/flow.js)
@@ -935,7 +937,7 @@ export class UI {
         <span class="g" title="gate">${c.fallen ? 'FALLEN' : gate}</span>
         <span class="t" title="troops">${g.troopCount(f.team)}⚔</span></div>`;
     }
-    $('factions').innerHTML = html;
+    if (html !== this.factionsHtml) { this.factionsHtml = html; $('factions').innerHTML = html; }   // (rebuilt only when a figure in it changed)
   }
 
   renderScoreboard() {
@@ -1109,7 +1111,7 @@ export class UI {
     for (const c of g.castles) {
       if (c.gate.alive) check({ alive: true, pos: c.gatePos.clone().setY(c.center.y), ref: c.gate }, 3, CASTLE.gateH);
     }
-    if (!best) { el.classList.add('hidden'); return; }
+    if (!best) { if (!el.classList.contains('hidden')) el.classList.add('hidden'); return; }
     const o = best.ref || best;
     const team = o.team;
     const house = (g.factions[team] || { name: 'Unknown' }).name;
@@ -1118,8 +1120,8 @@ export class UI {
     else if (o.kind === 'gate') name = `${house} – Gate`;
     else if (o.isSiege) name = `${o.name} – ${house}${o.abandoned ? ' (abandoned: E to take it)' : ''}`;
     else name = `${o.name}${!o.isHero && o.rank > 1 ? ' ' + '★'.repeat(o.rank) : ''} – ${house}${team === g.localTeam && !o.isHero && !o.isGiant && !o.isCrew ? ` · ${o.role}` : ''}`;
-    el.classList.remove('hidden');
-    $('targetName').textContent = name;
+    if (el.classList.contains('hidden')) el.classList.remove('hidden');
+    setText($('targetName'), name);
     $('targetName').style.color = TEAM_CSS[team] || NEUTRAL_CSS;
     $('targetFill').style.width = `${(o.hp / o.maxHp) * 100}%`;
     $('targetFill').style.background = team === g.localTeam ? '#4fa3ff' : allied(team, g.localTeam) ? '#4fd17a' : '#d33';

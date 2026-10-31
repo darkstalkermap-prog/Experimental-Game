@@ -371,18 +371,39 @@ export class Projectiles {
     }
   }
 
+  // the first one the point is in, in the grid's order (its fine cells walked here, not through grid.query with a callback: this is asked for
+  // every arrow in flight at every sub-step, and a battle's volleys made a closure each time)
   hitCharacter(pt, team, pad, skip = null) {
-    let found = null;
-    this.game.grid.query(pt.x, pt.z, 1.2 + pad, (u) => {
-      if (found || !u.alive || allied(u.team, team) || (skip && skip.has(u))) return;
-      const dx = pt.x - u.pos.x, dz = pt.z - u.pos.z;
-      const r = u.radius + pad;
-      if (dx * dx + dz * dz > r * r) return;
-      if (pt.y < u.pos.y || pt.y > u.pos.y + u.height) return;
-      found = u;
-    });
+    const G = this.game.grid, c = G.cell, R = 1.2 + pad;
+    if (R < 20) {   // (grid.query's fine cells; a reach of 20 m and more is looked up in its coarse ones)
+      const x0 = Math.floor((pt.x - R) / c), x1 = Math.floor((pt.x + R) / c), z0 = Math.floor((pt.z - R) / c), z1 = Math.floor((pt.z + R) / c);
+      for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+        const cell = G.map.get(G.key(ix, iz));
+        if (!cell) continue;
+        for (let i = 0, a = cell.a, n = cell.n; i < n; i++) {
+          const u = a[i];
+          if (!u.alive || allied(u.team, team) || (skip && skip.has(u))) continue;
+          const dx = pt.x - u.pos.x, dz = pt.z - u.pos.z;
+          const r = u.radius + pad;
+          if (dx * dx + dz * dz > r * r) continue;
+          if (pt.y < u.pos.y || pt.y > u.pos.y + u.height) continue;
+          return u;
+        }
+      }
+    } else {
+      let found = null;
+      G.query(pt.x, pt.z, R, (u) => {
+        if (found || !u.alive || allied(u.team, team) || (skip && skip.has(u))) return;
+        const dx = pt.x - u.pos.x, dz = pt.z - u.pos.z;
+        const r = u.radius + pad;
+        if (dx * dx + dz * dz > r * r) return;
+        if (pt.y < u.pos.y || pt.y > u.pos.y + u.height) return;
+        found = u;
+      });
+      if (found) return found;
+    }
     // the archers on the castle towers are men too (towerarchers.js): a cheap test that is over at once away from a tower roof
-    return found || archerAt(this.game, pt, team, pad, skip);
+    return archerAt(this.game, pt, team, pad, skip);
   }
 
   // an arrow lands: it joins the instanced mesh of landed arrows; kind is what it hit ('earth', 'wood', or the kind of a collider)
