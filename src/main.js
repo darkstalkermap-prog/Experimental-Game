@@ -149,6 +149,10 @@ function selectDifficulty(d) {
   refreshQuick();
 }
 document.querySelectorAll('#difficulty button').forEach((b) => b.addEventListener('click', () => { selectDifficulty(b.dataset.d); rememberLast(); }));
+// the online room's AI difficulty: the host chooses it in the lobby (lobbyui.js), remembered apart from the menu's so that a host's online habit does not
+// change their single-player battles (a host who never chose one starts from the menu's); it goes out in every lobby view and in the start message
+const isDiff = (d) => Object.prototype.hasOwnProperty.call(DIFFICULTY, d);
+let roomDiff = isDiff(stored('cw-mpdiff', '')) ? stored('cw-mpdiff', '') : difficulty;
 
 function selectMap(size) {
   mapSize = size;
@@ -545,7 +549,7 @@ const heroRoom = () => (heroOn ? { win: heroWin, size: room.size, seats: room.se
 // why the host cannot start the battle yet (null: it can)
 const startProblem = () => (heroOn ? heroProblem(room.seats, room.size, seated()) : warProblem(room.slots, seated(), coop));
 // what everybody's lobby shows (the host sends it as it is; a guest draws what it is sent)
-const roomView = () => ({ players: lobby, coop, obj: warOn ? 'war' : objective, war: warOn ? warSetup() : null, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
+const roomView = () => ({ players: lobby, coop, diff: roomDiff, obj: warOn ? 'war' : objective, war: warOn ? warSetup() : null, len: options.length, land: { biome: land.biome, seed: land.seed }, rv: lobbyRivals(), slots: room.slots, hero: heroRoom() });
 // the first colour nobody in the room flies (`wish` when it is free)
 const freeColor = (wish, who = null) => {
   const taken = new Set(lobby.filter((p) => p !== who).map((p) => p.col));
@@ -601,13 +605,14 @@ const hostActions = {
   win(id) { if (HERO.modes[id]) { showHeroWin(id); try { localStorage.setItem('cw-herowin', id); } catch (e) { /* ignore */ } lobbyBroadcast(); } },
   mode(o) { selectObjective(o); reseat(seated(), room.slots, room.seats, room.size); lobbyBroadcast(); },
   watch(on) { if (hostWatch(lobby.find((p) => p.netId === null), on)) lobbyBroadcast(); },
+  diff(d) { if (!isDiff(d) || d === roomDiff) return; roomDiff = d; store('cw-mpdiff', d); lobbyBroadcast(); },
 };
 // a guest's clicks: asks for the host
 const guestActions = {
   take(n) { net.toHost({ k: guestView && guestView.hero ? 'hseat' : 'seat', n }); },
   color(id) { if (isColorId(id)) { myColor = id; store('cw-color', id); net.toHost({ k: 'col', col: id }); } },
   watch(on) { net.toHost({ k: 'watch', on: !!on }); },
-  state() {}, move() {}, size() {}, win() {}, mode() {},
+  state() {}, move() {}, size() {}, win() {}, mode() {}, diff() {},
 };
 function showRoom(v, isHost) {
   ui.renderLobby(v.players.filter((p) => !p.watch), v.coop, v.obj, v.len);
@@ -677,9 +682,9 @@ $('startOnline').addEventListener('click', () => {
   const colors = assignColors(colorWants(players, !!hero));
   const empty = hero ? [] : emptyTeams(room.slots, players);
   const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
-  net.toAll({ k: 'start', diff: difficulty, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
+  net.toAll({ k: 'start', diff: roomDiff, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
   const me = players.find((p) => p.netId === null);   // (none: the host watches, and simulates the battle without a hero of its own)
-  begin(difficulty, { mode: 'host', spectator: !me, localTeam: me ? me.team : 0, players: players.map((p) => ({ ...p, me: p === me })), watchers: watchers.filter((w) => w.netId !== null),
+  begin(roomDiff, { mode: 'host', spectator: !me, localTeam: me ? me.team : 0, players: players.map((p) => ({ ...p, me: p === me })), watchers: watchers.filter((w) => w.netId !== null),
     coop: !hero && coop, objective, hero, war, empty, colors, options: opts });
 });
 
@@ -702,7 +707,7 @@ $('joinBtn').addEventListener('click', async () => {
     }
     if (d.k === 'lobby' && Array.isArray(d.players)) {
       hearWar(d.war);   // (War Mode's Armies row)
-      guestView = { players: d.players, coop: !!d.coop, obj: OBJECTIVES[d.obj] || d.obj === 'war' ? d.obj : 'conquest', len: d.len, rv: d.rv, slots: cleanSlots(d.slots),
+      guestView = { players: d.players, coop: !!d.coop, diff: isDiff(d.diff) ? d.diff : 'normal', obj: OBJECTIVES[d.obj] || d.obj === 'war' ? d.obj : 'conquest', len: d.len, rv: d.rv, slots: cleanSlots(d.slots),
         hero: d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null };
       showRoom(guestView, false);
       const l = sanitizeOptions(d.land);   // (the land the host has picked; the guest builds it when the battle starts)
@@ -715,7 +720,7 @@ $('joinBtn').addEventListener('click', async () => {
       const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
       const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
       const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
-      begin(Object.prototype.hasOwnProperty.call(DIFFICULTY, d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(isDiff(d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);

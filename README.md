@@ -93,6 +93,11 @@ the Hill or Hero Mode, below) and:
   each other, allied gates open for each other, and armies never march on an allied castle. Allies are marked
   **ally** in the castle list. A side wins when every rival house has fallen, and loses when every allied
   castle has fallen.
+- **AI difficulty** (Easy / Normal / Hard, the **AI** row of the lobby, in every mode): the host chooses, guests see it read-only.
+  It is the single-player scale (`DIFFICULTY` in config.js): the AI lords' and rival lords' gold, bounties and troops, War Mode's
+  AI generals (their gold, their soldiers' and their own strength) and the hero bots' aim, reaction and guard. It travels in the
+  start message (and stays for a Rematch); the host's simulation plays by it, guests only display. Remembered for the host
+  (`cw-mpdiff`, apart from the menu's difficulty, which only single player uses).
 
   **Calling a fallen ally back (co-op Conquest).** A house is finished when its keep has fallen and its hero is dead:
   that player can only watch. Any ally still in the battle can pay **500 gold** to bring them back to life.

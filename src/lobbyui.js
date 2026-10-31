@@ -12,6 +12,12 @@ import { WAR_DESC } from './warui.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// the lobby's AI difficulty buttons, in words (the numbers are config.js DIFFICULTY, the same as the menu's)
+const DIFF_TIPS = {
+  easy: 'Easy: AI lords earn less gold and field weaker troops; hero bots aim and react slower',
+  normal: 'Normal: the AI plays at full strength',
+  hard: 'Hard: AI lords earn more gold and field stronger troops; hero bots aim and react faster',
+};
 const css = (id) => (PALETTE[id] || PALETTE.blue).css;
 
 let styled = false;
@@ -45,6 +51,10 @@ function style() {
 #menu .setup #warFormat, #menu .setup .seatrow { order: 2; }   /* (the setup card orders its rows: these come after the Mode row and its own rows, before the map) */
 .seatrow button i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 5px; vertical-align: -1px; }
 .seatrow button small { opacity: 0.75; }
+#lobbyDiff { align-items: center; }
+#lobbyDiff .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
+#lobbyDiff button { padding: 6px 14px; font-size: 13px; }
+#lobbyDiff button:disabled.active { opacity: 1; }   /* (a guest sees the host's choice clearly, only without the click) */
 `;
   document.head.appendChild(s);
 }
@@ -78,8 +88,8 @@ function buttons(el, label, items, onPick, disabled = false) {
 
 // ---------------- the room ----------------
 // v: { players: [{ team, hs, name, netId, cls, cos, col }], me (this page's netId: null on the host), host, hero: null | { size, seats, win }, slots,
-//      coop, rv (the rival lords), problem (why the battle cannot start, or null) }
-// on: { take(n), state(n), move(netId), color(id), size(n), win(id), watch(on) }   (n: a castle in a war, a seat in the Hero Game Mode)
+//      coop, rv (the rival lords), diff (the AI difficulty: 'easy' | 'normal' | 'hard'), problem (why the battle cannot start, or null) }
+// on: { take(n), state(n), move(netId), color(id), size(n), win(id), watch(on), diff(d) }   (n: a castle in a war, a seat in the Hero Game Mode)
 // A player with `watch` watches the battle instead of playing (spectate.js): no castle or seat, a line of their own under the list.
 export function drawLobby(v, on) {
   style();
@@ -109,6 +119,16 @@ export function drawLobby(v, on) {
   if ($('lobbyWarFormat')) {
     $('lobbyWarFormat').classList.toggle('hidden', !war);
     for (const b of $('lobbyWarFormat').querySelectorAll('button')) b.disabled = !v.host;
+  }
+  // how hard the AI plays (the AI lords, War Mode's generals, the hero bots: config.js DIFFICULTY): the host's choice, read-only for a guest
+  const dr = $('lobbyDiff');
+  if (dr) {
+    for (const b of dr.querySelectorAll('button')) {
+      b.classList.toggle('active', b.dataset.d === v.diff);
+      b.disabled = !v.host;
+      b.title = DIFF_TIPS[b.dataset.d] + (v.host ? '' : ' (the host chooses)');
+      b.onclick = v.host && on.diff ? () => on.diff(b.dataset.d) : null;
+    }
   }
   // the Hero Game Mode's rows: how to win and how many a side
   const parent = objRow ? objRow.parentNode : $('lobbyList').parentNode;
