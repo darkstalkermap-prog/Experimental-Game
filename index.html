@@ -154,10 +154,13 @@
   kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 14px/1.2 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.45); color: #fff; }
   #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
   #prompt kbd { font-size: 14px; }
-  /* the orders bar: only while soldiers march in your army (class noarmy on the HUD otherwise, see ui.update) */
-  #command { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: flex; gap: 12px; align-items: center; font-size: 14px; padding: 5px 10px; white-space: nowrap; }
+  /* the orders bar: only while soldiers march in your army (class noarmy on the HUD otherwise, see ui.update). It sits centred in the gap between the
+     hero panel (16 + 324 px) and the minimap (16 + 188 px), all in the HUD's zoomed pixels, and its pieces wrap onto a second row when the window is
+     too narrow for them at this UI scale (as War Mode's bar, warui.js #warCmd): it never covers either */
+  #command { position: absolute; left: 348px; right: 214px; bottom: 16px; width: fit-content; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 4px 12px; align-items: center; font-size: 14px; padding: 5px 10px; white-space: nowrap; }
   #hud.noarmy #command { display: none; }
-  #command .orders { display: flex; gap: 4px; padding-left: 10px; border-left: 1px solid var(--edge); }
+  #command .orders { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; padding-left: 10px; border-left: 1px solid var(--edge); }
   #command .orders span { opacity: 0.6; padding: 1px 6px; border-radius: 3px; }
   #command .orders span.active { opacity: 1; background: rgba(224,180,76,0.28); color: #fff; }
   #command kbd { padding: 0 4px; }
@@ -171,8 +174,8 @@
   #command .foes kbd.active { opacity: 1; box-shadow: 0 0 0 2px #fff; }
   #command .foes kbd.out { opacity: 0.25; }
   #command > .cg:last-child { padding-left: 10px; border-left: 1px solid var(--edge); opacity: 0.8; }
-  @media (max-width: 1100px) { #command { bottom: 160px; } #toasts { bottom: 206px; } }
-  @media (max-width: 1000px) { #command { font-size: 12px; gap: 8px; } #command .orders { gap: 2px; } }
+  @media (max-width: 1100px) { #toasts { bottom: 150px; } }   /* (above the orders bar when it wraps) */
+  @media (max-width: 1000px) { #command { font-size: 12px; column-gap: 8px; } #command .orders { gap: 2px; } }
   .orders-grid { grid-column: 1 / -1; display: grid; gap: 14px; }
   .orders-grid h5 { margin: 0 0 6px; font-family: Cinzel, serif; font-size: 14px; color: var(--gold); }
   .orders-grid .row { justify-content: flex-start; margin: 0; }
@@ -229,7 +232,9 @@
   .abil.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(224,180,76,0.35); }
   .abil.aiming { border-color: #8fe88a; box-shadow: 0 0 12px rgba(143,232,138,0.7); }
   #aimhint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 5px 14px; background: var(--panel); border: 1px solid #8fe88a; border-radius: 4px; font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; color: #d8ffd4; pointer-events: none; }
-  #buffs { position: absolute; left: calc(100% + 8px); bottom: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+  /* the buffs: a row of labels over the abilities, inside the dock's column (beside them they stood in the gap where the orders bars are) */
+  #buffs { display: flex; flex-wrap: wrap; gap: 2px 4px; max-width: 100%; font-size: 14px; }
+  #buffs:empty { display: none; }
   #buffs span { background: rgba(0,0,0,0.66); border-left: 3px solid var(--gold); border-radius: 0 3px 3px 0; padding: 1px 8px; white-space: nowrap; }
 
   /* class picker (main menu and lobby) */
@@ -852,10 +857,10 @@
   </div>
   <div id="dock">
   <div id="talentHint" class="hidden"><kbd>N</kbd> Talent point available (<span id="talentN">1</span>)</div>
+  <div id="buffs"></div>
   <div id="abilities">
     <div class="abil" id="abilQ"><span class="ic"></span><kbd>Q</kbd><span class="nm"></span><span class="kind">Attack</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
     <div class="abil" id="abilR"><span class="ic"></span><kbd>R</kbd><span class="nm"></span><span class="kind">Defence</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
-    <div id="buffs"></div>
   </div>
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>

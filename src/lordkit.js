@@ -8,6 +8,9 @@
 // one. He wears its look (models.js HERO_DESC) with a lord's long cape. No Cavalier: a lord has no horse.
 // The difficulty: on Easy a lord looks for an opening less often, waits longer once an ability is ready, aims worse and wants a bigger knot of
 // foes before a run, a leap or a Power Shot; on Hard he is quick to use them. (The lord's own health and damage are the AI's as before.)
+// A lord is a commander, not a raid boss (BITE): his abilities do less to soldiers than a hero's do (a hero takes them in full), heal less of
+// his own wounds, come round more slowly than a hero's, and more slowly again while nobody threatens his castle; Easy gentler, Hard nearly a
+// hero's. (A Fireball or Smite wants two foes in its blast, or a hero: a lone soldier is left to his men.)
 // The level: a rival lord rises a level every five waves (5 at most) and learns what a hero bot would (herobot.js TALENT_PREFS); a War Mode
 // general starts at a level by the difficulty.
 // Online: the host runs the kit; a guest's copy only shows it (the class, the bow out and drawn: `net` in the lord's snapshot entry, netsync.js).
@@ -32,11 +35,20 @@ const SKILL = {
   slack: [3, 0.3],      // seconds (at most, at random) an ability waits once it is ready
   aim: [0.08, 0.02],    // radians of aim error
 };
+// How hard his abilities bite: [easy, normal, hard] (in between by DIFFICULTY.aiAggro, as SKILL).
+export const BITE = {
+  troops: [0.3, 0.4, 0.7],    // the damage they do to soldiers and engines, of a hero's (Game.damage; heroes, players' and lords', take it in full)
+  cd: [1.6, 1.4, 1],          // his cooldowns, of a hero's
+  calm: [1.6, 1.5, 1.2],      // and longer again while no foe is within THREAT m of his castle (War Mode has none: there it is always the fight)
+  mend: [0.3, 0.4, 0.7],      // what his abilities heal of his own wounds, of a hero's (Healing Light, the Berserker's talents; his men are healed in full)
+};
+const THREAT = 50;      // (as far as LordAI.threat looks)
 const SCAN = 50;        // how far he looks around him (metres)
 const RANGER_LORD = { range: 34, cd: 1.5 };   // a Ranger lord's ordinary shots: reach and seconds between two (a lord's damage each)
 const LIFT_MAX = 12;    // (metres above the ground the snapshot can tell: a leap's arc)
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
 const lerp = (a, b, t) => a + (b - a) * t;
+const by3 = (v, t) => (t < 0.5 ? lerp(v[0], v[1], t * 2) : lerp(v[1], v[2], t * 2 - 1));   // (easy, normal, hard at skill 0, 0.5, 1)
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
 
 // The class of house f's lord.
@@ -69,13 +81,14 @@ export class LordKit {
     this.draw = null;       // a Power Shot or a Sniper Shot being drawn: { slot, t, full, o }
     this.bowT = 0;          // the bow goes back on the shoulder when this runs out
     this.stats = { q: 0, r: 0, looks: 0 };
+    this.bite = 1;          // (what his abilities do to soldiers, of a hero's: set below by the difficulty)
     u.classId = cls;
     // the Ranger fights with the bow: she shoots from a distance as an archer does (never from a wall post: units.js), her bow always out
     if (cls === 'ranger') { u.ranged = true; u.range = RANGER_LORD.range; u.cd = RANGER_LORD.cd; this.bow(true); }
     if (this.view) return;
     const g = this.g;
     // what the abilities ask of a hero (classes.js Abilities): cooldowns, timed effects, talents and the class numbers
-    u.abilCd = { q: 3 + Math.random() * 4, r: 3 + Math.random() * 4 };   // (not the moment he rises)
+    u.abilCd = { q: 0, r: 0 };   // (set below, once his class numbers are known)
     u.buffs = new Buffs();
     u.talents = {};
     u.talentRev = 0;
@@ -88,14 +101,18 @@ export class LordKit {
       bowDmg: { configurable: true, get() { return PLAYER.bowDmg * kit.k * kit.mods().bow; } },
       talentPoints: { configurable: true, get() { return talentPointsFor(u.level) - Object.keys(u.talents).length; } },
     });
-    u.abilityCd = (slot) => { const d = abilityOf(u, slot); return d.cd * (kit.mods().cd || 1) * talentFx(u, 'cd_' + d.id, 1); };
-    u.heal = (n) => { u.hp = Math.min(u.maxHp, u.hp + n); };
+    u.abilityCd = (slot) => { const d = abilityOf(u, slot); return d.cd * (kit.mods().cd || 1) * talentFx(u, 'cd_' + d.id, 1) * kit.cdMul(); };
+    u.heal = (n) => { u.hp = Math.min(u.maxHp, u.hp + n * kit.mend); };   // (only his own abilities heal him this way: BITE.mend)
     u.eyePos = (out = new THREE.Vector3()) => out.set(u.pos.x, u.pos.y + u.height * 0.86, u.pos.z);
     this.k = u.dmg / UNIT_TYPES.lord.dmg;   // (how much stronger than a plain lord: the war's length and the difficulty; his spells and bow grow with it)
     const aggro = g.diff && g.diff.aiAggro !== undefined ? g.diff.aiAggro : 1;
     this.skill = Math.max(0, Math.min(1, (aggro - 0.7) / 0.6));
     this.sk = {};
     for (const key in SKILL) this.sk[key] = lerp(SKILL[key][0], SKILL[key][1], this.skill);
+    this.bite = by3(BITE.troops, this.skill);   // (Game.damage: what his abilities do to a soldier)
+    this.cdK = by3(BITE.cd, this.skill);
+    this.calmK = by3(BITE.calm, this.skill);
+    this.mend = by3(BITE.mend, this.skill);
     this.need = this.skill < 0.34 ? 1 : 0;   // (Easy wants one more foe in a knot)
     this.next = 1 + Math.random();
     this.round = g.round;
@@ -104,6 +121,9 @@ export class LordKit {
     this.foes = []; this.dist = []; this.friends = [];
     this.n = { c3: 0, c5: 0, c8: 0, c12: 0, heroes8: 0, near: 1e9, heroNear: 1e9 };
     this.levelUp(true);
+    // a lord who rises (or rises again: he comes back a little while after each fall, as long as his keep stands) has his abilities some while
+    // after, not the moment he is up: a third to two thirds of a cooldown
+    for (const sl of ['q', 'r']) u.abilCd[sl] = abilityOf(u, sl).cd * (this.mods().cd || 1) * this.cdK * (0.35 + 0.35 * Math.random());
   }
 
   // the class numbers with the talents learnt (not the hero levels: a lord grows with the war instead), spells by the lord's strength
@@ -163,6 +183,19 @@ export class LordKit {
       this.think();
     }
     return !!(u.leap || u.dash || this.draw);
+  }
+
+  // His cooldown for an ability just used, of a hero's: the difficulty's, longer while his castle is not threatened.
+  cdMul() { return this.cdK * (this.threatened() ? 1 : this.calmK); }
+
+  // Is a foe at (or near) his castle? (War Mode: no castles, always the fight. A lord with no castle left fights for it all the same.)
+  threatened() {
+    const u = this.u, g = this.g, c = u.homeCastle;
+    if (g.war || !c || c.fallen) return true;
+    const x = c.center.x, z = c.center.z;
+    let hit = false;
+    g.grid.query(x, z, THREAT, (o) => { if (!hit && o.alive && !allied(o.team, u.team) && Math.hypot(o.pos.x - x, o.pos.z - z) < THREAT) hit = true; });   // (heroes too)
+    return hit;
   }
 
   armed() {
@@ -407,14 +440,16 @@ export class LordKit {
     }
   }
 
-  // Fireball or Smite: at a rival hero, a group, anything in reach with a clear line; else the gate or keep he is breaking.
+  // Fireball or Smite: at a rival hero or a group (two foes in the blast, Easy three) with a clear line; else the gate or keep he is breaking.
   bolt(slot, lo, hi, speed) {
-    const u = this.u;
+    const u = this.u, need = 2 + this.need;
     let best = null, bs = -1;
     for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < lo || d > hi) continue;
-      let s = this.countAt(o.pos.x, o.pos.z, 3.8) + (o.isPlayer || o.kit ? 3 : 0) - d * 0.02;
+      const hero = o.isPlayer || o.kit, n = this.countAt(o.pos.x, o.pos.z, 3.8);
+      if (!hero && n < need) continue;   // (a lone soldier is left to his men)
+      let s = n + (hero ? 3 : 0) - d * 0.02;
       if (o === u.target) s += 0.5;
       if (s > bs && this.clearShot(o)) { bs = s; best = o; }
     }

@@ -167,6 +167,12 @@ export const UNIT_TYPES = {
     weapon: 'club', helmet: 'none', body: 'fur', scale: 3.2, kind: 'giant', giant: true, structMult: 4, siegeBonus: 2.5 },
 };
 
+// Spears against riders: a spearman's thrust does `dmg` times its damage to a man on horseback, and one that meets a rider charging at him
+// (faster than `fast` m/s, coming straight at him, in front of him) checks the horse: the rider is staggered `stagger` s and his charge
+// stops on the spear (Unit.updateAttack). A hero on horseback takes the damage but is not stopped. Cavalry still wins where it picks its
+// fight: the flank, the rear, archers, a line already at grips.
+export const SPEAR = { dmg: 1.5, fast: 3.5, stagger: 0.6 };
+
 export const SIEGE_TYPES = {
   ram: { name: 'Battering Ram', hp: 700, speed: 2.6, dmg: 110, cd: 2.6, cost: 400 },
   catapult: { name: 'Catapult', hp: 450, speed: 2.0, dmg: 140, cd: 6.5, cost: 750, range: 62 },
@@ -332,7 +338,7 @@ export const WAR = {
   // the soldier types for sale (keys of UNIT_TYPES): the gold each costs and how many one house may field
   units: {
     swordsman: { name: 'Footman', cost: 30, cap: 500, desc: 'Sword and shield: cheap and steady, the body of any army.' },
-    spearman: { name: 'Spearman', cost: 35, cap: 375, desc: 'Long reach; holds a line and stops riders.' },
+    spearman: { name: 'Spearman', cost: 35, cap: 375, desc: `Long reach; holds a line. +${Math.round((SPEAR.dmg - 1) * 100)}% damage to riders, and a horse that charges onto the spears is stopped.` },
     archer: { name: 'Archer', cost: 45, cap: 250, desc: 'Shoots from 44 m. Keep them behind the infantry.' },
     longbowman: { name: 'Longbowman', cost: 70, cap: 150, desc: 'Shoots further and harder than an archer, and wears mail.' },
     knight: { name: 'Knight', cost: 100, cap: 150, desc: 'Plate armour: the strongest man on foot.' },

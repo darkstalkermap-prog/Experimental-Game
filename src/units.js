@@ -1,6 +1,6 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
-import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL } from './config.js';
+import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL, SPEAR } from './config.js';
 import { buildSoldier, poseSoldier, poseDeath, buildHorse, poseHorse, poseHorseDead, SADDLE_Y, rigSetTier, rigSetRank } from './models.js';
 import { navigate, avoidCastles, keepSpot, outOfKeep } from './nav.js';
 import { clamp } from './noise.js';
@@ -773,13 +773,24 @@ export class Unit {
           this.game.projectiles.shootArrow(from, t, this.team, this.dmg, this, t.post ? 0.07 : 0.035);
           this.game.audio.play('bow', this.pos);
         } else if (this.distTo(t) <= (this.ranged ? 2.2 : this.range) + 1.0) {
-          const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1);
+          const spear = t.mounted && this.def.weapon === 'spear';   // (spears against riders: SPEAR)
+          const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1) * (spear ? SPEAR.dmg : 1);
           const charge = this.mounted ? 1 + Math.max(0, Math.hypot(this.vel.x, this.vel.z) - 3) / 8 : 1;
+          const check = spear && !t.isPlayer && this.meetsCharge(t);   // (judged before the blow: it may throw him back)
           this.game.damage(t, this.dmg * mult * charge * (0.85 + Math.random() * 0.3), this, { melee: true, attackDir: this.attackDir });
+          if (check && t.alive) t.stagger(SPEAR.stagger, this);
         }
       }
     }
     if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1;
+  }
+
+  // Is rider t charging onto this man's spear: at a gallop, straight at him, and in front of him?
+  meetsCharge(t) {
+    const vx = t.vel.x, vz = t.vel.z, v = Math.hypot(vx, vz);
+    if (v < SPEAR.fast) return false;
+    const dx = this.pos.x - t.pos.x, dz = this.pos.z - t.pos.z, d = Math.hypot(dx, dz) || 1;
+    return (vx * dx + vz * dz) / (v * d) > 0.5 && -(Math.sin(this.yaw) * dx + Math.cos(this.yaw) * dz) / d > 0.4;
   }
 
   // 0 near (animated, shadows) · 1 mid (animated) · 2 far (a static model) · 3 hidden (crowd.js draws them accordingly)

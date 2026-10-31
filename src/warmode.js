@@ -490,8 +490,8 @@ export class WarMode {
   }
 
   // group k of house f forms up round (cx, cz) facing yaw, each soldier to the nearest place of the new shape row by row (so the ranks do not cross
-  // through each other); the giants stand behind it
-  formUp(f, k, list, cx, cz, yaw) {
+  // through each other); the giants stand behind it. spears: the spearmen go to the front ranks (a line that receives riders: config SPEAR)
+  formUp(f, k, list, cx, cz, yaw, spears = false) {
     if (!list.length) return;
     f.war.dest[k] = { x: cx, z: cz, yaw };
     const F = WAR.formations[f.war.form[k]] || WAR.formations.line;
@@ -500,7 +500,8 @@ export class WarMode {
     const spots = formSpots(men.length, F, k === 'cav');
     // the soldiers in order: front to back by how far forward each stands, then each rank of them left to right
     const fwd = (u) => (u.pos.x - cx) * fx + (u.pos.z - cz) * fz, lat = (u) => (u.pos.x - cx) * rx + (u.pos.z - cz) * rz;
-    men.sort((a, b) => fwd(b) - fwd(a));
+    const sp = (u) => (spears && u.def.weapon === 'spear' ? 1 : 0);
+    men.sort((a, b) => sp(b) - sp(a) || fwd(b) - fwd(a));
     let i = 0;
     for (const row of spots.rows) {
       const rank = men.slice(i, i + row).sort((a, b) => lat(a) - lat(b));

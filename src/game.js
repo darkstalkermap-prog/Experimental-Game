@@ -867,6 +867,7 @@ export class Game {
     }
     // no friendly fire between houses on the same side (own troops and co-op allies)
     if (attacker && attacker !== target && attacker.team !== undefined && allied(target.team, attacker.team)) return;
+    if (attacker && attacker.kit && info.ability && !target.isPlayer && !target.kit) dmg *= attacker.kit.bite;   // (an AI lord's abilities land softer on soldiers than a hero's: lordkit.js BITE)
     if (target.isSiege) {
       this.lastHit = info;   // (what the blow was, for the match log: see onSiegeDestroyed)
       target.takeDamage(dmg, attacker);

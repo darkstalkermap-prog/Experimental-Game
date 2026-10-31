@@ -1,5 +1,5 @@
 // Everything gold can buy. Shared by the player's shop and the rival lords' AI.
-import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON, HORSE_COST } from './config.js';
+import { UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, CASTLE, PLAYER, RANKS, GIANT_COST, GATE_REPAIR_COST, SUMMON, HORSE_COST, SPEAR } from './config.js';
 import { SWORDS, SHIELDS, BOWS } from './player.js';
 import { mods } from './mods.js';
 import { gateRepairFactor, noteGateRepair } from './comeback.js';
@@ -11,7 +11,7 @@ function recruit(type) {
       const t = UNIT_TYPES[type];
       const role = g.recruitRoleOf(f), other = role === 'army' ? 'garrison' : 'army';
       const full = !g.roleRoom(f, role) && g.roleRoom(f, other) ? ` Your ${role} is full: set "New recruits join the" to ${other === 'army' ? 'Army' : 'Garrison'} to keep recruiting.` : '';
-      return `Joins your ${role === 'army' ? 'army and follows you' : 'garrison and defends the castle'}. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}${full ? '.' + full : ''}`;
+      return `Joins your ${role === 'army' ? 'army and follows you' : 'garrison and defends the castle'}. ${t.mounted ? 'Mounted' : t.ranged ? 'Ranged' : 'Melee'} · ${t.hp} HP · ${t.dmg} dmg · armour ${t.armor}${t.mounted ? ' · charge bonus' : ''}${t.weapon === 'spear' ? ` · +${Math.round((SPEAR.dmg - 1) * 100)}% against riders, stops their charge` : ''}${full ? '.' + full : ''}`;
     },
     cost: () => UNIT_TYPES[type].cost,
     can: (g, f) => {

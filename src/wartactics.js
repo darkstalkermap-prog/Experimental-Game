@@ -172,8 +172,8 @@ const BOUND_DWELL = 1.5;   // seconds a marching line stands formed at each boun
 // One AI house's general: every LEVELS.every seconds it reads the picture (Picture) and gives its groups their orders through warmode.js (formUp: a
 // group formed up and holding at a spot; charge: a group marching on an army, or on one group of it), and only when they change. It plans:
 //   posture    wait on its own hill (the start: the high ground, its archers shooting at an enemy who climbs to them) or march; it waits when its bows
-//              outshoot the enemy's or the enemy is the stronger, never when the enemy's archers would shoot it to pieces where it stands, and not for
-//              longer than its temper's patience
+//              outshoot the enemy's, the enemy is the stronger, or the enemy is strong in riders and its line has spears to meet them, never when the
+//              enemy's archers would shoot it to pieces where it stands, and not for longer than its temper's patience
 //   infantry   the body of the army: on its hill it holds a line (a shield wall when the enemy has archers or riders) and fights there; marching, it
 //              goes in bounds of about 20 m, the line formed up at each and the stragglers waited for, and charges all together from `close` metres of
 //              the enemy's foot; riders coming at it are received standing, not chased; cut down to a third, it gathers at its archers
@@ -300,20 +300,25 @@ export class General {
     if (this.posture) return;
     this.postureT = w.clock;
     if (!this.L.posture || c.rush) { this.posture = 'advance'; return; }
-    const lean = this.T.hold + (c.A.worth > c.eA.worth * 1.2 && c.A.n >= 10 ? 0.3 : 0) + (c.E.worth > c.me.worth * 1.25 ? 0.3 : 0) - (c.I.n < 10 ? 1 : 0);
+    // (an army strong in riders against a line with spears in it: the line waits for them, spears in front, rather than be caught on the march)
+    let spears = 0;
+    for (const u of c.I.men) if (u.def && u.def.weapon === 'spear') spears++;
+    const receive = c.eC.worth > c.E.worth * 0.3 && spears >= Math.max(8, c.I.n * 0.2) ? 0.35 : 0;
+    const lean = this.T.hold + (c.A.worth > c.eA.worth * 1.2 && c.A.n >= 10 ? 0.3 : 0) + (c.E.worth > c.me.worth * 1.25 ? 0.3 : 0) + receive - (c.I.n < 10 ? 1 : 0);
     this.posture = lean >= 0.6 ? 'hold' : 'advance';
   }
 
   // ---- orders ----
-  // group k formed up and holding round (x, z) facing yaw, in formation `form` (unchanged: no new orders, so the men are not shuffled every look)
-  holdGroup(k, G, x, z, yaw, form) {
+  // group k formed up and holding round (x, z) facing yaw, in formation `form` (unchanged: no new orders, so the men are not shuffled every look);
+  // spears: the spearmen in the front ranks (riders coming, or an enemy strong in them)
+  holdGroup(k, G, x, z, yaw, form, spears = false) {
     const S = this[k], f = this.f;
-    const same = S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 1 && Math.abs(Math.atan2(Math.sin(S.at.yaw - yaw), Math.cos(S.at.yaw - yaw))) < 0.35 && f.war.form[k] === form;
+    const same = S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 1 && Math.abs(Math.atan2(Math.sin(S.at.yaw - yaw), Math.cos(S.at.yaw - yaw))) < 0.35 && f.war.form[k] === form && (!spears || S.spears);   // (riders gone: the spearmen stay where they are)
     if (same) return;
     f.war.form[k] = form;
     f.war.plan[k] = 'hold';
-    this.w.formUp(f, k, G.men, x, z, yaw);
-    S.task = 'hold'; S.at = { x, z, yaw }; S.since = this.w.clock;
+    this.w.formUp(f, k, G.men, x, z, yaw, spears);
+    S.task = 'hold'; S.at = { x, z, yaw }; S.since = this.w.clock; S.spears = spears;
   }
 
   // group k charges house `foe` (kind: one group of it, or '' for any)
@@ -363,9 +368,10 @@ export class General {
       return;
     }
     // riders coming at the line (nearer it than their own foot, and not yet locked in a fight): the line stands to receive them, shoulder to shoulder
-    // (a shield wall at Normal and Hard), and fights where it stands; it is not drawn out after them. Our archers shoot them, our riders hit them
-    // once they are at grips with it (cavalry, below).
+    // (a shield wall at Normal and Hard), its spearmen in front (a horse that charges onto a spear is stopped: config SPEAR), and fights where it
+    // stands; it is not drawn out after them. Our archers shoot them, our riders hit them once they are at grips with it (cavalry, below).
     const riders = eC.n >= 6 && foot !== eC && dist(eC, I) - eC.r - I.r < 55 && dist(eC, I) < dist(foot, I) - 10;
+    const spears = riders || (eC.n >= 6 && eC.worth > c.E.worth * 0.3);   // (riders coming, or an army strong in them: the spearmen form up in front)
     if (!this.L.march) { this.chargeGroup('inf', I, this.foe); return; }   // (Easy: straight at them)
     const close = this.T.close + (c.rush ? 15 : 0);
     if (this.posture === 'hold' || riders) {
@@ -382,7 +388,7 @@ export class General {
       const at = S.task === 'hold' && S.at ? S.at : { x: I.x, z: I.z };
       let yaw = riders ? Math.atan2(eC.x - at.x, eC.z - at.z) : c.yaw;
       if (S.task === 'hold' && S.at && Math.abs(Math.atan2(Math.sin(S.at.yaw - yaw), Math.cos(S.at.yaw - yaw))) < 0.8) yaw = S.at.yaw;
-      this.holdGroup('inf', I, at.x, at.z, yaw, form);
+      this.holdGroup('inf', I, at.x, at.z, yaw, form, spears);
       return;
     }
     // cut down to a third and not at grips, against a stronger foot: back to the archers to gather (they shoot over it), until the enemy comes on
@@ -398,7 +404,7 @@ export class General {
     if (S.task === 'bound' && !S.reachedT && this.reached(I, this.T.wait)) S.reachedT = w.clock;
     if (S.task !== 'bound' || (S.reachedT && w.clock - S.reachedT >= BOUND_DWELL) || w.clock - S.since > 9) {
       const step = Math.max(6, Math.min(22, gapFoot - close + 4));
-      this.holdGroup('inf', I, I.x + c.dx * step, I.z + c.dz * step, c.yaw, 'line');
+      this.holdGroup('inf', I, I.x + c.dx * step, I.z + c.dz * step, c.yaw, 'line', spears);
       S.task = 'bound'; S.reachedT = 0;
     }
   }

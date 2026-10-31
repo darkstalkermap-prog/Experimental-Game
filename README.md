@@ -264,6 +264,10 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   - Raise the shield just as a blow lands to **parry**: the attacker staggers and is open.
   - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords block and
     circle you, looking for your side, and use their class's Q and R as heroes do (see **Rival lords**).
+  - **Spears stop riders**: a spearman's thrust does 50% more to anyone on horseback, and a rider who charges straight onto
+    the front of his spear at a gallop is checked (staggered 0.6 s, his charge stops there). A hero on horseback takes the
+    damage but is not stopped. Riders still win where they pick the fight: a flank, the rear, archers, a line already at
+    grips (`SPEAR` in `src/config.js`). War Mode's AI generals put their spearmen in the front rank when riders come at the line.
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
@@ -634,10 +638,15 @@ Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a kn
 Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
 fights with the bow from 34 m, never from a wall post; Power Shot down a line of foes, Sniper Shot at a far hero, giant or siege crew). The plain lords:
 Aldmoor a Knight, Varr a Berserker, Elden a Cleric, Sol a Mage; a War Mode general draws a class. No lord is a Cavalier (a lord has no horse). The
-abilities are the heroes' own: the same runs and leaps (never through a wall, never onto enemy battlements), the same damage (from the lord's) and the
-same effects on every screen. A lord's health and blows are what they always were. A lord who defends his castle or holds a place only runs or leaps at
-foes near it. He rises a level every five waves (5 at most; a War Mode general is level 1, 2 or 3 by the difficulty) and learns a hero bot's talents. On
-Easy a lord looks for an opening less often, waits a moment once an ability is ready and aims worse; on Hard he uses them as soon as they are worth it.
+abilities are the heroes' own: the same runs and leaps (never through a wall, never onto enemy battlements) and the same effects on every screen. A
+lord's health and blows are what they always were. A lord who defends his castle or holds a place only runs or leaps at foes near it. He rises a level
+every five waves (5 at most; a War Mode general is level 1, 2 or 3 by the difficulty) and learns a hero bot's talents. On Easy a lord looks for an
+opening less often, waits a moment once an ability is ready and aims worse; on Hard he uses them as soon as they are worth it.
+A lord is a commander, not a raid boss (`BITE` in `src/lordkit.js`): his abilities do less to soldiers than a hero's (Easy / Normal / Hard: 30 / 40 /
+70 %; a hero, yours or a rival's, takes them in full), heal less of his own wounds (50 / 60 / 85 %; his men are healed in full), and come round more
+slowly than a hero's (1.6x / 1.4x / 1x the cooldown), slower again (1.6x / 1.5x / 1.2x) while no foe is within 50 m of his castle. A Fireball or a
+Smite wants two foes in its blast (Easy three) or a hero. A War Mode general's hero is held to the same, so he leads his army but does not sweep yours
+away alone.
 
 For modders: a personality is a table of parameters in `src/rivals.js` (the key list is in its header; `CLASSIC` is the old lord), played by `LordAI` in
 `src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
@@ -1023,8 +1032,9 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
   looked since the last update (and the panel marks the updates that are new to you). The list is one array at the top of
   `src/whatsnew.js`: add an update by putting a new entry first.
 - **HUD**: bottom left, the abilities over the hero's own panel (class and level, health, stamina and experience, weapon,
-  potions, where your soldiers are); top left the houses, top centre the wave and its clock, top right the gold. The orders bar
-  shows only while your army has soldiers. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
+  potions, where your soldiers are), and over the abilities a row of labels for the buffs on you; top left the houses, top centre
+  the wave and its clock, top right the gold. The orders bar shows only while your army has soldiers; it sits centred in the gap
+  between the hero panel and the minimap (as War Mode's command bar) and wraps onto a second row when the window is narrow. HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
   base (1, or 1.2 on screens of 1800 × 1000 and up) times **Options → UI scale** (CSS `--hud-zoom` in index.html). Near a
