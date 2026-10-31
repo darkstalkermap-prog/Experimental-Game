@@ -438,7 +438,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   respawn (in co-op an ally can call you back: you rise in the ruins of your own keep).
 - **Cavalry**: mounted troops ride through their targets, and their charges hit harder. Waves bring riders
   from about wave 7, and Elite Levies add them to every wave.
-- **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, E whistles it over.
+- **Your warhorse**: press **E** to mount or dismount. If you're far from your horse, or a wall or a shut gate stands between you
+  (or you are up on the wall walk), E whistles it over: it comes round by the gate, the way the soldiers go.
   Shift gallops. Charging adds damage and tramples enemies on foot. The horse takes half the hits you'd take,
   and if it dies a Cavalier gets a fresh one the next time they respawn. Any other class can buy one in the shop
   (Class tab, 400 gold).
@@ -757,7 +758,8 @@ rival is picked first and the guard goes up against blows and arrows they can se
 looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
 close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
-fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
+fight (to a sword, foes in an enemy courtyard behind a gate that will not open for them, with no breach, are out of reach), and spend
+their talents from a list for each class. Their stamina drains and returns as a person's does. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
 also looks for a chance to use Q or R less often, waits a moment once one is ready, wants a bigger knot of foes and leads them less.
 They do not climb, duck or drive engines.
 

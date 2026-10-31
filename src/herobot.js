@@ -8,7 +8,7 @@
 // turns and strikes every frame.
 import * as THREE from 'three';
 import { CASTLE, WORLD } from './config.js';
-import { navigate } from './nav.js';
+import { navigate, gatePassable } from './nav.js';
 import { SWING } from './combat.js';
 import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
@@ -318,9 +318,13 @@ export class HeroBot {
     if (this.retreat && !atHome) return null;
     let best = null, bs = 1e9;
     const friendHero = this.friends.some((f) => f.isPlayer);
+    const g = this.g, mine = st.kind === 'melee' ? g.castleAt(me) : null;
     for (let i = 0; i < foes.length; i++) {
       const o = foes[i], d = dist[i];
       if (st.kind === 'melee' && !o.isSiege && o.pos.y - me.y > 2.4) continue;   // up on a wall: out of reach of a sword
+      // in an enemy courtyard behind a gate that will not let us in, and no breach: out of reach of a sword too (he would stand at the gate
+      // for as long as the foe stays in there; with nobody else to fight he hits the gate: structureTarget)
+      if (st.kind === 'melee' && !o.isSiege) { const oc = g.castleAt(o.pos); if (oc && oc !== mine && !allied(oc.team, p.team) && !this.canEnter(oc)) continue; }
       // (an archer shooting at us is worth the walk, whatever the temper)
       const range = atHome ? 12 : o.isPlayer ? this.aggro + 12 : o.ranged && d < o.range + 4 ? SCAN : st.kind === 'melee' ? this.aggro : Math.max(this.aggro, st.hi + 4);
       if (d > range) continue;
@@ -335,6 +339,13 @@ export class HeroBot {
       if (s < bs) { bs = s; best = o; }
     }
     return best;
+  }
+
+  // a way into this castle for us: its gate (down, or open to our side) or a breach in its walls (nav.js: entriesFor, without the list)
+  canEnter(c) {
+    if (gatePassable(c, this.p.team)) return true;
+    for (const w of c.walls) if (!w.alive) return true;
+    return false;
   }
 
   // The enemy gate (or, once it is down, the keep) when there is nobody to fight and we are at their castle.
