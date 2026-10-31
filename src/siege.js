@@ -13,6 +13,15 @@ import { limitShadow } from './shadows.js';
 
 let NEXT_ID = 1;
 
+// A catapult's spot to shoot from: `d` metres out from `from` along `dir`, or nearer when that is off the land (on the Small map a castle's back wall
+// is 36 m from the edge and the spot 52 m out: the engine used to roll into the edge of the map and never shoot)
+function onLand(from, dir, d) {
+  const lim = WORLD.playHalf - 6;
+  if (Math.abs(dir.x) > 1e-3) d = Math.min(d, (Math.sign(dir.x) * lim - from.x) / dir.x);
+  if (Math.abs(dir.z) > 1e-3) d = Math.min(d, (Math.sign(dir.z) * lim - from.z) / dir.z);
+  return from.clone().addScaledVector(dir, Math.max(8, d));
+}
+
 export class SiegeEngine {
   constructor(game, type, team, pos, targetCastle, stats = {}) {
     this.game = game;
@@ -279,12 +288,12 @@ export class SiegeEngine {
         let aim, fire;
         if (seg) {
           const n = tc.dirToWorld(seg.nx, seg.nz);
-          fire = seg.pos.clone().addScaledVector(n, this.range - 10);
+          fire = onLand(seg.pos, n, this.range - 10);
           aim = seg.pos.clone();
           aim.y = tc.center.y + 4.5;
         } else {
           const away = this.pos.clone().sub(tc.center).setY(0).normalize();
-          fire = tc.center.clone().addScaledVector(away, this.range - 12);
+          fire = onLand(tc.center, away, this.range - 12);
           aim = tc.keep.pos.clone();
           aim.y = tc.center.y + 10;
         }
