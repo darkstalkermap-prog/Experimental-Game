@@ -210,7 +210,8 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
 - **Round the keep**: inside a courtyard soldiers go round the keep by its corners rather than walking into its wall
   (a defender sent to a place behind it, the army behind a lord who stands with his back to it), and a place that
   would fall inside the keep is moved to the foot of its wall. Attackers strike the keep from a spot of their own
-  along its walls, spread over the face they come at and the two beside it (`src/nav.js`).
+  along its walls: a small band stays together on the face it comes at, a big host fans out over that face and the two
+  beside it (`src/nav.js`).
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to

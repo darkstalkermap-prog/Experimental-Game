@@ -143,8 +143,7 @@ function segHitsRect(ax, az, bx, bz, cx, cz, hx, hz) {
 }
 
 // A place to stand and strike the keep from, just off its wall: each soldier takes his own spot along the keep's
-// faces, a little way round from where he first came at it (spread by his id), so a crowd that comes in by the gate
-// fans out over the front and the sides instead of piling up on the door. Kept on the unit (out) until the target changes.
+// faces, a little way round from where he first came at it (spread by his id, and by how many have come). Kept on the unit (out) until the target changes.
 export function keepSpot(keep, unit, out) {
   const k = keep.collider;
   const off = unit.radius + 0.35;
@@ -157,7 +156,14 @@ export function keepSpot(keep, unit, out) {
     const side = e.indexOf(Math.min(...e));
     let s = side === 0 ? px - x0 : side === 1 ? w + (pz - z0) : side === 2 ? w + d + (x1 - px) : 2 * w + d + (z1 - pz);
     const h = ((unit.id * 0.6180339887) % 1) * 2 - 1;
-    s += h * per / 3;   // (up to a third of the way round either way: the face he comes at and the two beside it)
+    // How far round he may go grows with the number at this keep (about 0.9 m of wall each, two deep): a small band
+    // stays together on the face it comes at and hits hard there; a big host fans out over that face and the two beside
+    // it, up to a third of the way round either way, instead of piling up on the door.
+    let n = 0;
+    for (const o of unit.game.units) if (o.alive && o.team === unit.team && (o.target === keep || (o.order === 'assault' && o.orderData === keep.castle))) n++;
+    const reach = Math.min(per / 3, Math.max(2, n * 0.45));
+    s += h * reach;
+    unit.keepFan = reach > 6;   // (a band that fits on one face strikes from wherever it reaches the wall: see Unit.update)
     unit.keepAt = keep; unit.keepS = ((s % per) + per) % per;
   }
   let s = unit.keepS;
