@@ -439,11 +439,13 @@ export class WarMode {
       return Math.abs(dx * rx + dz * rz) < (S.w + b.w) / 2 + 2 && Math.abs(dx * fx + dz * fz) < (S.d + b.d) / 2 + 2;
     });
     const items = [];
+    let wx = 0, wz = 0, wn = 0;   // (where the groups ordered together stand, all of them: see below)
     for (const k of groups) {
       const l = lists[k];
       if (!l.length) continue;
       let x = 0, z = 0;
       for (const u of l) { x += u.pos.x; z += u.pos.z; }
+      wx += x; wz += z; wn += l.length;
       x = x / l.length + fx * step; z = z / l.length + fz * step;
       const S = size(k), I = blocks.find((b) => b.k === 'inf') || blocks.find((b) => b.k === 'arch');
       if (k !== 'inf' && I && clash(x, z, S)) {
@@ -456,6 +458,14 @@ export class WarMode {
       }
       blocks.push({ k, x, z, ...S });
       items.push({ k, list: l, x, z });
+    }
+    // (several groups ordered together keep the middle of all of them where the order puts it, Hold where they are: a group moved out of another's
+    // block moves the others a little the other way, not the whole army's place)
+    if (items.length > 1) {
+      let ax2 = 0, az2 = 0;
+      for (const it of items) { ax2 += it.x * it.list.length; az2 += it.z * it.list.length; }
+      const sx = wx / wn + fx * step - ax2 / wn, sz = wz / wn + fz * step - az2 / wn;
+      for (const it of items) { it.x += sx; it.z += sz; }
     }
     this.formUpAll(f, items, yaw);
   }
