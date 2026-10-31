@@ -330,6 +330,7 @@ export class ClientSync {
       if (d.st) absorbStats(d.st[this.g.net.id]);
       if (d.cb) absorbComeback(d.cb[this.g.net.id], this.g.localTeam);
       if (this.g.hero && !this.g.hero.result) this.g.hero.result = { winner: d.winner, reason: d.reason || '', draw: !(d.winner >= 0) };   // (the hero end screen reads it)
+      if (this.g.war && !this.g.war.result) this.g.war.result = { winner: d.winner, reason: d.reason || '', draw: !(d.winner >= 0) };   // (War Mode's host ends a battle with nobody's win only as a draw)
       this.g.finish(d.winner, d.reason || '', { hl: Array.isArray(d.hl) ? d.hl : null, quick: !!d.q });
     }
     else if (d.k === 'rematch' && this.g.onRematch) this.g.onRematch();   // (the host took the room back to its lobby: main.js)
@@ -428,7 +429,9 @@ export class ClientSync {
     s.f.forEach((a, i) => {
       const f = g.factions[i];
       const state = unpackFaction(a);
-      f.gold = state.gold; f.troopCap = state.troopCap; f.training = state.training;
+      // (War Mode: a purchase of this screen is shown at once, and a snapshot sent before the host had it would put the gold back up for a moment)
+      if (!(i === g.localTeam && f.war && g.time < (f.war.goldUntil || 0) && state.gold > f.gold)) f.gold = state.gold;
+      f.troopCap = state.troopCap; f.training = state.training;
       f.eliminated = !!state.eliminated;
       f.kills = state.kills; f.heroDeaths = state.heroDeaths; f.respawnT = state.respawnT;
       // your own pick shows at once and the host's word wins again after a moment (a late snapshot must not undo it)

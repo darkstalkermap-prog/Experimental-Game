@@ -738,8 +738,9 @@ export class UI {
       this.hideHud();
       return;
     }
-    $('goTitle').textContent = won ? 'Victory!' : 'Defeat';
-    $('goTitle').className = won ? 'win' : 'lose';
+    const draw = !won && !!(g.war && g.war.result && g.war.result.draw);   // (War Mode: nobody left standing, or the armies even at the horn)
+    $('goTitle').textContent = draw ? 'A draw' : won ? 'Victory!' : 'Defeat';
+    $('goTitle').className = draw ? '' : won ? 'win' : 'lose';
     $('goText').textContent = reason || (team
       ? 'Every rival house has fallen. Your alliance rules the realm.'
       : won

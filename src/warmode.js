@@ -292,8 +292,9 @@ export class WarMode {
         if (why) { if (!quiet) { g.audio.play('deny'); g.ui.toast(why); } return; }
         const n = Math.min(b, d.cap - c[a], this.cap - c.total, Math.floor(f.gold / d.cost));
         f.gold -= n * d.cost;
-        f.war.goldUntil = g.time + 0.6;
+        f.war.goldUntil = g.time + 1.5;   // (a snapshot the host sent before it had the purchase does not undo it: netsync.js)
       }
+      if (op === 'sell') f.war.goldUntil = 0;   // (the refund is the host's to give: its next word on the gold is taken as it is)
       if (op === 'preset') { f.war.preset = a; f.war.pickUntil = g.time + 1.5; }
       if (op === 'plan') { f.war.plan[a] = b; f.war.pickUntil = g.time + 1.5; }
       g.net.toHost({ a: 'war', op, t: a, n: b });
