@@ -846,7 +846,7 @@ export class UI {
       $('xpFill').style.width = `${(levelProgress(p.xp, p.level) * 100).toFixed(1)}%`;
       $('xpbar').classList.toggle('max', p.level >= MAX_LEVEL);
       $('xpbar').title = p.level >= MAX_LEVEL ? 'Level 5: the highest level' : `Level ${p.level}: ${Math.floor(p.xp)} / ${XP_FOR_LEVEL[p.level + 1]} experience`;
-      if (g.hero) this.updateHeroHud(); else this.renderFactions();
+      if (g.hero) this.updateHeroHud(); else if (!g.war) this.renderFactions();   // (War Mode's houses are on its own bar, warui.js: its #factions is hidden, and its 40 nodes 8 times a second were thrown away)
       this.updateHill(dt);
       if (!p.alive) {
         $('respawn').classList.remove('hidden');

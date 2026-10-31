@@ -249,6 +249,7 @@ export class WarUI {
     }
     top.classList.remove('hidden');
     top.innerHTML = '<div class="wt-main"></div><div class="wt-line"></div>';
+    this.top = null;   // (the fight's sides and clock: makeTop)
     this.topMain = top.firstElementChild;
     this.topLine = top.lastElementChild;
     let p = $('warPanel');
@@ -584,31 +585,57 @@ export class WarUI {
 
   refreshTop() {
     const g = this.g, w = this.w;
-    let main, line;
+    let line;
     if (!w.fighting) {
       const rv = readyView(g);
-      main = `<span class="wt-clock"><small>${g.spectator ? 'The armies form' : 'Build your army'}</small>${clock(Math.max(0, g.phaseT))}</span>`;
+      const main = `<span class="wt-clock"><small>${g.spectator ? 'The armies form' : 'Build your army'}</small>${clock(Math.max(0, g.phaseT))}</span>`;
+      if (this.shown.main !== main) { this.shown.main = main; this.topMain.innerHTML = main; }
       line = w.panelOpen ? 'Buy soldiers, choose a formation and a battle plan.' : `<kbd>B</kbd> army panel · <kbd>Enter</kbd> ready${rv && !rv.alone ? ` (${rv.n} / ${rv.of})` : ''} · <kbd>N</kbd> talents · <kbd>M</kbd> map`;
     } else {
-      const sides = w.sideList.map((side) => {
+      // (the sides and the clock are made once for the fight and only their numbers change after: the whole bar was written again at every soldier
+      // who fell, a few hundred DOM nodes a second all battle)
+      if (!this.top) this.makeTop();
+      for (const S of this.top.sides) {
         let n = 0, start = 0;
-        for (const t of side) { n += w.standing(t).n; start += g.factions[t].war.start || 0; }
-        const out = side.every((t) => g.factions[t].eliminated);
-        const name = side.length > 1 ? side.map((t) => colorName(t)).join(' + ') : side[0] === g.localTeam && !g.spectator ? 'You' : g.factions[side[0]].name.replace(/^House /, '');
-        const k = start ? Math.max(0, Math.min(1, n / start)) : 0;
-        return `<span class="wt-side${out ? ' out' : ''}"><b style="color:${TEAM_CSS[side[0]]}">${esc(name)}</b><span>${n} / ${start}</span><span class="wt-bar"><i style="width:${(k * 100).toFixed(0)}%;background:${TEAM_CSS[side[0]]}"></i></span></span>`;
-      });
-      const mid = Math.ceil(sides.length / 2);
-      const clk = `<span class="wt-clock"><small>Battle</small>${clock(w.clock)}<small>${clock(Math.max(0, WAR.fightLimit - w.clock))} left</small></span>`;
-      main = sides.slice(0, mid).join('') + clk + sides.slice(mid).join('');
+        for (const t of S.side) { n += w.standing(t).n; start += g.factions[t].war.start || 0; }
+        const out = S.side.every((t) => g.factions[t].eliminated);
+        const name = S.side.length > 1 ? S.side.map((t) => colorName(t)).join(' + ') : S.side[0] === g.localTeam && !g.spectator ? 'You' : g.factions[S.side[0]].name.replace(/^House /, '');
+        const txt = `${n} / ${start}`, width = `${((start ? Math.max(0, Math.min(1, n / start)) : 0) * 100).toFixed(0)}%`;
+        if (S.name !== name) { S.name = name; S.b.textContent = name; }
+        if (S.txt !== txt) { S.txt = txt; S.n.textContent = txt; }
+        if (S.width !== width) { S.width = width; S.i.style.width = width; }
+        if (S.out !== out) { S.out = out; S.el.classList.toggle('out', out); }
+      }
+      const C = this.top.clock, now = clock(w.clock), left = `${clock(Math.max(0, WAR.fightLimit - w.clock))} left`;
+      if (C.nowTxt !== now) { C.nowTxt = now; C.now.nodeValue = now; }
+      if (C.leftTxt !== left) { C.leftTxt = left; C.left.textContent = left; }
       const p = g.player;
       line = p.alive
         ? `${g.input.locked ? '' : '<b>Click to take the field</b> · '}Wheel or <kbd>X</kbd>: sword / bow · <kbd>N</kbd> talents · <kbd>M</kbd> map`
         : `<span class="wt-fallen">${g.localFaction.eliminated ? 'Your army has fallen.' : 'You have fallen. Your army fights on without you.'}</span>${offerFor(g) ? ' · <kbd>K</kbd> twice: leave the battle' : ''}`;
     }
-    if (this.shown.main !== main) { this.shown.main = main; this.topMain.innerHTML = main; }
     if (g.spectate && g.spectate.on) line = '';   // (the spectator's bar has the keys: spectate.js)
     if (this.shown.line !== line) { this.shown.line = line; this.topLine.innerHTML = line; }
+  }
+
+  // the fight's bar across the top: every side (its name, soldiers standing of those mustered, a bar of them) with the battle's clock in the middle
+  makeTop() {
+    const mk = (tag, cls = '') => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+    const sides = this.w.sideList.map((side) => {
+      const el = mk('span', 'wt-side'), b = mk('b'), n = mk('span'), bar = mk('span', 'wt-bar'), i = mk('i');
+      b.style.color = i.style.background = TEAM_CSS[side[0]];
+      bar.append(i);
+      el.append(b, n, bar);
+      return { side, el, b, n, i, name: null, txt: null, width: null, out: false };
+    });
+    const c = mk('span', 'wt-clock'), s1 = mk('small'), now = document.createTextNode(''), left = mk('small');
+    s1.textContent = 'Battle';
+    c.append(s1, now, left);
+    const mid = Math.ceil(sides.length / 2);
+    this.topMain.textContent = '';
+    this.topMain.append(...sides.slice(0, mid).map((S) => S.el), c, ...sides.slice(mid).map((S) => S.el));
+    this.top = { sides, clock: { now, left, nowTxt: null, leftTxt: null } };
+    this.shown.main = null;
   }
 
   // ---- cameras (after the hero has placed the camera, before anything looks through it) ----
