@@ -1183,4 +1183,12 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   the frame counter shows it next to the fps. The sky, fog, sun shadows (two cascades, snapped to the shadow map's
   texels), the HDR post passes (bloom of only the truly bright, tone curve and grade, vignette, sharpening, FXAA) and the quality tunables are in
   `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js` and `src/quality.js`. No three.js add-ons are vendored.
+- The ground is textured at every level from one 512 px detail tile (`src/terraintex.js`: tufts of grass blades seen from above, soil grain,
+  rock cracks, tree crowns). High and Ultra use the splat shader; Low and Medium a light shader (`src/terrainmat.js`) that puts the tile over
+  the baked ground colour and picks grass, soil or rock grain from that colour (Low reads it once, Medium twice and bumps the light with it).
+  On slopes the splat shader reads the tile from the side as well (triplanar), so banks are not smeared into streaks. Castle stone has a
+  per-texel grain; the far tree cards spread their leaf colours into the empty texels and raise their alpha down the mip chain, so the far
+  forest keeps clean outlines. The fine relief of the ground fades as its texels shrink below a pixel (no pixel grain on the roads),
+  bare rock has an 80 m layer of plates and gullies and hillsides one of tussocks, so faces and hills 50-500 m off keep their texture;
+  trees keep off faces steeper than about 45 degrees (`src/scenery.js`), and the marsh's mist banks float clear of the ground (`src/weather.js`).
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.

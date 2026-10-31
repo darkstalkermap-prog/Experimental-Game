@@ -101,20 +101,6 @@ export function woodTexture(seed = 7, banded = true) {
   return finish(c);
 }
 
-export function grassDetailTexture(seed = 11) {
-  const rng = mulberry32(seed);
-  const [c, ctx] = canvas(256, 256);
-  ctx.fillStyle = '#d8d8d8';
-  ctx.fillRect(0, 0, 256, 256);
-  for (let i = 0; i < 6000; i++) {
-    const v = 150 + rng() * 105;
-    ctx.fillStyle = `rgba(${v},${v},${v * 0.92},0.5)`;
-    const x = rng() * 256, y = rng() * 256;
-    ctx.fillRect(x, y, 1, 2 + rng() * 4);
-  }
-  return finish(c);
-}
-
 export function roofTexture(seed = 5) {
   const rng = mulberry32(seed);
   const [c, ctx] = canvas(128, 128);

@@ -21,7 +21,7 @@
 //   detail         0 plain · 1 rich · 2 richest: how much geometry and how many small parts models and props carry
 //   grass          grass density multiplier (0 = no grass)    grassDist  metres of grass around the camera
 //   trees          tree and rock density multiplier           viewDist   metres of trees and far plane (never under HAZE_FAR: the haze is the same at every level)
-//   terrain        0 vertex colours · 1 detail texture · 2 splat shader (detail textures, normals, tile-breaking)
+//   terrain        0 light ground shader (one detail read) · 1 the same, more reads and bump · 2 splat shader (triplanar on slopes, normals, tile-breaking)
 //   aniso          the most anisotropic filtering a texture may use (1 = trilinear only; see aniso.js)
 //   wind           foliage, grass and cloth move in the wind
 //   particles      multiplier on how many particles an effect may spawn

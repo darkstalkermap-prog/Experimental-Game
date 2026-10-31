@@ -113,9 +113,36 @@ function treeAtlas() {
   c.width = W * 4; c.height = H;
   const g = c.getContext('2d');
   for (let k = 0; k < 4; k++) spec(k).paint(g, W * k);
-  tex = new THREE.CanvasTexture(c);
+  // The empty texels round the trees are black on a canvas. The mip levels that a far card is read from blend them into the leaves, so the
+  // trees of the far forest had dark, dirty edges and read soft. The leaf colours are spread out into the empty texels (their alpha stays
+  // 0), and the strip goes to the GPU as raw data, so nothing premultiplies them back to black.
+  const src = g.getImageData(0, 0, c.width, c.height).data, w = c.width, h = c.height;
+  const px = new Uint8ClampedArray(src), done = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) done[i] = src[i * 4 + 3] > 8 ? 1 : 0;
+  for (let pass = 0; pass < 8; pass++) {
+    const next = done.slice();
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (done[i]) continue;
+      let r = 0, gg = 0, b = 0, n = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 0 || yy < 0 || xx >= w || yy >= h || ((xx >> 7) !== (x >> 7))) continue;   // (never across into the next tree's cell)
+        const j = yy * w + xx;
+        if (done[j]) { r += px[j * 4]; gg += px[j * 4 + 1]; b += px[j * 4 + 2]; n++; }
+      }
+      if (n) { px[i * 4] = r / n; px[i * 4 + 1] = gg / n; px[i * 4 + 2] = b / n; next[i] = 1; }
+    }
+    done.set(next);
+  }
+  const data = new Uint8Array(w * h * 4);
+  for (let y = 0; y < h; y++) data.set(px.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);   // (the canvas's top row is the texture's last)
+  tex = new THREE.DataTexture(data, w, h, THREE.RGBAFormat);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
   atlases.set(active.def.id, tex);
   return tex;
 }
@@ -161,6 +188,14 @@ function materials() {
           bbP.x += 0.82 * bbS; bbP.z += 0.57 * bbS;
           vec4 mvPosition = modelViewMatrix * vec4(bbP, 1.0);
           gl_Position = projectionMatrix * mvPosition;`);
+      // the alpha of a far card is read from a small mip level, where the leaves' edges have been averaged with the empty texels round them:
+      // it is raised with the level (from the screen size of a texel), so a far tree keeps its outline instead of thinning to a blur
+      shader.fragmentShader = shader.fragmentShader.replace('#include <alphatest_fragment>', `{
+          vec2 cT = vMapUv * vec2(512.0, 256.0), cDx = dFdx(cT), cDy = dFdy(cT);
+          float cLod = max(0.0, 0.5 * log2(max(dot(cDx, cDx), dot(cDy, cDy))));
+          diffuseColor.a *= 1.0 + 0.22 * cLod;
+          if (diffuseColor.a < alphaTest) discard;
+        }`);
     });
   }
   cardMat.map = treeAtlas();

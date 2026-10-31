@@ -1,6 +1,9 @@
 // Procedural ground textures for the splat shader, painted once into typed arrays (no image files). All of them tile.
-//   detail (256x256 RGBA)  R grass: blade strokes, G soil: grain and clods, B rock: cracks and plates, A tree crowns: round humps with dark gaps
+//   detail (512x512 RGBA)  R grass: tufts of blades seen from above, G soil: grain and clods, B rock: cracks and plates, A tree crowns: round humps with dark gaps
 //   noise  (128x128 RGBA)  R, G, B smooth noise at three seeds (macro colour and edge wobble), A pebbles
+// The detail tile covers 2.3 m of ground at its finest use (terrainmat.js), so 512 texels give about 220 per metre: a little more than a
+// 1366 to 1920 px wide screen shows of the ground a few metres in front of the feet (at 256 the near ground was magnified and read soft).
+// About 1.4 MB with its mips. Every quality reads it (Low and Medium through the light ground shader).
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 import { aniso } from './aniso.js';
@@ -65,29 +68,50 @@ function texture(data, size, maxAniso) {
 
 let detail = null, noise = null;
 
-export function detailTexture() {
-  if (detail) return detail;
-  const S = 256, rng = mulberry32(1701), d = new Uint8Array(S * S * 4);
-  // grass: strokes of blades over a soft base
+// Grass from above: tufts of tapering blades that fan out in every direction from a root, dark at the root and in the gaps, bright at the
+// tips. (The first version painted short strokes that all ran down the texture: on the ground they read as a smear, as if the meadow was
+// in motion.) Each blade is drawn with smooth edges (its coverage of a texel from the distance to its centre line), so the near ground,
+// where a texel is spread over a pixel or two, shows blades and not stair steps; a blade only lightens what is under it, so crossing
+// blades stay crisp instead of averaging to grey.
+function grassField(S, rng) {
   const g = fbm(S, 8, 3, rng);
-  for (let s = 0; s < 7000; s++) {
-    const x0 = rng() * S, y0 = rng() * S, len = 5 + rng() * 9, lean = (rng() - 0.5) * 0.5, val = (rng() - 0.5) * 0.7;
-    for (let k = 0; k < len; k++) {
-      const x = Math.floor(x0 + lean * k + S) % S, y = Math.floor(y0 + k + S) % S;
-      g[y * S + x] += val * (1 - k / len) * 0.5;
+  for (let i = 0; i < g.length; i++) g[i] = 0.32 + g[i] * 0.16;   // the dark ground between the blades
+  const tufts = Math.round(S * S / 90);
+  for (let t = 0; t < tufts; t++) {
+    const cx = rng() * S, cy = rng() * S, n = 4 + Math.floor(rng() * 6), lean = rng() * Math.PI * 2, spread = 0.9 + rng() * 2.2, tone = 0.72 + rng() * 0.28;
+    for (let b = 0; b < n; b++) {
+      const a = lean + (rng() - 0.5) * spread, len = 5 + rng() * 13, w = 0.8 + rng() * 0.7, ca = Math.cos(a), sa = Math.sin(a);
+      const x0 = Math.floor(Math.min(cx, cx + ca * len) - 2), x1 = Math.ceil(Math.max(cx, cx + ca * len) + 2);
+      const y0 = Math.floor(Math.min(cy, cy + sa * len) - 2), y1 = Math.ceil(Math.max(cy, cy + sa * len) + 2);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const px = x + 0.5 - cx, py = y + 0.5 - cy, along = px * ca + py * sa;
+        if (along < -0.5 || along > len + 0.5) continue;
+        const f = Math.max(0, Math.min(1, along / len)), half = w * (1 - f * 0.8);   // (tapers to a point)
+        const cover = Math.max(0, Math.min(1, half + 0.5 - Math.abs(-px * sa + py * ca))) * Math.min(1, len + 0.5 - along);
+        if (cover <= 0) continue;
+        const v = tone * (0.5 + 0.5 * f), i = (((y % S) + S) % S) * S + (((x % S) + S) % S);   // (the root in the blade's own shade, the tip in the light)
+        if (v > g[i]) g[i] += (v - g[i]) * cover;
+      }
     }
   }
+  return g;
+}
+
+export function detailTexture() {
+  if (detail) return detail;
+  const S = 512, rng = mulberry32(1701), d = new Uint8Array(S * S * 4);
+  const g = grassField(S, rng);
   // soil: clods and grain; rock: ridged plates and cracks
-  const soil = fbm(S, 6, 4, rng), grain = valueNoise(S, 64, rng);
-  const rk = fbm(S, 5, 5, rng);
+  const soil = fbm(S, 6, 5, rng), grain = valueNoise(S, 128, rng);
+  const rk = fbm(S, 5, 6, rng);
   // crowns: round humps (a hemisphere inside each cell, dark where the cells meet), each one a little different
   const w = worley(S, 6, rng);
   for (let i = 0; i < S * S; i++) {
     const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
     const cr = 1 - Math.abs(rk[i] * 2 - 1);                     // ridges of the rock noise
     const dome = Math.sqrt(clamp01(1 - (w.f1[i] / 0.62) * (w.f1[i] / 0.62)));
-    d[i * 4] = clamp01(0.5 + (g[i] - 0.5) * 1.3) * 255;
-    d[i * 4 + 1] = clamp01(soil[i] * 0.75 + grain[i] * 0.25) * 255;
+    d[i * 4] = clamp01(g[i]) * 255;
+    d[i * 4 + 1] = clamp01(soil[i] * 0.72 + grain[i] * 0.28) * 255;
     d[i * 4 + 2] = clamp01(Math.pow(cr, 3) * 0.7 + rk[i] * 0.5) * 255;
     d[i * 4 + 3] = clamp01(dome * (0.6 + 0.4 * w.id[i])) * 255;
   }

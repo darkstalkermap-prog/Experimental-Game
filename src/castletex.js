@@ -117,6 +117,11 @@ function blocks(o) {
             cr = mix(cr, 120, t); cg = mix(cg, 132, t); cb = mix(cb, 70, t);
           }
         }
+        if (o.grain && d >= 0) {               // the grain of the stone, texel by texel: up close a face reads as stone, not as a smooth wash
+          const gr = Math.sin(xx * 12.9898 + yy * 78.233) * 43758.5453, gn = gr - Math.floor(gr) - 0.5;
+          const k = 1 + gn * o.grain;
+          cr *= k; cg *= k; cb *= k; hgt += gn * o.grain * 0.25;
+        }
         if (o.streaks) {                       // rain streaks run down the face
           const t = smooth(0.55, 0.95, streakX[xx] * (0.4 + 0.9 * streakY[idx])) * o.streaks;
           cr *= 1 - t * 0.35; cg *= 1 - t * 0.33; cb *= 1 - t * 0.3;
@@ -157,7 +162,7 @@ const STONE_PAL = [[200, 192, 174], [184, 179, 166], [206, 194, 170], [170, 167,
 export function stoneSet(size = 512) {
   return once('stone' + size, () => {
     const t = blocks({ size, rows: 8, minW: size * 0.15, maxW: size * 0.3, gap: size / 170, bevel: size / 70, seed: 3, rough: 0.16, undulate: 0.22,
-      chips: 0.5, cracks: 5, lichen: 0.5, streaks: 0.55, mortar: [186, 176, 156], palette: STONE_PAL });
+      chips: 0.5, cracks: 5, lichen: 0.5, streaks: 0.55, grain: 0.14, mortar: [186, 176, 156], palette: STONE_PAL });
     return pair(t.color, t.height, size, 1.5);
   });
 }
@@ -165,7 +170,7 @@ export function stoneSet(size = 512) {
 export function flagSet(size = 512) {
   return once('flag' + size, () => {
     const t = blocks({ size, rows: 4, minW: size * 0.25, maxW: size * 0.45, gap: size / 140, bevel: size / 50, seed: 21, rough: 0.2, undulate: 0.3,
-      chips: 0.3, cracks: 3, lichen: 0.25, streaks: 0, mortar: [96, 88, 74], palette: [[150, 146, 138], [138, 136, 130], [158, 150, 136], [128, 128, 126], [146, 138, 124]] });
+      chips: 0.3, cracks: 3, lichen: 0.25, streaks: 0, grain: 0.12, mortar: [96, 88, 74], palette: [[150, 146, 138], [138, 136, 130], [158, 150, 136], [128, 128, 126], [146, 138, 124]] });
     return pair(t.color, t.height, size, 1.6);
   });
 }
