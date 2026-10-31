@@ -672,8 +672,8 @@ and the crosshair go. A lord who is out still has the shop, the map and the orde
 
 **Spectate a whole battle.** **Spectate** in the quiet row of the main menu starts the battle the setup describes with nobody of yours in
 it: every house an AI lord (castles set to empty stay empty), War Mode's armies all AI generals', Hero Mode's seats all bots. The first
-preparation is short (10 seconds, War Mode's build 6: the AI has its armies at once). Nothing is earned (no Renown, no records); the end
-screen names the winner and offers **Watch Again**.
+preparation is short (10 seconds, War Mode's build 6: the AI has its armies at once). Nothing is earned (no Renown, no records, and no
+War Mode army is remembered for Repeat last army); the end screen names the winner and offers **Watch Again**.
 
 **Online: the spectator seat.** In the room's lobby, under the castles (or the hero seats), a **Watching** line lists who watches; **Watch
 instead** takes you off your place (it takes no castle or hero seat), **Play instead** (or **Take** on a free place) brings you back. The host
