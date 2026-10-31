@@ -5,6 +5,22 @@
 
 export const UPDATES = [
   {
+    id: 7,
+    title: 'Bigger wars, smarter lords',
+    items: [
+      'War Mode: armies of up to 500 soldiers each and 30,000 gold to build them; battles of 2,000 run smoothly, online too.',
+      'War Mode: you are your hero from the first moment, standing by your army while you build it.',
+      'Charge sends your soldiers at the enemy (no more crowding round you), and archers shoot from range.',
+      'Send your army by colour: one button per enemy army in its colour (keys 5, 6, 7); in Conquest they send your army at that house\'s castle. Your groups have their own colours too.',
+      'The AI generals fight with tactics: a line with archers behind, cavalry on the flanks, advancing together, regrouping when beaten.',
+      'AI lords and generals are heroes now and use their abilities in battle (gentler on Easy).',
+      'Spearmen stop riders: extra damage to anyone on horseback, and a horse charging into their spears is checked.',
+      'Knight: Shield Bash is a charge: hold Q to see where it ends (as far as a Fireball flies), let go and run there behind your shield, bashing the first enemy you meet.',
+      'Cleric: Smite is lightning out of your open hand, as far as a Fireball flies.',
+      'Cavalier: Lance Charge gallops as far as a Fireball flies (hold Q to aim it, Q again to rein in), through everyone in the way.',
+    ],
+  },
+  {
     id: 6,
     title: 'Armies that know their way',
     items: [
@@ -14,9 +30,6 @@ export const UPDATES = [
       'War Mode online with four players: free-for-all, two against two, or together against the AI.',
       'Berserker: Blood Rage is gone. His R is now Leap: hold R to mark a spot as far as a Mage\'s Fireball flies, let go and he leaps there over the soldiers and slams the ground. Walls stop him. New talents: Earthshaker and Death from Above.',
       'Ranger: her R is now Sniper Shot: hold R and the view zooms in far, steadies, and one heavy arrow flies flat as far as a Fireball (a headshot counts). The Snare Trap is gone; new talents: Hawk\'s Scope and Deadeye.',
-      'Knight: Shield Bash is a charge: hold Q to see where it ends (as far as a Fireball flies), let go and run there behind your shield, bashing the first enemy you meet.',
-      'Cleric: Smite is lightning out of your open hand, as far as a Fireball flies.',
-      'Cavalier: Lance Charge gallops as far as a Fireball flies (hold Q to aim it, Q again to rein in), through everyone in the way.',
     ],
   },
   {
