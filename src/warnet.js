@@ -11,8 +11,9 @@
 //      A record is the soldier's place in the roster (the step from the last record's, 1 character), then now and then (his first few records, every
 //      STATICS snapshots, and when his rank changes) what never changes (type, team, look, rank: 3 characters), then 8 characters:
 //        x 12, z 12 bits (over the whole map) · yaw 6 · swing 3, staggered 1, blocking 1 · speed 4, attack side 2 · health 6
-// Each guest says which snapshots it has (with its pose: netsync.js); a soldier whose last record went in a snapshot some guest did not get (the room
-// transport keeps only the latest of a burst) is sent again at his next turn, changed or not, and so is a fixed part until a guest has it.
+// Each guest says which snapshots it has (with its pose: netsync.js). A soldier whose newest record old enough to have been answered for (LAG
+// snapshots) was missed by a guest, and no newer one got, goes in every snapshot until one is got (the room transport keeps only the latest of a burst;
+// at his turn he could miss the same beat of a burst again and again), with his fixed part until a guest has had that.
 // A guest keeps every soldier of the roster (one with no record this time goes on along his last steps and stops: interpolation.js), lays down the ones
 // the bits call fallen, and drops the ones the roster no longer has (a body cleared away, a soldier sold back in the build). Four armies of 500
 // marching and fighting come to some 6 to 9 KB. The height is not sent: a guest puts the soldier on the ground (the bowl has no walls to stand on).
@@ -60,8 +61,23 @@ function quant(u, q) {
 }
 const Q = new Int32Array(6);
 // a soldier's memory of what was last sent of him (the host's): [0..5] as quant's, [6] the snapshot, [7] the snapshot of his fixed part, [8] its
-// rank, [9] how many records of him have gone, [10] 1 once every guest has had his fixed part
-const memo = (u) => u.netQ || (u.netQ = new Int32Array([-1, -1, -1, -1, -1, -1, -1e6, -1e6, -1, 0, 0]));
+// rank, [9] how many records of him have gone, [10] 1 once every guest has had his fixed part, [11] the snapshots of his last 30 records (bit k: the
+// snapshot [12] - k), [12] the snapshot that mask was last moved on to
+const memo = (u) => u.netQ || (u.netQ = new Int32Array([-1, -1, -1, -1, -1, -1, -1e6, -1e6, -1, 0, 0, 0, 0]));
+// was soldier m's newest record that a guest could have answered for by now missed, with nothing newer got since?
+function lost(m, seq, had) {
+  const d = seq - m[12];
+  m[11] = d >= 30 ? 0 : (m[11] << d) & 0x3fffffff;
+  m[12] = seq;
+  const mask = m[11];
+  if (!mask) return false;
+  for (let k = 1; k < 30; k++) {
+    if (!(mask & (1 << k))) continue;
+    if (had(seq - k)) return false;   // (one got: newer than any that was missed)
+    if (k > LAG) return true;          // (the newest old enough to have been answered for, and missed)
+  }
+  return false;
+}
 
 const sorted = [];
 const byId = (a, b) => a.id - b.id;
@@ -99,10 +115,10 @@ export function packUnits(units, net = null) {
       if (!u.alive) continue;
       const m = memo(u);
       quant(u, Q);
-      u.netWhy = 0;
       if (m[10] === 0 && m[7] >= 0 && had(m[7])) m[10] = 1;
-      // (changed since his last record, or that record went in a snapshot a guest did not get)
-      if (m[6] < 0 || Q[0] !== m[0] || Q[1] !== m[1] || Q[2] !== m[2] || Q[3] !== m[3] || Q[4] !== m[4] || Q[5] !== m[5] || (seq - m[6] > LAG && !had(m[6]))) {
+      u.netWhy = 0;
+      if (lost(m, seq, had)) { u.netWhy = 1; near++; continue; }   // (lost on the way: every snapshot until one arrives)
+      if (m[6] < 0 || Q[0] !== m[0] || Q[1] !== m[1] || Q[2] !== m[2] || Q[3] !== m[3] || Q[4] !== m[4] || Q[5] !== m[5]) {
         let close = false;
         for (let e = 0; e < eyes.length && !close; e += 2) close = Math.abs(u.pos.x - eyes[e]) < NEAR && Math.abs(u.pos.z - eyes[e + 1]) < NEAR;
         u.netWhy = close ? 1 : 2;
@@ -126,7 +142,7 @@ export function packUnits(units, net = null) {
       if (every > 1 && (seq + u.id) % every !== 0 && (m[6] < 0 || seq - m[6] < every * 2)) continue;
     }
     quant(u, Q);
-    const fixed = !net || m[9] < 3 || (m[10] === 0 && seq - m[7] > LAG) || seq - m[7] >= STATICS || m[8] !== u.rank;
+    const fixed = !net || m[10] === 0 || seq - m[7] >= STATICS || m[8] !== u.rank;   // (until a guest is known to have it, every time)
     const step = i - last;
     if (step < 32) rec.push(ABC[step | (fixed ? 32 : 0)]);
     else { rec.push(ABC[fixed ? 32 : 0]); put(rec, i, 3); }
@@ -141,6 +157,7 @@ export function packUnits(units, net = null) {
     put(rec, Q[2], 1); put(rec, Q[3], 1); put(rec, Q[4], 1); put(rec, Q[5], 1);
     for (let k = 0; k < 6; k++) m[k] = Q[k];
     m[6] = seq; m[9]++;
+    if (net) m[11] |= 1;   // (bit 0: this snapshot, m[12])
     if (u.isHero) names.push([u.id, u.name]);
   }
   sorted.length = 0;
