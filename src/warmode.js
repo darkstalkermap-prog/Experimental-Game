@@ -773,7 +773,7 @@ export class WarMode {
     const g = this.g;
     return g.factions.filter((f) => f.war).map((f) => {
       const s = this.standing(f.team);
-      return { team: f.team, name: f.name, lord: f.lord, side: f.war.side, start: f.war.start, left: s.n, hero: s.hero, kills: f.kills, mine: f.team === g.localTeam, won: this.result ? this.result.winner >= 0 && allied(f.team, this.result.winner) : false };
+      return { team: f.team, name: f.name, lord: f.lord, side: f.war.side, start: f.war.start, left: s.n, hero: s.hero, kills: f.kills, mine: !g.spectator && f.team === g.localTeam, won: this.result ? this.result.winner >= 0 && allied(f.team, this.result.winner) : false };
     });
   }
 

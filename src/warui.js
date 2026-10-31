@@ -411,7 +411,7 @@ export class WarUI {
   // the local lord's army as the battle begins is remembered for the next battle of the same format (every screen: a guest's own browser keeps its own)
   remember() {
     const g = this.g, w = this.w, f = g.localFaction;
-    if (!f || !f.war) return;
+    if (!f || !f.war || g.spectator) return;   // (a spectator's house 0 is an AI general's army: watching it is no army of his)
     const c = w.counts(f.team), counts = {};
     for (const t of TYPES) if (c[t]) counts[t] = c[t];
     // (an army sent at a house is remembered as a charge: next battle's houses are others)
@@ -660,6 +660,6 @@ registerEndSection('war', 12, (summary) => {
     return `<tr class="${r.mine ? 'mine' : ''}"><td><b style="color:${TEAM_CSS[r.team]}">${esc(r.mine ? 'You' : r.name)}</b>${won ? ' ♛' : ''}</td><td>${r.start}</td><td>${r.left}</td><td>${r.start - r.left}</td><td>${r.kills}</td><td>${r.hero ? 'standing' : 'fallen'}</td></tr>`;
   }).join('');
   el.innerHTML = `<table><thead><tr><th>Army</th><th>Mustered</th><th>Standing</th><th>Lost</th><th>Kills</th><th>Lord</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">War Mode · ${esc(WAR.formats[W.format] ? WAR.formats[W.format].name : '')} · ${clock(W.clock)} of battle · your hero's kills: ${summary.kills}</div>`;
+    <div class="note">War Mode · ${esc(WAR.formats[W.format] ? WAR.formats[W.format].name : '')} · ${clock(W.clock)} of battle${summary.spectator ? '' : ` · your hero's kills: ${summary.kills}`}</div>`;
   return el;
 });
