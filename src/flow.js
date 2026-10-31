@@ -170,7 +170,8 @@ export function resetHud() {
   last.hillY = last.castleY = last.targetY = 0;
   last.cmdTop = last.toastLift = -1;
   last.feedY = 0; last.feedFit = 6; last.toasts = 6; last.topShift = 0; $('top').style.transform = '';
-  $('hill').style.top = $('target').style.top = $('killfeed').style.top = '';
+  $('hill').style.top = $('target').style.top = '';
+  $('hud').style.setProperty('--feedtop', '0px');
   delete $('hud').dataset.feed; delete $('hud').dataset.toasts;
   last.noTip = false; $('hud').classList.remove('notip');
   if ($('castleBar')) $('castleBar').style.top = '';
@@ -248,7 +249,7 @@ export function updateHud(g, ui) {
 }
 
 // The kill feed (the top right, under the gold and the keys) and the bars under the top panel: on a narrow HUD the bars reach into the feed's column, and the
-// feed then starts under them. Whether moved or not, it shows only as many of its newest lines as fit above the minimap (a short window at a large UI scale;
+// feed then starts under them (and under the full key line when that shows). Whether moved or not, it shows only as many of its newest lines as fit above the minimap (a short window at a large UI scale;
 // index.html: data-feed).
 const FEED_W = 270;   // HUD pixels kept free for the feed's lines (a long name against a long name), so a new line never lands on a bar
 const FEED_LINE = 27;   // HUD pixels a line of the feed takes, with the gap under it
@@ -256,7 +257,9 @@ function clearFeed(bars, W) {
   const kf = $('killfeed'), hud = $('hud');
   let y = 0;
   for (const b of bars) if (W / 2 + b.offsetWidth / 2 > W - 16 - Math.max(FEED_W, kf.offsetWidth) - 6) y = Math.max(y, b.offsetTop + b.offsetHeight + 6);
-  if (y !== last.feedY) { last.feedY = y; kf.style.top = y ? `${Math.max(y, 100)}px` : ''; }   // (never above its own place)
+  const hint = $('hint');   // (the full key line, in the same column: in the first preparations, and on I)
+  if (hint.offsetParent) y = Math.max(y, hint.offsetTop + hint.offsetHeight + 6);
+  if (y !== last.feedY) { last.feedY = y; hud.style.setProperty('--feedtop', `${y}px`); }   // (index.html: never above its own place)
   const mm = $('minimapWrap'), z = parseFloat(getComputedStyle(kf).zoom) || 1;
   const fit = mm.offsetParent && kf.offsetParent ? Math.max(1, Math.min(6, Math.floor((mm.getBoundingClientRect().top / z - 8 - kf.offsetTop + 3) / FEED_LINE))) : 6;
   if (fit !== last.feedFit) { last.feedFit = fit; if (fit < 6) hud.dataset.feed = String(fit); else delete hud.dataset.feed; }

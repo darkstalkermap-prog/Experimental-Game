@@ -278,7 +278,8 @@
   #goldpops { position: absolute; right: 20px; top: 56px; width: 80px; height: 80px; }
   .goldpop { position: absolute; right: 0; top: 0; color: var(--gold); font-family: Cinzel, serif; font-weight: 700; font-size: 18px; animation: gp 1.2s ease-out forwards; text-shadow: 0 1px 3px #000; }
   @keyframes gp { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-46px); opacity: 0; } }
-  #hint { position: absolute; right: 16px; top: 64px; max-width: 300px; line-height: 1.4; font-size: 14px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.66); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
+  #hint { position: absolute; right: 16px; top: 64px; max-width: clamp(200px, calc(50% - 254px), 300px); line-height: 1.4;   /* (as #alerts: clear of the bars under the top panel) */
+    font-size: 14px; text-align: right; padding: 3px 9px; background: rgba(0,0,0,0.66); border-radius: 4px; text-shadow: 0 1px 2px #000; color: var(--muted); }
   /* The key reminders: in a player's first two matches the full line shows while the castles prepare, and steps aside once the fighting has begun; after
      that (class keysfew, see main.js) only a small "I keys" note stays. I shows or hides the full line at any time (class keysopen). */
   #hud.inbattle #hint, #hud.inbattle #minimapWrap .mapHint, #hud.keysfew #hint, #hud.keysfew #minimapWrap .mapHint { display: none; }
@@ -347,8 +348,8 @@
   .toast.fade { opacity: 0; }
   .toast.bump { animation: toastbump 0.25s ease-out; }
   @keyframes toastbump { 0% { transform: scale(1.06); filter: brightness(1.4); } 100% { transform: none; filter: none; } }
-  #killfeed { position: absolute; right: 16px; top: 100px; display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
-  /* (a narrow HUD: the kill feed moved down under the bars of the top panel, and the toasts under those bars, keep only their newest lines that fit: flow.js) */
+  #killfeed { position: absolute; right: 16px; top: max(100px, var(--feedtop, 0px)); display: flex; flex-direction: column; gap: 3px; align-items: flex-end; font-size: 14px; }
+  /* (--feedtop: the kill feed moved down under the bars of the top panel or the key line; it and the toasts keep only their newest lines that fit: flow.js) */
   #hud[data-feed="1"] #killfeed .kill:nth-child(n+2), #hud[data-feed="2"] #killfeed .kill:nth-child(n+3), #hud[data-feed="3"] #killfeed .kill:nth-child(n+4),
   #hud[data-feed="4"] #killfeed .kill:nth-child(n+5), #hud[data-feed="5"] #killfeed .kill:nth-child(n+6),
   #hud[data-toasts="1"] #toasts .toast:nth-child(n+2), #hud[data-toasts="2"] #toasts .toast:nth-child(n+3), #hud[data-toasts="3"] #toasts .toast:nth-child(n+4),
@@ -679,7 +680,7 @@
      new UI scale or the start of a hero match): the roster and the key line drop below the score panel (its bottom is 94 px), the kill feed below
      the key line. The callouts under the roster keep only the newest ones that fit above the abilities (data-alerts, also measured). */
   #hud.heronarrow #heroRoster, #hud.heronarrow #hint { top: 104px; }
-  #hud.heronarrow #killfeed { top: 176px; }
+  #hud.heronarrow #killfeed { top: max(176px, var(--feedtop, 0px)); }
   #hud.heronarrow #alerts { top: 268px; }
   #hud[data-alerts="1"] #alerts .alert:nth-last-child(n+2), #hud[data-alerts="2"] #alerts .alert:nth-last-child(n+3),
   #hud[data-alerts="3"] #alerts .alert:nth-last-child(n+4) { display: none; }
