@@ -839,7 +839,10 @@ Soldiers appear in their places at once (+1, +10, +50); −1 / −10 dismiss the
 Archers behind (a deep infantry block, the archers on a long line well behind it, the riders held back). The **battle plan**
 says what infantry, archers and cavalry do when the battle begins: **Hold** (the default: they stay where they were set out
 and fight what comes, archers shoot from where they stand, until you give an order; your hero is free to walk the field),
-Charge, Advance or Follow me. The AI generals keep their own plans.
+Charge, Advance or Follow me. The AI generals keep their own plans. No place of any soldier is ever up the mountains round the map
+(`fieldHalf` in `src/warmap.js`, a few metres inside their foot): a big army whose formation would reach them from a hill near the edge
+(a small map, Archers behind) is set out wider and shallower, and a group sent towards them (Move here, Fall back, an AI general's
+place) forms up at their foot, its shape kept.
 
 **The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
 **1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). Each group has a colour of
@@ -854,7 +857,7 @@ out when the battle begins (Hold, Charge, Advance, Follow me and Attack; Move he
 | F2 | Follow me | Form up behind your hero and follow him (archers behind the infantry, riders on the right), facing the way he walks: he can turn and look round without his men running round him. |
 | F3 | Charge | March on the enemy army nearest the group and fight: each man looks round himself (anyone within 20 m), then marches on a man of that army wherever it stands; archers stop where their bows reach and shoot. |
 | 5 / 6 / 7 | Attack | The **Attack** row has a button for each enemy army in its house's colour, named by it and with its soldiers left (Red 312, Green 280, ...), on 5, 6 and 7 in house order (a beaten army's is struck through). The group marches on that army and fights it: other armies only when they stand in its way (5 m). |
-| F4 | Hold | Stop: form up where they are, facing the enemy. |
+| F4 | Hold | Stop: form up where they are, facing the enemy. A group whose block would stand in another's (riders set out on both wings have their middle among the infantry) forms up where Everyone's Move here puts it: the archers behind the infantry, the riders on its right (else its left). The same for Advance and Fall back. |
 | T / G | Advance / Fall back | 25 m towards / away from the nearest enemy army (`WAR.forward`), formed up, then hold. |
 | F | Formation | The next formation for the group (or click one): **Line** (a broad front a few ranks deep), **Shield wall** (shoulder to shoulder, shields locked when holding: blocks far more, melee men keep their place, marches slower), **Loose** (3.4 m apart: a giant's club or a fireball catches fewer; good for archers), **Wedge** (an arrowhead that closes a little quicker). |
 
