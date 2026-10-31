@@ -280,9 +280,12 @@ export const PROMOTIONS = { swordsman: 'knight', spearman: 'knight', archer: 'lo
 // The spells behind the Mage's Fireball and the Cleric's Smite. They fly (or fall) where the caster aims and are
 // stopped by walls and hills.
 export const SPELLS = {
-  fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, color: 0xff7a1a },
+  fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, life: 3, color: 0xff7a1a },   // (life: seconds before it fizzles out)
   smite: { name: 'Smite', dmg: 95, radius: 3.8, range: 60, color: 0xffe9a0 },
 };
+// How far a Fireball flies (it goes straight until it meets something or its time is up): the reach of the Berserker's Leap and the
+// Ranger's Sniper Shot is measured against it (classes.js)
+export const FIREBALL_RANGE = SPELLS.fireball.speed * SPELLS.fireball.life;
 
 // Pings and markers (src/pings.js): call-outs between team mates. A ping is a quick middle click on whatever you
 // look at and fades after a few seconds; a marker (the held middle button's wheel, or a click on a map) stays much

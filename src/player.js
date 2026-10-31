@@ -7,7 +7,7 @@ import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y 
 import { avoidCastles } from './nav.js';
 import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
-import { CLASSES, classOf, Buffs, SWITCH, RANGER, abilityOf } from './classes.js';
+import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, abilityOf } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
@@ -69,9 +69,11 @@ export class Player {
     this.climbTop = false;     // ...and it is the top of the battlements (a mantle from the wall walk), not the wall walk
     this.hintT = 0;
     this.vmDown = 0;           // how far the weapons are lowered (while climbing)
-    this.aiming = null;        // holding Q to place the Ranger's volley: { slot, t, at, far }
+    this.aiming = null;        // holding a key to place an ability on the ground (the Ranger's volley, the Berserker's Leap): { slot, t, at, far }
     this.power = null;         // the Ranger's Power Shot being drawn: { t } (it looses itself when the draw is full: tickPower)
-    this.throwT = 0;           // the Snare Trap leaving the hand (1 -> 0: the first-person arm, viewmodel.js)
+    this.scope = null;         // the Ranger's Sniper Shot: the bow at the eye while R is held, { t } (tickScope)
+    this.swayX = 0; this.swayY = 0;   // ... and how far the scope has swayed off where the hero looks (radians: yaw, pitch)
+    this.leap = null;          // the Berserker in the air: the plan of his Leap (Abilities.leapPlan) and its clock t
     this.arrowT = 0;           // the Ranger's quiver filling again (RANGER.arrowEvery)
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
@@ -308,7 +310,7 @@ export class Player {
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (1 - this.buffs.get('slow')) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }   // (slow: near a sprung Snare Trap)
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = abilityOf(this, slot); return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
@@ -356,9 +358,9 @@ export class Player {
     this.bwave = null;
     this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
-    this.dash = null;
+    this.dash = null; this.leap = null;
     this.castFlash = 0;
-    this.cancelAim();
+    this.cancelAim(); this.endScope();
     if (this.body) { this.buildTag(); this.restyleBody(); }
   }
 
@@ -435,11 +437,11 @@ export class Player {
     this.swingT = -1;
     this.buffs.clear();
     this.abilCd = { q: 0, r: 0 };
-    this.dash = null;
+    this.dash = null; this.leap = null;
     this.drive = null;
     this.climb = null; this.climbing = false; this.climbCd = 0;
     this.duck = 0; this.ducking = false; this.height = BODY.height; this.eye = BODY.eye;
-    this.cancelAim();
+    this.cancelAim(); this.endScope();
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
@@ -588,8 +590,10 @@ export class Player {
     const m = input.mouse;
 
     // look
-    this.yaw -= m.dx * this.sensitivity * (this.zoomed ? 0.5 : 1);
-    this.pitch = clamp(this.pitch - m.dy * this.sensitivity * (this.zoomed ? 0.5 : 1), -1.45, 1.45);
+    // (zoomed in, the mouse turns the view less: through the Sniper Shot's scope, in step with how narrow the view is)
+    const look = this.sensitivity * (this.scope ? Math.max(0.08, this.camera.fov / this.baseFov) : this.zoomed ? 0.5 : 1);
+    this.yaw -= m.dx * look;
+    this.pitch = clamp(this.pitch - m.dy * look, -1.45, 1.45);
 
     this.tickAbilities(dt);
     // steering a siege engine: the engine moves, the hero only looks around and gives orders
@@ -602,9 +606,14 @@ export class Player {
     if (!warKeys && input.hit('Digit2')) this.setWeapon('bow');
     if (m.wheel || (warKeys && input.hit('KeyX'))) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyH')) this.drinkPotion();
-    // Q: most abilities go off at once; the Ranger's volley is aimed with a circle (hold it, let go to loose it)
-    if (input.hit('KeyQ')) { if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input); }
-    if (input.hit('KeyR')) { this.cancelAim(); this.useAbility('r', input); }
+    // Q and R: most abilities go off at once; the Ranger's volley and the Berserker's Leap are aimed with a circle (hold the key, let
+    // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
+    if (input.hit('KeyQ')) { this.endScope(); if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input); }
+    if (input.hit('KeyR')) {
+      const r = abilityOf(this, 'r');
+      this.cancelAim();
+      if (r.aimed) this.beginAim('r'); else if (r.id === 'snipe') this.beginScope(); else this.useAbility('r', input);
+    }
 
     if (input.hit('KeyE')) {
       const engine = g.engineNear(this);
@@ -648,6 +657,8 @@ export class Player {
       this.zoomed = false;
     } else if (this.power) {
       this.blocking = false;   // (Power Shot: the bow is held at full draw until it looses itself, tickPower)
+    } else if (this.scope) {
+      this.blocking = false; this.zoomed = false;   // (Sniper Shot: the bow is at the eye, drawn and loosed by tickScope)
     } else {
       this.blocking = false;
       if (m.left && this.arrows > 0 && !this.aiming) this.drawT += dt;
@@ -660,7 +671,7 @@ export class Player {
     }
     this.shake = Math.max(0, this.shake - dt);
     this.tickPower(dt);
-    if (this.throwT > 0) this.throwT = Math.max(0, this.throwT - dt / 0.45);
+    if (this.scope) this.tickScope(dt, input.down('KeyR'), m.leftPressed);
 
     // regen when out of combat (the host decides this in online games)
     if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
@@ -670,12 +681,14 @@ export class Player {
     this.camera.position.set(this.pos.x, this.pos.y + (this.mounted ? HORSE.eye : this.eye), this.pos.z);
     const sk = this.shake * 0.06;
     // (hauling yourself up a wall, the view tips up toward the top of it)
-    this.camera.rotation.set(this.pitch + 0.4 * this.vmDown + (Math.random() - 0.5) * sk, this.yaw + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
-    const fov = this.zoomed ? 42 : this.baseFov;
-    if (Math.abs(this.camera.fov - fov) > 0.1) {
-      this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * 10);
+    // (the Sniper Shot's scope sways the view: swayX, swayY, the same offsets the arrow is loosed along)
+    this.camera.rotation.set(this.pitch + this.swayY + 0.4 * this.vmDown + (Math.random() - 0.5) * sk, this.yaw + this.swayX + Math.PI + (Math.random() - 0.5) * sk, (Math.random() - 0.5) * sk, 'YXZ');
+    const fov = this.scope ? this.scopeFov : this.zoomed ? 42 : this.baseFov;
+    if (Math.abs(this.camera.fov - fov) > 0.05) {
+      this.camera.fov += (fov - this.camera.fov) * Math.min(1, dt * (this.scope ? 1 / RANGER.snipe.zoomT * 3 : 10));
       this.camera.updateProjectionMatrix();
     }
+    this.showScope(!!this.scope && this.camera.fov < this.baseFov * 0.45);
     this.updateViewModel(dt, moving && this.onGround, sprint);
   }
 
@@ -683,6 +696,7 @@ export class Player {
   // weapon bob).
   move(dt, input) {
     const g = this.game;
+    if (this.leap) { this.flyLeap(dt); return { moving: false, sprint: false }; }
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     let moving, sprint = false;
     if (this.mounted) {
@@ -724,7 +738,6 @@ export class Player {
       if (this.drawT > 0) speed *= 0.6;
       if (this.aiming) speed *= 0.7;
       speed *= 1 - (1 - BODY.duckSpeed) * this.duck;
-      if (this.buffs.has('rooted')) speed = 0;   // (caught in a Snare Trap)
       if (sprint) this.stamina = Math.max(0, this.stamina - dt * 18 * biomeRules().drain);   // (the heat of the desert drains it faster and slows its return: biometwist.js)
       else this.stamina = Math.min(100, this.stamina + dt * (this.blocking ? 6 : 16) * biomeRules().regen);
       const tx = moving ? (mx / ml) * speed : 0, tz = moving ? (mz / ml) * speed : 0;
@@ -736,7 +749,6 @@ export class Player {
       this.vel.z += (tz - this.vel.z) * k;
     }
 
-    if (this.mounted && this.buffs.has('rooted')) this.rideSpeed = 0;   // (a horse caught in a Snare Trap)
     if (this.dash) {
       const d = this.dash;
       d.t -= dt;
@@ -866,7 +878,7 @@ export class Player {
   // knocks the climber off (see stagger). Returns whether a climb began (false: nothing to climb, so the jump goes ahead).
   tryClimb() {
     const g = this.game;
-    if (this.mounted || this.drive || this.climb || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
+    if (this.mounted || this.drive || this.climb || this.leap || this.climbCd > 0 || this.staggerT > 0 || this.ducking) return false;
     const ground = g.physics.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     if (!this.onGround && this.pos.y - ground > 2.2) return false;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
@@ -940,36 +952,131 @@ export class Player {
     }
   }
 
-  // ---------- placing the Ranger's volley ----------
-  // Hold Q: a circle on the ground follows the crosshair. Let go and the volley is loosed at it.
+  // ---------- abilities placed on the ground: the Ranger's volley, the Berserker's Leap ----------
+  // Hold the key: a circle on the ground follows the crosshair (for the Leap, where he would really land: short of a wall in the way,
+  // and in the warning colour when the leap is cut short). Let go and it goes off there.
   beginAim(slot) {
-    const g = this.game;
-    if (!this.alive || this.drive || this.climb || this.aiming) return;
-    if (this.staggerT > 0 || this.abilCd[slot] > 0) { g.audio.play('deny'); return; }
-    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false };
-    this.setWeapon('bow');
+    const g = this.game, def = abilityOf(this, slot);
+    if (!this.alive || this.drive || this.climb || this.aiming || this.leap) return;
+    if (this.staggerT > 0 || this.abilCd[slot] > 0 || (def.id === 'leap' && this.mounted)) { g.audio.play('deny'); return; }
+    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0 };
+    if (def.id === 'volley') this.setWeapon('bow');
   }
 
   updateAim(dt, input) {
-    const g = this.game, a = this.aiming;
-    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || abilityOf(this, 'q').id !== 'volley') { this.cancelAim(); return; }
+    const g = this.game, a = this.aiming, def = abilityOf(this, a.slot);
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || !def.aimed || this.leap) { this.cancelAim(); return; }
     a.t += dt;
     const eyePos = new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z);
-    const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
-    a.at.copy(r.pos);
-    a.far = r.far;
-    g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
-    if (input.release('KeyQ')) {
-      const at = a.at.clone();
+    if (def.id === 'leap') {
+      if ((a.re -= dt) <= 0) {   // (the arc is worked out 20 times a second, not every frame)
+        a.re = 0.05;
+        a.plan = g.abilities.leapPlan(this, this.pos, g.abilities.aimPoint(eyePos, this.lookDir(), LEAP.range, this.team).pos);
+        if (a.plan) a.at.copy(a.plan.to);
+        a.far = !a.plan || a.plan.cut;
+      }
+      if (a.plan) g.aimRing.show(a.at, LEAP.radius * talentFx(this, 'leapRadius', 1), a.far, a.t); else g.aimRing.hide();
+    } else {
+      const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
+      a.at.copy(r.pos);
+      a.far = r.far;
+      g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
+    }
+    const key = a.slot === 'q' ? 'KeyQ' : 'KeyR';
+    if (input.release(key)) {
+      const at = def.id === 'leap' && !a.plan ? null : a.at.clone();
       this.cancelAim();
-      this.useAbility(a.slot, input, at);
-    } else if (!input.down('KeyQ')) this.cancelAim();   // the menu opened or the window lost focus: never loose a volley by accident
+      if (at) this.useAbility(a.slot, input, at); else g.audio.play('deny');
+    } else if (!input.down(key)) this.cancelAim();   // the menu opened or the window lost focus: never loose it by accident
   }
 
   cancelAim() {
     if (!this.aiming) return;
     this.aiming = null;
     if (this.isLocal && this.game.aimRing) this.game.aimRing.hide();
+  }
+
+  // ---------- the Berserker in the air ----------
+  // The hero's own screen (or, for a bot, where the battle is run) carries him along the planned arc: no walking, no walls to push
+  // against (the plan has seen to that), and he lands on his feet where it ends.
+  flyLeap(dt) {
+    const L = this.leap;
+    L.t += dt;
+    const s = Math.min(1, L.t / L.dur), y0 = this.pos.y;
+    this.pos.set(L.from.x + (L.to.x - L.from.x) * s, L.from.y + (L.to.y - L.from.y) * s + 4 * L.apex * s * (1 - s), L.from.z + (L.to.z - L.from.z) * s);
+    this.vel.set((L.to.x - L.from.x) / L.dur, 0, (L.to.z - L.from.z) / L.dur);
+    this.onGround = false;
+    if (s < 1) { this.vy = (this.pos.y - y0) / Math.max(dt, 1e-4); return; }
+    this.leap = null;
+    this.pos.copy(L.to);
+    this.vel.set(0, 0, 0);
+    this.vy = 0;
+    this.onGround = true;
+    if (this.isLocal) this.shake = Math.max(this.shake, 0.4);
+  }
+
+  // ---------- the Ranger's Sniper Shot ----------
+  // Hold R: the bow comes up to the eye and the view narrows (the scope); the string is drawn as it comes up. The aim sways, settles
+  // after a moment and, held too long, starts to waver again. Let go of R (or click) once it is drawn and the arrow is loosed where the
+  // scope points; let go before that and nothing is spent. The hero's own screen runs it (a bot's, where the battle is: HeroBot.act).
+  get scopeFov() { const t = talentFx(this, 'scope', null); return RANGER.snipe.fov * (t ? t.fov : 1); }
+
+  beginScope() {
+    const g = this.game;
+    if (!this.alive || this.drive || this.climb || this.scope || this.power) return;
+    if (this.staggerT > 0 || this.abilCd.r > 0 || this.mounted) {
+      g.audio.play('deny');
+      if (this.mounted && this.isLocal) this.notify('Get down from the horse to use the scope.');
+      return;
+    }
+    this.setWeapon('bow');
+    this.scope = { t: 0 };
+    g.audio.play('bow', this.isBot ? this.pos : null);
+  }
+
+  // held: R is still down; fire: a click to loose now
+  tickScope(dt, held, fire) {
+    const sc = this.scope;
+    if (!sc) return;
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.mounted || this.abilCd.r > 0 || this.weapon !== 'bow' || abilityOf(this, 'r').id !== 'snipe') { this.endScope(); return; }
+    const S = RANGER.snipe, tal = talentFx(this, 'scope', null);
+    sc.t += dt;
+    this.drawT = this.drawTime * Math.min(1, sc.t / S.draw);
+    // the sway: two slow waves on each axis (never quite a loop), shrinking as the aim settles and growing again when held too long
+    const settle = S.settle * (tal ? tal.settle : 1), t = sc.t;
+    let k = t < settle ? 1 - (1 - S.steady) * (t / settle) : S.steady * (1 + Math.max(0, t - S.tire) * 0.6);
+    k *= S.sway * (tal ? tal.sway : 1);
+    const w = this.game.time;
+    this.swayX = k * (Math.sin(w * 1.3) + 0.5 * Math.sin(w * 2.9 + 1)) / 1.5;
+    this.swayY = k * (Math.sin(w * 1.7 + 0.6) + 0.4 * Math.sin(w * 3.3)) / 1.4;
+    const ready = t >= S.draw;
+    if (ready && (!held || fire || t >= S.hold)) {
+      const dir = this.scopeDir();
+      this.endScope();
+      if (this.vm) this.vm.recoil = 1;
+      this.castAbility('r', dir);
+    } else if (!held) this.endScope();   // let go too soon: the arrow is eased back and nothing is spent
+  }
+
+  // where the scope points: the hero's aim and the sway
+  scopeDir(out = new THREE.Vector3()) {
+    const p = this.pitch + this.swayY, y = this.yaw + this.swayX, cp = Math.cos(p);
+    return out.set(Math.sin(y) * cp, Math.sin(p), Math.cos(y) * cp);
+  }
+
+  endScope() {
+    if (!this.scope) return;
+    this.scope = null;
+    this.drawT = 0;
+    this.swayX = this.swayY = 0;
+  }
+
+  // the scope's ring over the screen (index.html #scope): only when it changes, never a DOM write a frame
+  showScope(on) {
+    if (!this.isLocal || on === !!this.scopeShown) return;
+    this.scopeShown = on;
+    const el = typeof document !== 'undefined' && document.getElementById('scope');
+    if (el) el.classList.toggle('on', on);
   }
 
   // ---------- class abilities ----------
@@ -1024,7 +1131,19 @@ export class Player {
         this.power = { t: 0 };
         g.audio.play('bow', this.isBot ? this.pos : null);
         return;
-      case 'trap': this.throwT = 1; break;
+      case 'leap': {
+        // the Berserker sets off at once along the arc (Abilities.leapPlan: short of walls, never onto enemy battlements); the host
+        // checks it again and slams the ground where it ends
+        if (this.mounted || this.climb || this.leap) { g.audio.play('deny'); return; }
+        const want = at || g.abilities.aimPoint(this.eyePos(), dir, LEAP.range, this.team).pos;
+        const plan = g.abilities.leapPlan(this, this.pos, want);
+        if (!plan) { g.audio.play('deny'); if (this.isLocal) this.notify('No room to leap there.'); return; }
+        this.cancelAim();
+        this.dash = null;
+        this.leap = { ...plan, t: 0 };
+        at = plan.to;
+        break;
+      }
       case 'fireball': this.castFlash = 1; this.castColor = 0xff8a2a; break;
       case 'smite': this.castFlash = 1; this.castColor = 0xffe9a0; break;
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
@@ -1045,12 +1164,13 @@ export class Player {
       g.net.toHost(msg);
       return;
     }
-    if (!g.abilities.use(this, slot, cam, dir, at)) { this.dash = null; this.castFlash = 0; }   // (use() starts the cooldown)
+    if (!g.abilities.use(this, slot, cam, dir, at)) { this.dash = null; this.leap = null; this.castFlash = 0; }   // (use() starts the cooldown)
   }
 
   // ---------- steering a siege engine ----------
   beginDrive(e) {
     this.drive = e;
+    this.leap = null; this.endScope();
     this.atk = null; this.blocking = false; this.drawT = 0; this.dash = null; this.zoomed = false;
     this.climb = null; this.climbing = false; this.climbHint = false;
     this.cancelAim();

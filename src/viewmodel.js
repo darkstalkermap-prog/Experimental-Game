@@ -192,7 +192,7 @@ export class ViewModel {
     this.spring = {};
     for (const n of ['kx', 'ky', 'kz', 'krx', 'kry', 'krz', 'sx', 'sy', 'sz', 'srx', 'sry', 'wx', 'wy', 'wz', 'wrx', 'wrz']) this.spring[n] = new Spring(n[0] === 's' ? 300 : 240, n[0] === 's' ? 22 : 19);
     this.lookX = new Spring(90, 13); this.lookY = new Spring(90, 13);
-    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.raiseAmt = 0; this.looseZ = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0; this.powerAmt = 0;
+    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.raiseAmt = 0; this.looseZ = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0; this.powerAmt = 0; this.scopeAmt = 0; this.scopeHid = false;
     this.shieldPose = { ...SHIELD_REST };
     this.swap = 0; this.shown = 'sword';
     this.prev = { yaw: 0, pitch: 0, hp: 1, arrows: 0, potions: 0, onGround: true, vy: 0, draw: 0, mounted: false, init: false };
@@ -438,7 +438,11 @@ export class ViewModel {
     const speed = Math.hypot(p.vel.x, p.vel.z);
     this.bobAmt = smooth(this.bobAmt, moving ? clamp(speed / 6, 0.4, 1.4) : 0, 8, dt);
     this.sprintAmt = smooth(this.sprintAmt, sprint ? 1 : 0, 7, dt);
-    this.zoomAmt = smooth(this.zoomAmt, p.zoomed ? 1 : 0, 10, dt);
+    this.zoomAmt = smooth(this.zoomAmt, p.zoomed || p.scope ? 1 : 0, 10, dt);
+    // the Sniper Shot: the bow comes up to the eye, and once the view is narrow the kit is out of sight behind the scope's ring
+    this.scopeAmt = smooth(this.scopeAmt, p.scope ? 1 : 0, p.scope ? 9 : 14, dt);
+    const hide = this.scopeAmt > 0.9 && !!p.scope;
+    if (hide !== this.scopeHid) { this.scopeHid = hide; this.root.visible = !hide; }
     this.castAmt = smooth(this.castAmt, casting ? 1 : 0, casting ? 24 : 9, dt);
     p.vmDown += ((p.climb ? 1 : 0) - p.vmDown) * Math.min(1, dt * 8);   // (the camera tips up with this while climbing)
     const climbW = clamp(p.vmDown, 0, 1);
@@ -490,6 +494,12 @@ export class ViewModel {
         }
       } else if (p.blocking) { ax += 0.08; ay -= 0.06; arz -= 0.3; }
       if (p.buffs.has('whirl')) { const w = t * 24; ax -= 0.22 + Math.cos(w) * 0.19; ay += 0.08 + Math.sin(w) * 0.08; arz += w; trailing = true; }
+      if (p.leap) {   // the Leap: the blade goes up over the head on the way up and is driven down into the ground as he lands
+        const k = clamp(p.leap.t / p.leap.dur, 0, 1), up = easeOut(clamp(k / 0.25, 0, 1)), down = easeInOut(clamp((k - 0.72) / 0.28, 0, 1));
+        ax -= 0.08 * up * (1 - down); ay += 0.16 * up - 0.28 * down; az += 0.06 * up - 0.12 * down;
+        arx -= 1.15 * up - 2.1 * down; arz += 0.2 * up * (1 - down);
+        trailing = down > 0.05;
+      }
       if (p.staggerT > 0) { const k = Math.min(1, p.staggerT * 3); ay -= 0.1 * k; arx -= 0.4 * k; }
       // sprinting carries the blade low across the body
       ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt;
@@ -542,18 +552,18 @@ export class ViewModel {
       if (climbW > 0.5) this.wristL.copy(L.climbWrist).applyMatrix4(L.climbGrp.matrix); else this.wristL.copy(L.wrist).applyMatrix4(L.grp.matrix);
     } else {
       // the bow: left hand at the grip, right hand on the string
-      const draw = p.aiming ? Math.min(1, p.aiming.t / 0.4) : drawNow;
+      const volley = !!p.aiming && p.aiming.slot === 'q';   // (holding the Volley's circle: the bow is drawn and lifted to loose high)
+      const draw = volley ? Math.min(1, p.aiming.t / 0.4) : drawNow;
       // after a loose (recoil runs 1 -> 0 over half a second): the string snaps home at once; the hand flies on back along the jaw and
       // opens (ft), the bow hand lets the top of the bow fall forward; then the hand comes forward to the string with the next arrow (rt)
       const rec = this.recoil = Math.max(0, this.recoil - dt * 2), u = 1 - rec;
-      // Power Shot: the draw goes on past the anchor, the string a hand further back, held hard (it trembles); a Snare Trap throw
-      // (throwT 1 -> 0): the string hand leaves the bow, drops to the belt and lobs the trap forward, and the bow comes down meanwhile
+      // Power Shot: the draw goes on past the anchor, the string a hand further back, held hard (it trembles)
       this.powerAmt = smooth(this.powerAmt, p.power ? 1 : 0, p.power ? 5 : 30, dt);
-      const pw = easeInOut(clamp(this.powerAmt, 0, 1)), thr = p.throwT > 0 ? 1 - p.throwT : -1;
+      const pw = easeInOut(clamp(this.powerAmt, 0, 1)), sc = easeInOut(clamp(this.scopeAmt, 0, 1));
       if (rec > 0.95) { this.looseZ = lerp(info0(this.bowInfo), DRAW_Z, easeInOut(this.drawAmt)) + 0.04 * pw; this.drawAmt = 0; }
       const ft = rec > 0 ? easeInOut(clamp(u / 0.25, 0, 1)) : 0, rt = rec > 0 ? easeInOut(clamp((u - 0.55) / 0.45, 0, 1)) : 1, fol = ft * (1 - rt);
       this.drawAmt = smooth(this.drawAmt, draw, draw > this.drawAmt ? 14 : 30, dt);
-      const up = (draw > 0 || p.zoomed || p.aiming || rec > 0.3) && thr < 0 ? 1 : 0;
+      const up = draw > 0 || p.zoomed || p.scope || volley || rec > 0.3 ? 1 : 0;
       this.raiseAmt = smooth(this.raiseAmt, up, up ? 11 : 4, dt);
       const dr = easeInOut(this.drawAmt), ra = easeInOut(clamp(this.raiseAmt, 0, 1)), zoom = this.zoomAmt;
       // the bow's turn: rest -> aim (steadier and more upright zoomed in); after a loose the bow hand lets the top of the bow fall forward
@@ -565,11 +575,12 @@ export class ViewModel {
       V4.copy(BOW_ANCHOR).sub(BOW_P);
       V4.z -= 0.012 * fol;   // (the bow arm keeps pushing at the mark through the loose)
       BOW_P.set(BOW_REST.x, BOW_REST.y, BOW_REST.z).lerp(V4, ra);
-      if (p.aiming) {   // the volley: the whole draw is lifted to loose high, the archer leaning back from the waist (so the nock drops from the eye)
+      if (volley) {   // the volley: the whole draw is lifted to loose high, the archer leaning back from the waist (so the nock drops from the eye)
         BOW_Q2.setFromAxisAngle(AXIS_X, 0.42 * ra);
         BOW_P.sub(VOLLEY_PIVOT).applyQuaternion(BOW_Q2).add(VOLLEY_PIVOT);
         BOW_Q.premultiply(BOW_Q2);
       }
+      if (sc > 0) { BOW_P.x -= 0.05 * sc; BOW_P.y += 0.05 * sc; BOW_P.z += 0.06 * sc; }   // (the Sniper Shot: in to the eye, along the arrow)
       const still = 1 - 0.7 * zoom;
       BOW_P.x += ox * still; BOW_P.y += oy * still - swapDip; BOW_P.z += oz;
       if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * (0.0008 + 0.0022 * pw);   // (a long hold at full draw trembles; a Power Shot's more)
@@ -591,7 +602,7 @@ export class ViewModel {
       // the arrow: from the nock to the shelf; gone after a loose until the hand has come back with the next one
       R.arrowGrp.position.copy(V3);
       R.arrowGrp.quaternion.setFromUnitVectors(ARROW_FWD, V4.subVectors(ARROW_REST, V3).normalize());
-      R.arrowGrp.visible = (p.arrows > 0 || drawNow > 0) && rec < 0.25 && thr < 0;
+      R.arrowGrp.visible = (p.arrows > 0 || drawNow > 0) && rec < 0.25;
       R.arrowGrp.updateMatrix();
       this.strand(L.strTop, V1, V3, L.bowGrp.matrix);
       this.strand(L.strBot, V3, V2, L.bowGrp.matrix);
@@ -602,13 +613,6 @@ export class ViewModel {
       V4.set(0, NOCK_Y, lerp(this.looseZ + 0.09 * ft, nockZ, rt));
       R.strGrp.position.copy(V4).applyMatrix4(L.bowGrp.matrix);
       R.strGrp.position.x += 0.05 * fol;
-      if (thr >= 0) {   // the throw: down and back to the belt for the trap (to 40%), then an underarm swing forward and up, then back to the string
-        const down = thr < 0.4 ? easeInOut(thr / 0.4) : 1 - easeInOut(clamp((thr - 0.4) / 0.35, 0, 1));
-        const fwd = thr < 0.4 ? 0 : Math.sin(clamp((thr - 0.4) / 0.6, 0, 1) * Math.PI);
-        R.strGrp.position.x += 0.1 * down + 0.04 * fwd;
-        R.strGrp.position.y += -0.22 * down + 0.06 * fwd;
-        R.strGrp.position.z += 0.08 * down - 0.3 * fwd;
-      }
       R.strGrp.quaternion.copy(L.bowGrp.quaternion);
       R.strGrp.updateMatrix();
       R.strHand.morphTargetInfluences[0] = 0; R.strHand.morphTargetInfluences[1] = 1 - 0.8 * fol;

@@ -12,14 +12,14 @@ import { navigate } from './nav.js';
 import { SWING } from './combat.js';
 import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
-import { abilityOf } from './classes.js';
+import { abilityOf, RANGER, LEAP } from './classes.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
   knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
-  berserker: ['bz_thirst', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_endless', 'bz_dervish', 'bz_reaper'],
-  ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_jaws', 'rg_heavy', 'rg_mark', 'rg_volley'],
+  berserker: ['bz_quake', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_meteor', 'bz_dervish', 'bz_reaper'],
+  ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_hawk', 'rg_heavy', 'rg_deadeye', 'rg_volley'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
   cavalier: ['cv_barding', 'cv_lance', 'cv_horn', 'cv_sweep', 'cv_banner', 'cv_thunder', 'cv_vanguard'],
@@ -422,12 +422,12 @@ export class HeroBot {
   }
 
   // aim at a foe where it will be when a bolt of this speed gets there
-  aimAtFoe(o, speed = 40) {
+  aimAtFoe(o, speed = 40, noise = 1) {
     const c = o.isStructure ? V3.copy(o.pos) : o.aimPoint ? o.aimPoint(V3) : o.chest(V3);
     const e = this.p.eyePos(V2);
     const t = Math.hypot(c.x - e.x, c.z - e.z) / speed;
     const v = o.vel;
-    this.aim(c.x + (v ? v.x * t : 0), c.y, c.z + (v ? v.z * t : 0));
+    this.aim(c.x + (v ? v.x * t : 0), c.y, c.z + (v ? v.z * t : 0), noise);
   }
 
   // a clear line for an arrow or bolt (sampled: a wall or merlon in the way)
@@ -464,12 +464,12 @@ export class HeroBot {
         }
         break;
       case 'berserker':
-        if (r && (n.c8 >= 3 || ((n.c8 >= 2 || n.heroes8) && hpf < 0.9))) { this.cast('r'); break; }
+        if (r && hpf > 0.4 && this.leapIn()) break;
         if (q && hpf > 0.2 && (n.c3 >= 2 || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
         break;
       case 'ranger': {
-        // the trap at whoever is coming for her (it is how a Ranger gets out of reach again), else at a rival hero in its reach
-        if (r && this.snare(heavy)) break;
+        // the Sniper Shot at a far rival hero, giant or siege crew; Power Shot (or the Volley) at the ranks
+        if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
         if (q) { if (abilityOf(p, 'q').id === 'volley') this.volley(); else this.powerShot(); }
         break;
       }
@@ -536,25 +536,52 @@ export class HeroBot {
     this.cast('q', at);
   }
 
-  // Snare Trap: thrown in front of the nearest foe closing in on her (where he will be in a second), or of a rival hero in its reach
-  snare(heavy) {
-    const p = this.p, n = this.n, reach = 14;
-    let best = null, bs = Infinity;
+  // Leap: into a rival hero or a knot of foes a fair way off (where they will be when he comes down), to open a fight or join one;
+  // never at a lone soldier, and not when the foes are already at hand (Whirlwind is for that).
+  leapIn() {
+    const p = this.p, n = this.n;
+    if (p.mounted || p.climb || p.leap || n.c5 >= 2) return false;
+    let best = null, bs = 0;
     for (let i = 0; i < this.foes.length; i++) {
       const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d > reach || d < 1.2 || o.pos.y - p.pos.y > 2) continue;
-      const vx = o.vel ? o.vel.x : 0, vz = o.vel ? o.vel.z : 0;
-      const coming = (vx * (p.pos.x - o.pos.x) + vz * (p.pos.z - o.pos.z)) / (Math.hypot(p.pos.x - o.pos.x, p.pos.z - o.pos.z) || 1);
-      const s = d - (o.isPlayer ? 6 : 0) - (coming > 1 ? 4 : 0);
-      if (s < bs) { bs = s; best = o; }
+      if (o.isSiege || d < 9 || d > 45 || Math.abs(o.pos.y - p.pos.y) > 4) continue;
+      let s = o.isPlayer ? 4 : 0;
+      for (const f of this.foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < LEAP.radius) s += f.isPlayer ? 2 : 1;
+      if (s > bs) { bs = s; best = o; }
     }
+    if (!best || bs < 4) return false;
+    const T = this.g.abilities.leapArc(this.gapTo(best)).dur;
+    const x = best.pos.x + (best.vel ? best.vel.x * T * 0.6 : 0), z = best.pos.z + (best.vel ? best.vel.z * T * 0.6 : 0);
+    const plan = this.g.abilities.leapPlan(p, p.pos, V3.set(x, best.pos.y, z));
+    if (!plan || Math.hypot(plan.to.x - x, plan.to.z - z) > LEAP.radius * 0.8) return false;   // (a wall in the way: walk round instead)
+    this.faceYaw = p.yaw = Math.atan2(x - p.pos.x, z - p.pos.z);
+    return this.cast('r', plan.to.clone());
+  }
+
+  // Sniper Shot: a far target worth an arrow that hits like three: a rival hero above all, then a giant, a siege crew or an engine's
+  // driver, else a tower archer or a soldier on the walls; with a clear line, beyond the reach of her ordinary shots
+  sniperShot() {
+    const p = this.p, g = this.g, S = RANGER.snipe, me = p.pos;
+    if (p.weapon !== 'bow' && this.nearGap < 12) return false;
+    if (p.scope || p.power || p.mounted || p.climb) return false;
+    let best = null, bs = 0;
+    const consider = (o) => {
+      if (!o.alive || allied(o.team, p.team) || o.drive) return;
+      const d = Math.hypot(o.pos.x - me.x, o.pos.z - me.z);
+      if (d < 22 || d > S.range - 4) return;
+      const s = (o.isPlayer ? 6 : o.isGiant || (o.def && o.def.boss) ? 4 : o.isCrew || o.crewOf ? 3 : 1) + d * 0.01;
+      if (s > bs && this.clearShot(o)) { bs = s; best = o; }
+    };
+    for (const h of g.humans) consider(h);
+    if (!best) g.grid.query(me.x, me.z, S.range, (u) => { if ((u.isGiant || u.isCrew || u.crewOf || (u.def && u.def.boss)) && !u.isPlayer) consider(u); });
     if (!best) return false;
-    const close = this.gapTo(best) < 6, rival = best.isPlayer && this.gapTo(best) < 12;
-    if (!close && !rival && !(heavy && n.c8) && n.c5 < 2) return false;
-    const vx = best.vel ? best.vel.x : 0, vz = best.vel ? best.vel.z : 0;
-    const x = best.pos.x + vx * 0.9, z = best.pos.z + vz * 0.9;
-    this.aim(x, this.g.physics.groundHeight(x, z, best.pos.y + 1), z, 0.5);
-    return this.cast('r');
+    this.snipeAt = best;
+    this.aimAtFoe(best, S.speed);
+    p.beginScope();
+    if (!p.scope) return false;
+    this.stats.r++;
+    this.castOk = this.t + 0.5;
+    return true;
   }
 
   // Power Shot: along the line with the most foes in it (a rival hero is worth three), from the bow
@@ -838,6 +865,13 @@ export class HeroBot {
         const pt = this.powerAt && this.powerAt.alive ? this.powerAt : tg;
         if (pt && pt.alive) this.aimAtFoe(pt, 95);
         p.tickPower(dt);
+      } else if (p.scope) {   // the scope at the eye: keep it on the mark, wait for the sway to settle, then loose
+        const st = this.snipeAt;
+        if (!st || !st.alive) p.endScope();
+        else {
+          this.aimAtFoe(st, RANGER.snipe.speed, 0.35);
+          p.tickScope(dt, true, p.scope.t >= RANGER.snipe.settle * 1.1);
+        }
       } else if (this.wantShoot && tg && tg.alive && p.arrows > 0 && now >= this.nockAt) {
         this.aimShot(tg);
         p.drawT += dt;

@@ -564,11 +564,12 @@ export class FX {
 
   // A thin streak that follows a ballistic flight (an arrow): the shader moves it, so it costs nothing per frame. Returns
   // where the particle lives and when it was born, to end it early with `endTracer`.
-  tracer(p, v, life, color, alpha = 0.3, width = 0.05, stretch = 0.09) {   // (width in metres, stretch in seconds of flight)
+  // grav: the flight's own fall (a Power Shot or a Sniper Shot falls far slower than an arrow)
+  tracer(p, v, life, color, alpha = 0.3, width = 0.05, stretch = 0.09, grav = 9.8) {   // (width in metres, stretch in seconds of flight)
     const A = this.alpha;
     const o = A.spawn(F.STREAK, R.FADE, p.x, p.y, p.z, v.x, v.y, v.z, life, width, width);
     A.streak(o, stretch);
-    A.motion(o, 0, 9.8, 0, 0);
+    A.motion(o, 0, grav, 0, 0);
     A.tint(o, color.r, color.g, color.b, alpha);
     this._to = o; this._tb = A.born(o);
     return o;
