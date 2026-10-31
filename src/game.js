@@ -55,6 +55,7 @@ import { startDecrees } from './decrees.js';
 import { startComeback, updateComeback, standKey, standFlash } from './comeback.js';
 import { WarMode } from './warmode.js';
 import { FIELD } from './warmap.js';
+import { kindGroup } from './wartactics.js';
 import { WarPhysics } from './warphysics.js';
 import { Spectate } from './spectate.js';
 import { tickArchers, livingOn } from './towerarchers.js';
@@ -622,8 +623,8 @@ export class Game {
     return null;
   }
 
-  // Nearest hostile character or siege engine for an AI unit. only: a team (War Mode: the army a charge was sent at) whose men alone are looked for,
-  // others only within `near` metres (in the way); -1 for anyone
+  // Nearest hostile character or siege engine for an AI unit. only: a team (War Mode: the army a charge was sent at; and unit.foeKind, one group of it)
+  // whose men alone are looked for, others only within `near` metres (in the way); -1 for anyone
   findEnemy(unit, radius, anchor, leash, skip = null, only = -1, near = 0) {
     let best = null, bd = Infinity;
     // a swordsman of the garrison inside his sealed castle (the gate standing, no breach) cannot reach anyone outside the
@@ -636,7 +637,7 @@ export class Game {
       if (o.isSiege && o.abandoned && !o.driver) return;   // nobody smashes an empty engine: they take it over
       const d = Math.hypot(o.pos.x - unit.pos.x, o.pos.z - unit.pos.z);
       if (d > radius) return;
-      if (only >= 0 && o.team !== only && d > near) return;
+      if (only >= 0 && d > near && (o.team !== only || (unit.foeKind && kindGroup(o) !== unit.foeKind))) return;
       if (!unit.ranged && o.pos.y - unit.pos.y > 2.4 && !this.war) return; // up on a wall: unreachable (War Mode has no walls: higher up a slope is not out of reach)
       if (sealed && !sealed.isInside(o.pos, -1)) return;
       if (anchor && leash < Infinity && Math.hypot(o.pos.x - anchor.x, o.pos.z - anchor.z) > leash) return;

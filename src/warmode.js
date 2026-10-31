@@ -21,7 +21,7 @@ export { sanitizeWar, warSides, warHills, menuPlan, planOf } from './warmap.js';
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
 import { WarUI } from './warui.js';
-import { Picture, chargeFoe } from './wartactics.js';
+import { Picture, chargeFoe, General, temperOfStyle, kindGroup } from './wartactics.js';
 
 export const WAR_TYPES = Object.keys(WAR.units);
 export const isWarType = (t) => typeof t === 'string' && Object.prototype.hasOwnProperty.call(WAR.units, t);
@@ -34,7 +34,6 @@ export const PLAN_ORDERS = ORDERS.filter((k) => WAR.orders[k].plan);   // (the b
 export const FORMS = Object.keys(WAR.formations);
 // a lord's army holds where it was set out until he gives an order: he is free to walk the field first (an AI general's plan is its own: aiBuy)
 const DEFAULT_PLAN = { inf: 'hold', arch: 'hold', cav: 'hold' };
-const AI_PLAN = { inf: 'charge', arch: 'hold', cav: 'charge' };
 const DEFAULT_FORM = { inf: 'line', arch: 'line', cav: 'line' };
 const NO_FOE = { inf: -1, arch: -1, cav: -1 };   // (the army each group was sent at with Attack: a house's team, -1 for none)
 // the orders that end with the group formed up and holding at a spot (the spot is kept in f.war.dest: the command bar's marker shows it)
@@ -111,7 +110,6 @@ export class WarMode {
     this.sideList = [];       // [[teams]] one entry per side
     this.cap = WAR.armyCap;   // soldiers a house may field
     this.countT = 0;
-    this.aiT = 0;
     this.panelOpen = false;
     this.reviewPose = null;   // where the local hero was put for the build ({ x, z, yaw }: respawn)
     this.xpT = WAR.xpEvery;
@@ -313,7 +311,7 @@ export class WarMode {
     else if (d.op === 'plan' && WAR_GROUPS.includes(d.t)) this.setPlan(p.team, d.t, d.n);
     else if (d.op === 'cmd' && (d.t === 'all' || WAR_GROUPS.includes(d.t)) && own(WAR.orders, d.n)) {
       // (Move here: the spot the guest looked at, a finite point inside the field, or nothing; Attack: a house of another side still in the field)
-      const at = d.n === 'move' ? clampSpot(d.x, d.z) : null, foe = d.n === 'attack' ? Number(d.f) : -1;
+      const at = d.n === 'move' ? clampSpot(d.x, d.z) : null, foe = d.n === 'attack' ? d.f : -1;   // (a whole number: isFoe)
       if ((d.n !== 'move' || at) && (d.n !== 'attack' || this.isFoe(p.team, foe))) this.command(p.team, d.t, d.n, at, foe);
     } else if (d.op === 'form' && (d.t === 'all' || WAR_GROUPS.includes(d.t)) && own(WAR.formations, d.n)) this.formation(p.team, d.t, d.n);
   }
@@ -428,19 +426,23 @@ export class WarMode {
   // the soldiers in `list` (one group) march on the enemy: on the army of house `foe`, or (-1) on the enemy army nearest the group's middle. Each looks
   // round himself first (a foe of any house close by is fought: 20 m, or for Attack only one in the way, 5 m), then marches on a man of that army
   // wherever it stands (units.js think, chargeFoe below)
-  charge(list, foe = -1) {
+  // kind: one group of that army ('inf', 'arch', 'cav': an AI general's riders sent at its archers), '' for any of it
+  charge(list, foe = -1, kind = '') {
     if (!list.length) return;
     const P = this.picture;
     P.fresh();
-    let x = 0, z = 0;
-    for (const u of list) { x += u.pos.x; z += u.pos.z; }
-    const t = foe >= 0 ? foe : P.nearestFoe(list[0].team, x / list.length, z / list.length);
+    let x = 0, z = 0, n = 0;
+    for (const u of list) if (u.alive) { x += u.pos.x; z += u.pos.z; n++; }
+    if (!n) return;
+    const t = foe >= 0 ? foe : P.nearestFoe(list[0].team, x / n, z / n);
     const near = foe >= 0 ? 5 : 20;
     for (const u of list) {
+      if (!u.alive) continue;
       u.setOrder('charge');
-      u.foeTeam = t; u.foeNear = near; u.lookT = 0;
+      u.thinkTimer = Math.random() * 0.3;   // (a whole army's first looks spread over a few frames, not all in one)
+      u.foeTeam = t; u.foeNear = near; u.foeKind = kind; u.lookT = 0;
       u.warFollow = null;
-      if (foe >= 0 && u.target && u.target.team !== foe && u.distTo(u.target) > near) u.target = null;   // (sent at another army: it leaves this one)
+      if (foe >= 0 && u.target && (u.target.team !== foe || (kind && kindGroup(u.target) !== kind)) && u.distTo(u.target) > near) u.target = null;   // (sent at another army: it leaves this one)
     }
   }
 
@@ -491,7 +493,7 @@ export class WarMode {
     if (!list.length) return;
     f.war.dest[k] = { x: cx, z: cz, yaw };
     const F = WAR.formations[f.war.form[k]] || WAR.formations.line;
-    const men = list.filter((u) => !u.isGiant), giants = list.filter((u) => u.isGiant);
+    const men = list.filter((u) => u.alive && !u.isGiant), giants = list.filter((u) => u.alive && u.isGiant);
     const fx = Math.sin(yaw), fz = Math.cos(yaw), rx = fz, rz = -fx;
     const spots = formSpots(men.length, F, k === 'cav');
     // the soldiers in order: front to back by how far forward each stands, then each rank of them left to right
@@ -593,6 +595,8 @@ export class WarMode {
     const data = { pos: new THREE.Vector3(x, 0, z), yaw, exact: true };
     u.setOrder('hold', data);
     u.orderData = data;
+    u.foeKind = '';
+    u.thinkTimer = Math.random() * 0.3;   // (a group's new places are looked at over a few frames, not all in one)
   }
 
   // ---------------- the battle's own simulation: every frame while the match is on (single player and the host) ----------------
@@ -610,8 +614,8 @@ export class WarMode {
     // a hero who lives through the battle grows with it, as one does through the waves of the war modes (the kills pay besides)
     this.xpT -= dt;
     if (this.xpT <= 0) { this.xpT = WAR.xpEvery; for (const h of g.humans) if (h.alive) h.gainXp(XP.wave, 'wave'); }
-    this.aiT -= dt;
-    if (this.aiT <= 0) { this.aiT = 1; this.generals(); }
+    // the AI generals (a house whose lord has left is led the same way): each looks at the battle every second or so and orders its groups
+    for (const f of g.factions) if (f.war && f.war.general && !f.isPlayer && !f.eliminated) f.war.general.update(dt);
     this.countT -= dt;
     if (this.countT <= 0) { this.countT = 0.5; this.checkSides(); }
     if (!this.result && this.clock >= WAR.fightLimit) this.timeUp();
@@ -635,8 +639,7 @@ export class WarMode {
         // a lord's groups do what his battle plan says (Hold, unless he chose otherwise: they stay where they were set out), in their formations
         for (const u of army) u.warForm = WAR.formations[f.war.form[u.isGiant ? 'inf' : groupOf(u.type)]] || null;
         for (const k of WAR_GROUPS) if (f.war.plan[k] !== 'hold') this.command(f.team, k, f.war.plan[k], null, f.war.foe[k]);
-      } else for (const u of army) this.applyPlan(f, u, f.war.plan[groupOf(u.type)]);
-      if (f.hero && !f.isPlayer && f.hero.alive) f.hero.setOrder('charge');   // (an AI lord leads from the front)
+      } else if (f.war.general) f.war.general.t = 0;   // (an AI general looks at the field at once: its first orders come with the horn)
       if (!army.length && !(f.hero && f.hero.alive)) f.eliminated = true;
     }
     this.ui.fightBegan();
@@ -644,29 +647,6 @@ export class WarMode {
     g.bannerAll('To battle!', 'The last army standing wins: your hero fights too, and does not rise again. Your army holds until you order it: 1 / 2 / 3 / 4 choose infantry, archers, cavalry or everyone, then F1 move here · F2 follow me · F3 charge · F4 hold, or 5 / 6 / 7 attack an army by its colour.', 'The armies march. The last army standing wins.');
   }
 
-  // an AI general's soldier at the start (hold: he keeps the place he was given)
-  applyPlan(f, u, order) {
-    if (order === 'charge') u.setOrder('charge');
-  }
-
-  // the AI generals: archers hold until the enemy is close or the fight has gone on a while, then everything charges; a house whose lord has left
-  // (a guest who went) is led the same way
-  generals() {
-    const g = this.g;
-    for (const f of g.factions) {
-      if (!f.war || f.isPlayer || f.eliminated || f.war.allIn) continue;
-      if (this.clock < 22 && !this.enemyWithin(f, 50)) continue;
-      f.war.allIn = true;
-      for (const u of this.armyOf(f.team)) if (u.order === 'hold') u.setOrder('charge');
-    }
-  }
-
-  enemyWithin(f, r) {
-    const s = f.war.spot;
-    let near = false;
-    for (const u of this.g.units) if (!near && u.alive && !allied(u.team, f.team) && Math.hypot(u.pos.x - s.x, u.pos.z - s.z) < r) near = true;
-    return near;
-  }
 
   // soldiers alive, and whether the lord still stands
   standing(team) {
@@ -726,20 +706,21 @@ export class WarMode {
   // a guest left: an AI general takes the house over (and finishes its purchases if the battle has not begun)
   dropHuman(f) {
     if (!f.war) return;
-    f.war.plan = { ...AI_PLAN };
-    if (!this.fighting && !f.eliminated) { this.spawnLord(f); this.aiBuy(f); }
-    if (this.fighting) for (const u of this.armyOf(f.team)) u.setOrder('charge');
+    if (!this.fighting && !f.eliminated) { this.spawnLord(f); this.aiBuy(f); return; }
+    f.war.general = new General(this, f, 'steady', this.g.difficultyName);
+    f.war.foe = { ...NO_FOE };
   }
 
-  // an AI general's army: a style, a formation, the purse spent down to the last coins
+  // an AI general's army: a style, a formation, the purse spent down to the last coins; and the general (wartactics.js), whose temper follows the style
   aiBuy(f) {
-    const style = STYLES[Math.floor(Math.random() * STYLES.length)];
+    const si = Math.floor(Math.random() * STYLES.length), style = STYLES[si];
     f.war.preset = PRESETS[Math.floor(Math.random() * PRESETS.length)];
     if (f.gold > WAR.units.giant.cost * 3 && Math.random() < 0.35) this.buy(f.team, 'giant', 1);
     const purse = f.gold;
     for (const t of WAR_TYPES) if (style[t]) this.buy(f.team, t, Math.floor((purse * style[t]) / WAR.units[t].cost));
     for (const t of ['swordsman', 'spearman', 'archer']) while (!this.buyBlock(f, t)) this.buy(f.team, t, 50);
-    f.war.plan = { inf: 'charge', arch: Math.random() < 0.7 ? 'hold' : 'charge', cav: 'charge' };
+    f.war.plan = { ...DEFAULT_PLAN };
+    f.war.general = new General(this, f, temperOfStyle(si), this.g.difficultyName);
   }
 
   // ---------------- every screen ----------------

@@ -250,8 +250,12 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     5 a gilded breastplate, a long cloak and a little more height.
 - **Rival lords** (AI) buy troops, repair, upgrade, and spend spare gold on rams, catapults and giants. After the
   first few minutes they also now and then send their whole garrison, and sometimes their hero, on a push at
-  the weakest castle (yours included), and their waves and engines follow it. They pull back to defend when
-  their gate falls.
+  the weakest castle (yours included), and their waves and engines follow it. A push **marches as a body**: it musters
+  before its own gate, halts once or twice on the way (the last time about 80 m from the target, out of reach of its
+  walls) until most of it stands formed up (infantry in front, archers behind, riders at the back, the lord in the front
+  rank when he goes), fights an enemy band it meets there where it stands, then goes in together (`march` in
+  `src/rivals.js`: the Reckless musters in a hurry, the Patient and the Ironclad wait for the whole host). They pull back
+  to defend when their gate falls, and do not march while their own gate is down or their keep is burning.
 - **Melee** (simple on purpose):
   - Left click swings your sword; hold it to keep swinging. The swings take turns (from the right, from the left, now and
     then overhead) just for the look of it: you never choose a direction, and every swing reaches and hits the same.
@@ -383,6 +387,11 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
   summon giants too.
 - **Commanding your army**: while your army has soldiers, the orders bar at the bottom of the screen shows your orders and their keys.
+  **5**, **6** and **7** (a key in each enemy house's colour on the bar, and a button each in the Orders menu) send the army, or the
+  chosen group, at that house: it marches on its castle and fights whoever stands in its way, but leaves a fight with another house.
+  **Charge** sends the army at the nearest foe: within 160 m, or else the nearest one out in the open (not behind his walls: that is
+  Assault); with nobody anywhere, the army forms up behind you. Following you, the army keeps its place behind you the way you walk,
+  not the way you look: you can turn and look round without your men running round you.
   Press **O** for the clickable **Orders** menu, which has orders, formations, army groups, the gate and an
   army count. Orders go to the soldiers in your **army** (see above); the garrison always defends the castle and
   the lane soldiers march on their own.
@@ -809,23 +818,44 @@ and fight what comes, archers shoot from where they stand, until you give an ord
 Charge, Advance or Follow me. The AI generals keep their own plans.
 
 **The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
-**1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). The chosen soldiers
-get a small gold arrow over their heads (and the button lights up); the others none. Then:
+**1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). Each group has a colour of
+its own, the same everywhere: **yellow** infantry, **green** archers, **blue** cavalry (pale, so they are never taken for a house's).
+The chosen soldiers get a small arrow in their group's colour over their heads (Everyone: each man his group's), and the button lights
+up; the others none. The bar is there in the build too (with the army panel closed): its orders are then the **battle plan**, carried
+out when the battle begins (Hold, Charge, Advance, Follow me and Attack; Move here and Fall back are for the battle). Then:
 
 | Key | Order | What they do |
 | --- | --- | --- |
-| F1 | Move here | March to the spot on the ground under your crosshair (a ring shows it while a group is chosen), form up there and hold. A banner with the group's number marks the spot. Everyone: the infantry on the spot, the archers behind it, the riders on its right. |
-| F2 | Follow me | Form up behind your hero and follow him (archers behind the infantry, riders on the right). |
-| F3 | Charge | March on the enemy and fight. |
+| F1 | Move here | March to the spot on the ground under your crosshair (a ring in the group's colour shows it while a group is chosen), form up there and hold. A banner in the group's colour with its number (under a band of your house's colour) marks the spot. Everyone: the infantry on the spot, the archers behind it, the riders on its right. |
+| F2 | Follow me | Form up behind your hero and follow him (archers behind the infantry, riders on the right), facing the way he walks: he can turn and look round without his men running round him. |
+| F3 | Charge | March on the enemy army nearest the group and fight: each man looks round himself (anyone within 20 m), then marches on a man of that army wherever it stands; archers stop where their bows reach and shoot. |
+| 5 / 6 / 7 | Attack | The **Attack** row has a button for each enemy army in its house's colour, named by it and with its soldiers left (Red 312, Green 280, ...), on 5, 6 and 7 in house order (a beaten army's is struck through). The group marches on that army and fights it: other armies only when they stand in its way (5 m). |
 | F4 | Hold | Stop: form up where they are, facing the enemy. |
 | T / G | Advance / Fall back | 25 m towards / away from the nearest enemy army (`WAR.forward`), formed up, then hold. |
 | F | Formation | The next formation for the group (or click one): **Line** (a broad front a few ranks deep), **Shield wall** (shoulder to shoulder, shields locked when holding: blocks far more, melee men keep their place, marches slower), **Loose** (3.4 m apart: a giant's club or a fireball catches fewer; good for archers), **Wedge** (an arrowhead that closes a little quicker). |
 
-Each group's button shows how many are left, its order and its formation; the buttons can be clicked while the mouse is
+Each group's button shows how many are left, its order (Attack Red, ...) and its formation; the buttons can be clicked while the mouse is
 free, and an order given before any group is chosen goes to everyone. The spacing of each formation is in `WAR.formations`
 (riders take `WAR.ride` times it). Because 1 to 4 are the bar, the hero's sword and bow switch with the **mouse wheel or X**
 in War Mode. Online a guest's orders and formations go to the host like its purchases (the Move here spot is checked to be a
-point inside the field); a spectator has no bar and no marks.
+point inside the field, an Attack's army to be a house of another side still in the field); a spectator has no bar and no marks.
+
+**The AI generals** (`src/wartactics.js`) read the battle every second or so (every 2.5 s on Easy, 0.6 s on Hard) and give their groups
+orders as a player would, only when they change. Their infantry is the body of the army: it either waits on its own hill for the enemy
+(when its bows outshoot the enemy's or the enemy is the stronger: the high ground, the enemy climbing to it under arrows; never when the
+enemy's archers would shoot it to pieces where it stands, and not for long when nobody comes), in a line, or a shield wall when there are
+archers or riders to face, and fights where it stands; or it marches in bounds of about 20 m, formed up at each and waiting for the
+stragglers, and charges all together from 25 to 40 m. Riders coming at the line are received standing, shoulder to shoulder, not chased.
+The archers keep a few steps behind the infantry, move up behind the fight once it begins and fall back behind the line when an enemy
+band comes for them. The cavalry waits beside the infantry for a mark worth the ride: the enemy's infantry locked in a fight with ours,
+struck from the side (no shield guards it there), or its archers out in the open near the fight; it rides round to the mark's flank, then
+charges it; it meets riders at grips with our line and bands that come for our archers; cut down to a third, it rides back to gather.
+A general fights the army at its throat, else the nearest (Normal and Hard: the weakest for the distance, or one already at grips with
+a third army), and when the enemy is broken, or the time is nearly up, everybody charges. The AI lord stays a few steps behind his
+infantry and charges with it. Each general has a temper that follows the army it bought: a balanced army is *steady*, a host of footmen
+*bold* (charges from further, never waits), a mass of bows an *archer's* general (waits on its hill longest), a horde of riders a
+*raider's*. Easy does none of the waiting, walls, flanking or picking: it marches straight at the nearest army in a line with its
+archers behind and its riders beside it, which is about the old generals' strength.
 
 **Talents.** **N** opens the Talents panel (alone, as in Hero Mode) in the build and in the battle; B goes back to the army
 panel. A hero earns experience from kills (and a share of those of soldiers fighting near them) and 10 more for every 30
@@ -1024,6 +1054,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | F3 | Army: charge |
 | F4 or V | Army: defend the castle |
 | T | Army: assault the selected target castle |
+| 5 / 6 / 7 | Army: assault the castle of the first, second or third enemy house (a key in its colour on the orders bar) |
 | Y | King of the Hill: army takes the hill in the middle and holds it |
 | G | Choose which group gets orders: everyone / infantry / archers / cavalry |
 | F | Cycle formation: line / shield wall / loose |
@@ -1036,8 +1067,8 @@ In **Hero Game Mode** (below) only some of these work: B and N both open the Tal
 Z, X, V, T, Y, G, F and K do nothing (Enter is still Ready).
 
 In **War Mode** B is the army panel (in the build), N the Talents panel, 1 / 2 / 3 / 4 choose infantry, archers, cavalry or
-everyone on the command bar and F1 / F2 / F3 / F4 order them to charge, hold, move forward or follow you; the mouse wheel or X
-switch sword and bow.
+everyone on the command bar, F1 / F2 / F3 / F4 order them to move where you look, follow you, charge or hold, T / G advance or fall
+back, 5 / 6 / 7 attack an enemy army by its colour and F changes the formation; the mouse wheel or X switch sword and bow.
 
 **Pings and markers.** Team mates can call out targets and places. A **ping** is a quick middle click on whatever the
 crosshair is on and lasts about 6 seconds; a **marker** (the held-button wheel, or a click on a map) lasts 45 seconds,
@@ -1137,7 +1168,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/combat.js` | The melee numbers: the hero's swing, the parry window, what a block costs, the look of each swing |
 | `src/magic.js` | Fireball and Smite effects: bolts, flashes (the fireball itself flies via `projectiles.js`) |
 | `src/grass.js` | Wind-swept grass that grows around the camera |
-| `src/ai.js` | Rival lord strategy: spending, repairs and pushes, in the style of the lord's personality (the classic lord's numbers are the old ones) |
+| `src/ai.js` | Rival lord strategy: spending, repairs and pushes (marching as a body: muster, halts, then the assault), in the style of the lord's personality (the classic lord's numbers are the old ones) |
 | `src/rivals.js`, `src/rivalsui.js` | The rival lords: the nine personalities (a table of parameters each, their names and plans), the roll, and what the player sees (the card at the start, the game menu list, the HUD tag, the end-screen row, the Options switch) |
 | `src/teams.js` | Who fights whom (co-op sides) and in which colours (the palette, `setPalette`) |
 | `src/seats.js`, `src/lobbyui.js` | Who sits where (castles, hero seats, open/AI/empty, colour wishes, who watches) and its drawing in the lobby and the menu |
@@ -1154,7 +1185,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/fx.js`, `src/particles.js`, `src/fxtex.js`, `src/groundfx.js`, `src/camfx.js` | Effects: GPU particles and ground marks, the ability glyphs, and the camera (shake, kicks, field-of-view punch, colour drain on low health, death fade) |
 | `src/atmosphere.js`, `src/shadows.js`, `src/post.js`, `src/gfx.js`, `src/quality.js`, `src/shaderhook.js` | The renderer: sky, fog and the tone curve, the two shadow cascades, the HDR post passes, the frame path and adaptive resolution, the quality tunables `Q`, and the helper that lets several modules extend one material's shader |
 | `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
-| `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warmarks.js`, `src/warnet.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the orders of the command bar, the AI generals, the win), the field and its hills (the ground and the places of the armies), what is on screen (menu and lobby rows, the army panel and Repeat, the top bar, the command bar, the cameras, the end-screen table), the marks in the world (the chosen soldiers, the aim ring, the Move here banners) and the packed snapshot of its soldiers |
+| `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warmarks.js`, `src/warnet.js`, `src/wartactics.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the orders of the command bar, the win), the field and its hills (the ground and the places of the armies), what is on screen (menu and lobby rows, the army panel and Repeat, the top bar, the command bar with its Attack row, the cameras, the end-screen table), the marks in the world (the chosen soldiers, the aim ring, the Move here banners, in each group's colour), the packed snapshot of its soldiers, and the picture of the battle (where every group stands, drawn twice a second: a charge marches on a man of the army it was sent at) with the AI generals who plan from it |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/flow.js` | The gap between matches: what Quick Play starts, the end screen's actions (Play Again, Change class, Rematch), Ready, and the offer to concede or finish a decided war |

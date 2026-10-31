@@ -97,6 +97,7 @@ export class Unit {
     this.warFollow = null;
     this.foeTeam = -1;     // the house his group was sent at (War Mode: Charge and Attack; Conquest: an Assault by colour), -1 for none, and how near a
     this.foeNear = 0;      // man of another house must be to be fought on the way (warmode.js charge, Game.order)
+    this.foeKind = '';     // (War Mode: one group of that house, 'inf', 'arch' or 'cav': an AI general's riders sent at its archers; '' for any)
     this.lookT = 0;        // (a charge's next look for a nearer foe)
     this.isCrew = !!t.crew;
     this.crewOf = null;    // the siege engine this soldier is manning, and which seat

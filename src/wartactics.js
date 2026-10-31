@@ -4,12 +4,14 @@
 //             archers, cavalry) how many are left, where its middle is and how far it spreads, how fast it moves, how many of it are in a fight, its
 //             strength. A charging soldier with nobody in reach marches on a man of the army his group was sent at (chargeFoe: a look over a few dozen of
 //             that army, not the whole field), and the generals plan from it.
-//   General   one per AI house (see the class below).
+//   General   one per AI house: every second or so (the difficulty) it reads the picture and gives its groups their orders through warmode.js, only when
+//             they change (see the class below).
 import { WAR, UNIT_TYPES } from './config.js';
 import { allied } from './teams.js';
 
 export const GROUP_KEYS = ['inf', 'arch', 'cav'];
-const kindGroup = (u) => (u.isGiant ? 'inf' : u.kind === 'archer' ? 'arch' : u.kind === 'cavalry' ? 'cav' : 'inf');
+// a soldier's group (a giant marches with the infantry); a hero is in none ('hero')
+export const kindGroup = (u) => (u.isGiant ? 'inf' : u.kind === 'archer' ? 'arch' : u.kind === 'cavalry' ? 'cav' : u.isHero || u.isPlayer ? 'hero' : 'inf');
 // a soldier's worth in the fight, by his type: what the generals weigh groups with (gold is a fair measure of it: WAR.units)
 const worthOf = (u) => (WAR.units[u.type] ? WAR.units[u.type].cost : UNIT_TYPES[u.type] ? 40 : 0);
 
@@ -44,7 +46,7 @@ export class Picture {
       if (!u.alive || u.isHero || u.isCrew) continue;
       const H = this.houses.get(u.team);
       if (!H) continue;
-      const G = H.groups[kindGroup(u)];
+      const G = H.groups[kindGroup(u)] || H.groups.inf;
       G.men.push(u); H.men.push(u);
       G.n++; G.x += u.pos.x; G.z += u.pos.z; G.hp += u.hp;
       const v = worthOf(u) * Math.max(0.25, u.hp / u.maxHp);
@@ -58,6 +60,7 @@ export class Picture {
       for (const k of GROUP_KEYS) {
         const G = H.groups[k];
         H.n += G.n; H.worth += G.worth;
+        if (!w.fighting || !G.start) G.start = G.n;   // (what it mustered: the share left tells a beaten group)
         if (!G.n) { G.vx = G.vz = 0; G.seen = false; continue; }
         G.x /= G.n; G.z /= G.n;
         H.x += G.x * G.n; H.z += G.z * G.n;
@@ -65,7 +68,6 @@ export class Picture {
         for (const u of G.men) r += Math.hypot(u.pos.x - G.x, u.pos.z - G.z);
         G.r = (r / G.n) * 1.6 + 2;   // (about where its outer men stand)
         if (G.seen) { G.vx = G.vx * 0.5 + ((G.x - G.px) / dt) * 0.5; G.vz = G.vz * 0.5 + ((G.z - G.pz) / dt) * 0.5; } else { G.vx = G.vz = 0; G.seen = true; }
-        if (!w.fighting || !G.start) G.start = G.n;   // (what it mustered: the share left tells a beaten group)
       }
       if (H.n) { H.x /= H.n; H.z /= H.n; } else if (H.hero) { H.x = H.hero.pos.x; H.z = H.hero.pos.z; }
     }
@@ -96,8 +98,9 @@ export class Picture {
 }
 
 // A real foe for a War Mode soldier on Charge who has nobody within reach: a man of the army his group was sent at (u.foeTeam; when it is gone or none
-// was chosen, the enemy army nearest him), the nearest of a few dozen of its men (a different few for each soldier, so a charge spreads along the
-// enemy's front rather than piling on one man), or its hero when he is the nearer. Null when no enemy is left anywhere.
+// was chosen, the enemy army nearest him; u.foeKind: of one group of it, an AI general's riders sent at its archers), the nearest of a few dozen of its
+// men (a different few for each soldier, so a charge spreads along the enemy's front rather than piling on one man), or its hero when he is the nearer.
+// Null when no enemy is left anywhere.
 const SAMPLE = 40;
 export function chargeFoe(P, u) {
   P.fresh();
@@ -108,6 +111,13 @@ export function chargeFoe(P, u) {
     H = t >= 0 ? P.house(t) : null;
     if (!H) return null;
   }
+  // (one group of it: when that group is gone, any of its men)
+  const G = u.foeKind && H.groups[u.foeKind];
+  if (G && G.n) {
+    const b = nearestOf(G, u, Math.max(1, Math.ceil(G.men.length / SAMPLE)), null) || nearestOf(G, u, 1, null);
+    if (b) return b;
+  }
+  if (u.foeKind) u.foeKind = '';
   let best = nearestOf(H, u, Math.max(1, Math.ceil(H.men.length / SAMPLE)));
   // (the picture is up to half a second old: when every man of that sample has fallen since, all of that army is looked at, then the next army)
   if (!best) best = nearestOf(H, u, 1);
@@ -119,8 +129,8 @@ export function chargeFoe(P, u) {
   return best;
 }
 
-// the nearest living man of house H to u, of every step-th of its men (from u.id on), or its hero when he is the nearer
-function nearestOf(H, u, step) {
+// the nearest living man of H (a house, or one group of it) to u, of every step-th of its men (from u.id on), or the hero when he is the nearer
+function nearestOf(H, u, step, hero = H.hero) {
   let best = null, bd = Infinity;
   const men = H.men, n = men.length;
   for (let i = n ? u.id % step : 0; i < n; i += step) {
@@ -129,7 +139,389 @@ function nearestOf(H, u, step) {
     const d = Math.hypot(o.pos.x - u.pos.x, o.pos.z - u.pos.z);
     if (d < bd) { bd = d; best = o; }
   }
-  const h = H.hero;
-  if (h && h.alive && Math.hypot(h.pos.x - u.pos.x, h.pos.z - u.pos.z) + 6 < bd) best = h;
+  if (hero && hero.alive && Math.hypot(hero.pos.x - u.pos.x, hero.pos.z - u.pos.z) + 6 < bd) best = hero;
   return best;
+}
+
+// ---------------- the AI generals ----------------
+// How each kind of general fights. In War Mode it follows from the army it bought (warmode.js aiBuy's style: a balanced army is steady, a host of footmen
+// bold, a mass of bows an archer's general, a horde of riders a raider's); a rival lord's personality (rivals.js) picks one too (Game.waveList's houses
+// have none in War Mode, but the table is the same).
+//   hold    how much it leans to waiting on its own hill for the enemy to come up to it (its archers shooting all the way): 0 never, 1 when it can
+//   close   metres between the two fronts at which its infantry charges (the bounds of the advance stop short of it)
+//   wait    the share of its line that must stand in its place before the next bound (the rest catch up: no trickling in one by one)
+//   stall   seconds it waits on its hill for an enemy who does not come, before it marches after all
+//   strike  whether its riders go round to strike (0: they ride in with the infantry)
+export const TEMPERS = {
+  steady: { hold: 0.45, close: 28, wait: 0.75, stall: 40, strike: 1 },
+  bold: { hold: 0, close: 40, wait: 0.6, stall: 20, strike: 1 },
+  archer: { hold: 0.9, close: 24, wait: 0.8, stall: 60, strike: 1 },
+  raider: { hold: 0.3, close: 30, wait: 0.7, stall: 35, strike: 1 },
+};
+const STYLE_TEMPER = ['steady', 'bold', 'archer', 'raider'];   // (warmode.js STYLES, in order)
+export const temperOfStyle = (i) => STYLE_TEMPER[i] || 'steady';
+// what the difficulty lets a general do: how often it looks again (seconds), and whether it waits on its hill when that serves it (posture), puts a shield
+// wall up under arrows (wall), sends its riders round to strike (flank), pulls a beaten band back to gather (rally) and picks the weakest army to fight
+// (focus). Easy marches straight at the nearest enemy as the generals always did, in a line with its archers behind and its riders beside it.
+export const LEVELS = {
+  easy: { every: 2.5, posture: false, wall: false, flank: false, rally: false, focus: false },
+  normal: { every: 1, posture: true, wall: true, flank: true, rally: true, focus: true },
+  hard: { every: 0.6, posture: true, wall: true, flank: true, rally: true, focus: true },
+};
+
+const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+
+// One AI house's general: every LEVELS.every seconds it reads the picture (Picture) and gives its groups their orders through warmode.js (formUp: a
+// group formed up and holding at a spot; charge: a group marching on an army, or on one group of it), and only when they change. It plans:
+//   posture    wait on its own hill (the start: the high ground, its archers shooting at an enemy who climbs to them) or march; it waits when its bows
+//              outshoot the enemy's or the enemy is the stronger, never when the enemy's archers would shoot it to pieces where it stands, and not for
+//              longer than its temper's patience
+//   infantry   the body of the army: on its hill it holds a line (a shield wall when the enemy has archers) and fights there; marching, it goes in bounds
+//              of about 20 m, the line formed up at each and the stragglers waited for, and charges all together from `close` metres
+//   archers    a few steps behind the infantry, moved up behind the fight once it begins, back behind it when an enemy band comes for them
+//   cavalry    beside the infantry until there is a mark worth the ride: the enemy's archers out in the open, or its infantry locked in a fight with
+//              ours (struck from the side, where no shield is: never head-on into a formed line); it rides round to the mark's flank, then charges
+//              it. It meets an enemy band that comes for our archers, and a band of riders cut down to a third rides back behind the infantry to gather.
+//   the foe    the nearest army; at Normal and Hard the weakest or the one already in a fight with a third (in a free-for-all), but always the one at its
+//              throat; when the enemy is broken, or the time is nearly up, everybody charges (allIn: the general has nothing more to plan)
+//   the lord   with his infantry, a few steps behind its middle; he charges when it does
+export class General {
+  constructor(w, f, temper = 'steady', level = 'normal') {
+    this.w = w;
+    this.g = w.g;
+    this.f = f;
+    this.temper = TEMPERS[temper] ? temper : 'steady';
+    this.T = TEMPERS[this.temper];
+    this.L = LEVELS[level] || LEVELS.normal;
+    this.t = 0;                // seconds to the next look
+    this.foe = -1;             // the house it fights
+    this.posture = null;       // 'hold' (on its hill) or 'advance'
+    this.postureT = 0;
+    this.side = Math.random() < 0.5 ? 1 : -1;   // (the flank its riders keep to)
+    this.inf = { task: null, at: null, since: 0, foe: -1 };
+    this.arch = { task: null, at: null, since: 0 };
+    this.cav = { task: null, at: null, since: 0, mark: null };
+    this.lord = { task: null, at: null };
+    this.threat = null;
+  }
+
+  // every frame of the battle (warmode.js update); the looks come every L.every seconds
+  update(dt) {
+    if (this.f.war.allIn || this.f.eliminated) return;
+    this.t -= dt;
+    if (this.t > 0) return;
+    this.t = this.L.every;
+    this.tick();
+  }
+
+  tick() {
+    const w = this.w, P = w.picture;
+    P.fresh();
+    const me = P.house(this.f.team);
+    if (!me) return;
+    const I = me.groups.inf, A = me.groups.arch, C = me.groups.cav;
+    // the body of the army: the infantry, else the riders, else the archers
+    const body = I.n >= 5 ? I : C.n >= 3 ? C : A.n ? A : null;
+    if (!body) { this.lordAlone(); return; }
+    const E = this.pickFoe(me, body);
+    if (!E) return;
+    const eI = E.groups.inf, eA = E.groups.arch, eC = E.groups.cav;
+    // the enemy group nearest our body, and the way to it
+    const near = nearestGroup(E, body);
+    const to = near ? near.G : E.hero ? { x: E.hero.pos.x, z: E.hero.pos.z, r: 1 } : null;
+    if (!to) return;
+    let dx = to.x - body.x, dz = to.z - body.z;
+    const l = Math.hypot(dx, dz) || 1;
+    dx /= l; dz /= l;
+    const c = {
+      me, E, I, A, C, eI, eA, eC, dx, dz, yaw: Math.atan2(dx, dz),
+      gap: (G) => (G.n ? gapTo(E, G) : Infinity),   // (between that group of ours and the enemy's nearest, front to front)
+      rush: eA.worth > Math.max(A.worth * 1.4, E.worth * 0.18),   // (the enemy's archers would shoot us to pieces while we wait: go at them)
+    };
+    // all in: the enemy is broken, only its lord is left, or the time is nearly up: everybody charges, and there is nothing more to plan
+    if (!E.n || (E.worth < me.worth * 0.25 && E.n < 40) || w.clock > WAR.fightLimit - 45) { this.allIn(me); return; }
+    this.choosePosture(c);
+    this.threat = this.L.flank ? this.archerThreat(c) : null;
+    this.infantry(c);
+    this.archers(c);
+    this.cavalry(c);
+    this.lordOrders(c);
+  }
+
+  // ---- the foe ----
+  // the army it fights: whoever is at its throat (a group within 40 m of our body); else the nearest, or at Normal and Hard the weakest for the
+  // distance, and the better one if it is already fighting a third house. It keeps its foe unless another is much the better.
+  pickFoe(me, body) {
+    const P = this.w.picture;
+    let best = null, bs = Infinity, cur = null, cs = Infinity;
+    for (const H of P.houses.values()) {
+      if (allied(H.team, this.f.team) || !(H.n || H.hero)) continue;
+      const near = nearestGroup(H, body);
+      const d = near ? near.d - body.r : dist(H.hero.pos, body);
+      let s = d;
+      if (d < 40) s -= 1000;
+      else if (this.L.focus) {
+        s += 140 * Math.min(2, H.worth / Math.max(1, me.worth));
+        let busy = 0;
+        for (const k of GROUP_KEYS) busy += H.groups[k].fight;
+        if (busy > H.n * 0.2 && d > 60) s -= 50;   // (a third house is already at it)
+      }
+      if (H.team === this.foe) { cur = H; cs = s; }
+      if (s < bs) { bs = s; best = H; }
+    }
+    if (cur && cs < bs + 40) best = cur;
+    if (best && best.team !== this.foe) this.foe = best.team;
+    return best;
+  }
+
+  choosePosture(c) {
+    const w = this.w;
+    if (this.posture === 'hold') {
+      // waited long enough for an enemy who does not come: march after all (and so does one whose archers would shoot it to pieces)
+      if ((w.clock - this.postureT > this.T.stall || c.rush) && c.gap(c.I.n ? c.I : c.A) > 45) { this.posture = 'advance'; this.postureT = w.clock; }
+      return;
+    }
+    if (this.posture) return;
+    this.postureT = w.clock;
+    if (!this.L.posture || c.rush) { this.posture = 'advance'; return; }
+    const lean = this.T.hold + (c.A.worth > c.eA.worth * 1.2 && c.A.n >= 10 ? 0.3 : 0) + (c.E.worth > c.me.worth * 1.25 ? 0.3 : 0) - (c.I.n < 10 ? 1 : 0);
+    this.posture = lean >= 0.6 ? 'hold' : 'advance';
+  }
+
+  // ---- orders ----
+  // group k formed up and holding round (x, z) facing yaw, in formation `form` (unchanged: no new orders, so the men are not shuffled every look)
+  holdGroup(k, G, x, z, yaw, form) {
+    const S = this[k], f = this.f;
+    const same = S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 1 && Math.abs(Math.atan2(Math.sin(S.at.yaw - yaw), Math.cos(S.at.yaw - yaw))) < 0.35 && f.war.form[k] === form;
+    if (same) return;
+    f.war.form[k] = form;
+    f.war.plan[k] = 'hold';
+    this.w.formUp(f, k, G.men, x, z, yaw);
+    S.task = 'hold'; S.at = { x, z, yaw }; S.since = this.w.clock;
+  }
+
+  // group k charges house `foe` (kind: one group of it, or '' for any)
+  chargeGroup(k, G, foe, kind = '') {
+    const S = this[k];
+    this.f.war.plan[k] = 'charge';
+    this.w.charge(G.men, foe, kind);
+    S.task = 'charge'; S.at = null; S.foe = foe; S.since = this.w.clock;
+  }
+
+  allIn(me) {
+    const f = this.f;
+    for (const k of GROUP_KEYS) if (me.groups[k].n) this.chargeGroup(k, me.groups[k], -1);
+    if (f.hero && f.hero.alive) { f.hero.foeTeam = -1; f.hero.setOrder('charge'); }
+    f.war.allIn = true;
+  }
+
+  // no soldier left: the lord fights on by himself
+  lordAlone() {
+    const h = this.f.hero;
+    if (h && h.alive && h.order !== 'charge') h.setOrder('charge');
+  }
+
+  // a share of group k standing in its places (a bound reached)
+  reached(G, share) {
+    let n = 0, m = 0;
+    for (const u of G.men) {
+      if (!u.alive) continue;
+      m++;
+      const d = u.order === 'hold' && u.orderData && u.orderData.exact ? u.orderData.pos : null;
+      if (d && Math.hypot(d.x - u.pos.x, d.z - u.pos.z) < 4) n++;
+    }
+    return m && n >= m * share;
+  }
+
+  // ---- the groups ----
+  infantry(c) {
+    const I = c.I, S = this.inf, w = this.w, { eI, eA, eC } = c;
+    if (!I.n) return;
+    // how far the enemy's foot is (its infantry; its archers when it has none; its riders when they are all it has): the charge is at men on foot
+    const foot = eI.n >= 5 ? eI : eA.n >= 5 ? eA : eC;
+    const gapFoot = foot.n ? Math.max(0, dist(foot, I) - foot.r - I.r) : Infinity;
+    // in contact: the line is in a fight, or the enemy front is at arm's length
+    const contact = I.fight >= Math.max(3, I.n * 0.12) || c.gap(I) < 6;
+    if (S.task === 'charge') {
+      if (S.foe !== this.foe && !contact) this.chargeGroup('inf', I, this.foe);   // (another army is the foe now)
+      return;
+    }
+    // riders coming at the line (nearer it than their own foot, and not yet locked in a fight): the line stands to receive them, shoulder to shoulder
+    // (a shield wall at Normal and Hard), and fights where it stands; it is not drawn out after them. Our archers shoot them, our riders hit them
+    // once they are at grips with it (cavalry, below).
+    const riders = eC.n >= 6 && foot !== eC && dist(eC, I) - eC.r - I.r < 55 && dist(eC, I) < dist(foot, I) - 10;
+    const close = this.T.close + (c.rush ? 15 : 0);
+    if (this.posture === 'hold' || riders) {
+      if (contact && !riders) {
+        // the enemy has come to the line: it fights where it stands; it charges home once the enemy's infantry is spent, or the fight hangs fire
+        if (eI.n < I.n * 0.4 || (I.fight < I.n * 0.05 && w.clock - S.since > 25)) this.chargeGroup('inf', I, this.foe);
+        return;
+      }
+      if (riders && gapFoot <= close && foot === eI) { this.chargeGroup('inf', I, this.foe); return; }   // (their foot is on us too: at it)
+      // on its hill (or where the riders found it), facing the enemy: a shield wall when there are archers or riders to face (the shields locked block
+      // most arrows and blows)
+      const form = this.L.wall && (eA.n >= 8 || riders) ? 'wall' : 'line';
+      const at = S.task === 'hold' && S.at ? S.at : { x: I.x, z: I.z };
+      const yaw = riders ? Math.atan2(eC.x - at.x, eC.z - at.z) : c.yaw;
+      this.holdGroup('inf', I, at.x, at.z, yaw, form);
+      return;
+    }
+    // marching: in bounds, the line formed up at each; the charge from `close` metres of the enemy's foot, all together
+    if (gapFoot <= close || contact) { this.chargeGroup('inf', I, this.foe); return; }
+    if (S.task !== 'bound' || this.reached(I, this.T.wait) || w.clock - S.since > 9) {
+      const step = Math.max(6, Math.min(22, gapFoot - close + 4));
+      this.holdGroup('inf', I, I.x + c.dx * step, I.z + c.dz * step, c.yaw, 'line');
+      S.task = 'bound';
+    }
+  }
+
+  archers(c) {
+    const A = c.A, S = this.arch, I = c.I;
+    if (!A.n || S.task === 'charge') return;
+    let x, z;
+    const guard = c.eC.worth > c.E.worth * 0.22 ? 9 : 15;   // (riders about: close behind the infantry)
+    if (this.threat && I.n >= 5) {
+      // an enemy band coming for them: back behind the infantry
+      x = I.x - c.dx * (I.r + 20); z = I.z - c.dz * (I.r + 20);
+    } else if (I.n >= 5) {
+      // behind the line; once it is in the fight, up close behind it, the enemy's ranks within their bows' reach
+      const back = this.inf.task === 'charge' || I.fight > I.n * 0.12 ? Math.min(A.men[0] ? A.men[0].range * 0.55 : 24, 26) : I.r * 0.5 + guard;
+      x = I.x - c.dx * back; z = I.z - c.dz * back;
+    } else {
+      // nobody to stand behind: where they are, or (marching) close enough to shoot
+      const gap = c.gap(A), reach = A.men[0] ? A.men[0].range - 8 : 36;
+      const step = this.posture === 'advance' && gap > reach ? Math.min(20, gap - reach) : 0;
+      x = A.x + c.dx * step; z = A.z + c.dz * step;
+    }
+    if (S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 7) return;
+    this.holdGroup('arch', A, x, z, c.yaw, 'line');
+  }
+
+  cavalry(c) {
+    const C = c.C, S = this.cav, w = this.w, I = c.I;
+    if (!C.n) return;
+    const mark = (m) => { const H = w.picture.house(m.team); return H ? H.groups[m.k] : null; };
+    // Easy: the riders go in with the infantry (beside it until it charges)
+    if (!this.L.flank) {
+      if (S.task === 'charge') return;
+      if (this.inf.task === 'charge' || I.n < 5 || c.gap(C) < 25) { this.chargeGroup('cav', C, this.foe); return; }
+      this.screen(c);
+      return;
+    }
+    // an enemy band coming for our archers, or riders at grips with our line: the riders meet them (a band of riders locked in a fight is the best
+    // mark there is: struck from the side, it cannot ride away)
+    const T = this.threat || this.ridersOnUs(c);
+    if (T && !(S.task === 'charge' && S.mark && S.mark.team === T.team && S.mark.k === T.k)) { S.mark = { team: T.team, k: T.k }; this.chargeGroup('cav', C, T.team, T.k); return; }
+    // cut down to a third and out of the fight: back behind the infantry to gather, for a while
+    if (this.L.rally && I.n >= 5 && C.n <= C.start * 0.35 && C.fight < C.n * 0.3 && S.task !== 'rally' && w.clock - S.since > 4) {
+      this.holdGroup('cav', C, I.x - c.dx * (I.r + 14), I.z - c.dz * (I.r + 14), c.yaw, 'line');
+      S.task = 'rally'; S.since = w.clock;
+      return;
+    }
+    if (S.task === 'rally' && w.clock - S.since < 15) return;
+    if (S.task === 'charge') {
+      const M = S.mark && mark(S.mark);
+      if (!S.mark || (M && M.n >= 3) || C.fight > C.n * 0.3) return;   // (still at it; or in a fight anyway)
+      S.task = null;
+    }
+    if (S.task === 'flank') {
+      const M = mark(S.mark);
+      if (!M || M.n < 3) S.task = null;
+      else if (this.reached(C, 0.5) || w.clock - S.since > 12 || dist(C, M) - M.r - C.r < 22) { this.chargeGroup('cav', C, S.mark.team, S.mark.k); return; }
+      else return;
+    }
+    // a mark worth the ride: round to its flank (then the charge, above)
+    const m = this.cavMark(c);
+    if (m) {
+      const M = c.E.groups[m.k], base = m.k === 'arch' && c.eI.n >= 8 ? c.eI : M;
+      // (beside it, on our riders' side, a little past its middle: the charge comes in from the side)
+      const px = c.dz * this.side, pz = -c.dx * this.side;
+      const x = M.x + px * (base.r + 20) + c.dx * M.r * 0.3, z = M.z + pz * (base.r + 20) + c.dz * M.r * 0.3;
+      this.holdGroup('cav', C, x, z, Math.atan2(M.x - x, M.z - z), 'line');
+      S.task = 'flank'; S.mark = m; S.since = w.clock;
+      return;
+    }
+    this.screen(c);
+  }
+
+  // the riders' place while they wait: on the flank of the infantry, a little behind its front
+  screen(c) {
+    const I = c.I, C = c.C, S = this.cav;
+    if (I.n < 5) { if (S.task !== 'hold') this.holdGroup('cav', C, C.x, C.z, c.yaw, 'line'); return; }
+    const px = c.dz * this.side, pz = -c.dx * this.side;
+    const x = I.x + px * (I.r + 14) - c.dx * 4, z = I.z + pz * (I.r + 14) - c.dz * 4;
+    if (S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 10) return;
+    this.holdGroup('cav', C, x, z, c.yaw, 'line');
+  }
+
+  // the riders' mark: the enemy's infantry locked in a fight with ours (struck from the side, where no shield is); the enemy's archers out in the open (no
+  // infantry of theirs about them, or theirs already at grips with ours) and near enough to the fight to be shooting at it (not a ride to their hill);
+  // or, when it has nothing else, its riders. While the enemy's riders are still loose and strong, ours stay by the infantry.
+  cavMark(c) {
+    const { E, eI, eA, eC, I, A, C } = c;
+    if (eI.n >= 8 && eI.fight >= eI.n * 0.2 && I.fight > 0) return { team: E.team, k: 'inf' };
+    if (eC.n >= 6 && eC.fight < eC.n * 0.3 && eC.worth > C.worth * 0.6) return null;
+    if (eA.n >= 5) {
+      const guarded = eI.n >= 8 && dist(eI, eA) < eI.r + eA.r + 10 && eI.fight < eI.n * 0.15;
+      const ours = I.n ? I : A.n ? A : C;
+      const nearFight = dist(eA, ours) - eA.r - ours.r < 75;
+      if (!guarded && nearFight) return { team: E.team, k: 'arch' };
+    }
+    if (!eI.n && !eA.n && eC.n) return { team: E.team, k: 'cav' };
+    return null;
+  }
+
+  // enemy riders (of any house) at grips with our infantry or archers: { team, k: 'cav' } or null
+  ridersOnUs(c) {
+    const { I, A } = c;
+    for (const H of this.w.picture.houses.values()) {
+      if (allied(H.team, this.f.team)) continue;
+      const G = H.groups.cav;
+      if (G.n < 4 || G.fight < Math.max(2, G.n * 0.2)) continue;
+      if ((I.n && dist(G, I) < G.r + I.r + 12) || (A.n && dist(G, A) < G.r + A.r + 12)) return { team: H.team, k: 'cav' };
+    }
+    return null;
+  }
+
+  // an enemy band (of any house) not yet in a fight, within 40 m of our archers and nearer them than our infantry is
+  archerThreat(c) {
+    const A = c.A, I = c.I;
+    if (A.n < 4) return null;
+    let best = null, bd = 40;
+    for (const H of this.w.picture.houses.values()) {
+      if (allied(H.team, this.f.team)) continue;
+      for (const k of ['inf', 'cav']) {
+        const G = H.groups[k];
+        if (G.n < 4 || G.fight > G.n * 0.4) continue;
+        const d = dist(G, A) - G.r - A.r * 0.5;
+        if (d >= bd) continue;
+        if (I.n >= 5 && dist(G, I) - I.r < d) continue;   // (our infantry stands in its way)
+        best = { team: H.team, k }; bd = d;
+      }
+    }
+    return best;
+  }
+
+  // the lord: with his infantry, a few steps behind its middle; he charges when it does
+  lordOrders(c) {
+    const h = this.f.hero, S = this.lord, I = c.I;
+    if (!h || !h.alive) return;
+    if (this.inf.task === 'charge' || I.n < 5) { if (S.task !== 'charge') { S.task = 'charge'; h.foeTeam = this.foe; h.foeNear = 20; h.setOrder('charge'); } return; }
+    const x = I.x - c.dx * (I.r * 0.4 + 4), z = I.z - c.dz * (I.r * 0.4 + 4);
+    if (S.task === 'hold' && S.at && Math.hypot(S.at.x - x, S.at.z - z) < 6) return;
+    this.w.holdAt(this.f, h, x, z, 0, c.yaw);
+    S.task = 'hold'; S.at = { x, z };
+  }
+}
+
+// the group of house H nearest the group B (its middle), and how far: { G, d } with d the distance between their middles less H's group's spread
+function nearestGroup(H, B) {
+  let best = null, bd = Infinity;
+  for (const k of GROUP_KEYS) { const G = H.groups[k]; if (!G.n) continue; const d = dist(G, B) - G.r; if (d < bd) { bd = d; best = G; } }
+  return best ? { G: best, d: bd } : null;
+}
+// between group B and the nearest group of house H, front to front
+function gapTo(H, B) {
+  const n = nearestGroup(H, B);
+  return n ? Math.max(0, n.d - B.r) : Infinity;
 }

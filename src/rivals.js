@@ -11,14 +11,16 @@
 //              stage, p }] · barracks (gold) · siege { stage, gold, max, p, ram } · giant { stage, gold } or null · promote (gold) · upgradeGold · upgrades [ids]
 //              · repair { gate, keep, walls } (share of health below which it repairs)
 //   war        warStage, rush · cooldown [base, spread] · jitter [base, spread] · minTroops, troopStep · minAttackers · maxPush · failWait, winWait · recallKeep,
-//              recallGate · sendKinds, sendShare · order · redirect · hero · pushBuy { ram, catapult, giant } · aim { ... weights of the target score }
+//              recallGate · sendKinds, sendShare · order · redirect · hero · pushBuy { ram, catapult, giant } · aim { ... weights of the target score } ·
+//              march { share, wait } (an assault marches as a body: at each halt it waits until `share` of it stands in its place, or `wait` seconds; ai.js lead)
 //   persona only   goals [{ id, lv | n, from }] (what it saves up for, in order: an upgrade up to level `lv`, 'engine' (a ram, then a catapult, ...) up to `n`
 //              on the road, 'giant'; nothing before stage `from`) · goalGap (seconds between two of them) · garrison (share of the barracks limit it keeps filled
 //              before it saves) · gifts { id: share } (the share of the price of a goal that his retinue, his masons, ... pay) · tax (gold a second) · lock ('human': every army marches on a human
 //              house) · defend { at, hold } (calls the army home when this many foes stand at the gate) · pounce { min, by } (only strikes a castle that is this
 //              damaged, until stage `by`) · needEngines · wave { mix, elite } · verbs { push, ram, catapult, and any shop id he likes to announce when he buys it: `{house}` in the text is his house }
 
-// What the lords have always done (src/ai.js before the personalities); every personality below starts from it.
+// What the lords have always done (src/ai.js before the personalities); every personality below starts from it. (Since round 8 every lord's assault
+// marches as a body, `march`, instead of each man setting off at his own pace.)
 export const CLASSIC = Object.freeze({
   reserve: [100, 150], recruitMin: 60, recruitGuard: 6,
   mix: [0.38, 0.62],
@@ -40,6 +42,7 @@ export const CLASSIC = Object.freeze({
   recallKeep: 0.5, recallGate: true,
   sendKinds: ['infantry', 'cavalry'], sendShare: 0.5, order: 'assault', redirect: true,
   hero: 0.6,
+  march: { share: 0.8, wait: 16 },
   pushBuy: { ram: 450, catapult: [3, 800], giant: [4, 2000] },
   aim: { troops: 25, gate: 20, keep: 40, dist: 0.5, noise: 60, human: 0, damaged: 0 },
 });
@@ -69,6 +72,7 @@ export const PERSONAS = [
       recallKeep: 0.2, recallGate: false, hero: 1,
       pushBuy: { ram: 500, catapult: null, giant: null },
       wave: { mix: ['swordsman', 'swordsman', 'spearman', 'swordsman', 'archer', 'swordsman', 'spearman', 'swordsman'], elite: { from: 4, every: 3, type: 'horseman' } },
+      march: { share: 0.55, wait: 6 },   // (a quick muster: he would rather strike now)
       verbs: { push: 'charges out against' },
     },
   },
@@ -96,6 +100,7 @@ export const PERSONAS = [
       recallKeep: 0.8, hero: 0,
       defend: { at: 5, hold: 25 },
       wave: { mix: ['archer', 'spearman', 'archer', 'swordsman', 'archer', 'spearman', 'archer', 'swordsman'] },
+      march: { share: 0.92, wait: 26 },   // (the whole host, in good order, or not at all)
       verbs: { push: 'opens the gates at last and marches on', fortify_walls: 'thickens the walls of {house}', towers: 'mans the towers of {house}', reinforce_gate: 'iron-bands the gate of {house}' },
     },
   },
@@ -194,6 +199,7 @@ export const PERSONAS = [
       warStage: 6, rush: 1, cooldown: [60, 40], jitter: [0.95, 0.1],
       minTroops: 8, troopStep: 3, minAttackers: 3, hero: 0.6,
       wave: { elite: { from: 8, every: 3, type: 'knight' } },
+      march: { share: 0.85, wait: 20 },
       verbs: { push: 'leads the iron host against' },
     },
   },
