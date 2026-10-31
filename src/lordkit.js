@@ -40,7 +40,7 @@ export const BITE = {
   troops: [0.3, 0.4, 0.7],    // the damage they do to soldiers and engines, of a hero's (Game.damage; heroes, players' and lords', take it in full)
   cd: [1.6, 1.4, 1],          // his cooldowns, of a hero's
   calm: [1.6, 1.5, 1.2],      // and longer again while no foe is within THREAT m of his castle (War Mode has none: there it is always the fight)
-  mend: [0.3, 0.4, 0.7],      // what his abilities heal of his own wounds, of a hero's (Healing Light, the Berserker's talents; his men are healed in full)
+  mend: [0.25, 0.35, 0.7],    // what his abilities heal of his own wounds, of a hero's (Healing Light, the Berserker's talents; his men are healed in full)
 };
 const THREAT = 50;      // (as far as LordAI.threat looks)
 const SCAN = 50;        // how far he looks around him (metres)
@@ -122,8 +122,8 @@ export class LordKit {
     this.n = { c3: 0, c5: 0, c8: 0, c12: 0, heroes8: 0, near: 1e9, heroNear: 1e9 };
     this.levelUp(true);
     // a lord who rises (or rises again: he comes back a little while after each fall, as long as his keep stands) has his abilities some while
-    // after, not the moment he is up: a third to two thirds of a cooldown
-    for (const sl of ['q', 'r']) u.abilCd[sl] = abilityOf(u, sl).cd * (this.mods().cd || 1) * this.cdK * (0.35 + 0.35 * Math.random());
+    // after, not the moment he is up: half a cooldown to a whole one
+    for (const sl of ['q', 'r']) u.abilCd[sl] = abilityOf(u, sl).cd * (this.mods().cd || 1) * this.cdK * (0.5 + 0.5 * Math.random());
   }
 
   // the class numbers with the talents learnt (not the hero levels: a lord grows with the war instead), spells by the lord's strength

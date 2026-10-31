@@ -203,3 +203,10 @@ test('War Mode: the sides of a match and the hills its world needs', async () =>
   setWarWorld(0);
   assert.equal(WAR_WORLD.on, false);
 });
+
+test('spears against riders: a clear, modest bonus, and the War Mode card says what it does', async () => {
+  const { SPEAR, WAR } = await load('src/config.js');
+  assert.ok(SPEAR.dmg > 1 && SPEAR.dmg <= 2, `spear damage on riders x${SPEAR.dmg}`);
+  assert.ok(SPEAR.stagger > 0 && SPEAR.stagger <= 1, `a charging horse is checked ${SPEAR.stagger} s`);
+  assert.ok(WAR.units.spearman.desc.includes(`+${Math.round((SPEAR.dmg - 1) * 100)}%`), WAR.units.spearman.desc);
+});

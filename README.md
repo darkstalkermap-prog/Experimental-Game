@@ -643,10 +643,10 @@ lord's health and blows are what they always were. A lord who defends his castle
 every five waves (5 at most; a War Mode general is level 1, 2 or 3 by the difficulty) and learns a hero bot's talents. On Easy a lord looks for an
 opening less often, waits a moment once an ability is ready and aims worse; on Hard he uses them as soon as they are worth it.
 A lord is a commander, not a raid boss (`BITE` in `src/lordkit.js`): his abilities do less to soldiers than a hero's (Easy / Normal / Hard: 30 / 40 /
-70 %; a hero, yours or a rival's, takes them in full), heal less of his own wounds (50 / 60 / 85 %; his men are healed in full), and come round more
-slowly than a hero's (1.6x / 1.4x / 1x the cooldown), slower again (1.6x / 1.5x / 1.2x) while no foe is within 50 m of his castle. A Fireball or a
-Smite wants two foes in its blast (Easy three) or a hero. A War Mode general's hero is held to the same, so he leads his army but does not sweep yours
-away alone.
+70 %; a hero, yours or a rival's, takes them in full), heal less of his own wounds (25 / 35 / 70 %; his men are healed in full), and come round more
+slowly than a hero's (1.6x / 1.4x / 1x the cooldown), slower again (1.6x / 1.5x / 1.2x) while no foe is within 50 m of his castle. A lord who rises
+again has them half a cooldown to a whole one later. A Fireball or a Smite wants two foes in its blast (Easy three) or a hero. A War Mode general's
+hero is held to the same, so he leads his army but does not sweep yours away alone.
 
 For modders: a personality is a table of parameters in `src/rivals.js` (the key list is in its header; `CLASSIC` is the old lord), played by `LordAI` in
 `src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
