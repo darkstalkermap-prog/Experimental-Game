@@ -329,6 +329,16 @@ export class SiegeEngine {
       this.lastPos.copy(this.pos);
       this.stuckT = 0;
     }
+    // and one that has got no nearer its goal in a while is wedged in a gap too narrow for it (two rocks with the way on between them: it swung out
+    // and rolled back into the same gap, again and again, for the rest of the match): it slips past the stones for a moment, as a stuck soldier does
+    this.progT = (this.progT || 0) + dt;
+    if (this.progT > 4) {
+      const d = Math.hypot(goal.x - this.pos.x, goal.z - this.pos.z);
+      this.wedged = this.progD !== undefined && d > this.progD - 1.5 ? (this.wedged || 0) + 1 : 0;
+      if (this.wedged >= 3) { this.slipT = 2.5; this.wedged = 0; }
+      this.progD = d; this.progT = 0;
+    }
+    if (this.slipT > 0) this.slipT -= dt;
     if (this.detourT > 0) {
       this.detourT -= dt;
       const sx = -uz * this.detourSide, sz = ux * this.detourSide;
@@ -342,7 +352,7 @@ export class SiegeEngine {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true); // engines roll past trunks
+    g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true, this.slipT > 0); // engines roll past trunks (and, wedged, past stones)
     this.turn(Math.atan2(ux, uz), dt);
     return true;
   }
