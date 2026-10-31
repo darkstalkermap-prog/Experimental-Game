@@ -77,6 +77,8 @@ export function renderClassPicker(root, info, selected, onPick) {
 
 const AIM_HINTS = {
   volley: 'Release Q to loose the volley · R or Esc: cancel',
+  bash: 'Release Q to charge behind the shield · R or Esc: cancel',
+  charge: 'Release Q to charge · R or Esc: cancel',
   leap: 'Release R to leap · Q or Esc: cancel',
   scope: 'Let go of R or click to loose · let go early to lower the bow',
 };
@@ -891,7 +893,8 @@ export class UI {
       e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power) || (slot === 'r' && !!p.scope));   // (a circle being placed, Power Shot being drawn, the scope up)
     }
     // the hint under the crosshair: which key lets it go (the volley's Q, the Leap's R, the Sniper Shot's R) and how to call it off
-    const aim = p.aiming ? (abilityOf(p, p.aiming.slot).id === 'leap' ? 'leap' : 'volley') : p.scope ? 'scope' : '';
+    const aimId = p.aiming ? abilityOf(p, p.aiming.slot).id : '';
+    const aim = p.aiming ? (aimId === 'leap' || aimId === 'volley' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
     if (aim !== this.aimShown) {
       this.aimShown = aim;
       const el = $('aimhint');

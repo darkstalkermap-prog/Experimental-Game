@@ -459,9 +459,10 @@ export class HeroBot {
     switch (p.classId) {
       case 'knight':
         if (r && (n.c8 >= 3 || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r'); break; }
+        // Shield Bash: at hand on a group or a rival hero; or a run at a rival hero, or a knot of foes, up to 40 m off
         if (q && foe && gap < 5 && ((foe.isPlayer && gap < 4) || this.countAt(p.pos.x + Math.sin(p.yaw) * 3, p.pos.z + Math.cos(p.yaw) * 3, 3.4) >= 2)) {
-          this.aimAtFoe(foe, 1e3); this.cast('q');
-        }
+          this.aimAtFoe(foe, 1e3); this.cast('q', foe.pos.clone());
+        } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3);
         break;
       case 'berserker':
         if (r && hpf > 0.4 && this.leapIn()) break;
@@ -481,14 +482,11 @@ export class HeroBot {
         let hurt = 0;
         for (const f of this.friends) if (Math.hypot(f.pos.x - p.pos.x, f.pos.z - p.pos.z) < 14 && f.hp < f.maxHp * 0.65) hurt += f.isPlayer ? 2 : 1;
         if (r && (hpf < 0.5 || hurt >= 4 || (hpf < 0.7 && hurt >= 2))) { this.cast('r'); break; }
-        if (q) this.bolt('q', 2, 50);
+        if (q) this.bolt('q', 2, 90);   // (Smite reaches as far as a Fireball: 120 m; a bot lets fly within 90)
         break;
       }
       case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short)
-        if (q && foe && hpf > 0.35 && gap > 4 && gap < 17 && (foe.isPlayer || this.countAt(foe.pos.x, foe.pos.z, 4) >= 2)) {
-          this.aimAtFoe(foe, 1e3); p.pitch = 0;
-          if (this.cast('q')) break;
-        }
+        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2)) break;
         if (r && ((this.friends.length >= 3 && n.c12 >= 2) || (hpf < 0.55 && n.c8 >= 1) || (n.heroes8 && this.friends.length >= 1))) this.cast('r');
         break;
       default: break;
@@ -534,6 +532,27 @@ export class HeroBot {
     this.faceYaw = Math.atan2(cx - p.pos.x, cz - p.pos.z);
     p.yaw = this.faceYaw;
     this.cast('q', at);
+  }
+
+  // The long charges: a run (Shield Bash) or a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or
+  // the densest knot of foes lo..hi m off, with nothing in the way of the run.
+  runAt(id, lo, hi, need) {
+    const p = this.p, A = this.g.abilities;
+    if (p.climb || p.leap || p.dash) return false;
+    let best = null, bs = 0;
+    for (let i = 0; i < this.foes.length; i++) {
+      const o = this.foes[i], d = this.dist[i];
+      if (o.isSiege || d < lo || d > hi || Math.abs(o.pos.y - p.pos.y) > 3) continue;
+      const s = (o.isPlayer ? 3 : 0) + this.countAt(o.pos.x, o.pos.z, 3.4);
+      if (s > bs) { bs = s; best = o; }
+    }
+    if (!best || bs < need) return false;
+    const dx = best.pos.x - p.pos.x, dz = best.pos.z - p.pos.z, l = Math.hypot(dx, dz) || 1, over = id === 'lancecharge' ? 8 : 0;
+    const want = V3.set(best.pos.x + (dx / l) * over, best.pos.y, best.pos.z + (dz / l) * over);
+    const plan = A.rushPlan(p, p.pos, want);
+    if (!plan || plan.d < l - 2) return false;   // (something in the way: walk round)
+    this.faceYaw = p.yaw = Math.atan2(dx, dz); p.pitch = 0;
+    return this.cast('q', plan.to.clone());
   }
 
   // Leap: into a rival hero or a knot of foes a fair way off (where they will be when he comes down), to open a fight or join one;

@@ -14,6 +14,9 @@ export const UPDATES = [
       'War Mode online with four players: free-for-all, two against two, or together against the AI.',
       'Berserker: Blood Rage is gone. His R is now Leap: hold R to mark a spot as far as a Mage\'s Fireball flies, let go and he leaps there over the soldiers and slams the ground. Walls stop him. New talents: Earthshaker and Death from Above.',
       'Ranger: her R is now Sniper Shot: hold R and the view zooms in far, steadies, and one heavy arrow flies flat as far as a Fireball (a headshot counts). The Snare Trap is gone; new talents: Hawk\'s Scope and Deadeye.',
+      'Knight: Shield Bash is a charge: hold Q to see where it ends (as far as a Fireball flies), let go and run there behind your shield, bashing the first enemy you meet.',
+      'Cleric: Smite is lightning out of your open hand, as far as a Fireball flies.',
+      'Cavalier: Lance Charge gallops as far as a Fireball flies (hold Q to aim it, Q again to rein in), through everyone in the way.',
     ],
   },
   {

@@ -264,8 +264,12 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
   - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). He carries a tall kite shield (so do knight
     soldiers and the AI lords), painted with your arms; in first person it is carried low and turned aside, and on guard its top
-    sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash**: lunge forward
-    and slam your shield into everything ahead for heavy damage, a long stun and a shove. **R Bulwark**: for 5 s
+    sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash** (12 s): hold Q and a
+    circle shows where your run ends, up to 120 m away (as far as a Mage's Fireball flies); let go and you run there behind your
+    shield at 24 m/s (26 mounted). The first enemy in front of the shield ends the run with the bash: heavy damage, a long stun and
+    a shove for everyone in the cone ahead. The run follows the ground and stops short of walls, gates that are not open to you,
+    trunks, steep rises and an enemy castle's stone; Q again bashes where you are, and with a wall at your nose it is the old short
+    lunge. **R Bulwark**: for 5 s
     you take 70% less damage and can't be staggered; allies beside you take 40% less.
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
     spin for a second and cut everyone around you three times. **R Leap** (11 s): hold R and a circle on the ground shows
@@ -294,11 +298,14 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
     enemies close to you.
   - **Cleric** (some armour, 110% spell damage, heals 2.5 times faster out of combat). **Q Smite**: a bolt of
-    holy light on the spot you aim at, blasting everyone near it. **R Healing Light**: heal yourself for 45% and
+    holy lightning out of your open hand (first person: the mace goes down and the hand is thrust out) to the first thing along your
+    aim, as far as a Fireball flies (120 m), blasting everyone near where it strikes; a crackle as it leaves the hand, thunder where it
+    lands. Chain Smite (talent) arcs it on to two more foes. **R Healing Light**: heal yourself for 45% and
     every ally within 14 m for 40%.
   - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you and tramples harder).
-    **Q Lance Charge**: charge straight ahead for a second at full gallop (a rush on foot), flattening everyone
-    in your path. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
+    **Q Lance Charge** (14 s): hold Q for where the charge ends, up to 120 m away (as far as a Fireball flies), let go and gallop
+    there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in your path and going on through them.
+    Walls, gates, trunks and steep rises stop it short; Q again reins in. Numbers: `RUSH` in `src/classes.js`. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
     (you take 40% less).
 
   **Switching class**: open the shop (**B**) and choose the **Class** tab. A class can only be taken up **at your own
@@ -313,7 +320,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
-  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Berserker's Whirlwind strikes
+  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Whirlwind strikes
   once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
   hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
   Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on

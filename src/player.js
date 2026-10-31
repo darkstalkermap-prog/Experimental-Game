@@ -7,7 +7,7 @@ import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y 
 import { avoidCastles } from './nav.js';
 import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
-import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, abilityOf } from './classes.js';
+import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, RUSH, abilityOf } from './classes.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
@@ -610,7 +610,8 @@ export class Player {
     // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
     if (input.hit('KeyQ')) {
       this.endScope();
-      if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
+      if (this.dash && this.dash.rush) this.dash = null;   // (Q again: the Knight bashes where he is, the Cavalier reins in: Abilities.rushOver)
+      else if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
       else if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input);
     }
     if (input.hit('KeyR')) {
@@ -753,6 +754,7 @@ export class Player {
       this.vel.z += (tz - this.vel.z) * k;
     }
 
+    if (this.dash && this.dash.rush === 'bash' && this.foeAhead(this.dash)) this.dash = null;   // (the run ends against the first foe)
     if (this.dash) {
       const d = this.dash;
       d.t -= dt;
@@ -963,7 +965,7 @@ export class Player {
     const g = this.game, def = abilityOf(this, slot);
     if (!this.alive || this.drive || this.climb || this.aiming || this.leap) return;
     if (this.staggerT > 0 || this.abilCd[slot] > 0 || (def.id === 'leap' && this.mounted)) { g.audio.play('deny'); return; }
-    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0 };
+    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0, volley: def.id === 'volley' };
     if (def.id === 'volley') this.setWeapon('bow');
   }
 
@@ -972,7 +974,15 @@ export class Player {
     if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || !def.aimed || this.leap) { this.cancelAim(); return; }
     a.t += dt;
     const eyePos = new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z);
-    if (def.id === 'leap') {
+    if (def.rush) {   // the long charges: the end of the run, short of whatever is in the way
+      if ((a.re -= dt) <= 0) {
+        a.re = 0.05;
+        a.plan = g.abilities.rushPlan(this, this.pos, g.abilities.aimPoint(eyePos, this.lookDir(), RUSH.range, this.team).pos);
+        if (a.plan) a.at.copy(a.plan.to);
+        a.far = !a.plan;
+      }
+      if (a.plan) g.aimRing.show(a.at, def.id === 'bash' ? 3.4 * talentFx(this, 'bashReach', 1) : 2.6 * talentFx(this, 'chargeReach', 1), a.far, a.t); else g.aimRing.hide();
+    } else if (def.id === 'leap') {
       if ((a.re -= dt) <= 0) {   // (the arc is worked out 20 times a second, not every frame)
         a.re = 0.05;
         a.plan = g.abilities.leapPlan(this, this.pos, g.abilities.aimPoint(eyePos, this.lookDir(), LEAP.range, this.team).pos);
@@ -988,9 +998,11 @@ export class Player {
     }
     const key = a.slot === 'q' ? 'KeyQ' : 'KeyR';
     if (input.release(key)) {
-      const at = def.id === 'leap' && !a.plan ? null : a.at.clone();
+      const at = (def.id === 'leap' || def.rush) && !a.plan ? null : a.at.clone();
       this.cancelAim();
-      if (at) this.useAbility(a.slot, input, at); else g.audio.play('deny');
+      if (at) this.useAbility(a.slot, input, at);
+      else if (def.id === 'bash') this.useAbility(a.slot, input);   // (no room to run: the bash where he stands)
+      else g.audio.play('deny');
     } else if (!input.down(key)) this.cancelAim();   // the menu opened or the window lost focus: never loose it by accident
   }
 
@@ -998,6 +1010,17 @@ export class Player {
     if (!this.aiming) return;
     this.aiming = null;
     if (this.isLocal && this.game.aimRing) this.game.aimRing.hide();
+  }
+
+  // a foe right in front of the shield on a Shield Bash run (the same test as Abilities.rushOver, on every hero's own screen)
+  foeAhead(d) {
+    let hit = false;
+    const x = this.pos.x + d.x * 1.2, z = this.pos.z + d.z * 1.2, y = this.pos.y;
+    this.game.grid.query(x, z, RUSH.reach + 2, (o) => {
+      if (hit || !o.alive || o === this || allied(o.team, this.team) || o.drive || Math.abs(o.pos.y - y) > 2.5) return;
+      if (Math.hypot(o.pos.x - x, o.pos.z - z) - (o.radius || 0.4) <= RUSH.reach) hit = true;
+    });
+    return hit;
   }
 
   // ---------- the Berserker in the air ----------
@@ -1125,8 +1148,23 @@ export class Player {
     const fl = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / fl, fz = dir.z / fl;
     switch (def.id) {
-      case 'bash': this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break;
-      case 'lancecharge': this.dash = { x: fx, z: fz, v: this.mounted ? 20 : 13, t: 1.1 * talentFx(this, 'chargeTime', 1) }; break;
+      case 'bash':
+      case 'lancecharge': {
+        // the long run: planned along the ground to where he looks (or the spot he chose), short of walls, gates and steep ground; he
+        // sets off at once on his own screen and the host checks it again (Abilities.bash / lancecharge)
+        if (this.climb || this.leap) { g.audio.play('deny'); return; }
+        const plan = g.abilities.rushPlan(this, this.pos, at || g.abilities.aimPoint(this.eyePos(), dir, RUSH.range, this.team).pos);
+        if (!plan) {
+          if (def.id === 'bash') { this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break; }   // (a wall at his nose: the old short lunge and the bash)
+          g.audio.play('deny'); if (this.isLocal) this.notify('No room to charge there.'); return;
+        }
+        const v = g.abilities.rushSpeed(this, def.id);
+        this.cancelAim();
+        this.dash = { x: plan.f.x, z: plan.f.z, v, t: plan.d / v, rush: def.id, plan, fresh: true };
+        if (this.mounted) this.yaw = Math.atan2(plan.f.x, plan.f.z);
+        at = plan.to;
+        break;
+      }
       case 'powershot':
         // the draw first (tickPower looses it); not on horseback or halfway up a wall
         if (this.mounted || this.climb) { g.audio.play('deny'); return; }
@@ -1149,11 +1187,12 @@ export class Player {
         break;
       }
       case 'fireball': this.castFlash = 1; this.castColor = 0xff8a2a; break;
-      case 'smite': this.castFlash = 1; this.castColor = 0xffe9a0; break;
+      case 'smite': this.castFlash = 1; this.castColor = 0xe8f0ff; break;   // (the open hand: viewmodel.js, castKind)
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
       case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
       default: break;
     }
+    this.castKind = def.id;
     this.castAbility(slot, dir, at);
   }
 
