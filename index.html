@@ -380,9 +380,11 @@
   #streak.t3 b { font-size: 54px; color: #ff6a4a; text-shadow: 0 3px 12px #000, 0 0 26px rgba(255,60,30,0.7); }
   #streak.show { animation: streak 2.6s ease-out forwards; }
   @keyframes streak { 0% { opacity: 0; transform: scale(0.6); } 12% { opacity: 1; transform: scale(1.14); } 22% { transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateY(-12px); } }
-  #tip { position: absolute; left: 50%; bottom: max(62px, var(--cmdtop, 0px)); transform: translateX(-50%); width: max-content; max-width: clamp(240px, calc(100% - 700px), 720px);
+  /* (centred in the gap between the hero panel and the minimap, as the orders bar under it, and never wider than that gap: % is the HUD's own width at its zoom) */
+  #tip { position: absolute; left: calc(50% + 67px); bottom: max(62px, var(--cmdtop, 0px)); transform: translateX(-50%); width: max-content; max-width: clamp(240px, calc(100% - 562px), 720px);
     padding: 5px 16px 6px; background: rgba(0,0,0,0.7); border-radius: 14px; font-size: 15px; line-height: 1.3; text-align: center; text-shadow: 0 1px 2px #000; opacity: 0; transition: opacity 0.6s; }
   #tip.show { opacity: 1; }
+  #hud.notip #tip { visibility: hidden; }   /* (no room for it on this window at this UI scale: flow.js) */
   #tip b { font-family: Cinzel, serif; font-size: 14px; font-weight: 700; letter-spacing: 0.1em; color: var(--gold); margin-right: 9px; }
   #tip kbd { margin: 0 1px; }
   @media (max-width: 1100px) { #tip { bottom: max(16px, var(--cmdtop, 0px)); } }
