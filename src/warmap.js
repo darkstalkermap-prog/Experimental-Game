@@ -25,7 +25,7 @@ export function layoutField() {
   const P = WORLD.playHalf, n = Math.max(2, Math.min(4, WAR_WORLD.hills | 0 || 2));
   FIELD.hills = n;
   FIELD.plan = typeof WAR_WORLD.plan === 'string' && [...WAR_WORLD.plan].reduce((a, c) => a + +c, 0) === n ? WAR_WORLD.plan : '1'.repeat(n);
-  FIELD.front = Math.round(P * (n > 2 ? 0.48 : 0.45));
+  FIELD.front = Math.round(P * (n > 2 ? 0.52 : 0.45));   // (three or four: a quarter turn apart, so further out: two neighbouring enemy heroes start >= 100 m apart on the small map)
   FIELD.hd = Math.round(P * 0.14);
   FIELD.hw = Math.round(P * (n > 2 ? 0.27 : 0.42));   // (two hills: a long ridge each, face to face)
   FIELD.slope = Math.round(P * 0.34);

@@ -734,7 +734,11 @@ hill each round the field; allies (Two against two, Co-op) get **neighbouring hi
 saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero starts at the front edge of
 his own army's hill. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
 stay open. The hills come from the match's sides (one digit per side, the armies on it: `'22'`, `'1111'`, `'31'`), so they are
-part of the world (`src/warmap.js`; the same ground on every screen). The air is clearer than in the war modes (`WAR.haze`):
+part of the world and of its key (`small+war22`, `src/warmap.js`; the same ground on every screen): a world laid out for other
+sides (the menu's, the last match's for a Play Again or a rematch of another format, a guest's own menu) is always built again,
+so no army is ever set on a hill another army holds. Every hero starts at least 100 m from the nearest enemy hero on a small
+map (about 130 m in a duel; 145 m on medium, 200 m on large), every soldier of another side at least 85 m away (130 m on
+medium). The air is clearer than in the war modes (`WAR.haze`):
 the battle is watched across 150 to 300 m from a hilltop. The Armies row picks how they are set against each other:
 **Free-for-all** (four armies), **Two against two** (Blue and Green against Red and Gold) or **One against one**.
 Online, Co-op in the lobby puts the players on one side against the AI; houses nobody plays are led by AI generals.

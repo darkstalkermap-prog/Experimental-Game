@@ -17,7 +17,7 @@ import { XP } from './heroes.js';
 import { Unit } from './units.js';
 import { setSides, allied } from './teams.js';
 import { FIELD, sideSpot, sanitizeWar, warSides } from './warmap.js';
-export { sanitizeWar, warSides, warHills, menuPlan } from './warmap.js';   // (main.js and the lobby take them from here)
+export { sanitizeWar, warSides, warHills, menuPlan, planOf } from './warmap.js';   // (main.js and the lobby take them from here)
 import { matchlog } from './matchlog.js';
 import { highlights } from './highlights.js';
 import { WarUI } from './warui.js';

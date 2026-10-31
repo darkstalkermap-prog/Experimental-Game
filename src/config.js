@@ -367,11 +367,18 @@ export const WAR = {
 // yard. `plan` is how the armies' hills are grouped: one digit per side, the number of armies on it ('11' a duel, '22' two against two, '1111' a
 // free-for-all, '31' three lords in co-op against one AI general); `hills` is their sum (2 to 4: warmap.js). From the match's sides (warHills in warmode.js).
 export const WAR_WORLD = { on: false, hills: 2, plan: '11' };
-export const setWarWorld = (v) => {
-  WAR_WORLD.on = !!v;
+// the plan a switch value stands for ('22', or a number of hills, or true: two), '' for no War Mode world. main.js keys its worlds by it: a world whose hills
+// were laid out for another plan is built again (two hills for a match of four armies would put two of them on one hill)
+export const warPlanOf = (v) => {
+  if (!v) return '';
   let plan = typeof v === 'string' ? v.replace(/[^1-4]/g, '').slice(0, 4) : '1'.repeat(Math.max(2, Math.min(4, v === true ? 2 : v | 0)));
-  let n = [...plan].reduce((a, c) => a + +c, 0);
-  if (plan.length < 2 || n > 4) { plan = '1'.repeat(Math.max(2, Math.min(4, n))); n = plan.length; }
-  WAR_WORLD.plan = v ? plan : '11';
-  WAR_WORLD.hills = v ? n : 2;
+  const n = [...plan].reduce((a, c) => a + +c, 0);
+  if (plan.length < 2 || n > 4) plan = '1'.repeat(Math.max(2, Math.min(4, n)));
+  return plan;
+};
+export const setWarWorld = (v) => {
+  const plan = warPlanOf(v);
+  WAR_WORLD.on = !!plan;
+  WAR_WORLD.plan = plan || '11';
+  WAR_WORLD.hills = [...WAR_WORLD.plan].reduce((a, c) => a + +c, 0);
 };
