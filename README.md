@@ -1153,7 +1153,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   ready, a bot hero always is, and the timer still ends the preparation by itself. The Hero Game Mode's 30 seconds can be
   skipped the same way; the practice courtyard has no preparation.
 - **Concede / Next battle** (K, twice to confirm, or the button in the game menu) is offered, never forced, when a battle is
-  decided: your keep has fallen; or you are one of the last two castles and the other is clearly winning (the rule and the
+  decided: your keep has fallen; or you are one of the last two castles (castles left empty do not count) and the other is clearly winning (the rule and the
   numbers are `DECIDED` in `src/flow.js`; not while your Last Stand can still be called, that comes first); or, the other way round, you are clearly winning, and the button says **Finish
   the war** (a victory at once). Conceding ends the match as a defeat with its own end screen (it skips any finishing show).
   Online, a lord who is out may **Leave · Next battle** while the war goes on for the others; the host never ends a battle
@@ -1162,7 +1162,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   **timed war**. Its tempo is faster, by a `mods` source named `length:short`: a shorter preparation (36 s), a wave every 21 s
   instead of 30, and soldiers and engines that grow tougher a quarter quicker. And at **12:00 of play the strongest house
   wins**: the castles that still stand, then the health of their keeps, then the kills, then the soldiers alive (a dead heat is
-  a draw; allied lords count as one side). A war that is won sooner ends sooner; the top panel shows the time left, with a word
+  a draw; allied lords count as one side; a castle left empty is no side at all). A war that is won sooner ends sooner; the top panel shows the time left, with a word
   of warning at three minutes and at one. Why a clock and not the pace alone: in bot-vs-bot wars (see `LENGTHS` in
   `src/config.js`) the lords hold out, with the comeback rules even more than before: the first castle of a Standard war fell
   after about 12 minutes and only two wars in six were over within 30, while in Short wars the clock decided all six. A

@@ -1640,12 +1640,13 @@ export class Game {
 
   // How the sides stand: a side is a house, or the houses that fight together (co-op). A war that runs out of time is decided on, in this order: the castles that
   // still stand, the health of their keeps, the kills, the soldiers alive. (Keeps within half a percent count as equal. In King of the Hill the seconds held on the
-  // hill count before all of that.)
+  // hill count before all of that. A castle left empty is nobody's side: its keep is whole because nobody ever had a reason to attack it, and it used to win
+  // the verdict, or tie with another empty one for a draw.)
   warStandings() {
     const groups = [];
     const seen = new Set();
     for (const side of this.sides) { groups.push(side.slice()); for (const t of side) seen.add(t); }
-    for (const f of this.factions) if (!seen.has(f.team)) groups.push([f.team]);
+    for (const f of this.factions) if (!seen.has(f.team) && !f.empty) groups.push([f.team]);
     return groups.map((teams) => {
       const fs = teams.map((t) => this.factions[t]);
       const standing = fs.filter((f) => !f.castle.fallen);
@@ -1668,8 +1669,8 @@ export class Game {
   // The clock has run out: the war is decided on points. No show: nothing falls, the horn sounds and the screen comes up.
   timeUp() {
     const [best, next] = this.warStandings();
-    const draw = Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
-    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.`;
+    const draw = !!next && Game.standsAbove(best, next) === 0;   // (every count equal: nobody is ahead)
+    const reason = draw ? 'Time is up, and nobody is ahead: the war ends in a draw.' : next ? `Time is up. ${best.name} is ahead with ${Game.whyAhead(best, next)}.` : `Time is up. ${best.name} holds the field.`;
     const winner = draw ? -1 : best.teams[0];
     matchlog.record('timeup', { winner });
     this.audio.play('horn', this.camera.position);
