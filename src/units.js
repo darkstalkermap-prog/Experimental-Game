@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL } from './config.js';
 import { buildSoldier, poseSoldier, poseDeath, buildHorse, poseHorse, poseHorseDead, SADDLE_Y, rigSetTier, rigSetRank } from './models.js';
-import { navigate, avoidCastles } from './nav.js';
+import { navigate, avoidCastles, keepSpot, outOfKeep } from './nav.js';
 import { clamp } from './noise.js';
 import { attackDirsFor } from './combat.js';
 import { allied } from './teams.js';
@@ -316,7 +316,7 @@ export class Unit {
         const fx = Math.sin(hero.yaw), fz = Math.cos(hero.yaw);
         const back = 3 + row * F.sz + (W ? W.back : 0), side = col * F.sx + (W ? W.side : 0);
         tmp.set(hero.pos.x - fx * back + fz * side, 0, hero.pos.z - fz * back - fx * side);
-        this.goal = tmp.clone();
+        this.goal = outOfKeep(g.castleAt(tmp), tmp, this.radius).clone();   // (his place behind a lord who stands with his back to a keep is at its foot)
         engage = this.ranged ? Math.min(this.range, 32) : 10;
         anchor = hero.pos; leash = 18;
         break;
@@ -329,6 +329,7 @@ export class Unit {
           const row = Math.floor(this.slot / F.cols), col = (this.slot % F.cols) - (F.cols - 1) / 2;
           const fx = Math.sin(d.yaw), fz = Math.cos(d.yaw);
           this.goal = new THREE.Vector3(d.pos.x + fz * col * F.sx - fx * row * F.sz, 0, d.pos.z - fx * col * F.sx - fz * row * F.sz);
+          this.goal = outOfKeep(g.castleAt(this.goal), this.goal, this.radius);
         }
         // a shield wall holds its line: it only fights what comes within arm's reach
         const wall = (this.warForm ? !!this.warForm.brace : fac.formation === 'shieldwall') && !this.ranged;
@@ -393,7 +394,8 @@ export class Unit {
     }
 
     // pick the walking waypoint
-    const dest = this.target ? this.target.pos : this.goal;
+    // (a keep is struck from a spot of one's own along its walls, not by walking at its middle: nav.js keepSpot)
+    const dest = this.target ? (this.target.kind === 'keep' ? keepSpot(this.target, this, this.keepPt || (this.keepPt = new THREE.Vector3())) : this.target.pos) : this.goal;
     if (dest && !this.post) {
       this.waypoint = navigate(g, this, dest);
       if (this.blockedBy && this.blockedBy.alive && !allied(this.blockedBy.team, this.team)) {
@@ -483,6 +485,11 @@ export class Unit {
   }
 
   distTo(t) {
+    if (t.kind === 'keep' && t.collider) {
+      // the keep is a big square: how far to its wall, not to a circle round its middle (which leaves its corners out of reach)
+      const k = t.collider;
+      return Math.hypot(Math.max(k.minX - this.pos.x, 0, this.pos.x - k.maxX), Math.max(k.minZ - this.pos.z, 0, this.pos.z - k.maxZ));
+    }
     return Math.hypot(t.pos.x - this.pos.x, t.pos.z - this.pos.z) - (t.radius || 0.4);
   }
 
@@ -555,7 +562,9 @@ export class Unit {
       const d = this.distTo(tgt);
       // archers with nothing to shoot help batter the gate by hand
       const reach = tgt.isStructure ? (this.ranged ? 2.2 : this.range) + 0.6 : this.range;
-      if (d <= reach && (!this.ranged || tgt.isStructure || this.los)) {
+      // (at a keep he strikes from his own spot along its wall, not from the first bit of wall he comes to: see keepSpot)
+      const atSpot = tgt.kind !== 'keep' || !this.keepPt || Math.hypot(this.keepPt.x - this.pos.x, this.keepPt.z - this.pos.z) < 3;
+      if (d <= reach && atSpot && (!this.ranged || tgt.isStructure || this.los)) {
         face = tgt.pos;
         if (this.attackTimer <= 0 && this.swingT < 0) this.startAttack();
         else if (this.isHero && !this.mounted && !tgt.isStructure && this.swingT < 0) moving = this.circle(tgt, d, dt);
