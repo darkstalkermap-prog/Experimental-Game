@@ -107,7 +107,7 @@ export class Finale {
     const g = this.g;
     if (this.active || g.state !== 'playing' || g.mode !== 'single' || g.hero || g.practice || g.objective === 'koth' || settings.finale === 0) return;
     const L = g.localTeam;
-    if (allied(castle.team, L) || g.castles.some((c) => c !== castle && !c.fallen && !allied(c.team, L))) return;
+    if (allied(castle.team, L) || g.castles.some((c) => c !== castle && !c.fallen && !allied(c.team, L) && !(g.factions[c.team] && g.factions[c.team].empty))) return;   // (a castle left empty is no rival)
     this.moment = { t: 0, called: false };
   }
 
