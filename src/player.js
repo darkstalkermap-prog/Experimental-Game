@@ -442,6 +442,10 @@ export class Player {
     this.climb = null; this.climbing = false; this.climbCd = 0;
     this.duck = 0; this.ducking = false; this.height = BODY.height; this.eye = BODY.eye;
     this.cancelAim(); this.endScope();
+    // whatever the fall cut short ends with it: a stagger, a swing or a Power Shot being drawn (it would loose itself at the keep), a
+    // guard; and a guest's run (its end must not be reported to the host after the rise, where it would end the next run at once)
+    this.staggerT = 0; this.atk = null; this.blocking = false; this.drawT = 0; this.power = null; this.zoomed = false; this.castFlash = 0;
+    this.rushEnd = false; this.wasRush = false;
     this.spawnSeq++;
     if (this.viewModel) this.viewModel.visible = true;
     this.mounted = false;
