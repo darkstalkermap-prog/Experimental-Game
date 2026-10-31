@@ -79,7 +79,8 @@ const FRAG_COLOR = `
   // The bump is taken from screen derivatives, which see 2x2 pixels at a time: where a texel of the fine layer is smaller than a pixel the bump
   // of that layer turns to blocky, pixel-sized grain (gravel roads read as noise). It is given up as its texels shrink below a pixel.
   float texPx = length(fwidth(p)) * 220.0;                   // texels of the 2.3 m tile (512 texels) per pixel
-  float bumpK = 1.0 - smoothstep(0.8, 2.6, texPx);
+  float bumpK = 1.0 - smoothstep(1.1, 3.4, texPx);
+  float pebK = 1.0 - smoothstep(2.0, 6.0, texPx);              // (the pebbles are about twice as coarse: their relief reaches farther)
   // the ground layers are read from above, and on a slope also from the side (blended by the normal), so a bank is not smeared into streaks
   vec3 tw = pow(abs(N), vec3(4.0)); tw /= tw.x + tw.y + tw.z;
   vec4 n2 = texture2D(uNoise, p * 0.021 + vec2(0.57, 0.29));
@@ -113,7 +114,8 @@ const FRAG_COLOR = `
 
   // trampled earth round the castles, the bare hill, the practice yard's sand
   float soil = d1.g * (0.6 + d2.g * 0.8);
-  vec3 earth = mix(P_EARTH_A, P_EARTH_B, soil);
+  float soilC = smoothstep(0.2, 0.8, soil);                  // (the albedo carries the grain where the bump has to let it go: a little more contrast)
+  vec3 earth = mix(P_EARTH_A, P_EARTH_B, soilC);
   earth = mix(earth, P_EARTH_PEBBLE, smoothstep(0.55, 0.9, peb) * 0.6 * fine);
   float mc = smoothstep(0.3, 0.7, vMask.x + (n3.r - 0.5) * 0.5);
   col = mix(col, earth, mc);
@@ -143,12 +145,12 @@ const FRAG_COLOR = `
   float road = 1.0 - smoothstep(2.0, 3.5, edge);
   float rut = (1.0 - smoothstep(0.12, 0.42, abs(abs(rs) - 0.85))) * road;
   float worn = (1.0 - smoothstep(0.1, 0.55, abs(rs))) * road;
-  vec3 roadCol = mix(P_ROAD_A, P_ROAD_B, soil);
-  roadCol = mix(roadCol, P_ROAD_PEBBLE, smoothstep(0.62, 0.92, peb) * 0.7 * fine);
+  vec3 roadCol = mix(P_ROAD_A, P_ROAD_B, soilC);
+  roadCol = mix(roadCol, P_ROAD_PEBBLE, smoothstep(0.55, 0.88, peb) * 0.75 * fine);
   roadCol *= 1.0 - 0.45 * rut;
   roadCol = mix(roadCol, roadCol * 1.18 + 0.01, worn * 0.5);
   col = mix(col, roadCol, road * 0.95);
-  bump = mix(bump, (peb * 0.03 * bumpK - rut * 0.07) * fine + soilBump, road);
+  bump = mix(bump, (peb * 0.05 * pebK - rut * 0.07) * fine + soilBump, road);
   // wetter, darker ground along the road
   col *= 1.0 - 0.22 * (1.0 - smoothstep(3.0, 7.0, rd)) * (1.0 - road);
 
