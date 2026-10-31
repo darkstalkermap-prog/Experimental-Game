@@ -74,7 +74,8 @@ Press **P** for the practice panel (the mouse is free while it is up, and the ya
   were sent in with, and the panel tells how many damage per second each group does, each and in all, so kinds, ranks and tiers can be compared.
 - **Dummies**: the armour of the row, the crowd and the far targets, and which stands are filled: a **ladder** (one of each armour, side by side),
   a **row of five** (alike: the fair test for soldiers, who choose the nearest dummy), a **crowd of twelve** (for the Whirlwind, fireballs and the
-  volley) and **far targets** (46 and 56 m). **Reset counters** starts the counting again.
+  volley), **far targets** (46 and 56 m) and three **on the far wall** (63 m up on its top: heads over the stone for the Ranger's Sniper Shot, and
+  a wall walk the Berserker's Leap can reach). **Reset counters** starts the counting again.
 
 The yard is part of the world, so entering and leaving it rebuilds the map (the small one); it is single player only.
 
@@ -260,15 +261,21 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     circle you, looking for your side.
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
-  attack and **R** is a defence. The numbers are in `src/classes.js`.
+  attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
   - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). He carries a tall kite shield (so do knight
     soldiers and the AI lords), painted with your arms; in first person it is carried low and turned aside, and on guard its top
     sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash**: lunge forward
     and slam your shield into everything ahead for heavy damage, a long stun and a shove. **R Bulwark**: for 5 s
     you take 70% less damage and can't be staggered; allies beside you take 40% less.
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
-    spin for a second and cut everyone around you three times. **R Blood Rage**: for 7 s you heal for half the
-    damage you deal, can't be staggered and hit 25% harder.
+    spin for a second and cut everyone around you three times. **R Leap** (11 s): hold R and a circle on the ground shows
+    where you will land, up to 120 m away (as far as a Mage's Fireball flies: `FIREBALL_RANGE` in `src/config.js`); let go and you
+    leap there in a high arc over the soldiers (longer leaps go higher, up to 7 m over the line, and take up to 2.3 s; nothing staggers
+    you in the air). Walls, towers and hills in the way cut the leap short in front of them (the circle turns to the warning colour), and
+    it never ends on an enemy castle's walls or towers, inside anything, or more than 6 m above where it began (no leaping up a
+    cliff); an enemy's walls are never leapt over, whatever the arc. Your own wall walk is fine. Landing slams the ground: 2.2x
+    your sword damage at the centre (half that at the rim of 5 m), a 1 s stagger (0.7 s for a hero) and soldiers thrown back. Not on
+    horseback. Numbers: `LEAP` in `src/classes.js`.
   - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter: her bow makes the most of **headshots**
     (any hero's arrow in the top sixth of a body deals double damage, 1.5x into a hero, with its own sharp sound and a
     skull over the cross: every class's bow does it, but the Ranger hits hardest and Eagle Eye adds more). **Piercing
@@ -276,10 +283,12 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     arrows hit engineers, siege crews and engines 50% harder, and an arrow comes back to the quiver every 4 s.
     **Q Power Shot**: the bow is drawn to the full and held (half a second, walking slowly), then a heavy arrow flies
     flat and fast through every soldier in its line, throwing them back and staggering them; a hero it hits is
-    staggered. Shields don't stop it; walls do. **R Snare Trap**: throw a trap where you look (up to 15 m). A moment
-    after it lands it is armed; the first enemy to step in it is rooted for 2 s (a hero can still fight, but not walk)
-    and the enemies within 4.5 m are slowed. Two traps at most; each lies for 45 s. The old **Arrow Volley** is the
-    tree's tier-4 talent. Numbers: `RANGER` in `src/classes.js`.
+    staggered. Shields don't stop it; walls do. **R Sniper Shot** (13 s): hold R and the bow comes up to your eye: the view
+    zooms in to an 11 degree field (about 7 times) behind a spyglass ring, the string is drawn in 0.6 s, and the aim sways, then
+    settles to a quarter of the sway after 1.2 s (held past 5 s it starts to waver again, and it looses itself at 9 s). Let go of R,
+    or click, and one heavy arrow flies flat at 150 m/s out to 120 m (as far as a Fireball), then falls like any arrow: 3.2 full
+    arrows of damage, and a headshot multiplies it as usual. Let go before it is drawn and nothing is spent. Not on horseback. The
+    old **Arrow Volley** is the tree's tier-4 talent. Numbers: `RANGER` in `src/classes.js`.
   - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
     flies where you aim and explodes on impact, burning gates and engines too. Stone walls shelter anyone behind
     them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
@@ -305,8 +314,9 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
   speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Berserker's Whirlwind strikes
-  once more, the Ranger's headshots and Piercing Shots hit harder and her traps hold longer and Mark their catch (and
-  her capstone trades Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
+  once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
+  hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
+  Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
   to more foes, the Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
   to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
   own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
@@ -699,7 +709,8 @@ a soldier has about 3.4 times the health and damage of a round-one soldier and a
 **The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
 alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
 rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
-looses Power Shot down the line with the most men in it and throws a Snare Trap in front of whoever closes in on her), they retreat
+looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
+close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
 fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty.
 They do not climb, duck or drive engines.
@@ -1102,7 +1113,6 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
-| `src/rangertrap.js` | How the Ranger's Snare Trap looks on every screen: thrown, lying open, snapping shut |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |

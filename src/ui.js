@@ -75,6 +75,12 @@ export function renderClassPicker(root, info, selected, onPick) {
   pick(selected);
 }
 
+const AIM_HINTS = {
+  volley: 'Release Q to loose the volley · R or Esc: cancel',
+  leap: 'Release R to leap · Q or Esc: cancel',
+  scope: 'Let go of R or click to loose · let go early to lower the bow',
+};
+
 export class UI {
   constructor() {
     this.game = null;
@@ -861,7 +867,7 @@ export class UI {
   updateAbilities(dt) {
     const p = this.game.player;
     if (!this.abilEls) {
-      const mk = (id) => { const r = $(id); return { r, ic: r.querySelector('.ic'), nm: r.querySelector('.nm'), cd: r.querySelector('.cd'), sec: r.querySelector('.sec') }; };
+      const mk = (id) => { const r = $(id); return { r, ic: r.querySelector('.ic'), nm: r.querySelector('.nm'), kind: r.querySelector('.kind'), cd: r.querySelector('.cd'), sec: r.querySelector('.sec') }; };
       this.abilEls = { q: mk('abilQ'), r: mk('abilR') };
     }
     if (this.abilClass !== p.classId || this.abilRev !== p.talentRev) {   // (a talent can put another ability in a slot)
@@ -870,6 +876,7 @@ export class UI {
         const d = abilityOf(p, slot), e = this.abilEls[slot];
         e.ic.textContent = d.icon;
         e.nm.textContent = d.name;
+        if (e.kind) e.kind.textContent = d.kind || (slot === 'q' ? 'Attack' : 'Defence');   // (the Berserker's Leap and the Ranger's Sniper Shot are R, but attacks)
         e.r.title = `${d.name} (${d.cd} s): ${d.desc}`;
       }
     }
@@ -881,10 +888,16 @@ export class UI {
       const sec = cd > 0 ? String(Math.ceil(cd)) : '';
       if (e.sec.textContent !== sec) e.sec.textContent = sec;
       e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
-      e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power));   // (the volley's circle, or Power Shot being drawn)
+      e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power) || (slot === 'r' && !!p.scope));   // (a circle being placed, Power Shot being drawn, the scope up)
     }
-    const aim = !!p.aiming;
-    if (aim !== this.aimShown) { this.aimShown = aim; $('aimhint').classList.toggle('hidden', !aim); }
+    // the hint under the crosshair: which key lets it go (the volley's Q, the Leap's R, the Sniper Shot's R) and how to call it off
+    const aim = p.aiming ? (abilityOf(p, p.aiming.slot).id === 'leap' ? 'leap' : 'volley') : p.scope ? 'scope' : '';
+    if (aim !== this.aimShown) {
+      this.aimShown = aim;
+      const el = $('aimhint');
+      el.classList.toggle('hidden', !aim);
+      if (aim) el.textContent = AIM_HINTS[aim];
+    }
     this.buffT = (this.buffT || 0) - dt;
     if (this.buffT <= 0) {
       this.buffT = 0.12;

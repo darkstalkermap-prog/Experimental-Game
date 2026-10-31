@@ -1,15 +1,16 @@
 // Hero classes. Every hero picks one of six classes before the battle; each has its own strengths and two abilities:
-// Q is an attack, R is a defence. The abilities are simulated where the world is (single player or host);
+// Q is an attack, R a second ability (mostly a defence; the Berserker's Leap and the Ranger's Sniper Shot are not). The abilities are simulated where the world is (single player or host);
 // their look and sound is replayed on every screen.
 import * as THREE from 'three';
-import { SPELLS, VOLLEY, TEAM_COLORS } from './config.js';
+import { SPELLS, VOLLEY, TEAM_COLORS, FIREBALL_RANGE, WORLD } from './config.js';
 import { GroundFX } from './groundfx.js';
-import { TrapLooks } from './rangertrap.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
 import { talentFx } from './talents.js';
 import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
+
+const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
 
 export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'cavalier'];
 
@@ -29,7 +30,7 @@ export const CLASSES = {
     mods: { hp: 1.1, armor: -1, speed: 1.07, melee: 1.3, bow: 0.6, spell: 1, bloodied: 0.15 },
     passive: 'Below half health you hit 15% harder.',
     q: { id: 'whirl', icon: '🌀', name: 'Whirlwind', cd: 9, desc: 'Spin with your blade for a second, cutting everyone around you three times.' },
-    r: { id: 'bloodrage', icon: '🩸', name: 'Blood Rage', cd: 18, desc: 'For 7 s you heal for half the damage you deal, cannot be staggered and hit 25% harder.' },
+    r: { id: 'leap', icon: '⤴', name: 'Leap', cd: 11, aimed: true, kind: 'Attack', desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
@@ -37,7 +38,7 @@ export const CLASSES = {
     mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8, marksman: 1 },
     passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
     q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
-    r: { id: 'trap', icon: '🕸', name: 'Snare Trap', cd: 14, desc: 'Throw a snare trap where you look (up to 15 m). The first enemy to step in it is rooted for 2 s, and the enemies around it are slowed.' },
+    r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, kind: 'Attack', desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -77,11 +78,19 @@ export const RANGER = {
   // through every soldier in its line, each taking `dmg` full arrows, thrown back `knock` m/s and staggered `stagger` s; a hero is
   // staggered `hero` s
   power: { draw: 0.55, speed: 95, grav: 0.3, dmg: 1.6, knock: 9, stagger: 0.6, hero: 0.8 },
-  // Snare Trap: thrown up to `range` m; it lands after `flight` s and is armed `arm` s later. The first enemy to come within `radius` m
-  // is rooted for `root` s, and the enemies within `slowR` m are slowed by `slow` for `slowT` s. A Ranger has `max` traps out at
-  // most, and each lasts `life` s
-  trap: { range: 15, flight: 0.5, arm: 0.5, radius: 1, root: 2, slowR: 4.5, slow: 0.45, slowT: 3, life: 45, max: 2 },
+  // Sniper Shot: hold R and the bow comes up to the eye; the view narrows to `fov` degrees over `zoomT` s and the arrow is drawn in `draw` s.
+  // The aim sways by `sway` radians at first and settles to `steady` of that over `settle` s; held past `tire` s it grows again (and is
+  // loosed at `hold` s at the latest). The arrow flies at `speed` m/s with `grav` of an arrow's gravity, flat out to `range` m (the
+  // Fireball's: Projectiles.FIREBALL_RANGE), then falls as any arrow does; it deals `dmg` fully drawn arrows (a headshot multiplies it)
+  snipe: { fov: 11, zoomT: 0.3, draw: 0.6, sway: 0.006, steady: 0.25, settle: 1.2, tire: 5, hold: 9, speed: 150, grav: 0.1, range: FIREBALL_RANGE, dmg: RANGER_SNIPE_DMG },
 };
+
+// The Berserker's Leap: hold R for a circle where he will land (up to `range` m: as far as a Fireball flies), let go and he leaps there.
+// The arc rises `apex` m above the line (from `apexMin`, `apexK` m more for every metre of the leap, up to `apexMax`) and takes as long
+// as a body falling under `grav` m/s² would; a leap is at least `min` m, and ends at most `up` m higher than it began (not up a cliff). Walls, towers and hills in the way cut it short, and it never
+// ends on an enemy castle's walls or towers or inside anything. The landing slams the ground: `dmg` of his melee damage (less toward the
+// edge, `edge` at the rim) to every foe within `radius` m, who is staggered `stagger` s (a hero `hero` s) and thrown back `knock` m/s.
+export const LEAP = { range: FIREBALL_RANGE, min: 3, up: 6, apexMin: 2, apexK: 0.055, apexMax: 7, grav: 11, dmg: 2.2, edge: 0.5, radius: 5, stagger: 1, hero: 0.7, knock: 10 };
 
 // Arrow Volley, the Ranger's old Q: a tier-4 talent (talents.js) puts it back in Power Shot's place.
 export const VOLLEY_Q = { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' };
@@ -107,11 +116,18 @@ SOUNDS.powershot = (a, k) => {   // a heavy string and the arrow tearing the air
   a.noise(0.35, 1800, 0.7, 0.3 * k, 'bandpass');
   a.noise(0.2, 5000, 1, 0.12 * k, 'highpass', 0.05);
 };
-SOUNDS.trapThrow = (a, k) => { a.noise(0.14, 1100, 1, 0.15 * k, 'bandpass'); a.tone(900, 0.06, 0.06 * k, 'square', 0.8, 0.45); };
-SOUNDS.trapSnap = (a, k) => {    // iron jaws slamming shut
-  a.tone(1400, 0.12, 0.2 * k, 'square', 0.4);
-  a.noise(0.08, 3200, 2, 0.4 * k, 'highpass');
-  a.tone(240, 0.18, 0.25 * k, 'triangle', 0.6, 0.02);
+SOUNDS.snipe = (a, k) => {   // a heavy string, and a thin high whistle as the arrow goes far
+  a.tone(130, 0.32, 0.32 * k, 'triangle', 0.45);
+  a.noise(0.18, 2400, 1.2, 0.26 * k, 'bandpass');
+  a.tone(3600, 0.5, 0.05 * k, 'sine', 0.6, 0.05);
+};
+// The Berserker's Leap: a grunt and a rush of air going up; the slam is a deep thump with stone cracking under it.
+SOUNDS.leap = (a, k) => { a.tone(110, 0.22, 0.25 * k, 'sawtooth', 0.6); a.noise(0.4, 900, 0.8, 0.22 * k, 'bandpass'); };
+SOUNDS.slam = (a, k) => {
+  a.tone(55, 0.6, 0.5 * k, 'sine', 0.4);
+  a.tone(90, 0.35, 0.3 * k, 'triangle', 0.5, 0.01);
+  a.noise(0.45, 500, 0.6, 0.45 * k, 'lowpass');
+  a.noise(0.12, 2600, 2, 0.22 * k, 'highpass', 0.03);
 };
 
 // Experience for the support classes: a Healing Light earns this share of the health it really restores in others (up
@@ -160,14 +176,17 @@ export class Buffs {
 }
 
 export const BUFF_NAMES = {
-  guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Blood Rage', ghost: 'Evading',
+  guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Fury', ghost: 'Evading',
   ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', snap: 'Cold Snap',
-  rooted: 'Snared', slow: 'Slowed', marked: 'Marked',
+  leaping: 'Leaping',
 };
 
 const ZERO = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const SEE_THROUGH = new Set(['tree']);   // a trunk does not stop you putting a volley on the ground behind it
+const LAND_H = [0.3, 1, 1.7];   // (the heights a landing Berserker's body is tested at, and the ring round his middle)
+const LAND_RING = [1, 0, -1, 0, 0, 1, 0, -1];
+const WALL_KINDS = new Set(['wall', 'gate', 'lintel', 'tower', 'keep', 'yard']);   // (the stone a Leap does not go over: Abilities.overWall)
 const v3 = (p) => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100];
 const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
 const C = {
@@ -186,10 +205,8 @@ export class Abilities {
     this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a volley coming down
     this.rising = [];   // a record of each climbing arrow of a volley while it is in the air (the arrows are drawn by Projectiles.showArrow)
     this.burning = [];  // foes a fireball set alight (Mage talent)
-    this.trails = [];   // looks that follow a hero for a moment (the dust of a charge)
-    this.traps = [];    // the Rangers' snare traps on the ground (where the battle is run)
+    this.trails = [];   // looks that follow a hero for a moment (the dust of a charge, a Berserker in the air)
     this.gfx = new GroundFX(game);   // the glyphs, shells and columns of light the abilities draw (see groundfx.js)
-    this.trapLook = new TrapLooks(game);   // the Snare Traps as they look (rangertrap.js)
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
   }
@@ -204,7 +221,7 @@ export class Abilities {
     // (a guest says where its eyes are: never more than a step from where the host has its hero)
     const eye = p.eyePos(this.tmpv);
     if (cam.distanceToSquared(eye) > 9) cam = eye.clone();
-    this[def.id](p, cam, dir.clone().normalize(), at);
+    if (this[def.id](p, cam, dir.clone().normalize(), at) === false) { p.abilCd[slot] = 0; return false; }   // (a leap with nowhere to go)
     return true;
   }
 
@@ -218,6 +235,10 @@ export class Abilities {
         if (e.n >= e.shots.length) this.active.splice(i, 1);
         continue;
       }
+      if (e.kind === 'leap') {   // the Berserker comes down: the slam (where the leap was planned to end, whatever became of him)
+        if (e.t >= e.dur) { this.active.splice(i, 1); if (p.alive) this.slam(p, e.to); }
+        continue;
+      }
       if (!p.alive || e.t > e.dur) { if (e.kind === 'bwave') p.bwave = null; this.active.splice(i, 1); continue; }
       if (e.kind === 'whirl') {
         while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n, e.n === e.hits - 1); e.n++; }
@@ -228,13 +249,11 @@ export class Abilities {
       } else this.chargeSweep(p, e);
     }
     this.burn(dt);
-    this.updateTraps(dt);
   }
 
   // Looks that run on every screen: the glyphs on the ground, shells and columns of light, the dust behind a charging hero.
   updateFx(dt) {
     this.gfx.update(dt);
-    this.trapLook.update(dt);
     for (let i = this.rising.length - 1; i >= 0; i--) { this.rising[i].t += dt; if (this.rising[i].t > 0.9) this.rising.splice(i, 1); }
     for (let i = this.trails.length - 1; i >= 0; i--) {
       const e = this.trails[i];
@@ -242,6 +261,15 @@ export class Abilities {
       const w = e.who;
       if (e.t > e.dur || !w || w.alive === false) { this.trails.splice(i, 1); continue; }
       e.acc += dt;
+      if (e.leap) {   // a Berserker in the air: a streak of red embers and dust off him, every 50 ms
+        while (e.acc > 0.05) {
+          e.acc -= 0.05;
+          this.tmpv.set(w.pos.x, w.pos.y + 1.1, w.pos.z);
+          this.g.fx.fireTrail(this.tmpv);
+          if (Math.random() < 0.4) this.g.fx._dust(this.tmpv, 1, 0.4, '');
+        }
+        continue;
+      }
       while (e.acc > 0.04) {   // (a puff of dust and a glint every 40 ms, wherever the hero is now)
         e.acc -= 0.04;
         const fx = this.g.fx, x = w.pos.x, y = w.pos.y, z = w.pos.z;
@@ -362,13 +390,125 @@ export class Abilities {
     this.emit('whirl', p.pos, ZERO, null, reach);
   }
 
-  bloodrage(p) {
-    const t = 7 + talentFx(p, 'rageTime', 0);
-    p.buffs.add('lifesteal', t, 0.5 * talentFx(p, 'rageSteal', 1));
-    p.buffs.add('steady', t);
-    p.buffs.add('rage', t, 1.25 + talentFx(p, 'rageDmg', 0));
-    p.heal(p.maxHp * 0.1);
-    this.emit('rage', p.pos, ZERO);
+  // ---------- Berserker: the Leap ----------
+  // The arc of a leap of d metres (up by dy): how high it bulges over the straight line, and how long it takes (as long as a body
+  // thrown that high takes to fall back under LEAP.grav). Every screen works it out the same way.
+  leapArc(d) {
+    const L = LEAP;
+    const apex = Math.min(L.apexMax, L.apexMin + L.apexK * d);
+    return { apex, dur: Math.max(0.45, Math.sqrt((8 * apex) / L.grav)) };
+  }
+
+  // Where a Leap from `from` (his feet) toward `want` (the spot he chose) really ends. It is held to the reach; cut short in front of
+  // whatever is in the arc's way (a wall, a tower, a merlon of the enemy's, a hill); and stepped back, a metre at a time, from a landing
+  // that is not open ground (inside something, or up on an enemy castle's walls and towers). Returns { from, to, apex, dur, d, cut }
+  // (to: his feet when he lands), or null when there is no leap to make (a wall right in front of him). The hero's own screen moves him
+  // along it (Player.move); where the battle is run the slam comes at `to` when the time is up. A guest's leap is planned again on the
+  // host, from where the host has him, so a guest cannot leap further than anyone else, or into a wall.
+  leapPlan(p, from, want) {
+    const L = LEAP, phys = this.g.physics;
+    let dx = want.x - from.x, dz = want.z - from.z, d = Math.hypot(dx, dz);
+    if (d < 0.01) { dx = Math.sin(p.yaw); dz = Math.cos(p.yaw); d = L.min; } else { dx /= d; dz /= d; }
+    d = Math.min(L.range, Math.max(L.min, d));
+    const footY = Math.max(from.y, Number.isFinite(want.y) ? want.y : from.y) + 1.5;   // (the highest ground under the end of the arc, below this)
+    let cut = false, ty = 0, tx = 0, tz = 0;
+    for (let tries = 0; tries < 6; tries++) {
+      // the landing: stepped back until it is open ground
+      for (;;) {
+        if (d < L.min - 1e-6) return null;
+        tx = from.x + dx * d; tz = from.z + dz * d;
+        ty = phys.groundHeight(tx, tz, footY, p.team);
+        if (ty - from.y <= L.up && this.leapLandOk(p, tx, ty, tz)) break;
+        d -= 1; cut = true;
+      }
+      // the arc: the first sample that meets something cuts it short a metre before it
+      const { apex } = this.leapArc(d);
+      const n = Math.max(4, Math.ceil(d / 0.5));
+      let block = -1;
+      for (let i = 1; i < n; i++) {
+        const s = i / n, x = from.x + dx * d * s, z = from.z + dz * d * s;
+        const y = from.y + (ty - from.y) * s + 4 * apex * s * (1 - s);
+        if (y + 0.5 < phys.terrainHeight(x, z) || phys.pointHit(x, y + 0.5, z, p.team) || phys.pointHit(x, y + 1.6, z, p.team) || this.overWall(p, x, z, tx, ty, tz)) { block = s; break; }
+      }
+      if (block < 0) {
+        const { dur } = this.leapArc(d);
+        return { from: from.clone(), to: new THREE.Vector3(tx, ty, tz), apex, dur, d, cut };
+      }
+      d = d * block - 1; cut = true;
+    }
+    return null;
+  }
+
+  // Walls are not leapt over, however high the arc: one that passes over an enemy castle's wall, gate, tower or keep (or the practice
+  // yard's walls) is stopped by it, unless the leap ends up on top of that very stone (the yard's wall top: an enemy's battlements are
+  // refused by leapLandOk). Your own castle's stone does not stop you: its walls are too high to clear from the ground anyway, and from
+  // the wall walk you may leap down outside.
+  overWall(p, x, z, lx, ly, lz) {
+    const g = this.g, phys = g.physics;
+    for (const c of g.castles) {
+      if (!c || allied(c.team, p.team) || !c.inFootprint({ x, z }, 1)) continue;
+      if (this.overStone(c.bucket.list, x, z, lx, ly, lz, p.team)) return true;
+    }
+    const cell = phys.grid.get(phys.gridKey(Math.floor(x / phys.cell), Math.floor(z / phys.cell)));
+    return !!cell && this.overStone(cell, x, z, lx, ly, lz, p.team);
+  }
+  overStone(list, x, z, lx, ly, lz, team) {
+    const phys = this.g.physics;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ || !c.active || !WALL_KINDS.has(c.kind)) continue;
+      if (c.kind === 'gate' && phys.lets(c, team)) continue;
+      const top = c.heightFn ? c.heightFn(x, z) : c.top;
+      const onIt = lx >= c.minX && lx <= c.maxX && lz >= c.minZ && lz <= c.maxZ && ly >= top - 0.1;   // (the leap ends up on this stone)
+      if (!onIt) return true;
+    }
+    return false;
+  }
+
+  // Is this open ground for a leap to end on? Inside the world, nothing solid where the body would be, and not on top of an enemy
+  // castle's walls, towers or keep (his own are fine: he may leap up onto his own wall walk).
+  leapLandOk(p, x, y, z) {
+    const g = this.g, phys = g.physics, lim = WORLD.playHalf - 1;
+    if (Math.abs(x) > lim || Math.abs(z) > lim) return false;
+    for (const h of LAND_H) {
+      if (phys.pointHit(x, y + h, z, p.team)) return false;
+      for (let k = 0; k < 4; k++) if (phys.pointHit(x + LAND_RING[k * 2] * p.radius, y + h, z + LAND_RING[k * 2 + 1] * p.radius, p.team)) return false;
+    }
+    if (y > phys.terrainHeight(x, z) + 0.4) {   // (raised ground: a wall walk, a tower roof, a ramp ...)
+      for (const c of g.castles) if (c && !allied(c.team, p.team) && c.inFootprint({ x, z }, 1)) return false;
+    }
+    return true;
+  }
+
+  // Leap (the Berserker's R). The hero's own screen has already set him flying along the plan (Player.useAbility: p.leap); a guest's
+  // hero is planned here again. The slam comes when the arc ends (update: kind 'leap').
+  leap(p, cam, dir, at) {
+    let plan = p.leap && p.leap.t === 0 ? p.leap : null;
+    if (!plan) plan = this.leapPlan(p, p.pos, at || this.aimPoint(cam, dir, LEAP.range, p.team).pos);
+    if (!plan) return false;
+    p.buffs.add('leaping', plan.dur);
+    p.buffs.add('steady', plan.dur + 0.2);   // (nothing staggers him out of the air)
+    this.active.push({ kind: 'leap', p, t: 0, dur: plan.dur, to: plan.to.clone() });
+    this.emit('leap', plan.from, flat(new THREE.Vector3(plan.to.x - plan.from.x, 0, plan.to.z - plan.from.z)), [plan.to]);
+    return true;
+  }
+
+  // The landing: the ground is slammed. Damage falls off toward the rim; everyone in it is staggered and the soldiers thrown back.
+  slam(p, at) {
+    const g = this.g, L = LEAP;
+    const reach = talentFx(p, 'leapRadius', 1), radius = L.radius * reach;
+    const dmg = p.meleeDmg * L.dmg * talentFx(p, 'leapDmg', 1), stun = talentFx(p, 'leapStun', 0);
+    this.eachFoe(p.team, at.x, at.z, radius, (o, d) => {
+      g.damage(o, dmg * (1 - (1 - L.edge) * Math.min(1, d / radius)), p, { melee: true, splash: true, charge: 1, ability: 'Leap' });
+      if (!o.alive) return;
+      if (o.stagger) o.stagger((o.isPlayer ? L.hero : L.stagger) + stun, { pos: at });
+      if (o.vel && !o.isPlayer && !o.isGiant && !o.isSiege) {
+        const l = d || 1;
+        o.vel.x += ((o.pos.x - at.x) / l) * L.knock; o.vel.z += ((o.pos.z - at.z) / l) * L.knock;
+      }
+    }, at.y, 3);
+    p.swingT = 0.3; p.attackDir = 'over';
+    this.emit('slam', at, ZERO, null, reach);
   }
 
   // ---------- Ranger ----------
@@ -460,65 +600,17 @@ export class Abilities {
     this.emit('power', from, dir);
   }
 
-  // Snare Trap: thrown at the spot under the crosshair (or as far as it goes); it lands, and a moment later it is armed.
-  trap(p, cam, dir) {
-    const T = RANGER.trap;
-    const r = this.aimPoint(cam, dir, T.range, p.team);
-    const at = r.pos;
-    const dx = at.x - p.pos.x, dz = at.z - p.pos.z, d = Math.hypot(dx, dz);
-    if (d < 1.5) { at.x = p.pos.x + Math.sin(p.yaw) * 1.5; at.z = p.pos.z + Math.cos(p.yaw) * 1.5; }   // (never at your own feet)
-    at.y = this.g.physics.groundHeight(at.x, at.z, Math.max(at.y, p.pos.y) + 0.5);
-    const mine = this.traps.filter((t) => t.p === p);
-    if (mine.length >= T.max) this.dropTrap(mine[0], false);   // the oldest is taken up again
-    const tr = { p, team: p.team, pos: at.clone(), t: 0, armAt: T.flight + T.arm, life: T.life, sprung: false };
-    this.traps.push(tr);
-    this.emit('trap', at, flat(dir), [p.eyePos(new THREE.Vector3())]);
-  }
-
-  // the traps that are out: a foe who steps into an armed one is caught (simulated where the battle is run)
-  updateTraps(dt) {
-    const T = RANGER.trap;
-    for (let i = this.traps.length - 1; i >= 0; i--) {
-      const tr = this.traps[i];
-      tr.t += dt;
-      if (tr.t >= tr.life) { this.dropTrap(tr, false); continue; }
-      if (tr.t < tr.armAt) continue;
-      let caught = null, best = Infinity;
-      this.eachFoe(tr.team, tr.pos.x, tr.pos.z, T.radius, (o, d) => { if (!o.isSiege && !o.isTowerArcher && d < best) { best = d; caught = o; } }, tr.pos.y, 1.6);
-      if (caught) this.spring(tr, caught);
-    }
-  }
-
-  spring(tr, o) {
-    const T = RANGER.trap, p = tr.p, g = this.g;
-    const root = T.root + talentFx(p, 'trapRoot', 0);
-    this.root(o, root);
-    const bite = talentFx(p, 'trapDmg', 0);   // Iron Jaws (Ranger talent)
-    if (bite) g.damage(o, bite, p, { splash: true, ability: 'Snare Trap' });
-    const mark = talentFx(p, 'trapMark', null);   // Hunter's Mark (Ranger talent): the caught foe takes more from arrows for a while
-    if (mark && o.alive) this.mark(o, mark.time, mark.dmg);
-    const slowR = T.slowR * talentFx(p, 'trapSlowR', 1);
-    this.eachFoe(tr.team, tr.pos.x, tr.pos.z, slowR, (f) => { if (f !== o && !f.isSiege) this.slow(f, T.slowT, T.slow); }, tr.pos.y, 3);
-    this.dropTrap(tr, true);
-  }
-
-  // rooted: a soldier stops where it is (units.js rootT); a hero cannot walk (Player.move) but can still fight
-  root(o, t) {
-    if (o.isPlayer) { o.buffs.add('rooted', t); o.dash = null; } else if (o.rootT !== undefined) o.rootT = Math.max(o.rootT, t);
-  }
-  slow(o, t, by) {
-    if (o.isPlayer) o.buffs.add('slow', t, by); else if (o.snareT !== undefined) { o.snareT = Math.max(o.snareT, t); o.snareMul = 1 - by; }
-  }
-  mark(o, t, mul) {   // (Projectiles reads markUntil and markMul; a hero also sees it among their effects)
-    o.markUntil = this.g.time + t; o.markMul = mul;
-    if (o.isPlayer) o.buffs.add('marked', t, mul);
-  }
-
-  // a trap goes: sprung (snapped shut on a foe) or taken up (it has lain too long, or its Ranger set another)
-  dropTrap(tr, sprung) {
-    const i = this.traps.indexOf(tr);
-    if (i >= 0) this.traps.splice(i, 1);
-    this.emit(sprung ? 'snap' : 'trapgone', tr.pos, ZERO);
+  // Sniper Shot: the hero has already held the bow to the eye (Player.tickScope); this looses the one heavy arrow, along where the
+  // scope was (the sway and all). It flies flat and fast out to the Fireball's reach (Projectiles: opts.snipe), then falls as any arrow.
+  snipe(p, cam, dir) {
+    const S = RANGER.snipe;
+    const from = cam.clone().addScaledVector(dir, 0.6);
+    from.y -= 0.05;
+    const dmg = p.bowDmg * S.dmg * talentFx(p, 'snipeDmg', 1);
+    const pierce = talentFx(p, 'snipePierce', null);   // Deadeye (Ranger talent): on through the first body into one more
+    this.g.projectiles.fireArrow(from, dir.clone().multiplyScalar(S.speed), p.team, dmg, p, false, 'Sniper Shot', pierce ? { snipe: 1, pierce } : { snipe: 1 });
+    p.swingT = 0.6; p.attackDir = 'over';
+    this.emit('snipe', from, dir);
   }
 
   // ---------- Mage ----------
@@ -778,14 +870,31 @@ export class Abilities {
         snd('swing');
         break;
       }
-      case 'rage': {
-        gf.glyph('pulse', at.x, at.y, at.z, 3.4, 0xff3a22, 1.2, { strength: 1.8 });
-        gf.glyph('rune', at.x, at.y, at.z, 2.4, 0xff4a2a, 1.6, { arms: 4, team: house, strength: 1.5 });
-        gf.glyph('shock', at.x, at.y, at.z, 5.5, 0xff6a40, 0.7, { team: house });
-        for (let i = 0; i < 6; i++) fx.fireTrail(this.tmpv.set(at.x + (Math.random() - 0.5) * 1.2, at.y + 0.3 + Math.random() * 1.4, at.z + (Math.random() - 0.5) * 1.2));
-        fx._blood(chest, 10, 0, 0);
-        fx.ring(at, 1.5, this.col.set(0xff3a22), 24, { up: 2.2, size: 0.3 });
-        snd('roar');
+      case 'leap': {
+        // the take-off: dust thrown off the ground and a burst of embers; the landing spot is marked until he comes down, and every
+        // screen sees a streak of embers follow him through the air
+        const to = targets && targets[0];
+        fx._dust(at.clone().setY(at.y + 0.2), 12, 2.2, '');
+        gf.glyph('shock', at.x, at.y, at.z, 2.6, 0xff8a50, 0.4, { team: house });
+        if (to) {
+          const dur = this.leapArc(Math.hypot(to.x - at.x, to.z - at.z)).dur;
+          gf.glyph('rune', to.x, to.y, to.z, LEAP.radius * 0.8, 0xff5a30, dur + 0.25, { arms: 4, team: house, strength: 1.3 });
+          if (who) this.trails.push({ who, f: dir, t: 0, dur, acc: 0, leap: true });
+        }
+        snd('leap');
+        break;
+      }
+      case 'slam': {
+        const r = LEAP.radius * sz;
+        gf.glyph('shock', at.x, at.y, at.z, r * 1.25, 0xffb080, 0.6, { team: house, strength: 1.9 });
+        gf.glyph('pulse', at.x, at.y, at.z, r, 0xff4a2a, 0.75, { strength: 1.7 });
+        gf.glyph('slash', at.x, at.y, at.z, r * 0.8, 0xffd0a0, 0.5, { team: house, strength: 1.5 });
+        fx._dust(at.clone().setY(at.y + 0.2), 26, r * 0.7, '');
+        fx.ring(at, r * 0.45, this.col.set(0xffa070), 30, { up: 1.0, size: 0.42, speed: 8 });
+        fx._sparks(chest, 16);
+        fx.crater(at, 1.8 * sz);
+        if (g.camfx) g.camfx.boom(at, 0.8);
+        snd('slam');
         break;
       }
       case 'power': {
@@ -796,23 +905,14 @@ export class Abilities {
         snd('powershot');
         break;
       }
-      case 'trap': {
-        // the trap flies from the Ranger's hand (targets[0]: the eyes) to where it lands
-        const from = targets && targets[0] ? targets[0] : at.clone().setY(at.y + 1.5);
-        this.trapLook.throw(from, at, Math.atan2(dir.x, dir.z), RANGER.trap.flight);
-        snd('trapThrow');
+      case 'snipe': {
+        // a sharp crack and a puff of air at the bow; the arrow itself, with its long bright streak, is drawn by Projectiles on every screen
+        const f = this.tmpv.copy(dir).normalize();
+        fx.flash(at.clone().addScaledVector(f, 0.5), this.col.set(0xe8f6d0), 1.8, 0.12, 0.6);
+        fx.ring(at.clone().addScaledVector(f, 0.7), 0.2, this.col.set(0xf0f8e0), 12, { up: 0.2, size: 0.15, speed: 6 });
+        snd('snipe');
         break;
       }
-      case 'snap': {
-        this.trapLook.snap(at);
-        gf.glyph('shock', at.x, at.y, at.z, 1.6, 0xd8c8a0, 0.35, { strength: 1.6 });
-        gf.glyph('pulse', at.x, at.y, at.z, RANGER.trap.slowR, 0x9ad08a, 0.7, { team: house });
-        fx._sparks(at.clone().setY(at.y + 0.3), 10);
-        fx._dust(at.clone().setY(at.y + 0.15), 8, 1.2, '');
-        snd('trapSnap');
-        break;
-      }
-      case 'trapgone': this.trapLook.gone(at); break;
       case 'volley': {
         // a flight of arrows leaves the bow and climbs out of sight; the circle stays marked on the ground until they land
         snd('bow');

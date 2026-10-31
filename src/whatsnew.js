@@ -12,6 +12,8 @@ export const UPDATES = [
       'Your field army has its own limit of 50 soldiers, apart from the garrison\'s (shown as Army 32/50 · Garrison 18/36).',
       'War Mode: every player always starts on their own hill, in front of their own army, far from the enemy (also after Play Again and online).',
       'War Mode online with four players: free-for-all, two against two, or together against the AI.',
+      'Berserker: Blood Rage is gone. His R is now Leap: hold R to mark a spot as far as a Mage\'s Fireball flies, let go and he leaps there over the soldiers and slams the ground. Walls stop him. New talents: Earthshaker and Death from Above.',
+      'Ranger: her R is now Sniper Shot: hold R and the view zooms in far, steadies, and one heavy arrow flies flat as far as a Fireball (a headshot counts). The Snare Trap is gone; new talents: Hawk\'s Scope and Deadeye.',
     ],
   },
   {
@@ -34,7 +36,7 @@ export const UPDATES = [
       'Bigger, clearer text on the battle screen, on darker panels, and a UI scale slider in Options (80 to 140 %).',
       'The key reminders show in your first two battles. After that press I to see them again.',
       'Headshots: any hero\'s arrow in the head deals double damage (1.5x into a hero), with a skull marker.',
-      'The Ranger is reworked: stronger headshots, arrows that pierce, Power Shot (Q), Snare Trap (R), arrows that come back over time and a new talent tree.',
+      'The Ranger is reworked: stronger headshots, arrows that pierce, Power Shot (Q), arrows that come back over time and a new talent tree.',
       'War Mode: every army starts on its own hill, your army waits for your orders, the chosen group is marked over their heads, and new orders like Bannerlord: Move here (where you look), Follow me, Charge, Hold, Advance, Fall back and four formations.',
       'King of the Hill: a bar shows how long every house has held the hill.',
       'Up close, a castle shows how much its keep, gate and walls can still take.',

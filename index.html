@@ -143,6 +143,14 @@
   #crosshair.bow { width: 30px; height: 30px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; }
   #crosshair.bow::before { left: 14px; top: 9px; height: 10px; }
   #crosshair.bow::after { top: 14px; left: 9px; width: 10px; }
+  /* the Ranger's Sniper Shot: a spyglass ring over the zoomed view (player.js showScope), fine cross lines that stop short of the middle */
+  #scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at 50% 50%, transparent 0, transparent 40vmin, rgba(30,22,12,0.92) 40.6vmin, rgba(8,6,4,0.97) 43vmin, #050403 60vmin); }
+  #scope.on { display: block; }
+  #scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 80vmin; height: 80vmin; transform: translate(-50%,-50%); border-radius: 50%;
+    box-shadow: inset 0 0 0 2px rgba(196,160,92,0.55), inset 0 0 6vmin rgba(0,0,0,0.55);
+    background: linear-gradient(to right, transparent calc(50% - 0.5px), rgba(20,16,10,0.75) calc(50% - 0.5px), rgba(20,16,10,0.75) calc(50% + 0.5px), transparent calc(50% + 0.5px)) center / 1px 100% no-repeat,
+      linear-gradient(to bottom, transparent calc(50% - 0.5px), rgba(20,16,10,0.75) calc(50% - 0.5px), rgba(20,16,10,0.75) calc(50% + 0.5px), transparent calc(50% + 0.5px)) center / 100% 1px no-repeat; }
+  #scope::after { content: ''; position: absolute; left: 50%; top: 50%; width: 9vmin; height: 9vmin; transform: translate(-50%,-50%); border-radius: 50%; background: radial-gradient(circle, rgba(0,0,0,0) 0, rgba(0,0,0,0) 60%, transparent 61%); box-shadow: 0 0 0 1px rgba(20,16,10,0.35); }
   kbd { display: inline-block; min-width: 20px; padding: 1px 5px; margin-right: 4px; border: 1px solid rgba(255,255,255,0.45); border-bottom-width: 2px; border-radius: 3px; font: 600 14px/1.2 'EB Garamond', Georgia, serif; text-align: center; background: rgba(0,0,0,0.45); color: #fff; }
   #prompt { position: absolute; left: 50%; top: calc(50% + 90px); transform: translateX(-50%); padding: 6px 14px; background: rgba(0,0,0,0.6); border: 1px solid var(--edge); border-radius: 4px; font-size: 17px; }
   #prompt kbd { font-size: 14px; }
@@ -790,6 +798,7 @@
 
 <div id="hud" class="hidden">
   <div id="vignette"></div>
+  <div id="scope"></div>
   <div id="crosshair"></div>
   <div id="feedback"></div>
   <div id="drawbar"><div id="drawFill"></div></div>

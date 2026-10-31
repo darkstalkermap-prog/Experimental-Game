@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { allied } from './teams.js';
-import { TEAM_COLORS } from './config.js';
+import { TEAM_COLORS, SPELLS } from './config.js';
 import { F, R } from './fxtex.js';
 import { RANGER } from './classes.js';
 import { talentFx } from './talents.js';
@@ -111,7 +111,7 @@ export class Projectiles {
   // Straight-line fireball (no gravity) that bursts on the first thing it meets.
   fireSpell(kind, from, vel, team, dmg, owner, radius = 0) {
     const fx = this.game.fx, s = 0.8 + radius / 6;
-    const e = { kind: 'fireball', spell: true, pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 3, radius,
+    const e = { kind: 'fireball', spell: true, pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: SPELLS.fireball.life, radius,
       hitSet: new Set(), glow: null };
     // the glow, the white-hot heart and the flame streaming behind: all fly the straight track on their own
     const G = fx.add, t = 3.2;
@@ -159,13 +159,16 @@ export class Projectiles {
 
   // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands.
   // opts (the Ranger's arrows): pierce: the shares of the damage for the bodies after the first that it goes on into (Piercing
-  // Shots); power: a Power Shot, flying flat through everyone in its line, throwing soldiers back and staggering heroes.
+  // Shots); power: a Power Shot, flying flat through everyone in its line, throwing soldiers back and staggering heroes; snipe: a
+  // Sniper Shot, flat and very fast out to the Fireball's reach (then it falls as any arrow does), with a long bright streak.
   fireArrow(from, vel, team, dmg, owner, big = false, ability = '', opts = null) {
-    const power = !!(opts && opts.power);
-    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: 6, big, tr: -1, trb: 0, ability,
-      grav: power ? RANGER.power.grav : 1, power, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null };
+    const power = !!(opts && opts.power), snipe = !!(opts && opts.snipe), S = RANGER.snipe;
+    const flatT = snipe ? S.range / S.speed : 0;   // (how long a Sniper Shot flies flat)
+    const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: snipe ? flatT + 2.5 : 6, big, tr: -1, trb: 0, ability,
+      grav: power ? RANGER.power.grav : snipe ? S.grav : 1, power, flatT, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null };
     const fx = this.game.fx;
-    fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075);
+    if (snipe) fx.tracer(from, vel, flatT, this.tracerColor(team), 0.55, 0.06, 0.035, G_ARROW * S.grav);   // (long and bright, while it flies flat)
+    else fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075, G_ARROW * e.grav);
     e.tr = fx._to; e.trb = fx._tb;
     this.list.push(e);
   }
@@ -199,6 +202,10 @@ export class Projectiles {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];
       p.life -= dt;
+      if (p.flatT > 0 && (p.flatT -= dt) <= 0) {   // a Sniper Shot at the end of its reach: it falls from here on, its streak gone
+        p.grav = 1;
+        if (p.tr >= 0) { this.game.fx.endTracer(p.tr, p.trb); p.tr = -1; }
+      }
       const grav = p.spell ? 0 : p.kind === 'arrow' ? G_ARROW * p.grav : G_ROCK;
       // short enough steps that a fast arrow can never jump over a 0.5 m merlon, even on a slow frame
       const steps = Math.min(12, Math.max(p.kind === 'arrow' || p.spell ? 3 : 2, Math.ceil(p.vel.length() * dt / 0.25)));
@@ -341,7 +348,7 @@ export class Projectiles {
   }
 
   // An arrow strikes a body. Any hero's arrow (every class can take up the bow) does double in the head (less in a hero's); the
-  // Ranger's do more into siege crews (and Eagle Eye adds to her headshots); and every arrow hits a foe Marked by a Ranger's trap harder. A Power Shot throws a soldier back and staggers a hero.
+  // Ranger's do more into siege crews (and Eagle Eye adds to her headshots). A Power Shot throws a soldier back and staggers a hero.
   arrowHit(p, hit, at) {
     const g = this.game, o = p.owner, marks = !!(o && o.mods && o.mods.marksman);
     g.audio.play('arrowHit', at);
@@ -354,7 +361,6 @@ export class Projectiles {
       dmg *= (big ? RANGER.headshotHero : RANGER.headshot) + talentFx(o, big ? 'headshotHero' : 'headshot', 0);
     }
     if (marks && (hit.isCrew || hit.crewOf)) dmg *= RANGER.siege;
-    if (hit.markUntil > g.time) dmg *= hit.markMul;
     g.damage(hit, dmg, o, { ranged: true, dir: p.vel, ability: p.ability, head, power: p.power });
     if (!p.power || !hit.alive) return;
     const P = RANGER.power, l = Math.hypot(p.vel.x, p.vel.z) || 1;

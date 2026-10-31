@@ -30,11 +30,12 @@ export const TUNE = {
     whirlCd: 0.2,          // Dervish: a quicker recharge, and no slow while whirling
     reaper: 0.015,         // Reaper: the share of your health a Whirlwind heals per foe it hits ...
     reaperFoes: 5,         //   ... for up to this many foes in one strike
-    rageSteal: 0.4,        // Bloodthirst: more of the damage you deal comes back as health
+    leapRadius: 0.3,       // Earthshaker: a wider slam when a Leap lands ...
+    leapStun: 0.4,         //   ... that staggers for this many seconds longer
     bloodied: 0.1,         // Battle Scars: the damage bonus below half health ...
     hp: 0.1,               //   ... and health
-    rageTime: 3,           // Endless Fury: seconds added to Blood Rage ...
-    rageDmg: 0.1,          //   ... and more damage during it (on top of 25%)
+    leapDmg: 0.3,          // Death from Above: a harder slam ...
+    leapCd: 0.25,          //   ... and a quicker recharge
     tithe: 0.08,           // Blood Tithe (alternative to Reaper): the share of your health the last strike of a Whirlwind gives back (Reaper gives 1.5% a foe, a strike)
   },
   ranger: {
@@ -43,9 +44,9 @@ export const TUNE = {
     pierce: [0.85, 0.7, 0.5],   // Bodkin Points: what a fully drawn arrow deals to the second, third and fourth body it goes into (70% and 50% without it, and no fourth)
     qDmg: 0.25, qCd: 0.25, // Heavy Draw: Power Shot (or the Volley) hits harder and recharges sooner
     speed: 0.06, draw: 0.1,        // Fleet-Footed: faster on foot, and the bow draws quicker
-    trapRoot: 1,           // Iron Jaws: seconds added to the Snare Trap's hold ...
-    trapDmg: 35,           //   ... and the damage of its bite
-    mark: { time: 5, dmg: 1.3 },   // Hunter's Mark: a foe caught in your trap takes this much more from arrows for this long
+    scope: { fov: 0.65, settle: 0.5, sway: 0.6 },   // Hawk's Scope: Sniper Shot zooms in to this share of the field of view, steadies in this share of the time and sways this much
+    snipeDmg: 0.3, snipeCd: 0.25,  // Deadeye: Sniper Shot hits harder and recharges sooner ...
+    snipePierce: [0.7],    //   ... and goes on through the first body into one more, for this share of the damage
     aim: { draw: 0.75, speed: 1.25 },   // Steady Aim (alternative to Arrow Volley): zoomed in (right mouse), the bow draws in this share of the time and the arrow flies this much faster
   },
   mage: {
@@ -108,7 +109,7 @@ export const TALENTS = [
   { id: 'kn_avenge', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', icon: '⚔', name: 'Avenging Wall',
     desc: `While Bulwark stands, a melee attacker takes ${pc(K.reflect)} of the blow back.`, fx: { reflect: K.reflect } },
 
-  // ---------- Berserker: Whirlwind | Blood Rage (the capstone is under Dervish) ----------
+  // ---------- Berserker: Whirlwind | Leap (the capstone is under Dervish) ----------
   { id: 'bz_cyclone', cls: 'berserker', br: 'q', tier: 1, needs: null, icon: '🌪', name: 'Cyclone',
     desc: `Whirlwind reaches ${pc(Z.whirlRadius)} further.`, fx: { whirlRadius: 1 + Z.whirlRadius } },
   { id: 'bz_storm', cls: 'berserker', br: 'q', tier: 2, needs: 'bz_cyclone', icon: '🌀', name: 'Blade Storm',
@@ -118,15 +119,15 @@ export const TALENTS = [
   { id: 'bz_reaper', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', icon: '☠', name: 'Reaper',
     desc: `Every foe a Whirlwind hits heals you for ${pc(Z.reaper)} of your health (up to ${Z.reaperFoes} foes a strike).`,
     fx: { reaper: { heal: Z.reaper, foes: Z.reaperFoes } } },
-  { id: 'bz_thirst', cls: 'berserker', br: 'r', tier: 1, needs: null, icon: '🩸', name: 'Bloodthirst',
-    desc: `Blood Rage heals ${pc(Z.rageSteal)} more of the damage you deal.`, fx: { rageSteal: 1 + Z.rageSteal } },
-  { id: 'bz_scars', cls: 'berserker', br: 'r', tier: 2, needs: 'bz_thirst', icon: '💢', name: 'Battle Scars',
+  { id: 'bz_quake', cls: 'berserker', br: 'r', tier: 1, needs: null, icon: '💥', name: 'Earthshaker',
+    desc: `A Leap's landing slams ${pc(Z.leapRadius)} wider and staggers ${Z.leapStun} s longer.`, fx: { leapRadius: 1 + Z.leapRadius, leapStun: Z.leapStun } },
+  { id: 'bz_scars', cls: 'berserker', br: 'r', tier: 2, needs: 'bz_quake', icon: '💢', name: 'Battle Scars',
     desc: `+${pc(Z.hp)} health, and below half health you hit ${pc(Z.bloodied)} harder still.`,
     mods: { mul: { hp: 1 + Z.hp }, add: { bloodied: Z.bloodied } } },
-  { id: 'bz_endless', cls: 'berserker', br: 'r', tier: 3, needs: 'bz_scars', icon: '🔥', name: 'Endless Fury',
-    desc: `Blood Rage lasts ${Z.rageTime} s longer and hits ${pc(Z.rageDmg)} harder.`, fx: { rageTime: Z.rageTime, rageDmg: Z.rageDmg } },
+  { id: 'bz_meteor', cls: 'berserker', br: 'r', tier: 3, needs: 'bz_scars', icon: '☄', name: 'Death from Above',
+    desc: `A Leap's slam hits ${pc(Z.leapDmg)} harder, and Leap recharges ${pc(Z.leapCd)} sooner.`, fx: { leapDmg: 1 + Z.leapDmg, cd_leap: 1 - Z.leapCd } },
 
-  // ---------- Ranger: headshots, piercing and Power Shot | Snare Trap (the capstone, Arrow Volley in Power Shot's place, is under Heavy Draw) ----------
+  // ---------- Ranger: headshots, piercing and Power Shot | Sniper Shot (the capstone, Arrow Volley in Power Shot's place, is under Heavy Draw) ----------
   { id: 'rg_eagle', cls: 'ranger', br: 'q', tier: 1, needs: null, icon: '👁', name: 'Eagle Eye',
     desc: `Headshots deal ${R.headshot + 2}x damage instead of 2x (${R.headshotHero + 1.5}x into a hero instead of 1.5x).`, fx: { headshot: R.headshot, headshotHero: R.headshotHero } },
   { id: 'rg_bodkin', cls: 'ranger', br: 'q', tier: 2, needs: 'rg_eagle', icon: '🗡', name: 'Bodkin Points',
@@ -138,10 +139,11 @@ export const TALENTS = [
     desc: 'Q becomes Arrow Volley instead of Power Shot: hold Q to put a circle on the ground, let go and a volley of arrows rains down on it.', fx: { volleyQ: true } },
   { id: 'rg_light', cls: 'ranger', br: 'r', tier: 1, needs: null, icon: '👢', name: 'Fleet-Footed',
     desc: `+${pc(R.speed)} speed, and the bow draws ${pc(R.draw)} faster.`, mods: { mul: { speed: 1 + R.speed, draw: 1 - R.draw } } },
-  { id: 'rg_jaws', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '🦷', name: 'Iron Jaws',
-    desc: `The Snare Trap holds ${R.trapRoot} s longer and bites for ${R.trapDmg} damage.`, fx: { trapRoot: R.trapRoot, trapDmg: R.trapDmg } },
-  { id: 'rg_mark', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_jaws', icon: '📍', name: "Hunter's Mark",
-    desc: `A foe caught in your trap is Marked: arrows hit them ${pc(R.mark.dmg - 1)} harder for ${R.mark.time} s.`, fx: { trapMark: R.mark } },
+  { id: 'rg_hawk', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '🦅', name: "Hawk's Scope",
+    desc: `Sniper Shot zooms in ${pc(1 - R.scope.fov)} further, steadies ${pc(1 - R.scope.settle)} sooner and sways ${pc(1 - R.scope.sway)} less.`, fx: { scope: R.scope } },
+  { id: 'rg_deadeye', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_hawk', icon: '🎯', name: 'Deadeye',
+    desc: `Sniper Shot hits ${pc(R.snipeDmg)} harder, recharges ${pc(R.snipeCd)} sooner and goes on through the first body into one more (${pc(R.snipePierce[0])}).`,
+    fx: { snipeDmg: 1 + R.snipeDmg, cd_snipe: 1 - R.snipeCd, snipePierce: R.snipePierce } },
 
   // ---------- Mage: Fireball | Frost Ward (the capstone is under Glacial Burst) ----------
   { id: 'mg_blast', cls: 'mage', br: 'q', tier: 1, needs: null, icon: '💥', name: 'Greater Blast',
