@@ -405,10 +405,11 @@ export class Abilities {
     const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
     const f = plan ? plan.f : flat(dir);
     if (p.dash) p.dash.fresh = false;
-    if (!plan) { this.bashHit(p, f); return; }
+    // no room to run, or a foe already at the shield (the host's copy of a guest may be closer to one than the guest's screen shows):
+    // the bash at once
+    if (!plan || this.rushOver(p, { t: 0, dur: 1, chk: 1, f, last: p.pos }, 0)) { this.bashHit(p, f); if (p.dash && p.dash.rush) p.dash = null; return; }
     const dur = plan.d / this.rushSpeed(p, 'bash') + 0.3;
     p.buffs.add('charging', dur);
-    p.rushEnd = false;
     this.active.push({ kind: 'rush', p, t: 0, dur, f, chk: 0.25, last: p.pos.clone() });
     this.emit('rush', p.pos, f, [plan.to]);
   }

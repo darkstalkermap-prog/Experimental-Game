@@ -1158,8 +1158,8 @@ export class Player {
         // sets off at once on his own screen and the host checks it again (Abilities.bash / lancecharge)
         if (this.climb || this.leap) { g.audio.play('deny'); return; }
         const plan = g.abilities.rushPlan(this, this.pos, at || g.abilities.aimPoint(this.eyePos(), dir, RUSH.range, this.team).pos);
-        if (!plan) {
-          if (def.id === 'bash') { this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break; }   // (a wall at his nose: the old short lunge and the bash)
+        if (!plan || (def.id === 'bash' && this.foeAhead({ x: plan.f.x, z: plan.f.z }))) {
+          if (def.id === 'bash') { this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break; }   // (a wall at his nose, or a foe at the shield: the old short lunge and the bash)
           g.audio.play('deny'); if (this.isLocal) this.notify('No room to charge there.'); return;
         }
         const v = g.abilities.rushSpeed(this, def.id);
