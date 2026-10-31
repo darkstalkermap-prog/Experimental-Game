@@ -4,7 +4,7 @@ import { WORLD } from './config.js';
 import { box } from './materials.js';
 import { SUN_DIR, createAtmosphere } from './atmosphere.js';
 import { ShadowRig } from './shadows.js';
-import { Terrain } from './terrain.js';
+import { Terrain, rockCover } from './terrain.js';
 import { Foliage } from './foliage.js';
 import { placeScenery } from './scenery.js';
 import { active, treeSlot } from './biomes.js';
@@ -36,17 +36,26 @@ export function followShadow(sun, focus) {
   if (sun.userData.rig) sun.userData.rig.follow(focus);
 }
 
+// the solid trees and rocks (scatter.js), worked out once per world: the ground under the trees (terrain.js) and the trees themselves read the same list
+const scattered = new WeakMap();
+function solidScatter(physics) {
+  let s = scattered.get(physics);
+  if (!s) scattered.set(physics, s = scatterSolid(physics));
+  return s;
+}
+
 export function createTerrain(scene, physics) {
   layoutRoads();
   // the land (play area chunks and the far mountains) lives in terrain.js; world.js keeps the roads it is drawn with
-  const terrain = new Terrain(scene, physics, { roadDist, roads: ROADS });
+  const solid = solidScatter(physics);
+  const terrain = new Terrain(scene, physics, { roadDist, roads: ROADS, trees: solid.pines.concat(solid.oaks) });
   (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(terrain);
   return terrain;
 }
 
 export function createForest(scene, physics) {
   const F = active.def.flora;
-  const { pines, oaks, rocks } = scatterSolid(physics);
+  const { pines, oaks, rocks } = solidScatter(physics);
 
   // What is drawn lives in foliage.js; this keeps only where the solid things stand. The trees stand a little way into the slope they are on.
   const terrain = (scene.userData.worldSystems || []).find((s) => s.isTerrain);
@@ -56,8 +65,13 @@ export function createForest(scene, physics) {
   };
   const scenery = terrain ? placeScenery(physics, terrain) : { trees: [], rocks: [] };
   const trees = [];
-  for (const t of pines) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: true });
-  for (const t of oaks) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: false });
+  // (those beyond the edge of the play area that stand on bare rock are not drawn: they have no collider, and on the mountain's grey face a lone
+  // tree reads as stuck on the cliff; the ones inside are solid and stay where they are, the ground under them turns to forest floor, terrain.js)
+  const P = WORLD.playHalf;
+  const shown = (t) => !terrain || Math.max(Math.abs(t.x), Math.abs(t.z)) <= P + 1 ||
+    rockCover(physics.noise, physics, t.x, t.z, physics.rawHeight(t.x, t.z), terrain.drawnSlope(t.x, t.z)) < 0.3;
+  for (const t of pines) if (shown(t)) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: true });
+  for (const t of oaks) if (shown(t)) trees.push({ x: t.x, y: t.y - sink(t), z: t.z, s: t.s, r: t.r, c: t.c, conifer: false });
   const rockItems = rocks.map((r) => ({ x: r.x, y: r.y, z: r.z, s: r.s, r: r.r, c: r.c }));
   const foliage = new Foliage(scene, trees.concat(scenery.trees), rockItems.concat(scenery.rocks));
   (scene.userData.worldSystems || (scene.userData.worldSystems = [])).push(foliage);

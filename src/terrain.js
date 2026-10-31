@@ -57,6 +57,63 @@ function bands(nz, sx, sz, amp) {
   return amp * Math.sin((sx * 0.62 + sz * 0.78) * 0.3 + 5 * nz.fbm(sx * 0.011, sz * 0.011, 2));
 }
 
+// The terms that decide where the ground is bare rock and where it is forest, shared with the trees' placement (scenery.js) so the two agree:
+// a tree only stands where the ground under it is drawn as forest floor or grass, never on a grey face.
+const rockNoise = (nz, sx, sz) => nz.fbm(sx * 0.035 + 20, sz * 0.035 - 8, 3) * 0.5 + 0.5;
+// the forest canopy painted on the mountains' foot (before the biome's own canopy factor)
+const canopyAt = (h, tl, forest, slope, rockN) =>
+  smoothstep(12, 34, h) * (1 - smoothstep(tl - 18, tl + 2, h)) * clamp(forest * 1.6 + 0.4, 0, 1) * (1 - smoothstep(1.5, 2.2, slope + 0.8 * (rockN - 0.5)));
+// the baked colour's bare rock: the steep faces, everything above the trees, and outcrops where the rock noise is high
+const bakedRock = (h, tl, slope, rockN) => Math.max(smoothstep(1.65, 2.3, slope + 0.9 * (rockN - 0.5)) * smoothstep(10, 26, h),
+  smoothstep(tl - 6, tl + 14, h) * (0.55 + 0.4 * rockN), smoothstep(0.85, 1.0, rockN) * smoothstep(0.9, 1.5, slope) * smoothstep(6, 20, h));
+
+// The ground round the play area's trees that stand on rock, as a grid of 2 m cells (0 .. 1): a disc round each such tree, a little wider than its
+// crown, so neighbours join into one patch. Only trees on ground that would be drawn as rock add to it (on the meadow a tree changes nothing).
+const COVER_CELL = 2;
+function buildCover(trees, physics, P) {
+  const nz = physics.noise, n = Math.ceil((2 * P + 24) / COVER_CELL) + 1, x0 = -P - 12, a = new Float32Array(n * n);
+  const g = (x, z) => Math.hypot(physics.rawHeight(x + 1, z) - physics.rawHeight(x - 1, z), physics.rawHeight(x, z + 1) - physics.rawHeight(x, z - 1)) / 2;
+  let any = false;
+  for (const t of trees) {
+    if (Math.max(Math.abs(t.x), Math.abs(t.z)) > P + 1) continue;
+    const w = smoothstep(0.08, 0.35, rockCover(nz, physics, t.x, t.z, physics.rawHeight(t.x, t.z), g(t.x, t.z)));
+    if (w <= 0) continue;
+    any = true;
+    // the disc sits a little uphill of the foot: on a face the crown hides the ground above the foot, and a patch hanging below it would read as
+    // a smear running down the rock
+    const R = 5 * t.s, gx = physics.rawHeight(t.x + 1, t.z) - physics.rawHeight(t.x - 1, t.z), gz = physics.rawHeight(t.x, t.z + 1) - physics.rawHeight(t.x, t.z - 1);
+    const gl = Math.hypot(gx, gz) || 1, cx = t.x + 0.4 * R * gx / gl, cz = t.z + 0.4 * R * gz / gl;
+    const i0 = Math.max(0, Math.floor((cx - R - x0) / COVER_CELL)), i1 = Math.min(n - 1, Math.ceil((cx + R - x0) / COVER_CELL));
+    const j0 = Math.max(0, Math.floor((cz - R - x0) / COVER_CELL)), j1 = Math.min(n - 1, Math.ceil((cz + R - x0) / COVER_CELL));
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      const d = Math.hypot(x0 + i * COVER_CELL - cx, x0 + j * COVER_CELL - cz) / R;
+      const k = j * n + i, v = w * (1 - smoothstep(0.45, 1, d));
+      a[k] = Math.min(1, a[k] + v);   // (summed: between two trees the patch closes up)
+    }
+  }
+  return any ? { x0, n, a } : null;
+}
+// the cover at a spot (bilinear), its edge broken up by the ground's own noise
+function coverAt(c, x, z, n2) {
+  const fx = (x - c.x0) / COVER_CELL, fz = (z - c.x0) / COVER_CELL, i = Math.floor(fx), j = Math.floor(fz);
+  if (i < 0 || j < 0 || i >= c.n - 1 || j >= c.n - 1) return 0;
+  const tx = fx - i, tz = fz - j, k = j * c.n + i, a = c.a;
+  const v = (a[k] * (1 - tx) + a[k + 1] * tx) * (1 - tz) + (a[k + c.n] * (1 - tx) + a[k + c.n + 1] * tx) * tz;
+  return v > 0 ? smoothstep(0.3, 0.75, v + 0.35 * (n2 - 0.5)) : 0;
+}
+
+// How much of a spot is drawn as bare rock (0 .. 1) at any quality: the most of the baked colour (Low, Medium), the splat shader's rock on faces
+// steeper than about 60 degrees and the light shader's cracks (terrainmat.js; both read the slope from the normal, here from `slope`), all less
+// under the canopy as the shaders do. `h` is the raw height (War Mode's dressing is applied here, as groundSample does).
+export function rockCover(nz, physics, x, z, h, slope) {
+  if (physics.war) h = physics.dressHeight(x, z, h);
+  const sx = x + active.ox, sz = z + active.oz, tl = treeLineAt(nz, x, z), rockN = rockNoise(nz, sx, sz);
+  const canopy = canopyAt(h, tl, forestDensity(nz, sx, sz), slope, rockN) * active.def.canopy;
+  const steep = 1 - 1 / Math.sqrt(1 + slope * slope);   // (1 - N.y, what the shaders see)
+  const shader = Math.max(smoothstep(0.5, 0.74, steep), smoothstep(tl - 6, tl + 14, h));
+  return Math.max(bakedRock(h, tl, slope, rockN), shader) * (1 - 0.92 * canopy);
+}
+
 // The colour of the grass at a spot (the meadow, darker under the forest and thinning out towards the treeline): what the grass blades take
 export function grassBase(nz, x, z, h, base) {
   const { fbm } = nz, C = colours(), B = active.def;
@@ -111,8 +168,11 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   if (B.patch && !o.far && !physics.practice) patchW = patchAt(nz, roadDist, x, z, slope);
   const mask = o.mask;
   // the forest on the foot of the mountains: the same inputs as the trees' placement (scenery.js), so the canopy is where the trees are
-  const rockN = fbm(sx * 0.035 + 20, sz * 0.035 - 8, 3) * 0.5 + 0.5;
-  const canopy = smoothstep(12, 34, h) * (1 - smoothstep(tl - 18, tl + 2, h)) * clamp(forest * 1.6 + 0.4, 0, 1) * (1 - smoothstep(1.5, 2.2, slope + 0.8 * (rockN - 0.5))) * B.canopy;
+  const rockN = rockNoise(nz, sx, sz);
+  // under the play area's own trees where they stand on a steep face (scatter.js places them; they cannot move, they are solid): forest floor round
+  // them instead of bare rock, so a stand on the wall reads as a stand on its own patch of wood, not as dots on the stone
+  const wood = canopyAt(h, tl, forest, slope, rockN) * B.canopy, cover = o.cover ? coverAt(o.cover, x, z, n2) * B.canopy : 0;
+  const canopy = Math.max(wood, cover);
   mask[0] = castle; mask[1] = hill; mask[2] = sandW || patchW; mask[3] = canopy;
   o.alt[0] = smoothstep(tl - 6, tl + 14, h);
   o.alt[1] = smoothstep(B.snowLine - 14, B.snowLine + 8, h + 14 * (n1 - 0.5));
@@ -127,11 +187,11 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   if (patchW) all.lerp(C.patch, patchW);
   tmp.copy(C.rock).lerp(C.rockWarm, n1);
   // bare rock: patches on the steep faces (the cliffs of the wall), and everything above the trees
-  const rockW = Math.max(smoothstep(1.65, 2.3, slope + 0.9 * (rockN - 0.5)) * smoothstep(10, 26, h), smoothstep(tl - 6, tl + 14, h) * (0.55 + 0.4 * rockN),
-    smoothstep(0.85, 1.0, rockN) * smoothstep(0.9, 1.5, slope) * smoothstep(6, 20, h));
+  const rockW = bakedRock(h, tl, slope, rockN);
   tmp.multiplyScalar(0.75 + 0.35 * rockN);
   all.lerp(tmp, rockW * (1 - 0.92 * canopy));
-  all.lerp(C.forestDark, canopy * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
+  all.lerp(C.forestDark, wood * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
+  if (cover > wood) all.lerp(C.forestFloor, (cover - wood) * 0.75);   // (round a stand on the face: its floor, lighter than a whole canopy's shade)
   all.multiplyScalar(shade);
   const sn = smoothstep(B.snowLine - 14, B.snowLine + 8, h + 14 * (n1 - 0.5)) * (1 - smoothstep(0.8, 1.5, slope));
   if (sn > 0) all.lerp(C.snow, sn);
@@ -203,6 +263,7 @@ export class Terrain {
     this.level = -1;
     this.isTerrain = true;
     this.colored = false;   // the baked colours (Q.terrain 0 and 1) are made the first time they are needed
+    this.cover = env.trees ? buildCover(env.trees, physics, WORLD.playHalf) : null;
     this.buildChunks();
     this.buildFar();
     scene.add(this.group);
@@ -216,6 +277,7 @@ export class Terrain {
     const ph = this.physics, n = ph.n, H = ph.heights, res = ph.res, half = WORLD.half, P = WORLD.playHalf;
     const lo = Math.round((half - P) / res), hi = n - 1 - lo;   // node range of the play area
     const nz = ph.noise, s = makeSample();
+    s.cover = this.cover;
     const hAt = (ix, iz) => H[iz * n + clamp(ix, 0, n - 1)];
     for (let z0 = lo; z0 < hi; z0 += CHUNK) {
       for (let x0 = lo; x0 < hi; x0 += CHUNK) {
@@ -257,6 +319,7 @@ export class Terrain {
 
   buildFar() {
     const ph = this.physics, nz = ph.noise, s = makeSample(true);
+    s.cover = this.cover;
     let a = WORLD.playHalf;
     const snap = (v, m) => Math.ceil(v / m - 1e-9) * m;
     for (let k = 0; k < RINGS.length; k++) {
@@ -343,6 +406,16 @@ export class Terrain {
     return tx + tz <= 1 ? a + (b - a) * tx + (d - a) * tz : f + (d - f) * (1 - tx) + (b - f) * (1 - tz);
   }
 
+  // the slope (|grad h|) of the far mesh as it is lit at a spot beyond the play area: the normals there are differences over two of the ring's
+  // cells, so a ledge narrower than that is drawn (and coloured) as the face it sits in
+  drawnSlope(x, z) {
+    const e = Math.max(Math.abs(x), Math.abs(z)), ph = this.physics;
+    let k = 0;
+    while (k < this.rings.length - 1 && e >= this.rings[k].b) k++;
+    const c = this.rings[k].c;
+    return Math.hypot(ph.rawHeight(x + c, z) - ph.rawHeight(x - c, z), ph.rawHeight(x, z + c) - ph.rawHeight(x, z - c)) / (2 * c);
+  }
+
   // The whole baked colour of every vertex (for Q.terrain 0 and 1; the splat shader works from the other attributes and never needs it)
   bakeColors() {
     this.colored = true;
@@ -350,6 +423,7 @@ export class Terrain {
     for (const mesh of this.chunks.concat(this.far)) {
       const g = mesh.geometry, p = g.attributes.position, n = g.attributes.normal, col = g.attributes.color;
       const s = makeSample(!!mesh.userData.far, true);
+      s.cover = this.cover;
       for (let i = 0; i < p.count; i++) {
         const ny = Math.max(n.getY(i), 0.05), slope = Math.sqrt(Math.max(0, 1 - ny * ny)) / ny;
         groundSample(nz, this.roadDist, ph, p.getX(i), p.getZ(i), p.getY(i), slope, s);

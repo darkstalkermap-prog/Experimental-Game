@@ -1191,4 +1191,9 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   forest keeps clean outlines. The fine relief of the ground fades as its texels shrink below a pixel (no pixel grain on the roads),
   bare rock has an 80 m layer of plates and gullies and hillsides one of tussocks, so faces and hills 50-500 m off keep their texture;
   trees keep off faces steeper than about 45 degrees (`src/scenery.js`), and the marsh's mist banks float clear of the ground (`src/weather.js`).
+- The trees and the ground agree on where the rock is: `rockCover` in `src/terrain.js` is the bare rock the ground is drawn with at a spot (the
+  baked colour's terms and the shaders' slope test, on the slope the far mesh is lit with). The mountain forest (`src/scenery.js`) stands only
+  where it is low at the spot and round it, so the grey faces carry no lone trees; the solid trees beyond the play area that stand on rock are not
+  drawn (`src/world.js`). The play area's own trees never move (they are solid): where one stands on the face of the wall, the ground round it,
+  a little uphill of its foot, turns to forest floor (the canopy term), so a stand on the wall has its own patch of wood.
 - The graphics are stylised low-poly made from procedural textures. They aren't Bannerlord-quality assets.
