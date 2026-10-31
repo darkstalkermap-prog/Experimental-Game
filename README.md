@@ -872,7 +872,8 @@ infantry and charges with it. Each general has a temper that follows the army it
 *raider's*. Easy does none of the waiting, walls, flanking or picking: its infantry and riders charge the nearest army at once and its
 archers stay on their hill for the first 22 s (or until an enemy comes within 60 m), then come up behind the infantry, which is the old
 generals' strength. Measured AI against AI (the same armies of 200, the sides swapped every battle, four makes of army): Normal beat the
-old generals in 15 battles of 16 with 63% of its army left (they kept 2%), Hard 12 of 12, Easy 7 of 12 (22% left against their 26%).
+old generals in 15 battles of 16 with 63% of its army left (they kept 2%), Hard 12 of 12, Easy 7 of 12 (22% left against their 26%);
+Hard beat Normal in 6 of 8; in six free-for-alls of two new generals and two old ones a new one won every time.
 
 **Talents.** **N** opens the Talents panel (alone, as in Hero Mode) in the build and in the battle; B goes back to the army
 panel. A hero earns experience from kills (and a share of those of soldiers fighting near them) and 10 more for every 30

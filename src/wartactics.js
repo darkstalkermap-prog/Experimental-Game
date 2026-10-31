@@ -172,6 +172,7 @@ export const LEVELS = {
 };
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
+const BOUND_DWELL = 1.5;   // seconds a marching line stands formed at each bound before the next (General.infantry)
 
 // One AI house's general: every LEVELS.every seconds it reads the picture (Picture) and gives its groups their orders through warmode.js (formUp: a
 // group formed up and holding at a spot; charge: a group marching on an army, or on one group of it), and only when they change. It plans:
@@ -355,17 +356,19 @@ export class General {
     if (!this.L.march) { this.chargeGroup('inf', I, this.foe); return; }   // (Easy: straight at them)
     const close = this.T.close + (c.rush ? 15 : 0);
     if (this.posture === 'hold' || riders) {
-      if (contact && !riders) {
-        // the enemy has come to the line: it fights where it stands; it charges home once the enemy's infantry is spent, or the fight hangs fire
-        if (eI.n < I.n * 0.4 || (I.fight < I.n * 0.05 && w.clock - S.since > 25)) this.chargeGroup('inf', I, this.foe);
+      if (riders && gapFoot <= close && foot === eI) { this.chargeGroup('inf', I, this.foe); return; }   // (their foot is on us too: at it)
+      if (contact) {
+        // the enemy has come to the line: it fights where it stands (the line is not formed up again while it fights: its men would leave their
+        // foes to walk to new places); it charges home once the enemy's infantry is spent, or the fight hangs fire
+        if (!riders && (eI.n < I.n * 0.4 || (I.fight < I.n * 0.05 && w.clock - S.since > 25))) this.chargeGroup('inf', I, this.foe);
         return;
       }
-      if (riders && gapFoot <= close && foot === eI) { this.chargeGroup('inf', I, this.foe); return; }   // (their foot is on us too: at it)
       // on its hill (or where the riders found it), facing the enemy: a shield wall when there are archers or riders to face (the shields locked block
-      // most arrows and blows)
+      // most arrows and blows). Once formed, it turns only for a large swing of the enemy (riders wheel about: the line would shuffle at every look).
       const form = this.L.wall && (eA.n >= 8 || riders) ? 'wall' : 'line';
       const at = S.task === 'hold' && S.at ? S.at : { x: I.x, z: I.z };
-      const yaw = riders ? Math.atan2(eC.x - at.x, eC.z - at.z) : c.yaw;
+      let yaw = riders ? Math.atan2(eC.x - at.x, eC.z - at.z) : c.yaw;
+      if (S.task === 'hold' && S.at && Math.abs(Math.atan2(Math.sin(S.at.yaw - yaw), Math.cos(S.at.yaw - yaw))) < 0.8) yaw = S.at.yaw;
       this.holdGroup('inf', I, at.x, at.z, yaw, form);
       return;
     }
@@ -377,10 +380,13 @@ export class General {
     }
     // marching: in bounds, the line formed up at each; the charge from `close` metres of the enemy's foot, all together
     if (gapFoot <= close || contact) { this.chargeGroup('inf', I, this.foe); return; }
-    if (S.task !== 'bound' || this.reached(I, this.T.wait) || w.clock - S.since > 9) {
+    // (the next bound once the line has stood formed for a moment, BOUND_DWELL seconds after most of it reached its places, however often the general
+    // looks: a general who looked more often marched on as soon as the first three quarters were there, and his stragglers never caught up)
+    if (S.task === 'bound' && !S.reachedT && this.reached(I, this.T.wait)) S.reachedT = w.clock;
+    if (S.task !== 'bound' || (S.reachedT && w.clock - S.reachedT >= BOUND_DWELL) || w.clock - S.since > 9) {
       const step = Math.max(6, Math.min(22, gapFoot - close + 4));
       this.holdGroup('inf', I, I.x + c.dx * step, I.z + c.dz * step, c.yaw, 'line');
-      S.task = 'bound';
+      S.task = 'bound'; S.reachedT = 0;
     }
   }
 
