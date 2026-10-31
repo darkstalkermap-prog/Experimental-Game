@@ -94,7 +94,7 @@ export class Player {
     this.abilCd = { q: 0, r: 0 };
     this.classAt = -99;        // when this hero last changed class
     this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
-    this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks and stones while this runs)
+    this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks while this runs)
     this.castFlash = 0;        // the spell hand is raised while this runs down
     this.castColor = 0xff8a2a;
     this.drive = null;         // the siege engine this hero is steering
@@ -811,7 +811,9 @@ export class Player {
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
-    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, this.ghostT > 0) && this.mounted) {
+    // (a wedged bot slips past trunks, never through a standing stone or a rock: those are big enough to be walked round, and a hero
+    // passing through one was there for everyone to see)
+    if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, false) && this.mounted) {
       this.rideSpeed *= 0.6; // ran into a wall
     }
 
@@ -1039,6 +1041,14 @@ export class Player {
       else if (def.id === 'bash') this.useAbility(a.slot, input);   // (no room to run: the bash where he stands)
       else g.audio.play('deny');
     } else if (!input.down(key)) this.cancelAim();   // the menu opened or the window lost focus: never loose it by accident
+  }
+
+  // A hero who is down holds nothing up: the circle of an aim, the scope at the eye and its ring over the screen (Game.update, every frame he
+  // is down: a fall comes from a blow here, or in a guest's snapshot, and neither path ran through these)
+  dropAims() {
+    this.cancelAim();
+    this.endScope();
+    this.showScope(false);
   }
 
   cancelAim() {
