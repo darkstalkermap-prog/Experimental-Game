@@ -21,7 +21,7 @@ export const CLASSES = {
     blurb: 'Plate armour and a kite shield: the hardest hero to bring down.',
     mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1, bow: 0.8, spell: 1, block: 0.1 },
     passive: 'Your shield blocks 10% more of the damage from the front.',
-    q: { id: 'bash', icon: '💥', name: 'Shield Bash', cd: 9, desc: 'Lunge forward and slam your shield into everything ahead: heavy damage, knocked back and stunned.' },
+    q: { id: 'bash', icon: '💥', name: 'Shield Bash', cd: 12, aimed: true, rush: true, desc: `Hold Q to see where your charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and run at it behind your shield. The first enemy you meet takes the bash: heavy damage, knocked back and stunned, and everyone beside him too. Walls, gates and steep ground stop you; Q again bashes where you are.` },
     r: { id: 'bulwark', icon: '🛡', name: 'Bulwark', cd: 18, desc: 'Plant your shield. For 5 s you take 70% less damage and cannot be staggered; allies beside you take 40% less.' },
   },
   berserker: {
@@ -53,7 +53,7 @@ export const CLASSES = {
     blurb: 'Holy light for friend and foe. Keeps the army on its feet.',
     mods: { hp: 1, armor: 2, speed: 1, melee: 0.9, bow: 0.8, spell: 1.1, regen: 2.5 },
     passive: 'Health regenerates two and a half times faster out of combat.',
-    q: { id: 'smite', icon: '⚡', name: 'Smite', cd: 8, desc: 'Call a bolt of holy light down on the spot you are aiming at, blasting everyone near it.' },
+    q: { id: 'smite', icon: '⚡', name: 'Smite', cd: 8, desc: `Hurl a bolt of holy lightning from your open hand at whatever you are aiming at, as far as a Mage's Fireball flies (${FIREBALL_RANGE} m), blasting everyone near where it strikes.` },
     r: { id: 'heal', icon: '✚', name: 'Healing Light', cd: 14, desc: 'Heal yourself for 45% of your health and every ally within 14 m for 40% of theirs.' },
   },
   cavalier: {
@@ -61,7 +61,7 @@ export const CLASSES = {
     blurb: 'Starts with a warhorse. Rides down the enemy and keeps the whole army moving.',
     mods: { hp: 1.1, armor: 3, speed: 1, melee: 1, bow: 0.8, spell: 1, horse: true, rider: 0.7, trample: 1.25 },
     passive: 'Mounted, the horse shields you (30% less damage) and tramples 25% harder.',
-    q: { id: 'lancecharge', icon: '🐎', name: 'Lance Charge', cd: 10, desc: 'Charge straight ahead for a second at full gallop (on foot, a rush), flattening everyone in your path.' },
+    q: { id: 'lancecharge', icon: '🐎', name: 'Lance Charge', cd: 14, aimed: true, rush: true, desc: `Hold Q to see where the charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and gallop there with the lance couched (on foot, a rush), flattening everyone in your path. Walls, gates and steep ground stop you; Q again reins in.` },
     r: { id: 'rally', icon: '📯', name: 'Rally Cry', cd: 20, desc: 'A war cry for every ally within 28 m: 30% less damage taken and 25% faster for 8 s (you take 40% less).' },
   },
 };
@@ -90,6 +90,17 @@ export const RANGER = {
 // as a body falling under `grav` m/s² would; a leap is at least `min` m, and ends at most `up` m higher than it began (not up a cliff). Walls, towers and hills in the way cut it short, and it never
 // ends on an enemy castle's walls or towers or inside anything. The landing slams the ground: `dmg` of his melee damage (less toward the
 // edge, `edge` at the rim) to every foe within `radius` m, who is staggered `stagger` s (a hero `hero` s) and thrown back `knock` m/s.
+// The long charges, the Knight's Shield Bash and the Cavalier's Lance Charge: hold Q for the end of the run (as far as a Fireball flies),
+// let go and the hero runs (or gallops) along the ground there at `speed` m/s (`mounted` on a horse). The run follows the ground and stops
+// short of what is in the way: a wall, a gate that is not open to him, a trunk, a rise steeper than `climb` m in half a metre, an enemy
+// castle's stone; it is at least `min` m. The Knight's run ends at the first foe in front of him (within `reach` m of his shield): the bash.
+// The Cavalier's goes on through them. Q again ends either early.
+export const RUSH = {
+  range: FIREBALL_RANGE, min: 1.5, climb: 0.6, reach: 1.4,
+  bash: { speed: 24, mounted: 26 },
+  lance: { speed: 17, mounted: 27 },
+};
+
 export const LEAP = { range: FIREBALL_RANGE, min: 3, up: 6, apexMin: 2, apexK: 0.055, apexMax: 7, grav: 11, dmg: 2.2, edge: 0.5, radius: 5, stagger: 1, hero: 0.7, knock: 10 };
 
 // Arrow Volley, the Ranger's old Q: a tier-4 talent (talents.js) puts it back in Power Shot's place.
@@ -120,6 +131,12 @@ SOUNDS.snipe = (a, k) => {   // a heavy string, and a thin high whistle as the a
   a.tone(130, 0.32, 0.32 * k, 'triangle', 0.45);
   a.noise(0.18, 2400, 1.2, 0.26 * k, 'bandpass');
   a.tone(3600, 0.5, 0.05 * k, 'sine', 0.6, 0.05);
+};
+// Smite's lightning leaving the hand: a dry crackle (the thunder at the strike is 'zap')
+SOUNDS.crackle = (a, k) => {
+  a.noise(0.16, 4200, 0.8, 0.32 * k, 'highpass');
+  a.noise(0.08, 1800, 2, 0.2 * k, 'bandpass', 0.05);
+  a.tone(2600, 0.05, 0.06 * k, 'square', 0.4, 0.02);
 };
 // The Berserker's Leap: a grunt and a rush of air going up; the slam is a deep thump with stone cracking under it.
 SOUNDS.leap = (a, k) => { a.tone(110, 0.22, 0.25 * k, 'sawtooth', 0.6); a.noise(0.4, 900, 0.8, 0.22 * k, 'bandpass'); };
@@ -235,6 +252,11 @@ export class Abilities {
         if (e.n >= e.shots.length) this.active.splice(i, 1);
         continue;
       }
+      if (e.kind === 'rush') {   // the Knight's run: it ends in the bash (at the first foe, at the end, or where he was stopped)
+        if (!p.alive) { this.active.splice(i, 1); continue; }
+        if (this.rushOver(p, e, dt)) { this.active.splice(i, 1); this.bashHit(p, e.f); if (p.dash && p.dash.rush) p.dash = null; }
+        continue;
+      }
       if (e.kind === 'leap') {   // the Berserker comes down: the slam (where the leap was planned to end, whatever became of him)
         if (e.t >= e.dur) { this.active.splice(i, 1); if (p.alive) this.slam(p, e.to); }
         continue;
@@ -246,7 +268,10 @@ export class Abilities {
         if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
       } else if (e.kind === 'bwave') {
         if (e.t >= e.delay) { this.bulwarkWave(p, e); this.active.splice(i, 1); }
-      } else this.chargeSweep(p, e);
+      } else {
+        this.chargeSweep(p, e);
+        if (e.kind === 'charge' && this.rushOver(p, e, dt, false)) { this.active.splice(i, 1); p.buffs.del('charging'); }   // (reined in, or stopped against a wall)
+      }
     }
     this.burn(dt);
   }
@@ -325,9 +350,74 @@ export class Abilities {
   }
 
   // ---------- Knight ----------
-  bash(p, cam, dir) {
+  // ---------- the long charges (Shield Bash, Lance Charge) ----------
+  // The run along the ground from `from` toward `want`, held to the reach and cut short in front of whatever stops a man running: a rise
+  // too steep, a wall, a trunk, a gate that is not open to him, an enemy castle's stone. Returns { to, d, f } (to: where he stops) or null
+  // when there is no room to run. The hero's own screen runs him along it (Player: a dash); the host plans it again for a guest, from where
+  // it has him, and checks where he gets to (rushOver).
+  rushPlan(p, from, want) {
+    const R = RUSH, phys = this.g.physics;
+    let dx = want.x - from.x, dz = want.z - from.z, d = Math.hypot(dx, dz);
+    if (d < 0.01) { dx = Math.sin(p.yaw); dz = Math.cos(p.yaw); d = R.range; } else { dx /= d; dz /= d; }
+    d = Math.min(R.range, d);
+    let y = from.y, last = 0;
+    for (let s = 0.5; s <= d + 1e-6; s += 0.5) {
+      const x = from.x + dx * s, z = from.z + dz * s;
+      const gy = phys.groundHeight(x, z, y + 0.3, p.team);
+      if (gy > y + R.climb || phys.pointHit(x, gy + 0.6, z, p.team) || phys.pointHit(x, gy + 1.5, z, p.team) || this.overWall(p, x, z, NaN, NaN, NaN)) break;
+      y = gy; last = s;
+    }
+    if (last < d - 0.25) last = Math.max(0, last - 0.5);   // (stopped by something: a step short of it)
+    if (last < R.min) return null;
+    return { to: new THREE.Vector3(from.x + dx * last, y, from.z + dz * last), d: last, f: new THREE.Vector3(dx, 0, dz) };
+  }
+
+  // the speed of a run (m/s)
+  rushSpeed(p, id) {
+    const R = id === 'bash' ? RUSH.bash : RUSH.lance;
+    return (p.mounted ? R.mounted : R.speed) * (id === 'lancecharge' ? talentFx(p, 'chargeSpeed', 1) : 1);
+  }
+
+  // Is the run over? Its time is up, he has stopped (reined in, or held against something: no headway for a quarter of a second), or
+  // (the Knight's) a foe is right in front of his shield.
+  // A guest's hero (remote) is where its pose messages put him, which come in bursts: there the guest's own word ends the run (it sends
+  // 'rushEnd' when its screen stops him: Player.update, NetSync), or the time allowed for it, and the foe in front of the shield.
+  rushOver(p, e, dt, foes = true) {
+    if (p.rushEnd) { p.rushEnd = false; return true; }
+    if (e.t >= e.dur + (p.remote ? 0.5 : 0)) return true;
+    if (!p.remote && (e.chk -= dt) <= 0) {
+      e.chk = 0.25;
+      const moved = Math.hypot(p.pos.x - e.last.x, p.pos.z - e.last.z);
+      e.last.copy(p.pos);
+      if (e.t > 0.35 && moved < 0.6) return true;
+    }
+    if (!foes) return false;
+    let hit = false;
+    const x = p.pos.x + e.f.x * 1.2, z = p.pos.z + e.f.z * 1.2;
+    this.eachFoe(p.team, x, z, RUSH.reach, (o) => { if (!o.isTowerArcher) hit = true; }, p.pos.y, 2.5);
+    return hit;
+  }
+
+  // Shield Bash: the run (Player.useAbility has set the hero off on it: p.dash) and, when it is over, the bash. With no room to run (a
+  // wall at his nose) it is the bash where he stands.
+  bash(p, cam, dir, at) {
+    const own = p.dash && p.dash.rush === 'bash' && p.dash.fresh ? p.dash.plan : null;
+    const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
+    const f = plan ? plan.f : flat(dir);
+    if (p.dash) p.dash.fresh = false;
+    // no room to run, or a foe already at the shield (the host's copy of a guest may be closer to one than the guest's screen shows):
+    // the bash at once
+    if (!plan || this.rushOver(p, { t: 0, dur: 1, chk: 1, f, last: p.pos }, 0)) { this.bashHit(p, f); if (p.dash && p.dash.rush) p.dash = null; return; }
+    const dur = plan.d / this.rushSpeed(p, 'bash') + 0.3;
+    p.buffs.add('charging', dur);
+    this.active.push({ kind: 'rush', p, t: 0, dur, f, chk: 0.25, last: p.pos.clone() });
+    this.emit('rush', p.pos, f, [plan.to]);
+  }
+
+  // the bash itself: everything in the cone in front of the shield
+  bashHit(p, f) {
     const g = this.g;
-    const f = flat(dir);
+    p.buffs.del('charging');
     const c = p.pos.clone().addScaledVector(f, 2.8);
     const dmg = p.meleeDmg * 2 * talentFx(p, 'bashDmg', 1);
     const reach = talentFx(p, 'bashReach', 1), stun = 1.6 + talentFx(p, 'bashStun', 0);
@@ -684,9 +774,11 @@ export class Abilities {
   }
 
   // ---------- Cleric ----------
+  // Smite: a bolt of holy lightning out of the Cleric's open hand, along the line of sight to the first thing it meets (as far as a
+  // Fireball flies), blasting everyone near where it strikes. Every screen sees the bolt (Magic.onBolt), from the hand to the strike.
   smite(p, cam, dir) {
     const g = this.g, s = SPELLS.smite;
-    const { pos: at, col } = this.rayHit(cam, dir, s.range, p.team);
+    const { pos: at, col } = this.rayHit(cam, dir, FIREBALL_RANGE, p.team);
     const dmg = s.dmg * p.mods.spell;
     const reach = talentFx(p, 'smiteRadius', 1), radius = s.radius * reach, stun = 0.8 + talentFx(p, 'smiteStun', 0);
     const hit = new Set();
@@ -698,9 +790,13 @@ export class Abilities {
     const chain = talentFx(p, 'smiteChain', null);
     if (chain) this.chainSmite(p, at, hit, dmg, chain);
     if (col && col.ref && col.ref.takeDamage && !allied(col.ref.team, p.team) && col.ref.kind !== 'wall') col.ref.takeDamage(dmg * 0.5, p, 'Smite');
-    const sky = at.clone();
-    sky.x += (Math.random() - 0.5) * 3; sky.z += (Math.random() - 0.5) * 3; sky.y += 42;
-    g.magic.showBolt([sky, at], s.color);
+    // the hand: a little ahead of the eyes, to the right and below them (where the first-person hand is, and the right hand of the body
+    // the others see)
+    const right = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+    const hand = cam.clone().addScaledVector(dir, 0.55).addScaledVector(right, 0.2);
+    hand.y -= 0.22;
+    g.magic.showBolt([hand, at], s.color);
+    g.audio.play('crackle', hand);
     g.audio.play('zap', at);
     p.swingT = 0.25; p.attackDir = 'over';
     this.emit('smite', at, ZERO, null, reach);
@@ -748,11 +844,17 @@ export class Abilities {
   }
 
   // ---------- Cavalier ----------
-  lancecharge(p, cam, dir) {
-    const f = flat(dir);
-    const dur = 1.15 * talentFx(p, 'chargeTime', 1);
+  // Lance Charge: the gallop (Player.useAbility has set the hero off on it: p.dash) to the end of the planned run, flattening everyone in
+  // the way (chargeSweep). A guest's run is planned again here from where the host has him.
+  lancecharge(p, cam, dir, at) {
+    const own = p.dash && p.dash.rush === 'lancecharge' && p.dash.fresh ? p.dash.plan : null;
+    const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
+    if (p.dash) p.dash.fresh = false;
+    if (!plan) return false;
+    const f = plan.f, dur = plan.d / this.rushSpeed(p, 'lancecharge') + 0.15;
     p.buffs.add('charging', dur);
-    this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set() });
+    p.rushEnd = false;
+    this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set(), chk: 0.25, last: p.pos.clone() });
     const rush = talentFx(p, 'chargeRush', null);   // Vanguard! (Cavalier talent): the army rides with the charge
     if (rush) this.eachFriend(p.team, p.pos.x, p.pos.z, rush.radius, (o) => { if (o !== p) this.haste(o, rush.time, rush.speed); });
     const wall = talentFx(p, 'chargeGuard', null);   // Shieldwall Charge (alternative to Vanguard!): the army is shielded instead of sped up
@@ -760,12 +862,25 @@ export class Abilities {
       this.eachFriend(p.team, p.pos.x, p.pos.z, wall.radius, (o) => { if (o !== p) this.guard(o, wall.time, 1 - wall.cut); });
       p.buffs.add('guard', wall.time, 1 - wall.cut);
     }
-    this.emit('charge', p.pos, f);
+    this.emit('charge', p.pos, f, [plan.to]);
+    return true;
   }
 
+  // Everyone the charge has gone over since the last frame: along the stretch from where he was to where he is now, every 1.5 m (a
+  // guest's hero moves in the steps its pose messages bring, several metres at a time at a gallop)
   chargeSweep(p, e) {
+    const prev = e.prev || (e.prev = p.pos.clone());
+    const d = Math.hypot(p.pos.x - prev.x, p.pos.z - prev.z), n = Math.min(80, Math.max(1, Math.ceil(d / 1.5)));
+    const c = this.sweepV || (this.sweepV = new THREE.Vector3());
+    for (let i = 1; i <= n; i++) {
+      c.copy(prev).lerp(p.pos, i / n).addScaledVector(e.f, 1.2);
+      this.chargeHit(p, e, c);
+    }
+    prev.copy(p.pos);
+  }
+
+  chargeHit(p, e, c) {
     const g = this.g;
-    const c = p.pos.clone().addScaledVector(e.f, 1.2);
     this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
@@ -950,7 +1065,7 @@ export class Abilities {
       }
       case 'smite': {
         const r = SPELLS.smite.radius * sz;
-        gf.pillar(at.x, at.y, at.z, 0xffe9a0, 0.55, 1.5 * sz, 46, 1.8);
+        gf.pillar(at.x, at.y, at.z, 0xffe9a0, 0.5, 0.9 * sz, 3.5, 0.6);   // (a short flare where the bolt strikes: the bolt itself comes from the hand)
         gf.glyph('rune', at.x, at.y, at.z, r, 0xffe08a, 1.2, { arms: 8, strength: 1.5 });
         gf.glyph('shock', at.x, at.y, at.z, r * 1.15, 0xfff0c0, 0.55);
         gf.glyph('pulse', at.x, at.y, at.z, r, 0xffd870, 0.5, { strength: 1.8 });
@@ -971,12 +1086,23 @@ export class Abilities {
         snd('buy');
         break;
       }
+      case 'rush': {
+        // the Knight sets off behind his shield: dust where he started, the end of the run marked, a trail of dust behind him
+        const f = flat(dir), to = targets && targets[0];
+        gf.glyph('shock', at.x, at.y, at.z, 2.4, 0xdfeaff, 0.4, { team: house });
+        fx._dust(at.clone().setY(at.y + 0.2), 10, 1.8, '');
+        if (to) gf.glyph('rune', to.x, to.y, to.z, 2.2, 0xbfd6ff, 0.9, { arms: 4, team: house, strength: 1.2 });
+        if (who) this.trails.push({ who, f, t: 0, dur: to ? Math.hypot(to.x - at.x, to.z - at.z) / RUSH.bash.speed + 0.3 : 1, acc: 0 });
+        snd('swing');
+        break;
+      }
       case 'charge': {
         const f = flat(dir);
         gf.glyph('cone', at.x, at.y, at.z, 7.5, 0xffd870, 0.6, { dir: Math.atan2(f.z, f.x), arc: 0.6, team: house, strength: 1.5 });
         gf.glyph('shock', at.x, at.y, at.z, 3.2, 0xffe7a8, 0.5, { team: house });
         fx._dust(at.clone().setY(at.y + 0.2), 16, 2.4, '');
-        if (who) this.trails.push({ who, f, t: 0, dur: 1.2, acc: 0 });
+        const to = targets && targets[0];   // (the end of the run: the dust follows him until he gets there)
+        if (who) this.trails.push({ who, f, t: 0, dur: to ? Math.hypot(to.x - at.x, to.z - at.z) / (who.mounted ? RUSH.lance.mounted : RUSH.lance.speed) + 0.2 : 1.2, acc: 0 });
         snd('swing');
         break;
       }

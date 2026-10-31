@@ -77,7 +77,7 @@ export const TUNE = {
   cavalier: {
     chargeDmg: 0.2,        // Couched Lance: harder charges
     chargeReach: 0.3,      // Wide Sweep: a wider path
-    chargeTime: 0.3,       // Thundering Hooves: a longer charge
+    chargeSpeed: 0.2,      // Thundering Hooves: a faster charge
     rush: { radius: 20, time: 5, speed: 1.25 },   // Vanguard!: allies this near ride with you, this much faster, for this long
     rider: 0.12, trample: 0.15,    // Barded Charger: the horse shields better and tramples harder
     rallyReach: 0.3,       // War Horn: a wider cry ...
@@ -184,7 +184,7 @@ export const TALENTS = [
   { id: 'cv_sweep', cls: 'cavalier', br: 'q', tier: 2, needs: 'cv_lance', icon: '🌊', name: 'Wide Sweep',
     desc: `The charge cuts a ${pc(V.chargeReach)} wider path.`, fx: { chargeReach: 1 + V.chargeReach } },
   { id: 'cv_thunder', cls: 'cavalier', br: 'q', tier: 3, needs: 'cv_sweep', icon: '🐎', name: 'Thundering Hooves',
-    desc: `The charge lasts ${pc(V.chargeTime)} longer.`, fx: { chargeTime: 1 + V.chargeTime } },
+    desc: `Lance Charge goes ${pc(V.chargeSpeed)} faster.`, fx: { chargeSpeed: 1 + V.chargeSpeed } },
   { id: 'cv_vanguard', cls: 'cavalier', br: 'q', tier: 4, needs: 'cv_thunder', icon: '🚩', name: 'Vanguard!',
     desc: `Allies within ${V.rush.radius} m ride with you: ${pc(V.rush.speed - 1)} faster for ${V.rush.time} s when you charge.`, fx: { chargeRush: V.rush } },
   { id: 'cv_barding', cls: 'cavalier', br: 'r', tier: 1, needs: null, icon: '🛡', name: 'Barded Charger',

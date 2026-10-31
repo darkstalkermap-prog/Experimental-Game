@@ -92,6 +92,7 @@ const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new TH
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
 const CAST_MACE = { x: 0.12, y: -0.05, z: -0.5, rx: -0.35, ry: 0.1, rz: -0.1 };
+const CAST_PALM = { x: 0.12, y: -0.1, z: -0.52, rx: -1.0, ry: 0.3, rz: 0.5 };   // the Cleric's Smite: the right hand thrust out, open
 const FLASK_A = { x: 0.06, y: -0.2, z: -0.34, rx: 0.9, ry: 0.0, rz: -0.1 }, FLASK_B = { x: 0.04, y: -0.15, z: -0.28, rx: 1.45, ry: 0.0, rz: -0.1 };
 const CLIMB_R = { x: 0.2, y: 0.1, z: -0.44, rx: 1.45, ry: -0.5, rz: 0.0 }, CLIMB_L = { x: -0.2, y: 0.1, z: -0.44, rx: 1.45, ry: 0.5, rz: 0.0 };
 
@@ -507,7 +508,8 @@ export class ViewModel {
       const bx = lerp(base.x, LANCE_REST.x, la), by = lerp(base.y, LANCE_REST.y, la), bz = lerp(base.z, LANCE_REST.z, la);
       const brx = lerp(base.rx, LANCE_REST.rx, la), bry = lerp(base.ry, LANCE_REST.ry, la), brz = lerp(base.rz, LANCE_REST.rz, la);
       // a spell raises the caster's weapon; a draught brings the flask up; climbing reaches both hands up
-      const castP = cls === 'cleric' ? CAST_MACE : CAST_STAFF, cw = this.castAmt, k = clamp(p.castFlash, 0, 1);
+      const palm = cls === 'cleric' && p.castKind === 'smite' && this.castAmt > 0.02;   // (Smite: the mace lowered out of sight, the open hand thrust out)
+      const castP = palm ? CAST_PALM : cls === 'cleric' ? CAST_MACE : CAST_STAFF, cw = this.castAmt, k = clamp(p.castFlash, 0, 1);
       const reach = Math.sin(Math.min(1, (1 - k) * 3) * Math.PI / 2);
       const FA = FLASK_A, FB = FLASK_B;
       let px = bx, py = by, pz = bz, prx = brx, pry = bry, prz = brz;
@@ -528,18 +530,22 @@ export class ViewModel {
       R.grp.rotation.set(prx + arx + rx + S.wrx.step(0, dt), pry + ary + ry, prz + arz + rz + S.wrz.step(0, dt), 'XYZ');
       R.grp.updateMatrix();
       const hasLance = !!R.lance && this.lanceAmt > 0.5;
-      R.weapon.visible = !hasLance && drinkW < 0.3 && climbW < 0.5;
+      R.weapon.visible = !hasLance && drinkW < 0.3 && climbW < 0.5 && !palm;
       if (R.lance) R.lance.visible = hasLance && drinkW < 0.3 && climbW < 0.5;
       R.flask.visible = drinkW > 0.02;
       if (R.flask.visible) { R.liquid.scale.y = lerp(1, 0.25, clamp((this.drinkT - 0.3) / 0.35, 0, 1)); R.liquid.position.y = -0.0; }
-      R.hand.morphTargetInfluences[0] = climbW > 0.3 ? 0.45 : 1;
+      R.hand.morphTargetInfluences[0] = palm ? 0 : climbW > 0.3 ? 0.45 : 1;
       R.hand.morphTargetInfluences[1] = 0;
       // the shield: rest pose, or raised across the front on guard, with a little spring
       const kite = cls === 'knight', sp = this.shieldPose, target = p.blocking ? (kite ? KITE_GUARD : GUARD) : kite ? KITE_REST : SHIELD_REST, kk = Math.min(1, dt * 15);
       sp.x += (target.x - sp.x) * kk; sp.y += (target.y - sp.y) * kk; sp.z += (target.z - sp.z) * kk;
       sp.rx += (target.rx - sp.rx) * kk; sp.ry += (target.ry - sp.ry) * kk; sp.rz += (target.rz - sp.rz) * kk;
       let bashZ = 0;
-      if (p.dash && cls === 'knight') bashZ = -0.22 * Math.min(1, (0.25 - p.dash.t) * 12) * Math.min(1, p.dash.t * 8);   // a shield bash drives the shield out
+      if (p.dash && cls === 'knight') {
+        // a Shield Bash run: the shield is carried out in front all the way (eased in over the first fifth of a second); the old short lunge
+        // (no room to run) drives it out and back
+        if (p.dash.rush) { this.rushT = (this.rushT || 0) + dt; bashZ = -0.2 * Math.min(1, this.rushT * 5); } else bashZ = -0.22 * Math.min(1, (0.25 - p.dash.t) * 12) * Math.min(1, p.dash.t * 8);
+      } else this.rushT = 0;
       const shove = p.blocking ? clamp(1 - (t - p.blockStart) / 0.35, 0, 1) : 0;   // a fresh guard thrusts out a little: the parry window
       this.place(L.grp, sp, ox + S.sx.step(0, dt) + 0.1 * bashZ, oy + S.sy.step(0, dt) - swapDip + this.landDip * 0.02 + 0.5 * bashZ * 0.1, oz + S.sz.step(0, dt) - 0.05 * shove + bashZ, S.srx.step(0, dt), S.sry.step(0, dt) + lx * 0.5, 0);
       // the left hand hauling up a wall
@@ -552,7 +558,7 @@ export class ViewModel {
       if (climbW > 0.5) this.wristL.copy(L.climbWrist).applyMatrix4(L.climbGrp.matrix); else this.wristL.copy(L.wrist).applyMatrix4(L.grp.matrix);
     } else {
       // the bow: left hand at the grip, right hand on the string
-      const volley = !!p.aiming && p.aiming.slot === 'q';   // (holding the Volley's circle: the bow is drawn and lifted to loose high)
+      const volley = !!p.aiming && !!p.aiming.volley;   // (holding the Volley's circle: the bow is drawn and lifted to loose high)
       const draw = volley ? Math.min(1, p.aiming.t / 0.4) : drawNow;
       // after a loose (recoil runs 1 -> 0 over half a second): the string snaps home at once; the hand flies on back along the jaw and
       // opens (ft), the bow hand lets the top of the bow fall forward; then the hand comes forward to the string with the next arrow (rt)
@@ -664,7 +670,7 @@ export class ViewModel {
       const reach = Math.sin(Math.min(1, (1 - k) * 3) * Math.PI / 2);
       this.castCol.setHex(p.castColor);
       VMU.tint.value.set(this.castCol.r, this.castCol.g, this.castCol.b, this.castAmt);
-      orb.position.copy(focusWeapon).applyMatrix4(R.grp.matrix);
+      orb.position.copy(p.castKind === 'smite' && cls === 'cleric' ? R.wrist : focusWeapon).applyMatrix4(R.grp.matrix);
       orb.position.z -= 0.05;
       orb.material.color.setHex(p.castColor);
       orb.material.opacity = 0.95 * Math.min(1, k * 3);
