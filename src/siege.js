@@ -313,7 +313,8 @@ export class SiegeEngine {
     }
     if (this.thinkT <= 0) {
       this.thinkT = 0.4;
-      this.waypoint = this.type === 'ram' ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal, this.avoid);
+      // (a catapult goes round the castles; one that finds itself in a castle's walls leaves by the gate or a breach, as a ram does)
+      this.waypoint = this.type === 'ram' || g.castles.some((c) => c.inFootprint(this.pos, 0)) ? navigate(g, this, goal) : avoidCastles(g, this.pos, goal, this.avoid);
     }
     const wp = this.waypoint || goal;
     const dx = wp.x - this.pos.x, dz = wp.z - this.pos.z;

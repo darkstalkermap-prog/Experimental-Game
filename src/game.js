@@ -744,7 +744,16 @@ export class Game {
       }
     };
     this.grid.query(p.x, p.z, GATE.far, look);
-    for (const s of this.siege) if (s.alive && !s.abandoned && !allied(s.team, team)) look(s);   // (an engine of its own never asks for it: they are built outside)
+    for (const s of this.siege) {
+      if (!s.alive) continue;
+      if (!allied(s.team, team)) { if (!s.abandoned) look(s); continue; }
+      // (an engine of its own is built outside and never asks for it, unless it has rolled in through the open gate on its way somewhere: then it has to get
+      // out again, and the gate must not shut on it in the gateway, or it stays in the courtyard for the rest of the match)
+      if (!castle.inFootprint(s.pos, 0.5)) continue;
+      users++;
+      const l = castle.toLocal(s.pos.x, s.pos.z);
+      if (Math.abs(l.x) < CASTLE.gateW / 2 + 2 && l.z > CASTLE.H - CASTLE.wallT - 2.5) wedged = true;
+    }
     let open;
     if (slip) open = false;
     else if (wedged && castle.gate.openAmt > 0.05) open = true;   // (let him finish going through)
