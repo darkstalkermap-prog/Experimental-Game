@@ -845,7 +845,9 @@ says what infantry, archers and cavalry do when the battle begins: **Hold** (the
 and fight what comes, archers shoot from where they stand, until you give an order; your hero is free to walk the field),
 Charge, Advance or Follow me. The AI generals keep their own plans.
 
-**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale) gives orders, as in Bannerlord but fewer of them. Choose a group:
+**The command bar** (bottom of the screen in the battle, between your hero panel and the minimap; its rows wrap at a large UI scale, and
+where that gap is narrow its buttons pack tighter, without the row labels and the groups' line of numbers; it never reaches above the top bar, and the
+toasts and the kill feed keep clear of it) gives orders, as in Bannerlord but fewer of them. Choose a group:
 **1** Infantry, **2** Archers, **3** Cavalry, **4** Everyone (the same number twice also picks everyone). Each group has a colour of
 its own, the same everywhere: **yellow** infantry, **green** archers, **blue** cavalry (pale, so they are never taken for a house's).
 The chosen soldiers get a small arrow in their group's colour over their heads (Everyone: each man his group's), and the button lights
@@ -1043,7 +1045,8 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
   toasts stand over the orders bar and its row of colour keys however many rows it takes; a tip is centred in the gap between the hero panel and the minimap
   (as the bar) and never wider than it at the UI scale (it wraps), and where not even a narrow one fits (1024 × 600 at the largest scale) it is not shown. On a
   narrow HUD (a small window at a large UI scale) the bars under the top panel start below the houses' panel, the kill feed starts below them, the kill feed
-  shows only the newest lines that fit above the minimap and the toasts only the newest that fit under those bars (measured a few times a second:
+  shows only the newest lines that fit above the minimap (or a command bar that reaches its column) and the toasts only the newest that fit under
+  those bars (measured a few times a second:
   `stackBottom` and `clearFeed` in `src/flow.js`). HUD text is at least 14 px, on dark panels. The key reminder (top right) and the
   minimap's ping hint show in the preparation of your first two battles; after that only a small **I keys** note stays, and
   **I** shows or hides the full line at any time (not F1: F1 is an order key in the war modes). One scale sizes the HUD: a
