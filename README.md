@@ -1275,7 +1275,8 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 - Every soldier has the same shape for the browser's JavaScript engine: all the fields a soldier ever gets are made in the `Unit` constructor,
   and a timer that will hold fractions starts as `-0` (0 to every test, a fraction to the engine), so the hottest loops (`update`,
   `applyMovement`, `animate`, `think`) keep their optimised code through a battle instead of being thrown out of it at every new field
-  (a seeded 4 x 500 clash simulates about 30 % faster). The frame makes little garbage: the grid and `lineClear` keep their lists, the pose,
+  (with the lords' shared getters below, a seeded 4 x 500 battle simulates in 3.9 ms a frame instead of 6.3, with a third of the garbage and
+  of the collections; the same battle, the same state hashes). The frame makes little garbage: the grid and `lineClear` keep their lists, the pose,
   the searches (`findEnemy`, `hitCharacter`) and the castle tests make no objects or closures per soldier, and a fallen soldier is posed
   only until his fall has come to rest. The HUD writes a field only when its text changes.
 - A finished world is let go of when the next one is built: modules keep what they need of a match (the decrees its mode, net and sound;

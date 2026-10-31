@@ -12,6 +12,7 @@ import { materials } from './materials.js';
 import { Castle } from './castle.js';
 import { Unit } from './units.js';
 import { SiegeEngine } from './siege.js';
+import { buildEngine } from './siegegeo.js';
 import { Projectiles } from './projectiles.js';
 import { Player } from './player.js';
 import { FX } from './fx.js';
@@ -358,6 +359,8 @@ export class Game {
     const lg = new THREE.BufferGeometry();
     lg.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 1, 0], 3));
     grp.add(new THREE.LineSegments(lg, this.magic.boltMat));
+    // the siege engines' material (their shader and its textures): the first ram or catapult of a match was compiled when it was first drawn
+    if (!this.war && !this.hero && !this.practice) for (const type of ['ram', 'catapult']) grp.add(buildEngine(type, 0).group);
     grp.position.copy(this.camera.position);
     this.scene.add(grp);
     try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* not fatal */ }
