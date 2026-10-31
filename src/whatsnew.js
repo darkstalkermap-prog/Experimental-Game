@@ -5,6 +5,16 @@
 
 export const UPDATES = [
   {
+    id: 6,
+    title: 'Armies that know their way',
+    items: [
+      'Late in a battle your soldiers no longer run into the walls of your keep: they go round it, and attackers spread along the enemy keep\'s faces.',
+      'Your field army has its own limit of 50 soldiers, apart from the garrison\'s (shown as Army 32/50 · Garrison 18/36).',
+      'War Mode: every player always starts on their own hill, in front of their own army, far from the enemy (also after Play Again and online).',
+      'War Mode online with four players: free-for-all, two against two, or together against the AI.',
+    ],
+  },
+  {
     id: 5,
     title: 'A clearer, sharper world',
     items: [
