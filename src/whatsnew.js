@@ -5,6 +5,17 @@
 
 export const UPDATES = [
   {
+    id: 5,
+    title: 'A clearer, sharper world',
+    items: [
+      'The haze is gone: far castles, banners and mountains read clearly, in every land and in War Mode.',
+      'Sharper picture: true anti-aliasing on High instead of a blur filter, a light sharpening, and glow only on bright highlights.',
+      'Screens with more pixels per inch draw at their full resolution.',
+      'The ground has real detail at every quality: grass tufts, soil and gravel, rock on the cliffs; War Mode\'s hills too.',
+      'Castle stone has grain, far trees keep their outline, and trees on the mountains stand on forest floor instead of bare rock.',
+    ],
+  },
+  {
     id: 4,
     title: 'Easier to start, a sharper Ranger',
     items: [
