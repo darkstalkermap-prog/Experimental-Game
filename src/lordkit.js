@@ -322,8 +322,8 @@ export class LordKit {
 
   // may his feet take him there (a run or a leap)? A lord who holds his castle or a place in the line only goes for foes near it
   inReach(o) {
-    const u = this.u;
-    if (Math.abs(o.pos.y - u.pos.y) > 3) return false;
+    const u = this.u, dy = o.pos.y - u.pos.y;
+    if (dy > 3 || dy < -8) return false;   // (up a wall: no; down a slope: yes)
     let a = null, r = 0;
     if (u.order === 'defend' && u.homeCastle && !u.homeCastle.fallen) { a = u.homeCastle.center; r = 45; }
     else if (u.order === 'hold' && u.orderData && u.orderData.pos) { a = u.orderData.pos; r = 30; }
@@ -446,7 +446,7 @@ export class LordKit {
     let best = null, bs = 0;
     for (let i = 0; i < this.foes.length; i++) {
       const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d < 9 || d > 45 || Math.abs(o.pos.y - u.pos.y) > 4 || !this.inReach(o)) continue;
+      if (o.isSiege || d < 9 || d > 45 || !this.inReach(o)) continue;
       let s = o.isPlayer || o.kit ? 4 : 0;
       for (const f of this.foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < LEAP.radius) s += f.isPlayer || f.kit ? 2 : 1;
       if (s > bs) { bs = s; best = o; }
