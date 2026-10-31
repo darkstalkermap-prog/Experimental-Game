@@ -50,6 +50,15 @@ const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3
 const lerp = (a, b, t) => a + (b - a) * t;
 const by3 = (v, t) => (t < 0.5 ? lerp(v[0], v[1], t * 2) : lerp(v[1], v[2], t * 2 - 1));   // (easy, normal, hard at skill 0, 0.5, 1)
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
+// A lord's hero numbers, read as a hero's are (mods, meleeDmg, bowDmg, talentPoints). The getters are the same functions for every lord and find his
+// kit on him (this): each lord's own closures were kept by the engine in the shape every soldier shares, and held that lord, his kit and his whole
+// world alive after the match (a heap snapshot showed a finished world kept that way).
+const KIT_GETTERS = {
+  mods: { configurable: true, get() { return this.lordKit.mods(); } },
+  meleeDmg: { configurable: true, get() { const kit = this.lordKit; return this.dmg * kit.mods().melee * (this.hp < this.maxHp * 0.5 ? 1 + (kit.mods().bloodied || 0) : 1); } },
+  bowDmg: { configurable: true, get() { const kit = this.lordKit; return PLAYER.bowDmg * kit.k * kit.mods().bow; } },
+  talentPoints: { configurable: true, get() { return talentPointsFor(this.level) - Object.keys(this.talents).length; } },
+};
 
 // The class of house f's lord.
 export function lordClass(g, f) {
@@ -95,12 +104,8 @@ export class LordKit {
     u.level = 1;
     u.dash = null; u.leap = null; u.rushEnd = false; u.bwave = null;
     const kit = this;
-    Object.defineProperties(u, {
-      mods: { configurable: true, get() { return kit.mods(); } },
-      meleeDmg: { configurable: true, get() { return u.dmg * kit.mods().melee * (u.hp < u.maxHp * 0.5 ? 1 + (kit.mods().bloodied || 0) : 1); } },
-      bowDmg: { configurable: true, get() { return PLAYER.bowDmg * kit.k * kit.mods().bow; } },
-      talentPoints: { configurable: true, get() { return talentPointsFor(u.level) - Object.keys(u.talents).length; } },
-    });
+    u.lordKit = this;   // (what the shared getters below read)
+    Object.defineProperties(u, KIT_GETTERS);
     u.abilityCd = (slot) => { const d = abilityOf(u, slot); return d.cd * (kit.mods().cd || 1) * talentFx(u, 'cd_' + d.id, 1) * kit.cdMul(); };
     u.heal = (n) => { u.hp = Math.min(u.maxHp, u.hp + n * kit.mend); };   // (only his own abilities heal him this way: BITE.mend)
     u.eyePos = (out = new THREE.Vector3()) => out.set(u.pos.x, u.pos.y + u.height * 0.86, u.pos.z);
