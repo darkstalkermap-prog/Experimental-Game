@@ -239,7 +239,7 @@ export class LordKit {
     if (D.t >= D.full) {
       this.draw = null;
       const speed = D.slot === 'r' ? RANGER.snipe.speed : RANGER.power.speed;
-      this.aimAt(o, speed, D.slot === 'r' ? 0.4 : 1, V2);
+      this.aimAt(o, speed, D.slot === 'r' ? 0.25 : 1, V2);   // (the Sniper Shot: steadied, as through a scope)
       if (this.use(D.slot, V2, null)) this.stats[D.slot]++;
       this.bowT = 1.1;
       u.attackTimer = Math.max(u.attackTimer, 0.8);
@@ -312,6 +312,9 @@ export class LordKit {
       if (hero && gap < n.heroNear) n.heroNear = gap;
     });
   }
+
+  // (in a battle of hundreds the candidates for a target are every k-th foe in sight, at most about 40: each is weighed against all the others)
+  step() { return Math.max(1, Math.ceil(this.foes.length / 40)); }
 
   // foes within r metres of a point
   countAt(x, z, r) {
@@ -392,7 +395,7 @@ export class LordKit {
       case 'cleric': {
         let hurt = 0;
         for (const f of this.friends) if (f.hp < f.maxHp * 0.65 && Math.hypot(f.pos.x - u.pos.x, f.pos.z - u.pos.z) < 14) hurt += f.isPlayer || f.isHero ? 2 : 1;
-        if (r && (hpf < 0.5 || hurt >= 4 + need || (hpf < 0.7 && hurt >= 2))) { this.cast('r', this.look()); break; }
+        if (r && (hpf < 0.6 || hurt >= 3 + need || (hpf < 0.8 && hurt >= 2))) { this.cast('r', this.look()); break; }   // (a lord keeps his men on their feet)
         if (q) this.bolt('q', 2, 90, 1e3);
         break;
       }
@@ -408,7 +411,7 @@ export class LordKit {
   bolt(slot, lo, hi, speed) {
     const u = this.u;
     let best = null, bs = -1;
-    for (let i = 0; i < this.foes.length; i++) {
+    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < lo || d > hi) continue;
       let s = this.countAt(o.pos.x, o.pos.z, 3.8) + (o.isPlayer || o.kit ? 3 : 0) - d * 0.02;
@@ -425,7 +428,7 @@ export class LordKit {
   runAt(id, lo, hi, need) {
     const u = this.u, A = this.g.abilities;
     let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
+    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < lo || d > hi || !this.inReach(o)) continue;
       const s = (o.isPlayer || o.kit ? 3 : 0) + this.countAt(o.pos.x, o.pos.z, 3.4);
@@ -444,7 +447,7 @@ export class LordKit {
     const u = this.u, A = this.g.abilities, n = this.n;
     if (n.c5 >= 2) return false;
     let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
+    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < 9 || d > 45 || !this.inReach(o)) continue;
       let s = o.isPlayer || o.kit ? 4 : 0;
@@ -482,7 +485,7 @@ export class LordKit {
   powerShot(need) {
     const u = this.u, ex = u.pos.x, ez = u.pos.z;
     let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
+    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < 4 || d > 60) continue;
       const dx = o.pos.x - ex, dz = o.pos.z - ez, l = Math.hypot(dx, dz) || 1;
@@ -503,7 +506,7 @@ export class LordKit {
   volley(need) {
     const u = this.u;
     let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
+    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
       const o = this.foes[i], d = this.dist[i];
       if (o.isSiege || d < 9 || d > 55) continue;
       const s = this.countAt(o.pos.x, o.pos.z, 6);

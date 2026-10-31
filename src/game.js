@@ -1644,6 +1644,7 @@ export class Game {
     if (this.hero) { this.hero.toBot(p); this.checkReady(); return; }   // (Hero Game Mode: a hero bot takes over their hero)
     const f = this.factions[p.team];
     if (p.drive) this.leaveEngine(p);
+    const stood = p.alive && this.war && this.war.fighting ? { pos: p.pos.clone(), hp: p.hp / p.maxHp } : null;   // (where the hero was, and how hurt)
     this.humans = this.humans.filter((h) => h !== p);
     p.removeBody();
     f.isPlayer = false;
@@ -1651,8 +1652,14 @@ export class Game {
     f.rival = this.practice || this.hero ? null : rivalInfo(this.options.rivals[f.team]);
     f.lord = f.rival ? f.rival.name : HOUSE_LORDS[f.team];
     f.hero = null;
-    if (this.war) this.war.dropHuman(f);   // (an AI general leads the army on)
-    else if (!f.eliminated && !f.castle.fallen) {
+    if (this.war) {
+      this.war.dropHuman(f);   // (an AI general leads the army on)
+      if (stood && !f.hero) {   // (in the battle he takes the hero's place where he stood, as hurt as the hero was: heroes do not rise again here)
+        const u = this.war.spawnLord(f);
+        u.pos.copy(stood.pos); u.hp = Math.max(1, Math.round(u.maxHp * stood.hp));
+        u.setOrder('charge');
+      }
+    } else if (!f.eliminated && !f.castle.fallen) {
       this.spawnLord(f);
       f.ai = new LordAI(this, f);
     }

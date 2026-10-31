@@ -259,7 +259,7 @@ a second. If the host leaves, the game ends. If someone else leaves, an AI lord 
     left the shield only softens it), and softens arrows and spells from in front. Blows from the side or behind get through.
   - Raise the shield just as a blow lands to **parry**: the attacker staggers and is open.
   - Heavy blows stagger enemies and interrupt their swings. Shielded troops sometimes block. Enemy lords block and
-    circle you, looking for your side.
+    circle you, looking for your side, and use their class's Q and R as heroes do (see **Rival lords**).
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
@@ -618,6 +618,18 @@ is far ahead of or behind the rest. Online, the host draws the lords and sends t
 (`options.rivals`), the guests only show them; a player who leaves is replaced by the plain lord. Hero Game Mode and the practice courtyard have no rival
 lords.
 
+**Lords fight as heroes.** Every lord the computer plays (a rival lord, a plain lord, the lord who takes over a house whose player left, and War Mode's
+AI generals) is a hero of a class: he wears its look under a lord's long cape and uses its **Q** and **R** as a hero bot does (`src/lordkit.js`). The
+Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a knot of foes or at a rival hero), the Patient and the Ironclad Knights
+(Shield Bash at hand or a run of up to 40 m at a knot or a hero, Bulwark when pressed), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
+Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
+fights with the bow from 34 m, never from a wall post; Power Shot down a line of foes, Sniper Shot at a far hero, giant or siege crew). The plain lords:
+Aldmoor a Knight, Varr a Berserker, Elden a Cleric, Sol a Mage; a War Mode general draws a class. No lord is a Cavalier (a lord has no horse). The
+abilities are the heroes' own: the same runs and leaps (never through a wall, never onto enemy battlements), the same damage (from the lord's) and the
+same effects on every screen. A lord's health and blows are what they always were. A lord who defends his castle or holds a place only runs or leaps at
+foes near it. He rises a level every five waves (5 at most; a War Mode general is level 1, 2 or 3 by the difficulty) and learns a hero bot's talents. On
+Easy a lord looks for an opening less often, waits a moment once an ability is ready and aims worse; on Hard he uses them as soon as they are worth it.
+
 For modders: a personality is a table of parameters in `src/rivals.js` (the key list is in its header; `CLASSIC` is the old lord), played by `LordAI` in
 `src/ai.js`; `options.rivals[team]` is `''`/`'classic'` for the old lord or an id like `rusher` or `rusher3` (the digit picks the name). A lord's waves follow
 his style too (`Game.waveList`). `src/rivalsui.js` is everything the player sees. The match log records `rival`, `push` and `rivalFell` events.
@@ -720,7 +732,8 @@ rival is picked first and the guard goes up against blows and arrows they can se
 looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
 close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
-fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty.
+fight, and spend their talents from a list for each class. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
+also looks for a chance to use Q or R less often, waits a moment once one is ready, wants a bigger knot of foes and leads them less.
 They do not climb, duck or drive engines.
 
 **Three ways to win**, chosen in the menu: pick *Hero Mode* in the Mode row and a second row offers them (the last choice is
@@ -777,7 +790,9 @@ map (about 130 m in a duel; 145 m on medium, 200 m on large), every soldier of a
 medium). The air is clearer than in the war modes (`WAR.haze`):
 the battle is watched across 150 to 300 m from a hilltop. The Armies row picks how they are set against each other:
 **Free-for-all** (four armies), **Two against two** (Blue and Green against Red and Gold) or **One against one**.
-Online, Co-op in the lobby puts the players on one side against the AI; houses nobody plays are led by AI generals.
+Online, Co-op in the lobby puts the players on one side against the AI; houses nobody plays are led by AI generals. An AI general fights as a hero of a
+class with its abilities (see **Rival lords**); a player who leaves during the battle is replaced where his hero stood by an AI general's hero, as
+hurt as the hero was.
 
 **The timer.** The two minutes are the **army-building phase** (`WAR.buildTime` in `src/config.js`): a countdown in the bar at
 the top and in the army panel. When it runs out, or as soon as every player has pressed **Ready** (Enter), the battle begins
@@ -1156,6 +1171,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/perf.js`, `src/perfutil.js` | The profiler overlay (backquote or `?perf`) and the seeded benchmark `window.__bench` |
 | `src/warmode.js`, `src/warmap.js`, `src/warui.js`, `src/warmarks.js`, `src/warnet.js` | War Mode: the rules (sides, the build, buying and caps, formations, battle plans, the orders of the command bar, the AI generals, the win), the field and its hills (the ground and the places of the armies), what is on screen (menu and lobby rows, the army panel and Repeat, the top bar, the command bar, the cameras, the end-screen table), the marks in the world (the chosen soldiers, the aim ring, the Move here banners) and the packed snapshot of its soldiers |
 | `src/herogame.js`, `src/herobot.js` | Hero Game Mode: the rules (the two sides, respawns and the fountain, the hero-kill count, the three ways to win, the `HERO` table) and the AI that plays the bot heroes |
+| `src/lordkit.js` | The lords the computer plays (rival lords, War Mode's AI generals) as heroes of a class: their look, level and talents, the abilities' needs (cooldowns, timed effects, the run, the leap, the bow draw) and when to use Q and R |
 | `src/ui.js`, `index.html` | HUD, shop, minimap, menus (main, game menu, options, controls) and lobby; the Hero Game Mode HUD, roster and scoreboard |
 | `src/flow.js` | The gap between matches: what Quick Play starts, the end screen's actions (Play Again, Change class, Rematch), Ready, and the offer to concede or finish a decided war |
 | `src/settings.js` | Volume, sensitivity, field-of-view and alerts/tips settings, kept in the browser |
@@ -1221,7 +1237,7 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.
-- On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players.
+- On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players. (The room keeps only the newest snapshot, so the looks seen once, an ability's effect, a spell, a bolt, a Power or Sniper Shot's arrow, ride along in the next two snapshots as well: `HostSync.redo`.)
 - Graphics quality (Auto / Low / Medium / High / Ultra) is in Options, on the main menu and the game menu. Auto
   picks a level for the machine (and steps down if even the lowest resolution cannot keep the frame rate); Low turns
   off shadows, grass and the post passes for slower computers. Whatever the level, the render resolution drops by
