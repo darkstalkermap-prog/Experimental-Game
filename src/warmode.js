@@ -396,7 +396,13 @@ export class WarMode {
     }
     if (!n) return;
     if (order === 'charge' || order === 'attack') { for (const k of groups) this.charge(lists[k], order === 'attack' ? foe : -1); return; }
-    if (order === 'follow') { this.follow(f, lists); return; }
+    if (order === 'follow') {
+      // (every group that follows him now, not only the ones just ordered: each takes its place beside the others, as Everyone's does. A group sent
+      // after another one was placed as if it were alone, right behind him, in the places the first group already stood in)
+      for (const k of WAR_GROUPS) if (!lists[k] && f.war.plan[k] === 'follow') lists[k] = this.groupList(team, k);
+      this.follow(f, lists);
+      return;
+    }
     ax /= n; az /= n;
     if (order === 'move') {
       const dir = this.towardsEnemy(team, at[0], at[1]), yaw = Math.atan2(dir[0], dir[1]);
