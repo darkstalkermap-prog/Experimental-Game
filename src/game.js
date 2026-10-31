@@ -749,7 +749,7 @@ export class Game {
       if (!allied(s.team, team)) { if (!s.abandoned) look(s); continue; }
       // (an engine of its own is built outside and never asks for it, unless it has rolled in through the open gate on its way somewhere: then it has to get
       // out again, and the gate must not shut on it in the gateway, or it stays in the courtyard for the rest of the match)
-      if (!castle.inFootprint(s.pos, 0.5)) continue;
+      if ((s.abandoned && !s.driver) || !castle.inFootprint(s.pos, 0.5)) continue;   // (one left standing there goes nowhere)
       users++;
       const l = castle.toLocal(s.pos.x, s.pos.z);
       if (Math.abs(l.x) < CASTLE.gateW / 2 + 2 && l.z > CASTLE.H - CASTLE.wallT - 2.5) wedged = true;
