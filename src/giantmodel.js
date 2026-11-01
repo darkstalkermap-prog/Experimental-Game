@@ -9,7 +9,7 @@
 // darker, so the skin reads as flesh over muscle and not as balls stuck together.
 import * as THREE from 'three';
 import { PAT, SKIRT } from './modelkit.js';
-import { SHAPES, getShape } from './shapes.js';
+import { SHAPES, getShape, shapeGeo } from './shapes.js';
 import { emblemCell, setRigEmblem } from './unittex.js';
 
 export const GIANT_SCALE = 3.2;
@@ -412,11 +412,11 @@ def('giant.pelvis', (b) => {
     { ...team, p: PAT.emblem, uv: [0, -0.15, 0.17, 0.24], arc: [-0.3, 0.6], sq: 2.2, seg: b.pick(8, 6, 3), rows: b.pick(8, 5, 3), a: [0.75, 1], w: [SKIRT + 0.9, SKIRT], cav: 0,
       post: (pos, rows, cols) => { for (let c = 0; c < cols; c++) pos[((rows - 1) * cols + c) * 3 + 1] -= 0.03 * hash3(c, 2, 8) + (c % 2) * 0.01; } });
   // the iron boss on the belt: a dented dome in a rim, riveted
-  b.lathe([[0.0, 0.03], [0.035, 0.027], [0.065, 0.017], [0.086, 0.004], [0.094, -0.008], [0.09, -0.016]], [0, 0.07, 0.19], { rot: [PI / 2 - 0.12, 0, 0], c: K.iron, m: 'iron', a: [0.75, 1], seg: b.pick(24, 16, 6) });
+  b.lathe([[0.0, 0.03], [0.035, 0.027], [0.065, 0.017], [0.086, 0.004], [0.094, -0.008], [0.09, -0.016]], [0, 0.07, 0.212], { rot: [PI / 2 - 0.12, 0, 0], c: K.iron, m: 'iron', a: [0.75, 1], seg: b.pick(24, 16, 6) });
   if (!lo) {
-    b.torus([0, 0.07, 0.19], 0.092, 0.011, { rot: [-0.12, 0, 0], c: K.ironLt, m: 'iron', sides: 5, seg: b.pick(24, 16, 9) });
-    b.ell([0, 0.073, 0.221], [0.022, 0.022, 0.012], { c: K.ironLt, m: 'iron', rot: [-0.12, 0, 0], seg: [8, 5] });
-    if (lv < 1) for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; b.ell([Math.cos(a) * 0.072, 0.07 + Math.sin(a) * 0.072, 0.208 - Math.sin(a) * 0.009], [0.008, 0.008, 0.006], { c: K.ironLt, m: 'iron', seg: [5, 3] }); }
+    b.torus([0, 0.07, 0.212], 0.092, 0.011, { rot: [-0.12, 0, 0], c: K.ironLt, m: 'iron', sides: 5, seg: b.pick(24, 16, 9) });
+    b.ell([0, 0.073, 0.243], [0.022, 0.022, 0.012], { c: K.ironLt, m: 'iron', rot: [-0.12, 0, 0], seg: [8, 5] });
+    if (lv < 1) for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; b.ell([Math.cos(a) * 0.072, 0.07 + Math.sin(a) * 0.072, 0.23 - Math.sin(a) * 0.009], [0.008, 0.008, 0.006], { c: K.ironLt, m: 'iron', seg: [5, 3] }); }
     // a pouch on the left hip and a string of bones on the right
     b.rbox([0.215, -0.02, 0.06], [0.06, 0.09, 0.05], { c: 0x4e3a26, m: 'leather', p: PAT.leather, e: 0.6, rot: [0, 1.2, -0.08], w: [SKIRT + 0.2, SKIRT] });
     if (lv < 1) {
@@ -629,7 +629,7 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
     shL, shR, elL, elR, weapon, cape: null, weaponTilt: GIANT_TILT, weaponRoll: 0, ranged: false, lance: false, mounted: false, parts, kit: off(), plumeC: off(), plumeG: off(),
     weaponPart, bowPart: null, kitArms: [], kitShield: null, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: null, giant: true, farKey: type,
     // (what the motion remembers between frames: its clock, how far into a walk it is, the rock of the last hit, the hammer's rest)
-    gs: { idle: -1, walk: 0, hurt: 0, rx: 0, rv: 0, zx: 0, zv: 0, side: 1, tilt: GIANT_TILT, seed: (variant * 1.37) % 7 },
+    gs: { idle: -1, walk: 0, hurt: 0, rx: 0, rv: 0, zx: 0, zv: 0, side: 1, tilt: GIANT_TILT, deadT: 0, deadTilt: GIANT_TILT, seed: (variant * 1.37) % 7 },
   };
   setColor(m.inst, 0, cloth);
   setColor(m.inst, 4, SKIN[v]);
@@ -930,8 +930,31 @@ function haftTo(m, h, near) {
 const fallK = (t, t0, t1) => { const k = clamp01((t - t0) / (t1 - t0)); return k * k * (1.2 - 0.2 * k); };   // (gathering speed, like a fall)
 // the bounce after hitting the ground at t0: up a little and back
 const bounce = (t, t0) => (t < t0 ? 0 : Math.exp(-(t - t0) * 7) * _sin(Math.min(PI, (t - t0) * 11)));
+// the lowest point of the body above the ground the root stands on (metres), from a few points of each part's far shape (the hammer
+// apart: it lies where it falls)
+const _lp = new THREE.Vector3();
+function lowest(m) {
+  m.root.updateMatrixWorld(true);
+  const y0 = m.root.matrixWorld.elements[13];
+  let lo = 1e9;
+  for (const p of m.parts) {
+    if (!p.on || p === m.weaponPart) continue;
+    let pts = p.shape.lowPts;
+    if (!pts) {
+      const pa = shapeGeo(p.shape, 3).attributes.position, step = Math.max(1, Math.floor(pa.count / 40));
+      pts = p.shape.lowPts = [];
+      for (let i = 0; i < pa.count; i += step) pts.push(pa.getX(i), pa.getY(i), pa.getZ(i));
+    }
+    const e = p.node.matrixWorld.elements;
+    for (let i = 0; i < pts.length; i += 3) {
+      const y = e[1] * pts[i] + e[5] * pts[i + 1] + e[9] * pts[i + 2] + e[13];
+      if (y < lo) lo = y;
+    }
+  }
+  return lo - y0;
+}
 function fallPose(m, t, kind, side) {
-  const S = GIANT_SCALE, J = (j, x, y, z) => j.rotation.set(x, y, z);
+  const S = GIANT_SCALE, J = (j, x, y, z) => j.rotation.set(x, y, z), mix = (a, b, k) => a + (b - a) * k;
   const A = PI / 2 - 0.06;
   m.pelvis.position.set(0, 0.93, 0); m.pelvis.rotation.set(0, 0, 0);
   m.hipL.position.z = m.hipR.position.z = 0;
@@ -943,42 +966,47 @@ function fallPose(m, t, kind, side) {
   const slack = smooth(clamp01((t - 0.2) / 0.8)) * (kind === 1 ? 0.75 : 0.35);
   m.ankleL.rotation.set(slack, 0, 0); m.ankleR.rotation.set(slack * 0.8, 0, 0);
   if (kind === 0) {
-    // reels back, a step back with the right foot, then topples onto its back
-    const f = fallK(t, 0.35, T0);
-    m.body.rotation.x = -0.1 * reel - (A - 0.1) * f + 0.06 * bo;
-    m.body.position.set(0, (0.16 * f + 0.03 * bo) * S, -0.12 * reel * S);
-    J(m.hipL, -0.15 * reel - 0.25 * f + 0.25 * settle, 0, 0.12 * f); J(m.hipR, 0.25 * reel - 0.1 * f + 0.05 * settle, 0, -0.15 * f);
-    J(m.kneeL, 0.3 * reel + 0.6 * f - 0.4 * settle, 0, 0); J(m.kneeR, 0.15 * reel + 0.35 * f - 0.15 * settle, 0, 0);
-    J(m.torso, -0.25 * reel + 0.1 * f - 0.08 * bo, 0, 0.12 * f);
-    J(m.head, -0.4 * reel + 0.45 * f + 0.3 * bo, 0.25 * f, 0.05); J(m.head2, -0.35 * reel + 0.5 * f + 0.25 * bo, -0.35 * f, -0.05);
-    J(m.shL, -0.9 * reel - 1.1 * f + 1.4 * settle, 0, 0.3 + 0.5 * f + 0.3 * settle); J(m.elL, -0.4 * reel - 0.2 * f + 0.3 * settle, 0, 0);
-    J(m.shR, -1.3 * reel - 0.6 * f + 1.2 * settle, 0, -0.4 - 0.6 * f - 0.2 * settle); J(m.elR, -0.5 * reel + 0.3 * settle, 0, 0);
+    // reels back, a step back with the right foot, then topples onto its back: the legs buckle on the way and it lies with a knee up,
+    // the heads knocked back on the ground, the arms thrown up as it goes and flopping out beside it
+    const f = fallK(t, 0.35, T0), k = smooth(clamp01((t - 0.35) / (T0 - 0.35)));
+    m.body.rotation.x = -0.1 * reel - (A - 0.1) * f;
+    m.body.position.z = -0.1 * reel * S;
+    J(m.hipL, mix(-0.15 * reel, -0.32, k), 0, 0.12 * k); J(m.hipR, mix(0.25 * reel, -0.1, k), 0, -0.15 * k);
+    J(m.kneeL, mix(0.3 * reel, 0.62, k), 0, 0); J(m.kneeR, mix(0.15 * reel, 0.2, k), 0, 0);
+    J(m.torso, mix(-0.25 * reel, -0.12, k) - 0.1 * bo, 0, 0.08 * k);
+    J(m.head, mix(-0.4 * reel, -0.55, k) + 0.25 * bo, 0.3 * k, 0.05); J(m.head2, mix(-0.35 * reel, -0.5, k) + 0.2 * bo, -0.42 * k, -0.05);
+    J(m.shL, mix(-0.9 * reel - 0.6 * k, -0.12, settle), 0, mix(0.3 + 0.5 * k, 0.8, settle)); J(m.elL, mix(-0.4 * reel, -0.25, settle), 0, 0);
+    J(m.shR, mix(-1.3 * reel - 0.4 * k, -0.08, settle), 0, mix(-0.4 - 0.5 * k, -0.85, settle)); J(m.elR, mix(-0.5 * reel, -0.3, settle), 0, 0);
   } else if (kind === 1) {
-    // the knees go (down onto them by 0.55), it sways there, then pitches forward onto its face
-    const kneel = smooth(clamp01(t / 0.55)), f = fallK(t, 0.75, T0);
-    const sag = kneel * (1 - f);
-    m.body.rotation.x = A * f - 0.04 * bo;
-    m.body.position.set(0, (-0.42 * sag + 0.15 * f + 0.03 * bo) * S, (-0.06 * kneel - 0.5 * f) * S);
-    J(m.hipL, -0.35 * sag - 0.08 * f, 0, 0.12 * f); J(m.hipR, -0.25 * sag + 0.05 * f, 0, -0.1 * f);
-    J(m.kneeL, 1.95 * sag + 0.3 * f, 0, 0); J(m.kneeR, 1.85 * sag + 0.15 * f, 0, 0);
-    J(m.torso, 0.5 * kneel - 0.45 * f + 0.05 * _sin(t * 6) * sag, 0, 0.1 * _sin(t * 4) * sag);
-    J(m.head, 0.3 * kneel + 0.2 * f - 0.2 * bo, 0.5 * f, 0.1); J(m.head2, 0.25 * kneel + 0.15 * f - 0.15 * bo, -0.6 * f, -0.1);
-    J(m.shL, -0.25 * kneel + (0.35 + 0.25 * settle) * f, 0, 0.25 + 0.25 * f); J(m.elL, -0.3 * kneel, 0, 0);
-    J(m.shR, -0.2 * kneel + (0.45 + 0.2 * settle) * f, 0, -0.25 - 0.3 * f); J(m.elR, -0.35 * kneel, 0, 0);
+    // the knees go (down onto them by 0.55), it sways there, then pitches forward onto its face, the legs straightening out behind,
+    // the heads turned aside on the ground, the arms trailing at its sides
+    const kneel = smooth(clamp01(t / 0.55)), f = fallK(t, 0.75, T0), k = smooth(clamp01((t - 0.75) / (T0 - 0.75)));
+    m.body.rotation.x = (A + 0.1) * f;
+    m.body.position.z = (-0.08 * kneel - 0.25 * f) * S;
+    J(m.hipL, mix(-0.32 * kneel, 0.04, k), 0, 0.12 * k); J(m.hipR, mix(-0.24 * kneel, -0.04, k), 0, -0.1 * k);
+    J(m.kneeL, mix(1.85 * kneel, 0.16, k), 0, 0); J(m.kneeR, mix(1.75 * kneel, 0.3, k), 0, 0);
+    J(m.torso, mix(0.5 * kneel + 0.05 * _sin(t * 6) * kneel, 0.12, k) - 0.06 * bo, 0, 0.1 * _sin(t * 4) * kneel * (1 - k));
+    J(m.head, mix(0.3 * kneel, 0.25, k) - 0.2 * bo, 0.7 * k, 0.1); J(m.head2, mix(0.25 * kneel, 0.2, k) - 0.15 * bo, -0.75 * k, -0.1);
+    J(m.shL, mix(-0.25 * kneel, 0.3, k), 0, mix(0.25, 0.4, k)); J(m.elL, mix(-0.3 * kneel, -0.15, k), 0, 0);
+    J(m.shR, mix(-0.2 * kneel, 0.38, k), 0, mix(-0.25, -0.45, k)); J(m.elR, mix(-0.35 * kneel, -0.2, k), 0, 0);
   } else {
-    // staggers, one knee gives, and it falls onto its side
-    const f = fallK(t, 0.38, T0);
-    m.body.rotation.z = side * (0.08 * reel + (A - 0.08) * f - 0.06 * bo);
-    m.body.position.set(side * (0.06 * reel + 0.2 * f) * S, (0.2 * f + 0.03 * bo) * S, 0);
-    J(m.hipL, -0.5 * reel + 0.1 * f, 0, 0.1); J(m.hipR, -0.25 * reel - 0.35 * f, 0, -0.1);
-    J(m.kneeL, 0.9 * reel - 0.2 * f, 0, 0); J(m.kneeR, 0.6 * reel + 0.4 * f, 0, 0);
-    J(m.torso, 0.25 * reel, 0, -0.3 * side * f + 0.08 * side * bo);
-    J(m.head, 0.25 * reel - 0.1 * f, 0.3 * side * f, 0.2 * side * f + 0.2 * side * bo); J(m.head2, 0.2 * reel, 0.2 * side * f, 0.25 * side * f + 0.15 * side * bo);
-    J(m.shL, -0.6 * reel - 0.6 * f + 0.4 * settle, 0, -0.3 * f); J(m.elL, -0.8 * reel + 0.3 * settle, 0, 0);
-    J(m.shR, -0.6 * reel - 0.3 * f + 0.3 * settle, 0, 0.4 * f); J(m.elR, -0.7 * reel + 0.3 * settle, 0, 0);
+    // staggers, one knee gives, and it falls onto its side, the under leg bent, the heads coming down on the ground, the upper arm
+    // flopping over the body
+    const f = fallK(t, 0.38, T0), k = smooth(clamp01((t - 0.38) / (T0 - 0.38))), u = side > 0;   // (u: the left side is underneath)
+    m.body.rotation.z = side * (0.08 * reel + (A - 0.08) * f);
+    m.body.position.x = side * 0.06 * reel * S;
+    J(m.hipL, mix(-0.5 * reel, u ? -0.5 : -0.25, k), 0, 0.1); J(m.hipR, mix(-0.25 * reel, u ? -0.25 : -0.5, k), 0, -0.1);
+    J(m.kneeL, mix(0.9 * reel, u ? 0.75 : 0.35, k), 0, 0); J(m.kneeR, mix(0.6 * reel, u ? 0.35 : 0.75, k), 0, 0);
+    J(m.torso, 0.25 * reel * (1 - k) + 0.12 * k, 0, 0.12 * side * k + 0.08 * side * bo);
+    J(m.head, 0.25 * reel * (1 - k), 0.25 * side * k, 0.7 * side * k + 0.2 * side * bo); J(m.head2, 0.2 * reel * (1 - k), 0.15 * side * k, 0.75 * side * k + 0.15 * side * bo);
+    J(m.shL, mix(-0.6 * reel, u ? -0.9 : -0.5, k), 0, mix(0, u ? 0.2 : -0.5, settle)); J(m.elL, mix(-0.8 * reel, -0.4, settle), 0, 0);
+    J(m.shR, mix(-0.6 * reel, u ? -0.5 : -0.9, k), 0, mix(0, u ? 0.5 : -0.2, settle)); J(m.elR, mix(-0.7 * reel, -0.4, settle), 0, 0);
   }
+  // down onto the ground, not into it nor above it (it bounces once as it lands)
+  m.body.position.y -= lowest(m);
+  m.body.position.y += 0.035 * S * Math.max(0, bo);
 }
-// the hammer's tilt in the fist once it lies level on the ground, for each fall (kind, side): found once, on the pose the fall ends in
+// the hammer's tilt in the fist once it lies on the ground, for each fall (kind, side): found once, on the pose the fall ends in
 const FALLEN = [null, null, null, null, null, null];
 function fallenTilt(m, kind, side) {
   fallPose(m, 2.6, kind, side);
@@ -990,7 +1018,8 @@ function fallenTilt(m, kind, side) {
   let x = Math.atan2(-a, b);
   const cur = GIANT_TILT - 0.3;
   if (Math.cos(x - cur) < 0) x += PI;
-  return cur + Math.atan2(Math.sin(x - cur), Math.cos(x - cur));
+  x = cur + Math.atan2(Math.sin(x - cur), Math.cos(x - cur));
+  return haftTo(m, 0.03, x);   // (near level, its head resting on the ground)
 }
 export function poseGiantDead(m, t, kind) {
   const side = m.variant & 1 ? 1 : -1, key = (kind % 3) * 2 + (side > 0 ? 1 : 0);
@@ -998,5 +1027,15 @@ export function poseGiantDead(m, t, kind) {
   fallPose(m, t, kind, side);
   // the hammer: out of the grip as he goes down, swung round in the fist until the haft lies level
   const reel = smooth(clamp01(t / 0.35)), start = GIANT_TILT - 0.3 * reel, k = smooth(clamp01((t - 0.3) / 0.9));
-  m.weapon.rotation.set(start + (FALLEN[key] - start) * k, 0, 0);
+  const g = m.gs, target = start + (FALLEN[key] - start) * k;
+  // (its head is not put into the ground on the way: it rests on it instead; and it turns at most so fast, from where it was as he
+  // died, so it never jumps)
+  if (!(t > g.deadT)) g.deadTilt = m.weapon.rotation.x;
+  const dt = Math.min(0.1, t - (g.deadT > 0 ? g.deadT : 0));
+  g.deadT = t;
+  m.weapon.rotation.set(target, 0, 0);
+  const ground = haftTo(m, 0.03, target), want = headLow(target) < 0.03 ? ground : target;
+  const d = Math.atan2(Math.sin(want - g.deadTilt), Math.cos(want - g.deadTilt));
+  g.deadTilt += clamp(d, -9 * dt, 9 * dt);
+  m.weapon.rotation.set(g.deadTilt, 0, 0);
 }
