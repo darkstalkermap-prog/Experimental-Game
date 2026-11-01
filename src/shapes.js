@@ -1218,8 +1218,8 @@ const hem = (b, w, h, y, o) => {
 };
 // (the collar: a roll round the back of the neck, along the cloak's top edge)
 const collar = (b, w, hgt, o) => {
-  const hw = w * 0.39;
-  b.sweep([[-hw, 0.0, 0.11], [-hw * 0.55, 0.012, 0.0], [0, 0.018, -0.03], [hw * 0.55, 0.012, 0.0], [hw, 0.0, 0.11]], hgt * 0.45, hgt * 0.45, { ...o, seg: b.pick(8, 5, 4), segs: b.pick(12, 6, 4) });
+  const hw = w * 0.3;
+  b.sweep([[-hw, -0.02, 0.1], [-hw * 0.6, 0.008, 0.01], [0, 0.016, -0.03], [hw * 0.6, 0.008, 0.01], [hw, -0.02, 0.1]], hgt * 0.4, hgt * 0.4, { ...o, seg: b.pick(8, 5, 4), segs: b.pick(12, 6, 4) });
 };
 const clasp = (b, o = gold) => { if (b.level < 2) { b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...o, e: 0.4 }); if (b.level < 1) b.rod([-0.12, 0.005, 0.07], [0.12, 0.005, 0.07], 0.004, 0.004, { ...o, seg: 4 }); } };
 def('cape.long', (b) => {
