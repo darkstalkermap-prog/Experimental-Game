@@ -5,6 +5,20 @@
 
 export const UPDATES = [
   {
+    id: 8,
+    title: 'Steadier and smoother',
+    items: [
+      'Big battles run much faster: a 2,000-soldier War Mode battle takes about 40% less work per frame, with far fewer pauses.',
+      'Memory stays flat over many matches in a row (a finished match is fully let go of).',
+      'Soldiers no longer climb the mountains round the map or float above slopes, and War Mode formations stay on the battlefield.',
+      'Fixed a rare War Mode bug where a holding archer shot from afar could vanish and keep a battle from ending.',
+      'A fallen castle\'s gate now breaks; siege engines no longer get stuck in their own castle or between rocks; small-map catapults reach the back walls.',
+      'Heroes rise fresh after dying (no leftover stagger or half-drawn shots), horses can\'t be mounted through walls, and bots tire like players do.',
+      'Online: a wrong join code can no longer close the game you then host, and the host shrugs off broken messages.',
+      'The HUD keeps clear of itself at every screen size and UI scale; a draw now says so.',
+    ],
+  },
+  {
     id: 7,
     title: 'Bigger wars, smarter lords',
     items: [
