@@ -21,6 +21,24 @@ export const MAT = {
   steel: [0.3, 0.9], plate: [0.34, 0.88], iron: [0.5, 0.8], mail: [0.46, 0.75], gold: [0.3, 0.95], brass: [0.4, 0.85], gem: [0.12, 0.1], rubber: [0.9, 0],
 };
 
+// The models' own dice. three.js names every object, geometry and material it makes with four draws of Math.random (its uuid), and
+// the battle's rules draw from Math.random too. Had the models drawn from it, a change to how soldiers look (two ankle joints a man,
+// a richer shape in the warm-up, one more batch in the crowd, a giant's footfalls) would change every number the battle draws after
+// it, and on a seeded run (the tests; the same seed, the same fight) the fight would play out differently. So whatever only shows is
+// made with dice of its own: quietly(fn, ...) runs fn with Math.random swapped for them (calls may nest; if fn throws, Math.random is
+// still given back). (models.js, shapes.js, crowd.js and the giant's dust in units.js)
+let dice = 0x2545f491, quiet = 0, rulesRandom = null;
+function ownRandom() {
+  dice = (dice + 0x6d2b79f5) | 0;
+  let t = Math.imul(dice ^ (dice >>> 15), 1 | dice);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+export function quietly(fn, a, b, c, d, e) {
+  if (quiet++ === 0) { rulesRandom = Math.random; Math.random = ownRandom; }
+  try { return fn(a, b, c, d, e); } finally { if (--quiet === 0) { Math.random = rulesRandom; rulesRandom = null; } }
+}
+
 const _m = new THREE.Matrix4(), _n3 = new THREE.Matrix3(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
 const _p = new THREE.Vector3(), _p2 = new THREE.Vector3(), _s = new THREE.Vector3(), _v = new THREE.Vector3(), _one = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color(), _tp = new THREE.Vector3(), _tn = new THREE.Vector3(), _tu = new THREE.Vector3();

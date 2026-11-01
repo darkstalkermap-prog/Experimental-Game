@@ -14,6 +14,7 @@ import { Q } from './quality.js';
 import { shapeGeo } from './shapes.js';
 import { unitMaterial, crowdDepthMaterial, crowdUniforms } from './unitmat.js';
 import { farShapeOf, geoLevel, warmStep } from './models.js';
+import { quietly } from './modelkit.js';
 import { limitShadow, shadowProxy } from './shadows.js';
 
 // the distances (metres) at which a soldier drops to the next level of detail, from the quality settings
@@ -26,6 +27,7 @@ export function lodLimits(out = LOD) {
 }
 
 const _sphere = new THREE.Sphere(), _frustum = new THREE.Frustum(), _proj = new THREE.Matrix4();
+const fillCrowd = (crowd, game, dt) => crowd.fill(game, dt);
 const STATIC = ['position', 'normal', 'color', 'aSurf', 'aFx'];
 // One update range for each instance buffer, kept for good: three.js empties a buffer's list of ranges after each upload, so the list and a range
 // were made again for every batch, every frame (garbage). The range's count is set before each upload instead.
@@ -139,8 +141,10 @@ export class Crowd {
     this.batchFor(f.geo[3], true, false).push(rig.body.matrixWorld.elements, rig.inst);
   }
 
-  // Draw what can be seen. `lod` of a unit was chosen by the game (0 near, 1 mid, 2 far, 3 hidden).
-  update(game, dt) {
+  // Draw what can be seen. `lod` of a unit was chosen by the game (0 near, 1 mid, 2 far, 3 hidden). (The batches, shapes and far
+  // models it makes as they are first needed are made with the models' own dice, not the rules' Math.random: modelkit.js)
+  update(game, dt) { quietly(fillCrowd, this, game, dt); }
+  fill(game, dt) {
     const cam = game.camera;
     cam.updateMatrixWorld();
     _proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);

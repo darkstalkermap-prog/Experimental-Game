@@ -10,7 +10,7 @@ import { Q } from './quality.js';
 import { getShape, shapeGeo, SHAPES, headJobs, ANKLE_Y, footOf } from './shapes.js';
 import { unitMaterial, unitMaterials } from './unitmat.js';
 import { unitTextures, emblemCell, setRigEmblem } from './unittex.js';
-import { SKIRT } from './modelkit.js';
+import { SKIRT, quietly } from './modelkit.js';
 import { buildGiant, poseGiant, poseGiantDead } from './giantmodel.js';
 
 export { unitMaterial };
@@ -79,7 +79,8 @@ function bodyScale(body, desc, tier) {
   body.scale.set(s * w, s, s * w);
 }
 // Build a posable soldier (the rig only: the crowd draws it). opts.hero: a hero class instead of a unit type's look.
-export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
+export function buildSoldier(type, team, variant, tier = 0, opts = null) { return quietly(makeSoldier, type, team, variant, tier, opts); }
+function makeSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
   let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
   if (opts && opts.cape && SHAPES.has(opts.cape)) desc = { ...desc, cape: opts.cape };   // a cloak the lord has earned (progress.js)
   const raider = team === RAIDER_TEAM;
@@ -190,7 +191,8 @@ export function rigSetBow(m, bow) {
 }
 
 // ---------------------------------------------------------------- the horse
-export function buildHorse(team, variant = Math.floor(Math.random() * 6), barded = true) {
+export function buildHorse(team, variant, barded = true) { return quietly(makeHorse, team, variant, barded); }
+function makeHorse(team, variant = Math.floor(Math.random() * 6), barded = true) {
   const root = new THREE.Group();
   const body = joint(root, 0, 0, 0);
   const neck = joint(body, 0, 1.62, 0.62), tail = joint(body, 0, 1.5, -1.0);
@@ -1093,20 +1095,19 @@ function bakeRig(m, level, resolve, keepPose) {
   return geo;
 }
 // the one static model that stands in for a rig far away: { name, open, geo: [..., geometry at index 3] } (see crowd.js)
-export function farShapeOf(m) {
-  let f = farCache.get(m.farKey);
-  if (!f) {
-    // (baked from a rig of its own: the one asked about may be mid-stride, or lying dead)
-    baking = true;   // (the rig made to be baked queues nothing of its own)
-    const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : null);
-    baking = false;
-    f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, bakeRig(t, 3, false)] };
-    farCache.set(m.farKey, f);
-  }
+export function farShapeOf(m) { return farCache.get(m.farKey) || quietly(bakeFar, m); }
+function bakeFar(m) {
+  // (baked from a rig of its own: the one asked about may be mid-stride, or lying dead)
+  baking = true;   // (the rig made to be baked queues nothing of its own)
+  const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : null);
+  baking = false;
+  const f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, bakeRig(t, 3, false)] };
+  farCache.set(m.farKey, f);
   return f;
 }
 // A static mesh of a rig's current pose, colours included (for modules that put a soldier on a wall and the like): the mesh is hidden at first.
-export function bakedMesh(key, root) {
+export function bakedMesh(key, root) { return quietly(makeBaked, key, root); }
+function makeBaked(key, root) {
   if (!bakeCache.has(key)) {
     const m = root.userData.rig;
     if (!m) throw new Error('bakedMesh needs a rig built by buildSoldier');
@@ -1128,7 +1129,8 @@ function warmHeads() {
 }
 // (the rich shapes are for soldiers close by; everyone farther away wears the plain ones, so a crowd stays cheap)
 export const geoLevel = (lod) => (lod === 0 ? Math.max(0, 2 - Q.detail) : 2);
-export function prewarmSoldier(type, team, variant, tier = 0) {
+export function prewarmSoldier(type, team, variant, tier = 0) { quietly(warmSoldier, type, team, variant, tier); }
+function warmSoldier(type, team, variant, tier) {
   warmHeads();
   const key = type + ':' + (team === RAIDER_TEAM ? 'r' : '');
   if (!warmed.has(key) && UNIT_TYPES[type]) {
@@ -1142,9 +1144,9 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
   }
   warmStep();
 }
-export function warmStep() {
+export function warmStep() { return warmTasks.length > 0 && quietly(runWarmTask); }
+function runWarmTask() {
   const task = warmTasks.shift();
-  if (!task) return false;
   if (typeof task === 'function') task();
   else if (task[0].kind) farShapeOf(task[0]); else shapeGeo(task[0], task[1]);
   return true;

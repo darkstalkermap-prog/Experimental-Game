@@ -10,7 +10,7 @@
 // and dust and mud climb from the feet (modelkit.js `dirt`). The richest level carries the small things (rivets, buckles, lacing, stitched
 // hems); the plain levels keep the layers and the silhouette, so a crowd stays cheap.
 import * as THREE from 'three';
-import { Builder, PAT, SKIRT } from './modelkit.js';
+import { Builder, PAT, SKIRT, quietly } from './modelkit.js';
 import { sculptHead, sculptHair, sculptBeard } from './heads.js';
 
 export const SHAPES = new Map();
@@ -21,9 +21,10 @@ export function getShape(name) {
   return s;
 }
 export function shapeGeo(shape, level) {
-  if (!shape.geo[level]) { const b = new Builder(level); shape.make(b); shape.geo[level] = b.geometry(); }
+  if (!shape.geo[level]) shape.geo[level] = quietly(makeGeo, shape, level);   // (with the models' own dice: modelkit.js)
   return shape.geo[level];
 }
+function makeGeo(shape, level) { const b = new Builder(level); shape.make(b); return b.geometry(); }
 
 const K = {
   steel: 0xa2a7ae, steelLt: 0xbcc0c6, iron: 0x55575c, ironDk: 0x2e2f33, gold: 0xc9973a, brass: 0xa77a2c, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,

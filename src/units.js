@@ -9,6 +9,7 @@ import { allied } from './teams.js';
 import { mods } from './mods.js';
 import { groundMul } from './biometwist.js';
 import { giantStep, GIANT_FALL, giantHammerHead } from './giantmodel.js';
+import { quietly } from './modelkit.js';
 
 const tmp = new THREE.Vector3();
 // how far a War Mode soldier on Charge looks round himself for a foe before he marches on the army his group was sent at (an archer looks as far as he
@@ -879,14 +880,7 @@ export class Unit {
     if (this.isGiant && moving) {
       // the ground shakes under each step
       const step = giantStep(this.walkPhase);   // (a heel strike: giantmodel.js plants the feet on its own, longer stride)
-      if (step !== this.lastStep) {
-        this.lastStep = step;
-        this.game.fx.stomp(this.pos.clone().setY(this.pos.y + 0.2));
-        this.game.audio.play('stomp', this.pos);
-        const p = this.game.player;
-        const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
-        if (d < 30) p.shake = Math.max(p.shake, 0.2 * (1 - d / 30));
-      }
+      if (step !== this.lastStep) { this.lastStep = step; quietly(giantStomp, this); }
     }
     // the head turns towards whoever the soldier is facing off against
     const tg = this.target;
@@ -965,15 +959,26 @@ export class Unit {
   }
 
   // A falling giant's body hits the ground: dust where its chest lands, a boom, and the ground shakes under whoever stands near.
-  giantFell(m) {
-    m.torso.updateWorldMatrix(true, false);
-    const c = m.torso.getWorldPosition(tmp);
-    c.y = this.pos.y + 0.3;
-    this.game.fx.dust(c, 28, 4);
-    this.game.audio.play('boom', c);
-    const p = this.game.player, d = Math.hypot(p.pos.x - c.x, p.pos.z - c.z);
-    if (d < 35) p.shake = Math.max(p.shake, 0.45 * (1 - d / 35));
-  }
+  giantFell(m) { quietly(giantFellFx, this, m); }
+}
+
+// (a giant's footfalls and fall only show: their dust is scattered with the models' own dice, so how often its gait puts a foot down, or
+// how it falls, changes no number the battle draws: modelkit.js)
+function giantStomp(u) {
+  u.game.fx.stomp(u.pos.clone().setY(u.pos.y + 0.2));
+  u.game.audio.play('stomp', u.pos);
+  const p = u.game.player;
+  const d = Math.hypot(p.pos.x - u.pos.x, p.pos.z - u.pos.z);
+  if (d < 30) p.shake = Math.max(p.shake, 0.2 * (1 - d / 30));
+}
+function giantFellFx(u, m) {
+  m.torso.updateWorldMatrix(true, false);
+  const c = m.torso.getWorldPosition(tmp);
+  c.y = u.pos.y + 0.3;
+  u.game.fx.dust(c, 28, 4);
+  u.game.audio.play('boom', c);
+  const p = u.game.player, d = Math.hypot(p.pos.x - c.x, p.pos.z - c.z);
+  if (d < 35) p.shake = Math.max(p.shake, 0.45 * (1 - d / 35));
 }
 
 export function isEnemy(a, b) {
