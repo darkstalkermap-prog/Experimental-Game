@@ -782,8 +782,8 @@ export function poseGiant(m, st) {
   let shLx = -0.2 - 0.3 * w * _cos(lag), shLz = 0.24, elL = -0.3 - 0.18 * w * Math.max(0, -_cos(lag)) - 0.04 * breath;
   let shRx = -0.2 - 0.14 * w * _cos(lag), shRz = -0.2, elR = -0.32 - 0.12 * w, wpn = 0;
   let hx = 0, stepL = 0, stepR = 0;
-  // the hammer while walking: carried a little up off the ground, its head swinging behind the arm
-  shRx -= 0.18 * w; elR -= 0.18 * w; wpn += 0.08 * w * _sin(lag - 0.8);
+  // the hammer while walking: carried just off the ground, its head swinging behind the arm
+  shRx -= 0.1 * w; elR -= 0.2 * w; wpn += 0.08 * w * _sin(lag - 0.8);
   // (the shoulders' pitch is against the stoop: the arms hang down, not forward; a blow's poses are the arms' own)
   const hang = (px + tx) * 0.75;
   shLx -= hang; shRx -= hang;
@@ -866,7 +866,7 @@ export function poseGiant(m, st) {
   // ---- the hammer: at rest its head lies on the ground by his feet (carried higher as he walks, swinging behind the arm); through a
   // blow the wind-up's tilt is the pose's, then the head is brought to the ground where it lands and kept there, kicking up once, and
   // dragged up off it as he hauls it back
-  const restH = 0.12 + 0.5 * w;
+  const restH = 0.12 + 0.25 * w;
   let tilt;
   if (!swinging) tilt = g.tilt = haftTo(m, restH, GIANT_TILT) + wpn;
   else {
