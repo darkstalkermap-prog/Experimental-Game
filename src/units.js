@@ -33,7 +33,9 @@ const DEATH_POSED = 2.6;   // s after a death by which every fall has come to re
 // the pose a soldier is drawn in this frame (Unit.animate): one object filled in for each soldier, not a new one for each of them every frame
 // (with War Mode's thousands that was a large share of the frame's garbage); poseSoldier reads it at once and keeps nothing of it
 // (its numbers start as -0, a fraction to the engine: see Z in the constructor)
-const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0 };
+// (dt, the place and the facing let models.js plant the feet and blend; gx, gz: the ground's slope under a near soldier; air: a lord's leap)
+const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0,
+  dt: -0, x: -0, y: -0, z: -0, yaw: -0, gx: -0, gz: -0, air: false };
 // A step that came out as no number is a bug (a way worked out from a distance of 0, a goal that is no number). A soldier at a NaN place is never drawn,
 // hit or killed, his house's middle in War Mode's picture goes NaN with him, and a battle could not end: he stays where he stood, at rest (or at his
 // last good place, when that was no number either), and it is said once, so that a test sees it and the cause is found (Unit.applyMovement).
@@ -601,7 +603,7 @@ export class Unit {
     this.idleT += dt;
     if (this.lod < 2) {
       if (sp > 0.2) this.walkPhase += dt * sp * 2.1;
-      poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT });
+      poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT, dt, x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yaw });
       const c = this.model;
       c.shL.rotation.set(-1.35, 0, -0.2); c.shR.rotation.set(-1.35, 0, 0.2);   // hands on the frame
       c.elL.rotation.x = c.elR.rotation.x = -0.3;
@@ -894,6 +896,16 @@ export class Unit {
     const st = POSE;
     st.phase = this.walkPhase; st.speed = sp; st.moving = moving; st.swingT = this.swingT; st.attackDir = this.attackDir;
     st.stagger = stag; st.hurt = this.hurtT; st.blocking = this.blockFlash > 0 || this.braced; st.mounted = this.mounted; st.idle = this.idleT; st.look = this.lookS;
+    st.dt = dt; st.x = this.pos.x; st.y = this.pos.y; st.z = this.pos.z; st.yaw = this.yaw;
+    // the slope under a near soldier's feet (each foot finds its own ground: models.js), not on a wall walk; a lord in the air (his leap; a guest
+    // sees it in his height)
+    const P = this.game.physics;
+    st.gx = 0; st.gz = 0;
+    if (this.lod === 0 && !this.mounted) {
+      const x = this.pos.x, z = this.pos.z, h0 = P.terrainHeight(x, z);
+      if (this.pos.y - h0 < 0.3) { st.gx = (P.terrainHeight(x + 0.4, z) - h0) * 2.5; st.gz = (P.terrainHeight(x, z + 0.4) - h0) * 2.5; }
+    }
+    st.air = !!this.kit && (!!this.leap || (!this.game.simulating && this.pos.y - P.groundHeight(this.pos.x, this.pos.z, this.pos.y + 0.1) > 0.45));
     poseSoldier(m, st);
   }
 
