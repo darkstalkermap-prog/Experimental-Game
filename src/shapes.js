@@ -74,15 +74,16 @@ const ALONG_Z = new THREE.Matrix4().makeRotationX(PI / 2);
 // The boot: a shaft to below the knee with its top turned down, the ankle, a foot with a heel and a rounded toe on a sole, a strap and
 // buckle over the instep. `kind`: 'leather', 'fur' (wrapped in pelt and thongs) or 'plate' (a sabaton of lames over a mail foot).
 function boot(b, kind) {
-  const bc = kind === 'fur' ? { c: K.fur, m: 'fur', p: PAT.fur } : kind === 'plate' ? { c: K.bootDk, m: 'leather', p: PAT.leather } : { c: K.boot, m: 'leather', p: PAT.leather };
+  const bc = kind === 'fur' ? { c: K.fur, m: 'fur', p: PAT.fur } : { c: K.boot, m: 'leather', p: PAT.leather };
+  const fc = kind === 'plate' ? { c: K.steel, m: 'plate' } : bc;   // (a sabaton is plate over the foot)
   b.dirt = mud(-0.5, -0.22);
   b.loft([[-0.135, 0.051, 0.057, -0.012], [-0.24, 0.047, 0.053, -0.008], [-0.34, 0.04, 0.043, 0.0], [-0.415, 0.039, 0.043, 0.004], [-0.45, 0.043, 0.05, 0.012]], { ...bc, a: [0.78, 1], seg: b.pick(18, 8, 6) });
   const foot = [[-0.085, 0.006, 0.006, 0.474], [-0.078, 0.03, 0.026, 0.472], [-0.05, 0.041, 0.04, 0.466], [-0.01, 0.045, 0.048, 0.458], [0.04, 0.047, 0.038, 0.468],
     [0.09, 0.048, 0.03, 0.477], [0.14, 0.046, 0.024, 0.483], [0.18, 0.039, 0.019, 0.488], [0.207, 0.024, 0.013, 0.492], [0.218, 0.006, 0.006, 0.494]];
-  b.within(ALONG_Z, () => b.loft(foot, { ...bc, a: [0.8, 1], seg: b.pick(16, 8, 6), sq: 2.4 }));
+  b.within(ALONG_Z, () => b.loft(foot, { ...fc, a: [0.8, 1], seg: b.pick(16, 8, 6), sq: 2.4 }));
   if (b.level < 2) {
     // the sole and the heel, darker and worn
-    b.within(ALONG_Z, () => b.loft([[-0.082, 0.026, 0.006, 0.503], [-0.07, 0.04, 0.008, 0.503], [0.0, 0.046, 0.007, 0.504], [0.1, 0.05, 0.007, 0.504], [0.18, 0.042, 0.006, 0.503], [0.215, 0.022, 0.006, 0.501], [0.222, 0.004, 0.004, 0.5]], { c: K.sole, m: 'rubber', seg: b.pick(12, 6, 4), sq: 3 }));
+    b.within(ALONG_Z, () => b.loft([[-0.082, 0.026, 0.006, 0.503], [-0.07, 0.04, 0.008, 0.503], [0.0, 0.046, 0.007, 0.504], [0.1, 0.05, 0.007, 0.504], [0.18, 0.042, 0.006, 0.503], [0.215, 0.022, 0.006, 0.501], [0.222, 0.004, 0.004, 0.5]], { c: K.sole, m: 'rubber', seg: b.pick(10, 6, 4), sq: 3, smooth: false }));
     b.rbox([0, -0.493, -0.055], [0.068, 0.022, 0.05], { c: K.sole, m: 'rubber', e: 0.3 });
     if (kind === 'leather') {
       b.loft([[-0.118, 0.056, 0.062, -0.012], [-0.135, 0.059, 0.065, -0.012], [-0.175, 0.058, 0.064, -0.012], [-0.185, 0.053, 0.059, -0.011]], { c: K.cuff, m: 'leather', p: PAT.leather, a: [0.85, 1], seg: b.pick(18, 8, 6), smooth: false });   // the turned-down top
@@ -92,13 +93,9 @@ function boot(b, kind) {
       for (const y of [-0.2, -0.29, -0.38]) b.band([[0.05, y, 0.015], [0, y - 0.015, 0.06], [-0.05, y - 0.03, 0.015], [-0.01, y - 0.045, -0.05], [0.05, y - 0.06, -0.02]], 0.008, 0.004, { ...leatherDk, out: from([0, y, -0.005]), segs: b.pick(12, 5, 3) });   // thongs wound round
     }
   }
-  if (kind === 'plate') {
-    // the sabaton: lames from the ankle to the toe, each overlapping the next
-    for (let i = 0; i < (b.level < 2 ? 3 : 1); i++) {
-      const z0 = 0.01 + i * 0.055, w = 0.054 - i * 0.002;
-      b.lathe([[w, -0.016], [w + 0.003, 0.006], [w - 0.006, 0.022]], [0, -0.472 + i * -0.007, z0 + 0.03], { arc: [-PI / 2, PI], rot: [-PI / 2 + 0.22, 0, 0], sc: [1, 0.6, 1], c: K.steel, m: 'iron', seg: b.pick(14, 8, 5) });
-    }
-    if (b.level < 2) b.ell([0, -0.486, 0.19], [0.042, 0.02, 0.04], { ...plate, a: [0.9, 1] });
+  if (kind === 'plate' && b.level < 1) {
+    // the sabaton's lames: the edge of each across the instep
+    for (const [z, y] of [[0.035, -0.428], [0.085, -0.444], [0.135, -0.457]]) b.band([[-0.048, y - 0.03, z], [0, y, z], [0.048, y - 0.03, z]], 0.006, 0.003, { c: K.steelLt, m: 'plate', out: from([0, -0.5, z]), segs: 6 });
   }
   b.dirt = null;
 }
@@ -509,7 +506,7 @@ def('chest.mail', (b) => {
   }
 }, true);
 def('chest.plate', (b) => {
-  trunk(b, { c: K.ironDk, m: 'iron', a: [0.7, 1] });
+  trunk(b, { c: K.ironDk, m: 'iron', a: [0.7, 1], seg: b.pick(16, 10, 9), smooth: false });   // (the arming coat: mostly under plate)
   // breastplate and backplate, the breast with a keel down the middle and rolled edges at the neck and armholes; the surcoat over them
   b.loft(over(-0.05, 0.37, 0.022, 0.026), { sq: SQ, arc: [-1.2, 2.4], ...plate, a: [0.85, 1], seg: b.pick(20, 10, 6) });
   b.loft(over(-0.05, 0.4, 0.02), { sq: SQ, arc: [PI - 1.05, 2.1], ...plate, a: [0.85, 1], seg: b.pick(16, 8, 5) });
@@ -525,7 +522,7 @@ def('chest.plate', (b) => {
 // The Cavalier's brigandine: a coat of the house's cloth riveted over steel plates (rows of brass heads), closed at the front with straps
 // and buckles, over mail; the house's arms on the breast; a gorget at the throat
 def('chest.brigandine', (b) => {
-  trunk(b, { ...mailM, a: [0.75, 1] });
+  trunk(b, { ...mailM, a: [0.75, 1], seg: b.pick(16, 10, 9), smooth: false });
   const rings = over(-0.06, 0.37, 0.026, 0.03);
   b.loft(rings, { sq: SQ, ...cloth, p: PAT.emblem, uv: [0, 0.18, 0.26, 0.26], a: [0.8, 1], seg: b.pick(28, 12, 7) });
   if (b.level < 2) {
@@ -576,9 +573,9 @@ def('chest.ranger', (b) => {
   }
   // the mantle: from the neck over the shoulders, down to the chest, its edge cut in points
   const mo = { ...clothDk };
-  b.lathe([[0.292, 0.2], [0.284, 0.27], [0.262, 0.35], [0.205, 0.415], [0.11, 0.462], [0.076, 0.48]], [0, 0, -0.012], { sc: [1, 1, 0.56], ...mo, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
+  b.lathe([[0.3, 0.2], [0.296, 0.28], [0.284, 0.35], [0.252, 0.41], [0.165, 0.455], [0.08, 0.482]], [0, 0, -0.012], { sc: [1, 1, 0.56], ...mo, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
   if (b.level < 2) {
-    rim(b, 0.205, 0.292, 0.164, -0.012, 0.006, { ...leatherDk });   // a leather hem
+    rim(b, 0.205, 0.3, 0.168, -0.012, 0.006, { ...leatherDk });   // a leather hem
     b.band([[-0.15, 0.19, 0.135], [-0.06, 0.12, 0.14], [0.04, 0.05, 0.133], [0.14, -0.01, 0.105]], 0.036, 0.005, { ...leatherDk, out: trunkOut, segs: b.pick(10, 5, 3) });   // the baldric, from under the mantle
     buckle(b, [-0.03, 0.1, 0.146], [0, 0, 1], 1.1);
   }
@@ -630,9 +627,9 @@ def('chest.fur', (b) => {
     const n = b.level < 1 ? 22 : 12;
     for (let i = 0; i < n; i++) {
       const t = (i / n) * TAU + 0.13 * Math.sin(i * 2.7);
-      const len = 0.07 + 0.05 * ((i * 7) % 5) / 4 + (Math.cos(t) < -0.3 ? 0.08 : 0);   // (longer down the back)
-      const r0 = 0.212, p0 = [Math.sin(t) * r0, 0.285, Math.cos(t) * r0 * 0.68 - 0.006], p1 = [Math.sin(t) * (r0 + 0.02), 0.285 - len, Math.cos(t) * (r0 + 0.02) * 0.68 - 0.006];
-      b.cone(p0, p1, 0.04, { ...fo, seg: 5, a: [0.55, 1], w: [0.2, 0] });
+      const len = 0.05 + 0.04 * ((i * 7) % 5) / 4 + (Math.cos(t) < -0.3 ? 0.06 : 0);   // (longer down the back)
+      const r0 = 0.21, p0 = [Math.sin(t) * r0, 0.3, Math.cos(t) * r0 * 0.68 - 0.006], p1 = [Math.sin(t) * (r0 + 0.025), 0.3 - len, Math.cos(t) * (r0 + 0.025) * 0.68 - 0.006];
+      b.cone(p0, p1, 0.055, { ...fo, seg: 6, a: [0.8, 1], w: [0.2, 0] });
     }
   }
   // the house's sash, slung from the right shoulder to the left hip, knotted there
@@ -661,10 +658,10 @@ def('chest.cleric', (b) => {
 const HC = [0, 0.205, -0.006], HELM = [0.088, 0.106, 0.108];
 // the faces of the classes (heads.js faceField): the plain soldier's, a heavy-browed warrior's, an old man's
 const FACE = { man: {}, brute: { brow: 1.35, jaw: 1.12, nose: 1.15, cheek: 1.1 }, sage: { age: 1, nose: 1.1, brow: 1.05 }, lean: { jaw: 0.94, cheek: 1.1 } };
-function headBase(b, face = FACE.man, neck = true) {
+function headBase(b, face = FACE.man, neck = true, shade = null) {
   if (b.level >= 3) { b.ell([0, 0.19, 0.0], [0.08, 0.115, 0.1], { ...skin, seg: [5, 3] }); return; }
   if (neck) b.loft([[-0.04, 0.058, 0.056, -0.004], [0.04, 0.054, 0.053, 0.004], [0.11, 0.052, 0.054, 0.0]], { ...skin, a: [0.55, 0.8], seg: b.pick(16, 7, 5) });
-  sculptHead(b, face);
+  sculptHead(b, face, shade);
   if (b.level < 2) for (const s of [-1, 1]) {   // the ears
     b.ell([s * 0.077, 0.172, -0.008], [0.012, 0.03, 0.02], { s: 'skinDark', m: 'skin', seg: [b.pick(8, 5, 4), b.pick(6, 3, 3)] });
     if (b.level < 1) b.ell([s * 0.084, 0.174, -0.006], [0.006, 0.022, 0.014], { s: 'skin', m: 'skin', seg: [6, 4] });
@@ -801,12 +798,13 @@ def('head.hood', (b) => {
 // The Ranger's hood: the house's colour, pulled forward over the brow so the face is in its shadow, the edge rolled; a green scarf round
 // the neck; a short beard
 def('head.ranger', (b) => {
-  headBase(b, FACE.lean); beard(b, FACE.lean, 0.8, 0);
+  headBase(b, FACE.lean, true, [0.55, 0.78]); beard(b, FACE.lean, 0.8, 0);   // (the face in the hood's shadow)
   const g = { ...clothDk };
-  // a roomy hood with its edge drawn forward round the face, its point falling behind
-  b.shell([0, 0.198, -0.022], [0.122, 0.148, 0.138], PI * 0.5 + 0.6, TAU - 1.2, 0, PI * 0.92, { ...g, a: [0.55, 1] });
-  b.torus([0, 0.19, 0.083], 0.083, 0.013, { ...g, rot: [0.36, 0, 0], sc: [1, 1.32, 1], seg: b.pick(24, 10, 6), a: [0.7, 1] });
-  b.sweep([[0, 0.31, -0.08], [0, 0.29, -0.17], [0, 0.22, -0.22], [0, 0.13, -0.2]], 0.05, 0.01, { ...g, seg: b.pick(8, 5, 4), segs: b.pick(8, 5, 3), w: [0, 0.4] });
+  // a roomy hood rising to a soft point, its edge drawn forward round the face, the point falling behind
+  b.shell([0, 0.21, -0.03], [0.132, 0.165, 0.15], PI * 0.5 + 0.55, TAU - 1.1, 0, PI * 0.9, { ...g, a: [0.55, 1] });
+  b.ell([0, 0.33, -0.07], [0.07, 0.06, 0.09], { ...g, rot: [0.5, 0, 0], a: [0.75, 1] });
+  b.torus([0, 0.195, 0.088], 0.086, 0.009, { ...g, rot: [0.4, 0, 0], sc: [1, 1.38, 1], seg: b.pick(24, 10, 6), a: [0.7, 1] });
+  b.sweep([[0, 0.33, -0.1], [0, 0.31, -0.19], [0, 0.23, -0.24], [0, 0.12, -0.22]], 0.05, 0.01, { ...g, seg: b.pick(8, 5, 4), segs: b.pick(8, 5, 3), w: [0, 0.4] });
   b.lathe([[0.16, -0.03], [0.13, 0.02], [0.085, 0.075]], [0, 0, -0.016], { sc: [1, 1, 0.82], ...g, a: [0.6, 1] });
   const sc = { c: K.green, m: 'wool', p: PAT.weave };
   b.lathe([[0.08, 0.0], [0.082, 0.04], [0.068, 0.09]], [0, 0, 0.004], { sc: [1, 1, 0.95], ...sc, a: [0.75, 1] });   // the scarf
@@ -814,12 +812,13 @@ def('head.ranger', (b) => {
 }, true);
 // The Mage's cowl: a deep hood of the robe's blue, edged in gold round the face, the face beneath it lined and old, a long beard
 def('head.cowl', (b) => {
-  headBase(b, FACE.sage);
+  headBase(b, FACE.sage, true, [0.6, 0.82]);
   if (b.level < 2) sculptBeard(b, FACE.sage, 1.15, 2);
   const o = { c: K.robe, m: 'wool', p: PAT.weave };
-  b.shell([0, 0.2, -0.016], [0.108, 0.135, 0.124], PI * 0.5 + 0.7, TAU - 1.4, 0, PI * 0.92, { ...o, a: [0.6, 1] });
-  b.cone([0, 0.31, -0.06], [0, 0.29, -0.2], 0.07, { ...o, seg: b.pick(10, 6, 5) });
-  b.torus([0, 0.205, 0.072], 0.094, 0.009, { ...gold, rot: [0.28, 0, 0], sc: [1, 1.3, 1], seg: b.pick(28, 12, 6) });
+  b.shell([0, 0.21, -0.03], [0.13, 0.163, 0.15], PI * 0.5 + 0.55, TAU - 1.1, 0, PI * 0.92, { ...o, a: [0.55, 1] });
+  b.ell([0, 0.335, -0.075], [0.07, 0.065, 0.09], { ...o, rot: [0.55, 0, 0], a: [0.75, 1] });
+  b.cone([0, 0.34, -0.1], [0, 0.31, -0.25], 0.06, { ...o, seg: b.pick(10, 6, 5) });
+  b.torus([0, 0.195, 0.088], 0.088, 0.008, { ...gold, rot: [0.4, 0, 0], sc: [1, 1.38, 1], seg: b.pick(28, 12, 6) });
   b.lathe([[0.16, -0.03], [0.13, 0.01], [0.08, 0.07]], [0, 0, -0.012], { sc: [1, 1, 0.8], ...o, a: [0.65, 1] });
 }, true);
 def('head.none', (b) => {

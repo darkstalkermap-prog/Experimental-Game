@@ -113,7 +113,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const cape = desc.cape ? joint(torso, 0, 0.42, -0.125) : null;
   if (cape) add(cape, desc.cape);
   if (desc.quiver) add(torso, 'quiver');
-  const bowBack = desc.slung && desc.bow ? add(torso, 'bow.back', desc.weapon !== 'bow') : null;   // (the bow on his back while the sword is out)
+  const bowBack = desc.slung && desc.bow && !desc.cape ? add(torso, 'bow.back', desc.weapon !== 'bow') : null;   // (the bow on his back while the sword is out; under a cloak there is no room)
   const kit = add(torso, 'kit.torso', false);
   const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
   const kitShield = desc.shield ? add(elL, 'kit.shield.' + desc.shield, false) : null;

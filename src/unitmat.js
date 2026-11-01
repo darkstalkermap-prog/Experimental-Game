@@ -159,6 +159,10 @@ if (pat > 0.5) {
     diffuseColor.rgb = c;
     float n = cNoise(q.xy * 34.0 + q.z * 27.0);
     diffuseColor.rgb *= mix(vec3(0.96, 0.98, 1.0), vec3(1.05, 0.98, 0.95), n);
+    // blood under the skin: the cheeks, the nose and the lips warmer than the brow
+    vec2 cu = vec2(abs(fuv.x - 0.5), fuv.y);
+    float red = exp(-dot(cu - vec2(0.2, 0.42), cu - vec2(0.2, 0.42)) * 90.0) + exp(-dot(cu - vec2(0.0, 0.38), cu - vec2(0.0, 0.38)) * 260.0) + 0.8 * exp(-dot(cu - vec2(0.0, 0.235), cu - vec2(0.0, 0.235)) * 300.0);
+    diffuseColor.rgb *= mix(vec3(1.0), vec3(1.1, 0.92, 0.88), clamp(red, 0.0, 1.0) * step(0.0, vFx.x) * 0.7);
   } else if (pat < 8.5 || (pat > 11.5 && pat < 12.5)) {
     // the emblem (8: a surcoat or shield, the whole of the arms; 12: a badge on a cloak of fixed colours, the sigil only)
     vec2 euv = clamp(vFx.xy, 0.0, 1.0);

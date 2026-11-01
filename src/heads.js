@@ -110,10 +110,11 @@ function cached(key, make) {
 const I4 = new THREE.Matrix4();
 
 // the head itself (skin, the face atlas on the front)
-export function sculptHead(b, f = {}) {
+// (shade: the baked light from the chin to the crown; a hood's deep shadow is darker)
+export function sculptHead(b, f = {}, shade = null) {
   const [nu, nv] = RES[Math.min(2, b.level)];
   const g = cached(`h${JSON.stringify(f)}|${b.level}`, () => fieldGeometry(faceField(f), nu, nv));
-  b.add(g, I4, { s: 'skin', m: 'skin', p: PAT.face, uv: faceUV, a: [0.78, 1] });
+  b.add(g, I4, { s: 'skin', m: 'skin', p: PAT.face, uv: faceUV, a: shade || [0.78, 1] });
 }
 
 // How far the hair stands off the scalp at a point, by cut: 0 short, 1 long (to the shoulders behind), 2 thinning on the crown, 3 a
@@ -159,7 +160,7 @@ function beardGeometry(f, big, shape, nu, nv) {
     // up the jaw to the sideburns, round the mouth, a moustache over the lip
     let m = sstep(0.16, 0.13, y) * sstep(-0.035, -0.005, z);
     if (ax < 0.045 && y > 0.118) m *= sstep(0.13, 0.122, y) * (ax < 0.03 ? 1 : 0);
-    if (ax < 0.02 && y > 0.094 && y < 0.112 && z > 0.07) m *= 0.15;   // (the mouth stays bare)
+    if (z > 0.06) m *= 1 - sstep(0.03, 0.018, ax) * sstep(0.084, 0.094, y) * sstep(0.12, 0.112, y);   // (the mouth stays bare)
     let t = (0.006 + 0.014 * sstep(0.13, 0.07, y) * sstep(0.0, 0.05, z)) * big;
     if (shape === 0) t *= 0.55;
     return t * m;
