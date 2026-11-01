@@ -34,13 +34,14 @@ export function faceField(f = {}) {
     d = smin(d, sdEll(ax, y, z, [0, 0.106, 0.027], [0.055 * jaw, 0.048, 0.062]), 0.026);                        // the jaw
     d = smin(d, sdEll(ax, y, z, [0, 0.074, 0.064], [0.024 * jaw, 0.02, 0.019]), 0.016);                         // the chin
     d = smin(d, sdEll(ax, y, z, [0.043, 0.162, 0.058], [0.025 * cheek, 0.016, 0.024]), 0.014);                 // a cheekbone
-    d = smin(d, sdEll(ax, y, z, [0, 0.201, 0.08], [0.062, 0.013 * brow, 0.02 * brow]), 0.013);                  // the brow ridge
+    d = smin(d, sdEll(ax, y, z, [0, 0.202, 0.081], [0.064, 0.015 * brow, 0.022 * brow]), 0.012);                 // the brow ridge
     d = smin(d, sdRod(ax, y, z, [0, 0.19, 0.089], [0, 0.141, 0.111 + 0.004 * nose], 0.007, 0.0105 * nose), 0.009);   // the nose
     d = smin(d, sdEll(ax, y, z, [0.0115, 0.138, 0.099], [0.0105 * nose, 0.0085, 0.0095]), 0.006);              // a nostril's wing
     d = smin(d, sdEll(ax, y, z, [0, 0.112, 0.083], [0.02, 0.0065, 0.0095]), 0.006);                             // the upper lip
     d = smin(d, sdEll(ax, y, z, [0, 0.099, 0.081], [0.018, 0.007, 0.0095]), 0.006);                             // the lower lip
     d = smax(d, -sdEll(ax, y, z, [0, 0.1055, 0.091], [0.019, 0.0018, 0.012]), 0.003);                           // the line of the mouth
-    d = smax(d, -sdEll(ax, y, z, [0.033, 0.18, 0.09], [0.021, 0.0125, 0.0135]), 0.011);                         // an eye socket
+    d = smax(d, -sdEll(ax, y, z, [0.033, 0.18, 0.089], [0.023, 0.0145, 0.016]), 0.01);                          // an eye socket
+    d = smin(d, sdEll(ax, y, z, [0.033, 0.179, 0.071], [0.016, 0.0105, 0.012]), 0.004);                         // the eye under its lid
     if (age > 0) d = smax(d, -sdEll(ax, y, z, [0.047, 0.125, 0.07], [0.018, 0.022, 0.012]), 0.012 * age);      // hollow cheeks
     return d;
   };

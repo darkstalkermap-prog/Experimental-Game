@@ -208,7 +208,7 @@ const FRAG_RIM = `
   float rim = pow(1.0 - nv, 3.0);
   // (skin lets light through at its edges, warm, where cloth and steel catch a cool sky rim)
   float flesh = step(6.5, pat) * step(pat, 7.5) + step(10.5, pat) * step(pat, 11.5);
-  totalEmissiveRadiance += diffuseColor.rgb * rim * mix(vec3(0.17, 0.19, 0.21), vec3(0.42, 0.17, 0.1), flesh);
+  totalEmissiveRadiance += diffuseColor.rgb * rim * mix(vec3(0.17, 0.19, 0.21), vec3(0.3, 0.14, 0.09), flesh);
   totalEmissiveRadiance += vec3(1.0, 0.8, 0.55) * vFx.z * 0.9;
   if (pat > 9.5 && pat < 10.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
 }

@@ -21,8 +21,8 @@ const sdSeg = (u, v, ax, ay, bx, by, r) => {
 const sdEll = (u, v, cx, cy, rx, ry) => (Math.hypot((u - cx) / rx, (v - cy) / ry) - 1) * Math.min(rx, ry);
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
 
-function makeTexture(data) {
-  const t = new THREE.DataTexture(data, CELL * CELLS, CELL, THREE.RGBAFormat);
+function makeTexture(data, cell = CELL) {
+  const t = new THREE.DataTexture(data, cell * CELLS, cell, THREE.RGBAFormat);
   t.generateMipmaps = true;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.magFilter = THREE.LinearFilter;
@@ -32,67 +32,84 @@ function makeTexture(data) {
   return t;
 }
 
-// face variants: brow thickness / height / tilt, eye size, mouth width and curve (+ = smile), stubble, scar, war paint
+// face variants: brow thickness / height / tilt, eye size, mouth width and curve (+ = smile), stubble, scar, war paint, age (lines)
 const FACES = [
-  { brow: 0.032, by: 0.665, tilt: 0.0, eye: 1.0, mw: 0.16, mc: 0.0, stub: 0.0, scar: 0, paint: 0 },
-  { brow: 0.046, by: 0.655, tilt: -0.05, eye: 0.9, mw: 0.15, mc: -0.012, stub: 0.0, scar: 0, paint: 0 },
-  { brow: 0.036, by: 0.67, tilt: 0.02, eye: 1.0, mw: 0.17, mc: 0.0, stub: 0.55, scar: 0, paint: 0 },
-  { brow: 0.04, by: 0.66, tilt: -0.03, eye: 0.95, mw: 0.15, mc: -0.006, stub: 0.2, scar: 1, paint: 0 },
-  { brow: 0.028, by: 0.68, tilt: 0.03, eye: 1.1, mw: 0.17, mc: 0.012, stub: 0.0, scar: 0, paint: 0 },
-  { brow: 0.04, by: 0.65, tilt: -0.04, eye: 0.85, mw: 0.14, mc: -0.014, stub: 0.35, scar: 0, paint: 0 },
-  { brow: 0.05, by: 0.655, tilt: -0.07, eye: 0.9, mw: 0.16, mc: -0.01, stub: 0.3, scar: 0, paint: 1 },
-  { brow: 0.045, by: 0.66, tilt: -0.05, eye: 0.95, mw: 0.15, mc: -0.008, stub: 0.2, scar: 1, paint: 2 },
+  { brow: 0.032, by: 0.665, tilt: 0.0, eye: 1.0, mw: 0.16, mc: 0.0, stub: 0.0, scar: 0, paint: 0, age: 0 },
+  { brow: 0.046, by: 0.655, tilt: -0.05, eye: 0.9, mw: 0.15, mc: -0.012, stub: 0.0, scar: 0, paint: 0, age: 0.7 },
+  { brow: 0.036, by: 0.67, tilt: 0.02, eye: 1.0, mw: 0.17, mc: 0.0, stub: 0.55, scar: 0, paint: 0, age: 0.2 },
+  { brow: 0.04, by: 0.66, tilt: -0.03, eye: 0.95, mw: 0.15, mc: -0.006, stub: 0.2, scar: 1, paint: 0, age: 0.4 },
+  { brow: 0.028, by: 0.68, tilt: 0.03, eye: 1.1, mw: 0.17, mc: 0.012, stub: 0.0, scar: 0, paint: 0, age: 0 },
+  { brow: 0.04, by: 0.65, tilt: -0.04, eye: 0.85, mw: 0.14, mc: -0.014, stub: 0.35, scar: 0, paint: 0, age: 1 },
+  { brow: 0.05, by: 0.655, tilt: -0.07, eye: 0.9, mw: 0.16, mc: -0.01, stub: 0.3, scar: 0, paint: 1, age: 0.5 },
+  { brow: 0.045, by: 0.66, tilt: -0.05, eye: 0.95, mw: 0.15, mc: -0.008, stub: 0.2, scar: 1, paint: 2, age: 0.6 },
 ];
 
+// (the faces are painted at twice the emblems' resolution: a hero's face is looked at from a couple of metres)
+const FCELL = 128;
 let faceTex = null;
 export function faceAtlas() {
   if (faceTex) return faceTex;
-  const W = CELL * CELLS, data = new Uint8Array(W * CELL * 4);
+  const W = FCELL * CELLS, data = new Uint8Array(W * FCELL * 4);
   for (let c = 0; c < CELLS; c++) {
     const f = FACES[c];
-    for (let y = 0; y < CELL; y++) {
-      for (let x = 0; x < CELL; x++) {
-        const u = (x + 0.5) / CELL, v = (y + 0.5) / CELL, su = Math.abs(u - 0.5);
+    for (let y = 0; y < FCELL; y++) {
+      for (let x = 0; x < FCELL; x++) {
+        const u = (x + 0.5) / FCELL, v = (y + 0.5) / FCELL, su = Math.abs(u - 0.5);
         let r = 1, g = 0, b = 0, a = 0;
-        // the face sits in the middle of the cell: shade the edges so it melts into the head
-        r -= 0.35 * clamp01((su - 0.3) / 0.2);
-        r -= 0.25 * clamp01((0.18 - v) / 0.18);
-        // eye sockets and nose
+        // the face sits in the middle of the cell: shade the edges so it melts into the head (the head's own shape does the rest)
+        r -= 0.3 * clamp01((su - 0.32) / 0.18);
+        r -= 0.2 * clamp01((0.16 - v) / 0.16);
+        // the sockets (the head is hollowed there too: only a touch), the sides of the nose, its tip's underside
         const sock = Math.min(sdEll(u, v, 0.5 - 0.18, 0.555, 0.12, 0.075), sdEll(u, v, 0.5 + 0.18, 0.555, 0.12, 0.075));
-        r -= 0.16 * cov(sock, 0.09);
-        r -= 0.2 * cov(Math.abs(su - 0.085) - 0.016, 0.05) * clamp01((v - 0.33) / 0.05) * clamp01((0.56 - v) / 0.08);
-        r -= 0.12 * cov(sdEll(u, v, 0.5, 0.345, 0.07, 0.04), 0.04);
+        r -= 0.08 * cov(sock, 0.09);
+        r -= 0.12 * cov(Math.abs(su - 0.085) - 0.014, 0.05) * clamp01((v - 0.36) / 0.05) * clamp01((0.56 - v) / 0.08);
+        r -= 0.12 * cov(sdEll(u, v, 0.5, 0.345, 0.07, 0.035), 0.04);
+        // the folds from the nose's wings to the corners of the mouth, the shadow under the lower lip, the philtrum
+        for (const s of [-1, 1]) r -= (0.07 + 0.06 * f.age) * cov(sdSeg(u, v, 0.5 + s * 0.085, 0.37, 0.5 + s * (f.mw + 0.035), 0.24, 0.006), 0.03);
+        r -= 0.12 * cov(sdEll(u, v, 0.5, 0.195, 0.08, 0.022), 0.03);
+        r -= 0.05 * cov(sdEll(u, v, 0.5, 0.29, 0.018, 0.035), 0.02);
+        // the lips a little darker and redder than the skin round them (R shades it; the mouth's line is a dark detail)
+        r -= 0.1 * cov(sdEll(u, v, 0.5, 0.238, f.mw * 0.95, 0.032), 0.015);
         // eyes
         for (const s of [-1, 1]) {
           const ex = 0.5 + s * 0.18, ey = 0.555;
           // (an almond, mostly iris, under a heavy upper lid: small staring whites read as a cartoon)
           const eye = Math.max(sdEll(u, v, ex, ey, 0.074 * f.eye, 0.03 * f.eye), sdEll(u, v, ex, ey - 0.05 * f.eye, 0.11 * f.eye, 0.068 * f.eye));
-          b = Math.max(b, 0.75 * cov(eye));
-          a = Math.max(a, 0.92 * cov(sdCircle(u, v, ex, ey - 0.004, 0.027 * f.eye)) * cov(eye, 0.02));
-          a = Math.max(a, 0.7 * cov(Math.abs(sdEll(u, v, ex, ey + 0.008, 0.082 * f.eye, 0.036 * f.eye)) - 0.008) * (v > ey ? 1 : 0));   // the upper lid
-          r -= 0.12 * cov(sdEll(u, v, ex, ey + 0.05, 0.1, 0.03), 0.04);   // the crease above it
-          g = Math.max(g, 0.92 * cov(sdSeg(u, v, 0.5 + s * 0.07, f.by - 0.02 + f.tilt * 0.4, 0.5 + s * 0.27, f.by + f.tilt, f.brow * 0.5)));   // brows
+          b = Math.max(b, 0.5 * cov(eye, 0.01));
+          const iris = sdCircle(u, v, ex, ey - 0.004, 0.03 * f.eye);
+          a = Math.max(a, (0.62 + 0.3 * cov(sdCircle(u, v, ex, ey - 0.004, 0.013 * f.eye), 0.008)) * cov(iris, 0.008) * cov(eye, 0.012));
+          a = Math.max(a, 0.5 * cov(Math.abs(iris) - 0.003, 0.006) * cov(eye, 0.012));                                        // the iris's dark ring
+          a = Math.max(a, 0.78 * cov(Math.abs(sdEll(u, v, ex, ey + 0.008, 0.082 * f.eye, 0.036 * f.eye)) - 0.006, 0.008) * (v > ey ? 1 : 0));   // the upper lid
+          a = Math.max(a, 0.3 * cov(Math.abs(sdEll(u, v, ex, ey + 0.004, 0.078 * f.eye, 0.034 * f.eye)) - 0.004, 0.008) * (v < ey - 0.01 ? 1 : 0));   // the lower lid
+          r -= 0.12 * cov(sdEll(u, v, ex, ey + 0.05, 0.1, 0.028), 0.03);   // the crease above it
+          r -= 0.06 * cov(sdEll(u, v, ex, ey - 0.055, 0.075, 0.022), 0.03);   // the shadow under it
+          if (f.age > 0) for (let k = 0; k < 3; k++) a = Math.max(a, 0.18 * f.age * cov(sdSeg(u, v, ex + s * 0.1, ey + 0.012 - k * 0.018, ex + s * 0.14, ey + 0.02 - k * 0.03, 0.002), 0.006));   // crow's feet
+          // brows: thick at the inner end, thinning outward, of hairs
+          const bx0 = 0.5 + s * 0.07, bx1 = 0.5 + s * 0.27, by0 = f.by - 0.02 + f.tilt * 0.4, by1 = f.by + f.tilt;
+          const tb = clamp01(((u - bx0) * (bx1 - bx0) + (v - by0) * (by1 - by0)) / ((bx1 - bx0) ** 2 + (by1 - by0) ** 2));
+          const brow = cov(sdSeg(u, v, bx0, by0, bx1, by1, f.brow * (0.62 - 0.32 * tb)), 0.01);
+          g = Math.max(g, brow * (0.7 + 0.3 * hash(x * 3 + c, y)));
         }
+        if (f.age > 0) for (let k = 0; k < 2; k++) a = Math.max(a, 0.14 * f.age * cov(Math.abs(v - (0.79 + k * 0.045)) - 0.0025, 0.006) * cov(su - 0.2, 0.05));   // the brow's lines
         // nostrils and mouth
-        for (const s of [-1, 1]) a = Math.max(a, 0.55 * cov(sdEll(u, v, 0.5 + s * 0.052, 0.36, 0.02, 0.012)));
+        for (const s of [-1, 1]) a = Math.max(a, 0.55 * cov(sdEll(u, v, 0.5 + s * 0.05, 0.36, 0.019, 0.011), 0.01));
         const my = 0.235 + f.mc * (1 - Math.pow((u - 0.5) / f.mw, 2));
-        if (su < f.mw) a = Math.max(a, 0.6 * cov(Math.abs(v - my) - 0.007));
-        r -= 0.1 * cov(sdEll(u, v, 0.5, 0.17, 0.09, 0.03), 0.04);
+        if (su < f.mw) a = Math.max(a, 0.62 * cov(Math.abs(v - my) - 0.005, 0.008) * clamp01((f.mw - su) / 0.02));
         // stubble and moustache
         if (f.stub > 0) {
           const area = cov(sdBox(u, v, 0.5, 0.18, 0.33, 0.2), 0.12) * (1 - cov(sdEll(u, v, 0.5, 0.235, 0.14, 0.05), 0.02) * 0.5);
-          g = Math.max(g, area * f.stub * (0.55 + 0.45 * hash(x, y)));
+          g = Math.max(g, area * f.stub * (0.5 + 0.5 * hash(x, y)));
         }
-        g = Math.max(g, 0.5 * cov(sdEll(u, v, 0.5, 0.275, 0.12, 0.025), 0.03));                  // moustache shadow
-        if (f.scar) a = Math.max(a, 0.5 * cov(sdSeg(u, v, 0.67, 0.72, 0.56, 0.42, 0.007)));
-        if (f.paint === 1) for (const s of [-1, 1]) for (let k = 0; k < 3; k++) a = Math.max(a, 0.78 * cov(sdSeg(u, v, 0.5 + s * (0.16 + k * 0.05), 0.47, 0.5 + s * (0.2 + k * 0.05), 0.26, 0.012)));
-        if (f.paint === 2) { a = Math.max(a, 0.78 * cov(Math.abs(v - 0.555) - 0.06)); a = Math.max(a, 0.6 * cov(sdSeg(u, v, 0.5, 0.5, 0.5, 0.88, 0.02))); }
-        const i = (y * W + c * CELL + x) * 4;
+        g = Math.max(g, 0.45 * cov(sdEll(u, v, 0.5, 0.275, 0.12, 0.025), 0.03));                  // moustache shadow
+        if (f.scar) { a = Math.max(a, 0.5 * cov(sdSeg(u, v, 0.67, 0.72, 0.56, 0.42, 0.006), 0.008)); r -= 0.08 * cov(sdSeg(u, v, 0.67, 0.72, 0.56, 0.42, 0.014), 0.01); }
+        if (f.paint === 1) for (const s of [-1, 1]) for (let k = 0; k < 3; k++) a = Math.max(a, 0.78 * cov(sdSeg(u, v, 0.5 + s * (0.16 + k * 0.05), 0.47, 0.5 + s * (0.2 + k * 0.05), 0.26, 0.012), 0.01));
+        if (f.paint === 2) { a = Math.max(a, 0.78 * cov(Math.abs(v - 0.555) - 0.06, 0.01)); a = Math.max(a, 0.6 * cov(sdSeg(u, v, 0.5, 0.5, 0.5, 0.88, 0.02), 0.01)); }
+        const i = (y * W + c * FCELL + x) * 4;
         data[i] = Math.round(clamp01(r) * 255); data[i + 1] = Math.round(clamp01(g) * 255); data[i + 2] = Math.round(clamp01(b) * 255); data[i + 3] = Math.round(clamp01(a) * 255);
       }
     }
   }
-  faceTex = makeTexture(data);
+  faceTex = makeTexture(data, FCELL);
   return faceTex;
 }
 

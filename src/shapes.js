@@ -26,10 +26,10 @@ export function shapeGeo(shape, level) {
 }
 
 const K = {
-  steel: 0xaeb3ba, steelLt: 0xc4c8ce, iron: 0x55575c, ironDk: 0x2e2f33, gold: 0xc9973a, brass: 0xa77a2c, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,
+  steel: 0xa2a7ae, steelLt: 0xbcc0c6, iron: 0x55575c, ironDk: 0x2e2f33, gold: 0xc9973a, brass: 0xa77a2c, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,
   boot: 0x3b2a1c, bootDk: 0x2a1d13, cuff: 0x4d3826, pants: 0x4c4237, trim: 0xd9c89a, wood: 0x6b4a2c, woodDk: 0x4a3420, bone: 0xe0d4b8, mail: 0x7a7f86, gamb: 0x9a8560,
   fur: 0x5a4634, furLt: 0x7a6450, linen: 0xd2c9b0, hoof: 0x2a2420, dark: 0x0a0a0c, red: 0xc0392b, quiver: 0x6a4a2a, sole: 0x1e1712,
-  robe: 0x2b2160, robeDk: 0x1d1640, cream: 0xe2d8bc, green: 0x2f5a34, greenDk: 0x22422a, rope: 0xb09a6c,
+  robe: 0x2b2160, robeDk: 0x1d1640, cream: 0xcbbf9f, green: 0x2f5a34, greenDk: 0x22422a, rope: 0xb09a6c,
 };
 const TAU = Math.PI * 2, PI = Math.PI;
 const steel = { c: K.steel, m: 'steel' }, plate = { c: K.steel, m: 'plate' }, iron = { c: K.iron, m: 'iron' }, gold = { c: K.gold, m: 'gold' }, brass = { c: K.brass, m: 'brass' };
@@ -49,12 +49,13 @@ const rim = (b, y, rx, rz, z0, r, o, arc) => {
 };
 // rivets: little domes at the points given (the richest level only)
 const rivets = (b, pts, r, o = steel) => { if (b.level < 1) for (const p of pts) b.ell(p, r, { ...o, seg: [5, 3] }); };
-// a buckle: a frame and its tongue, the face toward `n` (the richest level only)
+// a buckle: a square frame and its tongue, the face toward `n` (the richest level only)
 function buckle(b, c, n, s = 1, o = brass) {
   if (b.level >= 1) return;
-  const ry = Math.atan2(n[0], n[2]), rx = -Math.asin(Math.max(-1, Math.min(1, n[1])));
-  b.torus(c, 0.014 * s, 0.0032 * s, { ...o, rot: [rx, ry, 0], sc: [1, 1.25, 1], seg: 10, sides: 4 });
-  b.rod([c[0], c[1] + 0.012 * s, c[2]], [c[0], c[1] - 0.012 * s, c[2]], 0.002 * s, 0.002 * s, { ...o, seg: 4 });
+  const l = Math.hypot(n[0], n[1], n[2]) || 1;
+  const ry = Math.atan2(n[0], n[2]), rx = -Math.asin(Math.max(-1, Math.min(1, n[1] / l)));
+  b.torus(c, 0.0105 * s, 0.0024 * s, { ...o, rot: [rx, ry, PI / 4], sc: [1, 1, 1], seg: 4, sides: 4 });
+  b.rod([c[0], c[1] + 0.008 * s, c[2]], [c[0], c[1] - 0.008 * s, c[2]], 0.0015 * s, 0.0015 * s, { ...o, seg: 4 });
 }
 
 // ---------------------------------------------------------------- the body plan (see models.js for the joints)
@@ -93,9 +94,9 @@ function boot(b, kind) {
   }
   if (kind === 'plate') {
     // the sabaton: lames from the ankle to the toe, each overlapping the next
-    for (let i = 0; i < (b.level < 2 ? 4 : 2); i++) {
-      const z0 = 0.0 + i * 0.05, w = 0.054 - i * 0.002;
-      b.lathe([[w, -0.012], [w + 0.004, 0.004], [w - 0.004, 0.016]], [0, -0.47 + i * -0.006, z0 + 0.03], { arc: [-PI / 2, PI], rot: [-PI / 2 + 0.25, 0, 0], sc: [1, 0.62, 1], ...plate, seg: b.pick(14, 8, 5) });
+    for (let i = 0; i < (b.level < 2 ? 3 : 1); i++) {
+      const z0 = 0.01 + i * 0.055, w = 0.054 - i * 0.002;
+      b.lathe([[w, -0.016], [w + 0.003, 0.006], [w - 0.006, 0.022]], [0, -0.472 + i * -0.007, z0 + 0.03], { arc: [-PI / 2, PI], rot: [-PI / 2 + 0.22, 0, 0], sc: [1, 0.6, 1], c: K.steel, m: 'iron', seg: b.pick(14, 8, 5) });
     }
     if (b.level < 2) b.ell([0, -0.486, 0.19], [0.042, 0.02, 0.04], { ...plate, a: [0.9, 1] });
   }
@@ -416,15 +417,15 @@ def('pelvis.leather', (b) => {
 def('pelvis.fur', (b) => {
   // a berserker: a kilt of pelt under a fringe of studded leather strips, a broad belt with a big round buckle, the house's sash
   hips(b, { c: K.fur, m: 'fur', p: PAT.fur });
-  for (const arc of [[-0.9, 1.8], [PI - 0.9, 1.8]]) b.lathe([[0.25, -0.34], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.furLt, m: 'fur', p: PAT.fur, w: [SKIRT + 0.8, SKIRT], a: [0.7, 1], seg: b.pick(12, 6, 4), d: mud(-0.36, -0.1, 0.5) });
+  for (const arc of [[-0.9, 1.8], [PI - 0.9, 1.8]]) b.lathe([[0.235, -0.3], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.fur, m: 'fur', p: PAT.fur, w: [SKIRT + 0.8, SKIRT], a: [0.6, 1], seg: b.pick(12, 6, 4), d: mud(-0.32, -0.1, 0.5) });
   b.lathe([[0.17, 0.0], [0.18, 0.01], [0.18, 0.095], [0.17, 0.105]], [0, 0, 0], { sc: [1, 1, 0.74], ...leatherDk, seg: b.pick(36, 14, 9) });
   if (b.level < 2) {
     const n = b.level < 1 ? 11 : 7;
     for (let i = 0; i < n; i++) {
       const t = -1.25 + (i / (n - 1)) * 2.5 + (i % 2) * 0.04;
-      const p0 = onHips(0.0, t, 0.012), p1 = onHips(-0.24 - (i % 3) * 0.025, t, 0.05);
+      const p0 = onHips(0.01, t, 0.024), p1 = onHips(-0.27 - (i % 3) * 0.03, t, 0.085);
       b.band([p0, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2], p1], 0.04, 0.005, { ...leather, w: [SKIRT + 0.5, SKIRT], out: () => [Math.sin(t), 0, Math.cos(t)], segs: 3, d: 0.25 });
-      if (b.level < 1) b.ell([p1[0] * 0.98, p1[1] + 0.03, p1[2] * 0.98], 0.007, { ...iron, w: SKIRT, seg: [5, 4] });
+      if (b.level < 1) for (const k of [0.45, 0.8]) b.ell([p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k, p0[2] + (p1[2] - p0[2]) * k], 0.0075, { ...iron, w: SKIRT, seg: [5, 4] });
     }
     b.ell([0, 0.052, 0.13], [0.044, 0.044, 0.016], { ...iron, a: [0.9, 1] });   // the buckle's round plate
     if (b.level < 1) b.torus([0, 0.052, 0.144], 0.03, 0.006, { ...brass, seg: 16, sides: 5 });
@@ -468,7 +469,7 @@ function tabardTop(b, top, bottom, d = 0.012, o = cloth, wide = 0.7) {
   const rings = over(bottom, top, d, d + 0.004);
   const q = { sq: SQ, seg: b.pick(16, 8, 5) };
   b.loft(rings, { ...q, arc: [-wide, wide * 2], ...o, p: PAT.emblem, uv: [0, 0.2, 0.3, 0.3], a: [0.85, 1] });
-  b.loft(rings, { ...q, arc: [PI - wide, wide * 2], ...o, a: [0.85, 1] });
+  b.loft(rings, { ...q, arc: [PI - wide, wide * 2], ...o, p: PAT.emblem, uv: (x, y) => [-x / 0.3 + 0.5, (y - 0.2) / 0.3 + 0.5], a: [0.85, 1] });   // (the arms on the back too, read from behind)
   if (b.level < 2) {
     b.loft(over(top - 0.03, top, d + 0.002, d + 0.006), { ...q, arc: [-wide - 0.02, wide * 2 + 0.04], ...trim });
     b.loft(over(top - 0.03, top, d + 0.002, d + 0.006), { ...q, arc: [PI - wide - 0.02, wide * 2 + 0.04], ...trim });
@@ -575,15 +576,11 @@ def('chest.ranger', (b) => {
   }
   // the mantle: from the neck over the shoulders, down to the chest, its edge cut in points
   const mo = { ...clothDk };
-  b.lathe([[0.27, 0.22], [0.24, 0.3], [0.19, 0.38], [0.12, 0.43], [0.07, 0.47]], [0, 0, -0.012], { sc: [1, 1, 0.74], ...mo, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
+  b.lathe([[0.292, 0.2], [0.284, 0.27], [0.262, 0.35], [0.205, 0.415], [0.11, 0.462], [0.076, 0.48]], [0, 0, -0.012], { sc: [1, 1, 0.56], ...mo, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
   if (b.level < 2) {
-    const n = b.level < 1 ? 12 : 8;
-    for (let i = 0; i < n; i++) {
-      const t = (i / n) * TAU;
-      b.cone([Math.sin(t) * 0.262, 0.235, Math.cos(t) * 0.262 * 0.74 - 0.012], [Math.sin(t) * 0.285, 0.15, Math.cos(t) * 0.285 * 0.74 - 0.012], 0.04, { ...mo, w: [0.3, 0.45], seg: 4, sc: 1 });
-    }
-    b.band([[-0.16, 0.36, -0.12], [-0.17, 0.38, 0.0], [-0.12, 0.3, 0.13], [0.02, 0.14, 0.135], [0.13, 0.0, 0.11]], 0.036, 0.005, { ...leatherDk, out: trunkOut, segs: b.pick(14, 6, 3) });   // the baldric
-    buckle(b, [-0.06, 0.24, 0.14], [0, 0, 1], 1.1);
+    rim(b, 0.205, 0.292, 0.164, -0.012, 0.006, { ...leatherDk });   // a leather hem
+    b.band([[-0.15, 0.19, 0.135], [-0.06, 0.12, 0.14], [0.04, 0.05, 0.133], [0.14, -0.01, 0.105]], 0.036, 0.005, { ...leatherDk, out: trunkOut, segs: b.pick(10, 5, 3) });   // the baldric, from under the mantle
+    buckle(b, [-0.03, 0.1, 0.146], [0, 0, 1], 1.1);
   }
 }, true);
 def('chest.leather', (b) => {
@@ -599,10 +596,10 @@ def('chest.leather', (b) => {
 def('chest.robe', (b) => {
   const o = { c: K.robe, m: 'wool', p: PAT.weave };
   trunk(b, { ...o, a: [0.75, 1] });
-  b.lathe([[0.115, 0.37], [0.112, 0.42], [0.086, 0.5], [0.09, 0.52]], [0, 0, -0.016], { sc: [1, 1, 0.88], ...o, a: [0.8, 1] });   // the collar
+  b.lathe([[0.118, 0.37], [0.114, 0.42], [0.096, 0.47], [0.1, 0.49]], [0, 0, -0.016], { arc: [PI - 1.9, 3.8], sc: [1, 1, 0.88], ...o, a: [0.8, 1] });   // the collar, standing behind the neck
   if (b.level < 2) {
     b.band([onTrunk(-0.1, 0, 0.004), onTrunk(0.15, 0, 0.004), onTrunk(0.37, 0, 0.004)], 0.03, 0.003, { ...gold, out: trunkOut, segs: b.pick(10, 4, 2) });
-    rim(b, 0.52, 0.09, 0.079, -0.016, 0.005, gold);
+    rim(b, 0.49, 0.1, 0.088, -0.016, 0.005, gold, [PI - 1.9, 3.8]);
     for (const s of [-1, 1]) {
       // the stole: over the shoulder from behind the neck, down the front to the waist, its end weighted with a fringe of gold
       b.band([onTrunk(0.4, s * 2.3, 0.01), [s * 0.1, 0.45, -0.01], [s * 0.09, 0.42, 0.06], onTrunk(0.3, s * 0.32, 0.012), onTrunk(0.05, s * 0.3, 0.014), onTrunk(-0.12, s * 0.3, 0.016)], 0.055, 0.004, { ...cloth, out: from([s * 0.02, 0.2, -0.02]), segs: b.pick(14, 6, 3) });
@@ -619,24 +616,28 @@ def('chest.fur', (b) => {
   for (const sx of [-1, 1]) b.ell([sx * 0.08, 0.27, 0.075], [0.085, 0.07, 0.055], { ...skin, a: [0.8, 1], rot: [0, 0, sx * 0.15] });   // the pectorals
   if (b.level < 2) {
     b.ell([0, 0.11, 0.075], [0.085, 0.11, 0.04], { ...skin, a: [0.85, 1] });   // the belly
-    if (b.level < 1) for (let r = 0; r < 3; r++) for (const sx of [-1, 1]) b.ell([sx * 0.032, 0.04 + r * 0.055, 0.105], [0.03, 0.024, 0.016], { ...skin, a: [0.85, 1], seg: [8, 6] });   // the muscles of the belly
+    if (b.level < 1) for (let r = 0; r < 3; r++) for (const sx of [-1, 1]) b.ell([sx * 0.03, 0.045 + r * 0.05, 0.1], [0.032, 0.028, 0.012], { ...skin, a: [0.92, 1], seg: [10, 7] });   // the muscles of the belly
+    for (const sx of [-1, 1]) b.ell([sx * 0.15, 0.2, -0.01], [0.04, 0.12, 0.09], { ...skin, a: [0.8, 1], rot: [0, 0, sx * -0.12] });   // the lats
     for (const sx of [-1, 1]) b.ell([sx * 0.11, 0.33, -0.06], [0.08, 0.08, 0.06], { ...skin, a: [0.8, 1] });   // the shoulder blades
     for (const sx of [-1, 1]) b.band([onTrunk(0.4, sx * 2.6, 0.012), [sx * 0.13, 0.44, 0.02], onTrunk(0.3, sx * 0.55, 0.014), onTrunk(0.17, 0, 0.026), onTrunk(0.0, -sx * 0.75, 0.01)], 0.032, 0.005, { ...leatherDk, out: from([0, 0.2, -0.01]), segs: b.pick(14, 6, 3) });
     b.ell([0, 0.17, 0.142], [0.034, 0.034, 0.014], { ...iron, a: [0.9, 1] });
     if (b.level < 1) rivets(b, [[0, 0.17, 0.156]], 0.009, brass);
   }
-  // the pelt: a thick ruff from the neck over the shoulders, ragged at its edge
+  // the pelt: a thick ruff from the neck over the shoulders and down the back, its edge in ragged locks that hang
   const fo = { c: K.furLt, m: 'fur', p: PAT.fur };
-  b.loft([[0.29, 0.188, 0.128, 0.0], [0.35, 0.212, 0.138, -0.004], [0.405, 0.198, 0.122, -0.01], [0.445, 0.13, 0.092, -0.013], [0.48, 0.068, 0.064, -0.014]], { ...fo, a: [0.7, 1], seg: b.pick(24, 10, 7) });
+  b.loft([[0.27, 0.2, 0.135, -0.004], [0.33, 0.228, 0.15, -0.006], [0.39, 0.214, 0.134, -0.01], [0.44, 0.15, 0.1, -0.013], [0.48, 0.075, 0.068, -0.014]], { ...fo, a: [0.65, 1], seg: b.pick(28, 10, 7) });
   if (b.level < 2) {
-    const n = b.level < 1 ? 16 : 9;
+    const n = b.level < 1 ? 22 : 12;
     for (let i = 0; i < n; i++) {
-      const t = (i / n) * TAU + 0.2;
-      const p = [Math.sin(t) * 0.2, 0.29 - (i % 2) * 0.02, Math.cos(t) * 0.135];
-      b.ell(p, [0.05, 0.045, 0.04], { ...fo, rot: [0, t, 0], a: [0.7, 1], seg: [8, 6] });
+      const t = (i / n) * TAU + 0.13 * Math.sin(i * 2.7);
+      const len = 0.07 + 0.05 * ((i * 7) % 5) / 4 + (Math.cos(t) < -0.3 ? 0.08 : 0);   // (longer down the back)
+      const r0 = 0.212, p0 = [Math.sin(t) * r0, 0.285, Math.cos(t) * r0 * 0.68 - 0.006], p1 = [Math.sin(t) * (r0 + 0.02), 0.285 - len, Math.cos(t) * (r0 + 0.02) * 0.68 - 0.006];
+      b.cone(p0, p1, 0.04, { ...fo, seg: 5, a: [0.55, 1], w: [0.2, 0] });
     }
   }
-  b.sweep([[-0.2, 0.4, 0.0], [-0.1, 0.3, 0.13], [0.05, 0.12, 0.135], [0.16, -0.04, 0.11]], 0.035, 0.035, { ...cloth, seg: 6 });
+  // the house's sash, slung from the right shoulder to the left hip, knotted there
+  b.band([[-0.18, 0.43, -0.02], [-0.14, 0.38, 0.1], [-0.03, 0.24, 0.142], [0.09, 0.08, 0.128], [0.16, -0.05, 0.1]], 0.075, 0.006, { ...cloth, out: from([0, 0.2, -0.02]), segs: b.pick(14, 6, 3) });
+  if (b.level < 2) b.band([[0.15, -0.04, 0.11], [0.17, -0.12, 0.12], [0.16, -0.24, 0.11]], 0.06, 0.005, { ...cloth, w: [0.6, 0], out: () => [0.4, 0, 1], segs: b.pick(6, 3, 2) });
 }, true);
 // The Cleric: mail, the house's tabard with its arms, and over it a cream stole edged in gold that hangs to the belt, a holy sun on a chain
 def('chest.cleric', (b) => {
@@ -739,18 +740,19 @@ def('head.great', (b) => {
   if (b.level < 1) for (const s of [-1, 1]) for (let i = 0; i < 6; i++) b.rbox([s * (0.04 + (i % 3) * 0.013), 0.09 + Math.floor(i / 3) * 0.022, 0.11 - (i % 3) * 0.006], [0.008, 0.008, 0.012], { c: K.dark, m: 'iron', sharp: true, rot: [0, s * 0.3, 0] });
   wings(b, 0.27);
 }, true);
-// The Cavalier's sallet: a rounded bowl drawn out into a tail over the nape, a visor with its sight slit and a ridge, a bevor guarding the
-// chin and throat, and a crest of the house's colour that streams back
+// The Cavalier's sallet: a rounded bowl drawn out into a tail over the nape, its visor raised onto the brow so the eyes show, a bevor guarding
+// the mouth, chin and throat, and a crest of the house's colour that streams back
 def('head.sallet', (b) => {
-  if (b.level < 3) b.loft([[-0.04, 0.06, 0.058, -0.004], [0.06, 0.056, 0.056, 0.0]], { ...skin, seg: b.pick(14, 7, 5) });
-  b.loft([[0.13, 0.098, 0.13, -0.025], [0.19, 0.101, 0.125, -0.012], [0.25, 0.096, 0.116, -0.008], [0.29, 0.078, 0.096, -0.008], [0.318, 0.045, 0.06, -0.01], [0.33, 0.01, 0.014, -0.01]], { ...plate, a: [0.8, 1], seg: b.pick(32, 14, 9) });
+  headBase(b, FACE.lean);
+  b.loft([[0.17, 0.1, 0.122, -0.012], [0.22, 0.099, 0.12, -0.008], [0.27, 0.088, 0.106, -0.008], [0.305, 0.064, 0.08, -0.009], [0.326, 0.03, 0.04, -0.01], [0.333, 0.006, 0.008, -0.01]], { ...plate, a: [0.8, 1], seg: b.pick(32, 14, 9) });
+  b.loft([[0.12, 0.096, 0.112, -0.03], [0.17, 0.1, 0.122, -0.012]], { ...plate, arc: [0.95, TAU - 1.9], a: [0.75, 0.95], seg: b.pick(22, 10, 7) });   // the sides and back of the bowl
   b.shell([0, 0.155, -0.04], [0.1, 0.05, 0.13], PI * 0.5 + 0.9, TAU - 1.8, PI * 0.5, PI * 0.3, { ...plate, a: [0.75, 0.9] });   // the tail
-  b.shell([0, 0.165, 0.005], [0.104, 0.07, 0.118], PI * 0.5 - 1.15, 2.3, PI * 0.3, PI * 0.42, { ...plate, a: [0.8, 1] });   // the visor
-  b.rbox([0, 0.193, 0.112], [0.12, 0.012, 0.03], { c: K.dark, m: 'iron', e: 0.2 });
-  b.lathe([[0.076, 0.0], [0.09, 0.06], [0.1, 0.12], [0.098, 0.15]], [0, 0, 0.012], { arc: [-1.4, 2.8], sc: [1, 1, 1.12], ...plate, a: [0.8, 1], seg: b.pick(22, 10, 6) });   // the bevor
+  b.shell([0, 0.205, 0.012], [0.108, 0.06, 0.12], PI * 0.5 - 1.1, 2.2, PI * 0.2, PI * 0.28, { ...plate, a: [0.85, 1] });   // the visor, raised
+  b.lathe([[0.072, 0.0], [0.086, 0.06], [0.096, 0.12], [0.094, 0.142]], [0, 0, 0.014], { arc: [-1.35, 2.7], sc: [1, 1, 1.12], ...plate, a: [0.8, 1], seg: b.pick(22, 10, 6) });   // the bevor
   if (b.level < 2) {
-    b.rbox([0, 0.24, 0.07], [0.014, 0.14, 0.012], { ...plate, rot: [0.95, 0, 0], e: 0.4 });
-    rim(b, 0.15, 0.098, 0.11, 0.012, 0.004, { c: K.steelLt, m: 'plate' }, [-1.4, 2.8]);
+    b.rbox([0, 0.258, 0.088], [0.014, 0.1, 0.012], { ...plate, rot: [1.0, 0, 0], e: 0.4 });
+    rim(b, 0.142, 0.094, 0.105, 0.014, 0.004, { c: K.steelLt, m: 'plate' }, [-1.35, 2.7]);
+    for (const s of [-1, 1]) rivets(b, [[s * 0.104, 0.205, 0.0]], 0.008, brass);   // the visor's pivots
     helmRivets(b, 0.2, 0.099, 0.123, -0.012, 12);
     // the crest: a fan of the house's cloth that rises from the crown and streams back over the tail
     b.sweep([[0, 0.32, 0.03], [0, 0.37, -0.02], [0, 0.36, -0.12], [0, 0.29, -0.22]], 0.04, 0.012, { ...cloth, w: [0.2, 0.95], seg: b.pick(8, 5, 4), segs: b.pick(12, 6, 4), sc: 1 });
@@ -771,7 +773,7 @@ def('head.crown', (b) => {
 // The Berserker: a heavy brow and jaw, an iron cap with a fur brim and a nasal, two great horns, a wild mane and a beard plaited in two
 def('head.horned', (b) => {
   headBase(b, FACE.brute);
-  if (b.level < 2) { sculptHair(b, FACE.brute, 1, { wild: 1 }); sculptBeard(b, FACE.brute, 1.25, 3, { opt: { g: 6 } }); }
+  if (b.level < 2) { sculptHair(b, FACE.brute, 1, { wild: 1 }); sculptBeard(b, FACE.brute, 1.25, 3); }
   b.shell(HC, helm(1), 0, TAU, 0, PI * 0.5, { c: K.iron, m: 'iron', a: [0.8, 1] });
   b.lathe([[0.09, 0.185], [0.1, 0.188], [0.102, 0.205], [0.1, 0.222], [0.09, 0.226]], [0, 0, -0.006], { sc: [1, 1, 1.15], c: K.fur, m: 'fur', p: PAT.fur });
   for (const s of [-1, 1]) {
@@ -783,8 +785,8 @@ def('head.horned', (b) => {
     helmRivets(b, 0.232, 0.09, 0.106, -0.006, 10);
     // the plaits of the beard, bound with iron rings
     for (const s of [-1, 1]) {
-      b.sweep([[s * 0.02, 0.05, 0.085], [s * 0.024, 0.0, 0.09], [s * 0.022, -0.06, 0.085]], 0.014, 0.008, { ...hairM, g: 6, seg: 6, segs: b.pick(8, 4, 3) });
-      if (b.level < 1) b.torus([s * 0.022, -0.05, 0.086], 0.011, 0.003, { ...iron, g: 6, rot: [PI / 2, 0, 0], seg: 10, sides: 4 });
+      b.sweep([[s * 0.02, 0.05, 0.085], [s * 0.024, 0.0, 0.09], [s * 0.022, -0.06, 0.085]], 0.014, 0.008, { ...hairM, seg: 6, segs: b.pick(8, 4, 3) });
+      if (b.level < 1) b.torus([s * 0.022, -0.05, 0.086], 0.011, 0.003, { ...iron, rot: [PI / 2, 0, 0], seg: 10, sides: 4 });
     }
   }
 }, true);
@@ -801,10 +803,11 @@ def('head.hood', (b) => {
 def('head.ranger', (b) => {
   headBase(b, FACE.lean); beard(b, FACE.lean, 0.8, 0);
   const g = { ...clothDk };
-  b.shell([0, 0.2, -0.01], [0.104, 0.13, 0.12], PI * 0.5 + 0.72, TAU - 1.44, 0, PI * 0.9, { ...g, a: [0.6, 1] });
-  b.shell([0, 0.2, 0.012], [0.11, 0.135, 0.13], PI * 0.5 - 0.8, 1.6, PI * 0.16, PI * 0.2, { ...g, a: [0.7, 1] });   // the peak over the brow
-  b.torus([0, 0.205, 0.07], 0.09, 0.011, { ...g, rot: [0.3, 0, 0], sc: [1, 1.3, 1], seg: b.pick(24, 10, 6) });
-  b.lathe([[0.15, -0.02], [0.12, 0.02], [0.075, 0.07]], [0, 0, -0.01], { sc: [1, 1, 0.8], ...g, a: [0.65, 1] });
+  // a roomy hood with its edge drawn forward round the face, its point falling behind
+  b.shell([0, 0.198, -0.022], [0.122, 0.148, 0.138], PI * 0.5 + 0.6, TAU - 1.2, 0, PI * 0.92, { ...g, a: [0.55, 1] });
+  b.torus([0, 0.19, 0.083], 0.083, 0.013, { ...g, rot: [0.36, 0, 0], sc: [1, 1.32, 1], seg: b.pick(24, 10, 6), a: [0.7, 1] });
+  b.sweep([[0, 0.31, -0.08], [0, 0.29, -0.17], [0, 0.22, -0.22], [0, 0.13, -0.2]], 0.05, 0.01, { ...g, seg: b.pick(8, 5, 4), segs: b.pick(8, 5, 3), w: [0, 0.4] });
+  b.lathe([[0.16, -0.03], [0.13, 0.02], [0.085, 0.075]], [0, 0, -0.016], { sc: [1, 1, 0.82], ...g, a: [0.6, 1] });
   const sc = { c: K.green, m: 'wool', p: PAT.weave };
   b.lathe([[0.08, 0.0], [0.082, 0.04], [0.068, 0.09]], [0, 0, 0.004], { sc: [1, 1, 0.95], ...sc, a: [0.75, 1] });   // the scarf
   if (b.level < 2) b.band([[0.03, 0.04, 0.075], [0.04, -0.02, 0.09], [0.035, -0.1, 0.085]], 0.04, 0.004, { ...sc, w: [0, 0.5], out: () => [0, 0, 1], segs: b.pick(6, 3, 2) });
@@ -812,7 +815,7 @@ def('head.ranger', (b) => {
 // The Mage's cowl: a deep hood of the robe's blue, edged in gold round the face, the face beneath it lined and old, a long beard
 def('head.cowl', (b) => {
   headBase(b, FACE.sage);
-  if (b.level < 2) { sculptHair(b, FACE.sage, 2, {}); sculptBeard(b, FACE.sage, 1.15, 2, { opt: { g: 6 } }); }
+  if (b.level < 2) sculptBeard(b, FACE.sage, 1.15, 2);
   const o = { c: K.robe, m: 'wool', p: PAT.weave };
   b.shell([0, 0.2, -0.016], [0.108, 0.135, 0.124], PI * 0.5 + 0.7, TAU - 1.4, 0, PI * 0.92, { ...o, a: [0.6, 1] });
   b.cone([0, 0.31, -0.06], [0, 0.29, -0.2], 0.07, { ...o, seg: b.pick(10, 6, 5) });
@@ -1012,7 +1015,7 @@ def('weapon.greataxe', (b) => {
     for (const s of [-1, 1]) b.rbox([s * 0.026, -1.08, 0], [0.006, 0.26, 0.022], { ...iron, e: 0.5 });
     if (b.level < 1) for (const y of [0.14, -0.24]) b.torus([0, y, 0], 0.031, 0.004, { ...iron, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
   }
-  const bit = [[0, 0.17], [0.07, 0.2], [0.17, 0.27], [0.27, 0.26], [0.33, 0.14], [0.35, -0.02], [0.33, -0.18], [0.26, -0.32], [0.15, -0.33], [0.07, -0.2], [0, -0.15]];
+  const bit = [[0, 0.13], [0.06, 0.15], [0.14, 0.21], [0.22, 0.21], [0.27, 0.11], [0.285, -0.02], [0.27, -0.15], [0.21, -0.26], [0.12, -0.27], [0.06, -0.16], [0, -0.12]];
   b.extrude(bit, 0.024, b.level < 2 ? 0.007 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
   b.extrude([[0, 0.06], [-0.12, 0.025], [-0.2, 0], [-0.12, -0.025], [0, -0.06]], 0.024, b.level < 2 ? 0.005 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
   b.rbox([0, -1.25, 0], [0.07, 0.15, 0.07], { ...iron, e: 0.4 });
@@ -1179,10 +1182,10 @@ function drapeGeo(b, w, h, k = {}) {
     const down = (h / 2 - y0) / h, u = x0 / (w / 2), top = Math.max(0, 1 - down / 0.18);
     const kx = 1 + flare * down;
     // forward round the shoulders at the top, gently round the back below it, pleats that open toward the hem
-    let z = 0.13 * top * top * u * u + 0.045 * (1 - top) * u * u;
+    let z = 0.16 * top * top * u * u + 0.05 * (1 - top) * u * u - 0.085 * Math.min(1, Math.max(0, (down - 0.3) / 0.4)) * (1 - 0.3 * u * u);   // (out over the seat and skirts)
     z += folds * (0.012 + 0.03 * down) * Math.sin(u * 7.2 + phase) * Math.min(1, down * 3);
     const y = y0 + 0.012 * Math.sin(u * 9.1 + 1.3) * down * down;
-    pa.setXYZ(i, x0 * kx * (1 - 0.08 * top * u * u), y, z);
+    pa.setXYZ(i, x0 * kx * (1 - 0.22 * top), y, z);
   }
   g.computeVertexNormals();
   return g;
@@ -1198,7 +1201,11 @@ const hem = (b, w, h, y, o) => {
   g.dispose();
   b.band(row, 0.05, 0.004, { ...o, w: [1.95, 1.9], out: () => [0, 0, -1], segs: nx * 2, d: capeDirt(h) });
 };
-const collar = (b, w, hgt, o, bend = 0.12) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(10, 5, 3), 1, { ...o, dz: (x) => bend * (x / (w / 2)) ** 2 });
+// (the collar: a roll round the back of the neck, along the cloak's top edge)
+const collar = (b, w, hgt, o) => {
+  const hw = w * 0.39;
+  b.sweep([[-hw, 0.0, 0.11], [-hw * 0.55, 0.012, 0.0], [0, 0.018, -0.03], [hw * 0.55, 0.012, 0.0], [hw, 0.0, 0.11]], hgt * 0.45, hgt * 0.45, { ...o, seg: b.pick(8, 5, 4), segs: b.pick(12, 6, 4) });
+};
 const clasp = (b, o = gold) => { if (b.level < 2) { b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...o, e: 0.4 }); if (b.level < 1) b.rod([-0.12, 0.005, 0.07], [0.12, 0.005, 0.07], 0.004, 0.004, { ...o, seg: 4 }); } };
 def('cape.long', (b) => {
   hang(b, 0.58, 1.0, { ...cloth });
