@@ -126,8 +126,10 @@ export class Crowd {
     const parts = rig.parts, inst = rig.inst;
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
-      if (!p.on) continue;
-      this.batchFor(shapeGeo(p.shape, level), p.shape.open, cast, p.shape, level).push(p.node.matrixWorld.elements, inst);
+      // (a near-only part, the foot on its ankle: further off its shape is part of another's, and near it casts no shadow of its own, as
+      // the shadow is drawn from that other part's mid shape: models.js)
+      if (!p.on || (p.near && level > 1)) continue;
+      this.batchFor(shapeGeo(p.shape, level), p.shape.open, cast && !p.near, p.shape, level).push(p.node.matrixWorld.elements, inst);
     }
   }
 

@@ -101,7 +101,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const add = (node, name, on = true) => { const p = { node, shape: getShape(name), on }; parts.push(p); return p; };
   add(pelvis, desc.pelvis); add(torso, desc.chest); add(head, desc.head);
   add(hipL, 'thigh.' + desc.leg); add(hipR, 'thigh.' + desc.leg); add(kneeL, 'shin.' + desc.leg); add(kneeR, 'shin.' + desc.leg);
-  add(ankleL, footOf(desc.leg)); add(ankleR, footOf(desc.leg));
+  add(ankleL, footOf(desc.leg)).near = add(ankleR, footOf(desc.leg)).near = true;   // (near only: further off the shin wears the foot)
   const foreStyle = arm === desc.arm && desc.fore ? desc.fore : arm === 'leather' ? 'cloth' : arm;
   add(shL, 'arm.' + arm); add(shR, 'arm.' + arm); add(elL, 'fore.' + foreStyle); add(elR, 'fore.' + foreStyle);
   if (desc.shield) add(elL, 'shield.' + desc.shield);
@@ -155,7 +155,7 @@ function warmRig(m) {
   warmHeads();
   warmed.add(key);
   const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
-  for (const p of m.parts) if (p.on || p === m.bowPart || p === m.bowDrawn || p === m.bowBack) for (const l of levels) if (!p.shape.geo[l]) warmTasks.push([p.shape, l]);
+  for (const p of m.parts) if (p.on || p === m.bowPart || p === m.bowDrawn || p === m.bowBack) for (const l of levels) if (!p.shape.geo[l] && !(p.near && l > 1)) warmTasks.push([p.shape, l]);
   if (!farCache.has(m.farKey)) warmTasks.push([m, 3]);   // (nothing is queued that is made already: the queue keeps its pace)
 }
 
@@ -384,7 +384,7 @@ function ankleH(psi) { const c = Math.cos(psi), s = Math.sin(psi); return ANK * 
 // Units.js does the same, see Z in the Unit constructor)
 function newFoot(o) {
   const F = { o: -0, up: false, w: -0, tilt: -0, ax: -0, ay: -0, az: -0, x: -0, y: -0, z: -0, yaw: -0, lx: -0, ly: -0, lz: -0, lyaw: -0, u0: -0, pu: -0, psi: -0,
-    cx: -0, cy: -0, cz: -0, cyaw: -0, rx: -0, rz: -0, toe: -0, tx: -0, tz: -0, fp: -0 };
+    cx: -0, cy: -0, cz: -0, cyaw: -0, rx: -0, rz: -0, toe: -0, tx: -0, tz: -0 };
   F.o = o; F.w = 1;
   return F;
 }
@@ -793,7 +793,6 @@ function bodyPose(A, m, st) {
       const lean = Math.atan2(-fo, Math.max(0.2, fv));
       // (a foot in the air takes more of it, most at the top of its swing, so its toes stay clear of the ground)
       F.tilt = F.up ? Math.max(-0.6, Math.min(0.6, lean + (F.psi - lean) * (F.psi > lean ? 0.3 + 0.35 * Math.sin(Math.PI * F.w) : 0.3))) : Math.max(-0.85, Math.min(0.85, lean + 0.3 * (F.psi - lean)));
-      F.fp = F.tilt + slope;
       _a.set(lx2, wy + ankleH(F.tilt + slope) * sc, lz2).sub(B.position).multiplyScalar(1 / sc).sub(P.position).applyQuaternion(_qi);
       _fw.set(fsx, 0, fsz).applyQuaternion(_qi);
       reachLeg(hip, kn, hip.position, _a, _fw, A);
@@ -809,12 +808,13 @@ function bodyPose(A, m, st) {
       m.kneeL.rotation.x += (CROUCH.knee - m.kneeL.rotation.x) * cr;
       m.kneeR.rotation.x += (CROUCH.knee - m.kneeR.rotation.x) * cr;
     }
-    // each foot on its ankle lies as its ankle was raised for: turned to its own yaw, toes down by its tilt over the ground, whatever the
-    // shin does (the leg's chain undone, in the root's frame), so a planted toe or heel stays on the ground and never dips into it
+    // each foot on its ankle lies as its ankle was raised for: turned to its own yaw, toes down by its tilt (from the level: ankleH takes the
+    // ground's slope on top of it, as the toe meets a rise first), whatever the shin does (the leg's chain undone, in the root's frame), so a
+    // planted toe or heel stays on the ground and never dips into it
     if (m.ankleL) for (let i = 0; i < 2; i++) {
       const F = A.feet[i];
       _qf.copy(B.quaternion).multiply(P.quaternion).multiply((i ? m.hipR : m.hipL).quaternion).multiply((i ? m.kneeR : m.kneeL).quaternion).invert();
-      _qg.setFromAxisAngle(UP, F.cyaw - yaw); _qh.setFromAxisAngle(XAX, F.fp); _qg.multiply(_qh);
+      _qg.setFromAxisAngle(UP, F.cyaw - yaw); _qh.setFromAxisAngle(XAX, F.tilt); _qg.multiply(_qh);
       (i ? m.ankleR : m.ankleL).quaternion.multiplyQuaternions(_qf, _qg);
     }
   } else {
@@ -1081,7 +1081,7 @@ function bakeRig(m, level, resolve, keepPose) {
   const bits = resolve && m.kind === 'soldier' ? Math.round(m.inst[3]) : 0;
   const list = [];
   for (const p of m.parts) {
-    if (!p.on) continue;
+    if (!p.on || (p.near && level > 1)) continue;   // (a near-only part: further off another part wears it)
     // (far away the small things do not show: tier kit, plumes, the quiver; the forearms stay, in their plainest form, to hold the weapon)
     if (level === 3 && /^(kit|plume|quiver)/.test(p.shape.name)) continue;
     _rel.multiplyMatrices(_inv, p.node.matrixWorld);
@@ -1135,7 +1135,7 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
     warmed.add(key);
     const m = buildSoldier(type, team, variant, tier);
     const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
-    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume') || p === m.bowDrawn) for (const l of levels) warmTasks.push([p.shape, l]);
+    for (const p of m.parts) if (p.on || p.shape.name.startsWith('kit') || p.shape.name.startsWith('plume') || p === m.bowDrawn) for (const l of levels) if (!(p.near && l > 1)) warmTasks.push([p.shape, l]);
     warmTasks.push([m, 3]);
     if (m.mounted) { const h = buildHorse(team, variant, team !== RAIDER_TEAM); for (const p of h.parts) for (const l of levels) warmTasks.push([p.shape, l]); warmTasks.push([h, 3]); }
     return;

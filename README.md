@@ -1210,7 +1210,8 @@ man is doing, with a little kept on the rig between frames so that nothing snaps
   soldier shoved by the crowd or carried on an engine steps as he goes, a walk turns into a run with flight in it, and stopping brings the
   feet together in a last step or two. The legs reach the feet with two-bone IK (softened near full stretch so a knee never flicks
   straight); the hips come down where a stride is long; the heel lifts as the leg goes behind. Standing, a foot steps only when the body has
-  turned or been pushed off it. On a slope each foot finds its own ground. Going sideways or backwards at speed the hips turn part way into
+  turned or been pushed off it. Near the camera the foot turns at its own ankle to lie as it was set down (flat, or rolled onto the toe),
+  so a planted toe or heel never dips into the ground while the shin leans over it. On a slope each foot finds its own ground. Going sideways or backwards at speed the hips turn part way into
   the stride. Past a sprint (a Shield Bash's run) the steps stay a sprint's.
 - **Blends, not snaps.** The guard, a stagger, a climb, a jump ease in and out by weights; anything abrupt (a blow cut short, a blow seen
   late on a guest, the bow taken out, mounting, landing, a burst of speed, death) is carried as an offset from the last pose drawn that
@@ -1312,7 +1313,9 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   frame goes. Only the richest level (High and Ultra, the nearest `crowdRich` within `crowdNear`) carries the sculpted heads,
   rivets, buckles and straps: a hero is about 18 to 29 thousand triangles there, 5 to 7.5 thousand at Medium's near level,
   1.5 to 1.7 thousand at the mid level and under a thousand far away. The faces, hair cuts and beards are made as small jobs
-  of their own at the start of the warm-up (one a frame), ahead of the heads that wear them.
+  of their own at the start of the warm-up (one a frame), ahead of the heads that wear them. Near the camera each foot is a
+  shape of its own on an ankle joint (one more batch for each kind of boot in view, casting no shadow of its own); at the mid
+  level and far away the shin wears the foot, so those levels cost what they did.
 - War Mode's biggest battles (two armies of 500, four of 500: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine: the
   simulation of 1000 soldiers in melee takes about 7 ms a frame and of 1600 about 12 ms (8 µs a soldier, less than the 10 to 12 of the old 200-soldier
   armies): long looks for a foe go through a coarse second grid (16 m cells), a soldier looks round himself before he looks across the field (and
