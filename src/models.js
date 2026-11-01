@@ -341,7 +341,6 @@ const _a = new THREE.Vector3(), _fw = new THREE.Vector3(), _sh = new THREE.Vecto
 // the engine does not inline, garbage for every soldier in every frame)
 const smooth = (a, b, x) => ease(clamp01((x - a) / (b - a)));
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
-const clampA = (x, a) => (x < -a ? -a : x > a ? a : x);
 // a damped spring on one number, stepped semi-implicitly (sub-steps keep it stable at any frame time): returns the new velocity, the new
 // value is left in SX[0] (a typed array: a number kept in a module variable is boxed afresh at every write, garbage for every soldier)
 const SX = new Float64Array(1);
@@ -398,21 +397,24 @@ function reachLeg(hip, kn, H, tgt, fwd) {
 
 // The root this frame: how fast it travels (smoothed), its acceleration along and across the facing, how fast it turns. A jump of more than
 // a stride in one frame (a respawn, a teleport, a soldier coming back into the animated ring) starts the feet afresh.
-function track(A, X, Y, Z, yaw, dt) {
+// (it reads the root from st itself: numbers handed to a call the engine does not inline are boxed, garbage for every soldier)
+function track(A, st, R0) {
+  const X = st.x !== undefined ? st.x : R0.position.x, Y = st.y !== undefined ? st.y : R0.position.y, Z = st.z !== undefined ? st.z : R0.position.z;
+  const yaw = st.yaw !== undefined ? st.yaw : R0.rotation.y, dt = Math.min(st.dt, 0.1);
   const dx = X - A.x, dz = Z - A.z;
   if (!A.init || dx * dx + dz * dz > Math.max(0.36, 900 * dt * dt) || Math.abs(Y - A.y) > 3) {
     A.x = X; A.y = Y; A.z = Z; A.yaw = yaw; A.vx = A.vz = A.vy = A.acc = A.accS = A.turn = 0; A.replant = true;
     return;
   }
   const ovx = A.vx, ovz = A.vz, k = 1 - Math.exp(-dt / 0.08);
-  A.vx += (clampA(dx / dt, 25) - A.vx) * k;
-  A.vz += (clampA(dz / dt, 25) - A.vz) * k;
+  A.vx += (Math.max(-25, Math.min(25, dx / dt)) - A.vx) * k;
+  A.vz += (Math.max(-25, Math.min(25, dz / dt)) - A.vz) * k;
   A.vy += ((Y - A.y) / dt - A.vy) * (1 - Math.exp(-dt / 0.04));
-  A.turn += (clampA(wrap(yaw - A.yaw) / dt, 12) - A.turn) * (1 - Math.exp(-dt / 0.1));
+  A.turn += (Math.max(-12, Math.min(12, wrap(yaw - A.yaw) / dt)) - A.turn) * (1 - Math.exp(-dt / 0.1));
   const ax = (A.vx - ovx) / dt, az = (A.vz - ovz) / dt, c = Math.cos(yaw), s = Math.sin(yaw);
   A.jolt = ax * ax + az * az > 70 * 70;   // (a burst: a dash starting or stopping dead, a knock: see the blends in poseSoldier)
-  A.acc += (clampA(ax * s + az * c, 40) - A.acc) * (1 - Math.exp(-dt / 0.1));
-  A.accS += (clampA(ax * c - az * s, 40) - A.accS) * (1 - Math.exp(-dt / 0.1));
+  A.acc += (Math.max(-40, Math.min(40, ax * s + az * c)) - A.acc) * (1 - Math.exp(-dt / 0.1));
+  A.accS += (Math.max(-40, Math.min(40, ax * c - az * s)) - A.accS) * (1 - Math.exp(-dt / 0.1));
   A.x = X; A.y = Y; A.z = Z; A.yaw = yaw;
 }
 
@@ -422,6 +424,12 @@ function track(A, X, Y, Z, yaw, dt) {
 // that runs out instead of halting at a key.)
 const SW = { wind: 0.18, gather: 0.22, hit: 0.32, through: 0.43, end: 0.62, settle: 0.06, over: 0.25 };
 function herm(p0, m0, p1, m1, s, T) { const s2 = s * s, s3 = s2 * s; return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * T * m0 + (3 * s2 - 2 * s3) * p1 + (s3 - s2) * T * m1; }
+const SK = new Float64Array(5);
+// all five numbers of the blow's keys (WIND / END rows) from the guard a0..a2 (twist and tilt start at 0), into SK
+function swingKeys(t, a0, a1, a2, W, E) {
+  SK[0] = swingAt(t, a0, W[0], E[0]); SK[1] = swingAt(t, a1, W[1], E[1]); SK[2] = swingAt(t, a2, W[2], E[2]);
+  SK[3] = swingAt(t, 0, W[3], E[3]); SK[4] = swingAt(t, 0, W[4], E[4]);
+}
 function swingAt(t, a, w, e) {
   const w2 = w + SW.settle * (w - a), f = e + SW.over * (e - w), T3 = SW.through - SW.hit, mh = 2.7 * (f - e) / T3;
   if (t < SW.wind) return herm(a, 0, w, 0.6 * (w2 - w) / (SW.gather - SW.wind), t / SW.wind, SW.wind);
@@ -445,14 +453,14 @@ export function poseSoldier(m, st) {
   const R0 = m.root;
   const X = st.x !== undefined ? st.x : R0.position.x, Y = st.y !== undefined ? st.y : R0.position.y, Z = st.z !== undefined ? st.z : R0.position.z;
   const yaw = st.yaw !== undefined ? st.yaw : R0.rotation.y, cy = Math.cos(yaw), sy = Math.sin(yaw);
-  if (live) track(A, X, Y, Z, yaw, dt);
+  if (live) track(A, st, R0);
   else { A.x = X; A.y = Y; A.z = Z; A.yaw = yaw; A.vx = A.vz = A.vy = A.acc = A.accS = A.turn = 0; A.replant = true; }
   const vx = A.vx, vz = A.vz, v = Math.hypot(vx, vz);
   const lvx = vx * cy - vz * sy, lvz = vx * sy + vz * cy;   // (in the root's frame: +z ahead, +x to his left)
   // going sideways or backwards at speed the hips turn part way toward where he goes (the shoulders stay on his facing), so the legs stride
   // along their own line rather than shuffle; the stride is shorter the more sideways it still is
   const travel = v > 0.3 ? Math.atan2(lvx, lvz) : 0;
-  const turnTo = clampA(Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI, 0.6) * smooth(0.3, 1.5, v);
+  const turnTo = Math.max(-0.6, Math.min(0.6, Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI)) * smooth(0.3, 1.5, v);
   A.hipTurn += (turnTo - A.hipTurn) * (live ? (1 - Math.exp(-dt / 0.15)) : 1);
   const rel0 = travel - A.hipTurn, fwdK = v > 0.05 ? Math.cos(rel0) : 1, latK = v > 0.05 ? Math.abs(Math.sin(rel0)) : 0;
   const gx = st.gx || 0, gz = st.gz || 0;
@@ -596,11 +604,11 @@ export function poseSoldier(m, st) {
     px = (0.04 + 0.07 * run) * gw; py = -(0.08 + 0.06 * run) * gw * cl + A.hipTurn; ty -= A.hipTurn; pz = (0.045 * (1 - run) + 0.02 * run) * gw * cm + 0.03 * sway * (1 - gw);
     shiftX = ((0.026 * (1 - run) + 0.008 * run) * gw * cm + 0.012 * sway * (1 - gw)) * sc;
     // leaning into a start, back from a stop, banking into a turn (and looking into it)
-    const lean = clampA(A.acc * 0.028, 0.14);
+    const lean = Math.max(-0.14, Math.min(0.14, A.acc * 0.028));
     tx += lean; px += lean * 0.5;
-    const bank = clampA(-A.turn * v * 0.026, 0.2);
+    const bank = Math.max(-0.2, Math.min(0.2, -A.turn * v * 0.026));
     pz += bank; tz += bank * 0.35;
-    turnLook = clampA(A.turn * 0.16, 0.35) * (1 - gw * 0.5);
+    turnLook = Math.max(-0.35, Math.min(0.35, A.turn * 0.16)) * (1 - gw * 0.5);
   }
   // the arms swing against the legs, a little behind them, and settle when he stops
   const armT = -Math.cos(TAU * (A.ph + 0.07)) * Math.min(0.55, v * 0.1 + 0.05) * gw;
@@ -629,8 +637,8 @@ export function poseSoldier(m, st) {
     } else {
       // a blow: the guard, the wind-up gathering, driven through and on, back to the guard (swingAt); the body behind it
       const W = WIND[st.attackDir] || WIND.over, E = END[st.attackDir] || END.over;
-      sh = swingAt(t, sh, W[0], E[0]); el = swingAt(t, el, W[1], E[1]); rz = swingAt(t, rz, W[2], E[2]);
-      twist = swingAt(t, 0, W[3], E[3]); tiltOff = swingAt(t, 0, W[4], E[4]);
+      swingKeys(t, sh, el, rz, W, E);
+      sh = SK[0]; el = SK[1]; rz = SK[2]; twist = SK[3]; tiltOff = SK[4];
       // the weight goes back onto the rear foot in the wind-up, then in behind the blow, and back (the feet stay where they stand)
       const back = t < SW.gather ? ease(t / SW.gather) : 1 - ease(clamp01((t - SW.gather) / (SW.hit - SW.gather)));
       const into = t < SW.gather ? 0 : t < 0.38 ? ease((t - SW.gather) / (0.38 - SW.gather)) : 1 - ease(clamp01((t - 0.38) / (SW.end - 0.38)));
@@ -703,13 +711,13 @@ export function poseSoldier(m, st) {
       const fo = (lx2 - shiftX - (i ? -0.09 : 0.09) * sc) * fsx + (lz2 - bodyZ) * fsz, fv = HIP_Y * sc + bodyY - wy;
       const lean = Math.atan2(-fo, Math.max(0.2, fv));
       // (a foot in the air takes more of it, most at the top of its swing, so its toes stay clear of the ground)
-      F.tilt = F.up ? clampA(lean + (F.psi - lean) * (F.psi > lean ? 0.3 + 0.35 * Math.sin(Math.PI * F.w) : 0.3), 0.6) : clampA(lean + 0.3 * (F.psi - lean), 0.85);
+      F.tilt = F.up ? Math.max(-0.6, Math.min(0.6, lean + (F.psi - lean) * (F.psi > lean ? 0.3 + 0.35 * Math.sin(Math.PI * F.w) : 0.3))) : Math.max(-0.85, Math.min(0.85, lean + 0.3 * (F.psi - lean)));
       _a.set(lx2, wy + ankleH(F.tilt + slope) * sc, lz2).sub(B.position).multiplyScalar(1 / sc).sub(P.position).applyQuaternion(_qi);
       _fw.set(fsx, 0, fsz).applyQuaternion(_qi);
       reachLeg(hip, kn, hip.position, _a, _fw);
       // the shin's tilt over the foot (the ankle's height next frame): the shin in the root's frame
       _sh.copy(_f).applyQuaternion(P.quaternion);
-      F.psi = clampA(Math.atan2(-(_sh.x * fsx + _sh.z * fsz), -_sh.y), 0.9);
+      F.psi = Math.max(-0.9, Math.min(0.9, Math.atan2(-(_sh.x * fsx + _sh.z * fsz), -_sh.y)));
     }
     if (cr > 0) {
       // ducking: thighs forward, knees folded. Walking crouched is a shuffle.
@@ -744,13 +752,13 @@ export function poseSoldier(m, st) {
   if (live) inertia(A, dt); else holdPose(A);
   // ---- what hangs off him
   if (live) {
-    A.capeXV = spring(A.capeX, A.capeXV, clampA(A.acc * 0.05, 0.55), 8.5, 0.3, dt); A.capeX = SX[0];
-    A.capeZV = spring(A.capeZ, A.capeZV, clampA(-A.accS * 0.045, 0.4), 7.5, 0.3, dt); A.capeZ = SX[0];
+    A.capeXV = spring(A.capeX, A.capeXV, Math.max(-0.55, Math.min(0.55, A.acc * 0.05)), 8.5, 0.3, dt); A.capeX = SX[0];
+    A.capeZV = spring(A.capeZ, A.capeZV, Math.max(-0.4, Math.min(0.4, -A.accS * 0.045)), 7.5, 0.3, dt); A.capeZ = SX[0];
     A.bilV = spring(A.bil, A.bilV, Math.min(1, v / 7), 5.5, 0.45, dt); A.bil = SX[0];
     const plume = m.plumeC.on || m.plumeG.on;
     if (plume) {
-      A.plXV = spring(A.plX, A.plXV, clampA(-A.acc * 0.04 - (bodyY / sc) * 2, 0.5), 11, 0.25, dt); A.plX = SX[0];
-      A.plZV = spring(A.plZ, A.plZV, clampA(A.accS * 0.04 + A.turn * v * 0.02, 0.5), 10, 0.25, dt); A.plZ = SX[0];
+      A.plXV = spring(A.plX, A.plXV, Math.max(-0.5, Math.min(0.5, -A.acc * 0.04 - (bodyY / sc) * 2)), 11, 0.25, dt); A.plX = SX[0];
+      A.plZV = spring(A.plZ, A.plZV, Math.max(-0.5, Math.min(0.5, A.accS * 0.04 + A.turn * v * 0.02)), 10, 0.25, dt); A.plZ = SX[0];
       m.plumeC.node.rotation.set(A.plX, 0, A.plZ);
     }
   } else { A.capeX = A.capeZ = 0; A.bil = Math.min(1, v / 7); }
