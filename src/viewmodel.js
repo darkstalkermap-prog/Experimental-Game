@@ -17,6 +17,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (k) => 1 - (1 - k) * (1 - k);
 const easeInOut = (k) => k * k * (3 - 2 * k);
 const smooth = (v, target, rate, dt) => v + (target - v) * (1 - Math.exp(-rate * dt));
+const launch = (k, m0) => k * k * (3 - 2 * k) + (k * k * k - 2 * k * k + k) * m0;   // 0 -> 1 leaving at speed m0 (smoothstep is 0, easeOut 2), arriving at rest
 
 // a damped spring on one number (underdamped: a little overshoot)
 class Spring {
@@ -489,8 +490,10 @@ export class ViewModel {
       if (atk) {
         const W = WIND[atk.dir], E = END[atk.dir];
         let from = ZERO, to = W, k;
-        if (atk.phase === 'wind') k = easeOut(Math.min(1, atk.t / 0.09));
-        else if (atk.phase === 'strike') { from = W; to = E; const u = Math.min(1, atk.t / 0.09); k = easeOut(u) + 0.07 * Math.sin(u * Math.PI) * (atk.phase === 'strike' ? 1 : 0); }
+        // (each phase leaves its rest at a speed, not from a standstill to full speed in one frame: the wind-up and the strike still snap, but
+        // the hand does not jump; the strike runs on a little past its end, the blow's weight)
+        if (atk.phase === 'wind') k = launch(Math.min(1, atk.t / 0.09), 0.7);
+        else if (atk.phase === 'strike') { from = W; to = E; const u = Math.min(1, atk.t / 0.09); k = launch(u, 0.9) + 0.07 * Math.sin(u * Math.PI); }
         else { from = E; to = ZERO; k = easeInOut(Math.min(1, atk.t / 0.2)); }
         ax = from.x + (to.x - from.x) * k; ay = from.y + (to.y - from.y) * k; az = from.z + (to.z - from.z) * k;
         arx = from.rx + (to.rx - from.rx) * k; ary = from.ry + (to.ry - from.ry) * k; arz = from.rz + (to.rz - from.rz) * k;
