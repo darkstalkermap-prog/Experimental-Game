@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { UNIT_TYPES, TEAM_COLORS, RAIDER_TEAM } from './config.js';
 import { Q } from './quality.js';
-import { getShape, shapeGeo, SHAPES } from './shapes.js';
+import { getShape, shapeGeo, SHAPES, headJobs } from './shapes.js';
 import { unitMaterial, unitMaterials } from './unitmat.js';
 import { unitTextures, emblemCell, setRigEmblem } from './unittex.js';
 import { SKIRT } from './modelkit.js';
@@ -149,6 +149,7 @@ export function buildHeroBody(classId, team, variant = 2, cape = null, cell = -1
 function warmRig(m) {
   const key = 'hero:' + m.farKey + ':' + (m.desc.cape || '');
   if (baking || warmed.has(key)) return;
+  warmHeads();
   warmed.add(key);
   const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
   for (const p of m.parts) if (p.on || p === m.bowPart || p === m.bowDrawn || p === m.bowBack) for (const l of levels) if (!p.shape.geo[l]) warmTasks.push([p.shape, l]);
@@ -582,9 +583,16 @@ export function bakedMesh(key, root) {
 // ---------------------------------------------------------------- warming and shared resources
 // The shapes a kind of soldier wears are built a few at a time (one per call) so a new arrival never stalls a frame.
 const warmed = new Set(), warmTasks = [];
+// (the sculpted faces, hair and beards first, a job a frame: the heads that wear them are quick to make after)
+function warmHeads() {
+  if (warmed.has('heads')) return;
+  warmed.add('heads');
+  for (const l of new Set([geoLevel(0), geoLevel(1)])) for (const j of headJobs(l)) warmTasks.push(j);
+}
 // (the rich shapes are for soldiers close by; everyone farther away wears the plain ones, so a crowd stays cheap)
 export const geoLevel = (lod) => (lod === 0 ? Math.max(0, 2 - Q.detail) : 2);
 export function prewarmSoldier(type, team, variant, tier = 0) {
+  warmHeads();
   const key = type + ':' + (team === RAIDER_TEAM ? 'r' : '');
   if (!warmed.has(key) && UNIT_TYPES[type]) {
     warmed.add(key);
@@ -600,7 +608,8 @@ export function prewarmSoldier(type, team, variant, tier = 0) {
 export function warmStep() {
   const task = warmTasks.shift();
   if (!task) return false;
-  if (task[0].kind) farShapeOf(task[0]); else shapeGeo(task[0], task[1]);
+  if (typeof task === 'function') task();
+  else if (task[0].kind) farShapeOf(task[0]); else shapeGeo(task[0], task[1]);
   return true;
 }
 

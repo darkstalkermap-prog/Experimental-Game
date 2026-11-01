@@ -33,6 +33,7 @@ export function faceField(f = {}) {
     d = smin(d, sdEll(ax, y, z, [0, 0.152 - age * 0.004, 0.022], [0.064, 0.08 + age * 0.004, 0.071]), 0.03);   // the face
     d = smin(d, sdEll(ax, y, z, [0, 0.106, 0.027], [0.055 * jaw, 0.048, 0.062]), 0.026);                        // the jaw
     d = smin(d, sdEll(ax, y, z, [0, 0.074, 0.064], [0.024 * jaw, 0.02, 0.019]), 0.016);                         // the chin
+    if (d > 0.045 || z < 0.0) return d;   // (the features below are all on the front of the face, none stands 4 cm off it)
     d = smin(d, sdEll(ax, y, z, [0.043, 0.162, 0.058], [0.025 * cheek, 0.016, 0.024]), 0.014);                 // a cheekbone
     d = smin(d, sdEll(ax, y, z, [0, 0.202, 0.081], [0.064, 0.015 * brow, 0.022 * brow]), 0.012);                 // the brow ridge
     d = smin(d, sdRod(ax, y, z, [0, 0.19, 0.089], [0, 0.141, 0.111 + 0.004 * nose], 0.007, 0.0105 * nose), 0.009);   // the nose
@@ -99,7 +100,7 @@ export function fieldGeometry(F, nu, nv, keep = null) {
 // ---------------------------------------------------------------- what is laid on the face
 // (the face atlas's planar projection: the eyes at u 0.5 +- 0.18, v 0.555; the back of the head reads none of it)
 export const faceUV = (x, y, z) => (z < 0.0 ? [-3, -3] : [x / 0.175 + 0.5, (y - 0.167) / 0.234 + 0.5]);
-const RES = [[34, 26], [20, 14], [12, 9]];
+const RES = [[30, 22], [20, 14], [12, 9]];
 // (the same face, hair or beard is wanted by many shapes, a kettle hat's and a crown's alike: each surface is found once per level)
 const made = new Map();
 function cached(key, make) {

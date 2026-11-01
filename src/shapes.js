@@ -669,6 +669,22 @@ function headBase(b, face = FACE.man, neck = true, shade = null) {
   }
 }
 const hairM = { s: 'hair', m: 'hair', p: PAT.hair };
+// The faces, hair cuts and beards the catalogue wears, as separate small jobs (each a few tens of ms at the richest level), so the warm-up can
+// make them one per frame before the heads that need them (heads.js keeps each surface once made).
+export function headJobs(level) {
+  const jobs = [];
+  const job = (fn) => jobs.push(() => fn(new Builder(level)));
+  for (const f of [FACE.man, FACE.brute, FACE.sage, FACE.lean]) job((b) => sculptHead(b, f));
+  for (const cut of [0, 1, 2]) job((b) => sculptHair(b, FACE.man, cut));
+  for (const cut of [0, 1, 2]) job((b) => sculptHair(b, FACE.brute, cut));
+  job((b) => sculptHair(b, FACE.brute, 1, { wild: 1 }));
+  job((b) => sculptBeard(b, FACE.man, 1, 1));
+  job((b) => sculptBeard(b, FACE.brute, 1.15, 1));
+  job((b) => sculptBeard(b, FACE.brute, 1.25, 3));
+  job((b) => sculptBeard(b, FACE.sage, 1.15, 2));
+  job((b) => sculptBeard(b, FACE.lean, 0.8, 0));
+  return level >= 2 ? [] : jobs;   // (the plain levels have no hair or beard and a cheap head)
+}
 // the three cuts a soldier may wear (gates 7 8 9): cropped, long behind, thinning on the crown
 function hairSet(b, face = FACE.man) {
   if (b.level >= 2) return;
