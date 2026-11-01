@@ -546,6 +546,7 @@ function giantFist(b) {
     b.ell([0, 0.0, 0.02], [0.07, 0.075, 0.075], { ...skin, a: [0.82, 1], seg: [b.pick(12, 9, 6), b.pick(9, 7, 5)] });   // the palm
     if (lv >= 2) { b.rbox([0, -0.01, -0.02], [0.13, 0.12, 0.1], { ...skin, e: 0.7 }); return; }
     b.rod([0, 0.05, 0], [0, -0.07, 0], 0.048, 0.048, { ...skin, seg: b.pick(10, 8, 6) });
+    for (const y of [0.05, -0.07]) b.ell([0, y, 0], [0.05, 0.016, 0.05], { ...skin, a: [0.75, 0.9], seg: [b.pick(10, 8, 6), 4] });   // (the curled fingers close over the ends)
     for (let k = 0; k < 4; k++) {
       const y = 0.042 - k * 0.029, R = 0.066 - Math.abs(k - 1.3) * 0.003;
       b.torus([0, y, 0], R, 0.019, { rot: [PI / 2, 0, PI * 0.5], sc: [0.86, 1, 1], ...skin, a: [0.66, 1], sides: b.pick(6, 5, 4), seg: b.pick(12, 10, 8) });
