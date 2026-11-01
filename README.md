@@ -817,10 +817,9 @@ steeper than about 26 degrees, so infantry, riders and heroes all walk up and do
 meet in the low field between, and may push up the other side. Two armies get two hills face to face; three or four get one
 hill each round the field; allies (Two against two, Co-op) get **neighbouring hills of their own**, close together with a
 saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero is **there from the first
-moment**, in his own eyes with his arms and weapon in hand: he stands a few metres in front of his army's front rank and off to
-its right, turned to look back along it, so he watches it muster as he buys (the army panel opens over this view, on the right;
-online every other player sees him standing there). When the battle begins a hero who has not moved from that spot turns round to
-face the enemy with the horn; one who has walked off keeps his way. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
+moment**, in his own eyes with his arms and weapon in hand: he stands a few metres in front of his army's front rank, facing the
+enemy across the field, his army at his back (the army panel opens over this view; online every other player sees him standing
+there). Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
 stay open. The hills come from the match's sides (one digit per side, the armies on it: `'22'`, `'1111'`, `'31'`), so they are
 part of the world and of its key (`small+war22`, `src/warmap.js`; the same ground on every screen): a world laid out for other
 sides (the menu's, the last match's for a Play Again or a rematch of another format, a guest's own menu) is always built again,

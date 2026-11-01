@@ -491,9 +491,7 @@ export class WarUI {
     if (this.w.panelOpen) this.setPanel(false, false);   // (the timer ran out: the next click on the field takes the mouse back)
     this.remember();
     this.t = 0;
-    // a hero still where the build put him, looking at his own soldiers, turns round to the enemy with the horn (one who has moved keeps his way)
-    const p = this.g.player, f = this.g.localFaction, s = f && f.war && f.war.spot, r = this.w.reviewPose;
-    if (s && r && p.alive && !this.g.spectator && Math.hypot(p.pos.x - r.x, p.pos.z - r.z) < 0.5 && Math.abs(Math.atan2(Math.sin(p.yaw - r.yaw), Math.cos(p.yaw - r.yaw))) < 0.05) this.turn = { yaw: s.yaw, t: 0.9 };
+    // (the build already stands the hero facing the enemy, so the horn needs no turn: warmode.js respawn)
   }
 
   handleInput(i) {
