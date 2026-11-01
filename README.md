@@ -1209,8 +1209,8 @@ man is doing, with a little kept on the rig between frames so that nothing snaps
 - **Weight.** A blow settles into its wind-up, is driven through the moment it lands and follows through before it comes back; the body
   goes back onto the rear foot and then in behind it. Men lean into a start and back from a stop and bank into turns; a hit throws the body
   the way it came. The arms' swing, the cape (swung by starts, stops and turns), its billow and the plume lag and settle.
-- **Cost.** Nothing is made per frame; the IK and the springs cost about as much again as the old pose (roughly 4 µs a man), and only the
-  soldiers in the animated ring are posed.
+- **Cost.** The pose makes no garbage; with the IK and the springs it costs about twice the old one (about 4 µs a man on a busy 4-core test
+  machine, 1.2 ms a frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed.
 - **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Bash's push and a blow cut short ease in
   and out; the wind-up and the strike leave their rest at a speed instead of jumping to it.
 
