@@ -343,9 +343,9 @@ function oneHead(b) {
   for (const s of [-1, 1]) {
     // deep-set eyes under heavy lids, and bushy brows knotted down in the middle
     b.ell([s * 0.034, 0.169, 0.08], [0.017, 0.0095, 0.011], { ...skin, p: PAT.face, uv: eyeUV(s), seg: [b.pick(10, 8, 6), b.pick(8, 6, 4)] });
-    b.ell([s * 0.034, 0.1755, 0.0858], [0.022, 0.0085, 0.0125], { ...skin, a: [0.78, 0.95], rot: [0.2, 0, s * -0.3], seg: [b.pick(9, 7, 5), 5] });   // the upper lid, half shut
+    b.ell([s * 0.034, 0.1755, 0.0858], [0.022, 0.0085, 0.0125], { ...skin, a: [0.78, 0.95], rot: [0.2, 0, s * 0.3], seg: [b.pick(9, 7, 5), 5] });   // the upper lid, half shut, low at the inner corner
     b.ell([s * 0.034, 0.1625, 0.086], [0.018, 0.004, 0.009], { ...skin, a: [0.8, 0.95], rot: [-0.2, 0, s * 0.1], seg: [b.pick(8, 6, 5), 4] });
-    b.ell([s * 0.037, 0.1975, 0.1015], [0.031, 0.0095, 0.012], { ...hair, a: [0.55, 0.85], rot: [0.3, 0, s * -0.42], seg: [b.pick(8, 6, 5), 4] });
+    b.ell([s * 0.037, 0.1975, 0.1015], [0.031, 0.0095, 0.012], { ...hair, a: [0.55, 0.85], rot: [0.3, 0, s * 0.42], seg: [b.pick(8, 6, 5), 4] });
     // the moustache, drooping past the corners of the mouth into the beard
     b.sweep([[s * 0.008, 0.124, 0.118], [s * 0.035, 0.118, 0.11], [s * 0.055, 0.095, 0.098], [s * 0.056, 0.06, 0.097]], 0.013, 0.007, { ...hair, seg: b.pick(6, 5, 4), segs: b.pick(8, 5, 4), a: [0.6, 1] });
   }
@@ -866,7 +866,7 @@ export function poseGiant(m, st) {
   // ---- the hammer: at rest its head lies on the ground by his feet (carried higher as he walks, swinging behind the arm); through a
   // blow the wind-up's tilt is the pose's, then the head is brought to the ground where it lands and kept there, kicking up once, and
   // dragged up off it as he hauls it back
-  const restH = 0.12 + 1.1 * w;
+  const restH = 0.12 + 0.5 * w;
   let tilt;
   if (!swinging) tilt = g.tilt = haftTo(m, restH, GIANT_TILT) + wpn;
   else {
@@ -1030,12 +1030,12 @@ export function poseGiantDead(m, t, kind) {
   const g = m.gs, target = start + (FALLEN[key] - start) * k;
   // (its head is not put into the ground on the way: it rests on it instead; and it turns at most so fast, from where it was as he
   // died, so it never jumps)
-  if (!(t > g.deadT)) g.deadTilt = m.weapon.rotation.x;
-  const dt = Math.min(0.1, t - (g.deadT > 0 ? g.deadT : 0));
+  if (!(t > g.deadT)) { g.deadTilt = m.weapon.rotation.x; g.deadT = Math.max(0, t - 0.016); }   // (a new fall: from the grip he had)
+  const dt = Math.min(0.1, t - g.deadT);
   g.deadT = t;
   m.weapon.rotation.set(target, 0, 0);
   const ground = haftTo(m, 0.03, target), want = headLow(target) < 0.03 ? ground : target;
   const d = Math.atan2(Math.sin(want - g.deadTilt), Math.cos(want - g.deadTilt));
-  g.deadTilt += clamp(d, -9 * dt, 9 * dt);
+  g.deadTilt += dt >= 0.1 ? d : clamp(d, -9 * dt, 9 * dt);   // (a pose set out of the blue, not frame by frame, is where it ends up)
   m.weapon.rotation.set(g.deadTilt, 0, 0);
 }
