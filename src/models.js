@@ -48,16 +48,20 @@ function descFor(type) {
     scale: t.scale || 1, cape: t.cape ? 'cape.long' : null, quiver: t.weapon === 'bow', giant: !!t.giant, mounted: !!t.mounted, plate: t.body === 'plate',
   };
 }
-// the six hero classes (the third-person bodies of other people's heroes, and bots)
+// the six hero classes (the third-person bodies of other people's heroes, and bots), each its own silhouette at a glance and the house's
+// colour on each: the Knight in plate under the house's surcoat and a great helm; the Berserker bare-chested in pelt with a horned cap and a
+// great axe; the Ranger hooded, in a green-sleeved jerkin with a quiver and the longbow slung on his back; the Mage in a long blue robe and cowl
+// under the house's cloak and stole; the Cleric in mail and the house's tabard over cream robes; the Cavalier in a riveted brigandine of the
+// house's cloth, a crested sallet and a long cloak. (fore: the forearm's own style when it is not the arm's)
 const HERO_DESC = {
   knight: { ...BODY_PARTS.plate, head: 'head.great', shield: 'kiteL', weapon: 'sword', scale: 1.06, plate: true },
   berserker: { ...BODY_PARTS.fur, head: 'head.horned', shield: null, weapon: 'greataxe', scale: 1.08, arm: 'skin' },
-  ranger: { ...BODY_PARTS.gambeson, arm: 'cloth', head: 'head.hood', shield: null, weapon: 'sword', bow: 'bow.long', quiver: true, cape: 'cape.cloak', scale: 1 },
-  mage: { ...BODY_PARTS.leather, arm: 'leather', head: 'head.hood', shield: null, weapon: 'staff', scale: 1, cape: 'cape.cloak' },
-  cleric: { ...BODY_PARTS.mail, head: 'head.nasal', shield: 'round', weapon: 'mace', scale: 1 },
-  cavalier: { ...BODY_PARTS.plate, head: 'head.great', shield: 'kite', weapon: 'sword', scale: 1.05, plate: true, cape: 'cape.long' },
+  ranger: { ...BODY_PARTS.gambeson, chest: 'chest.ranger', arm: 'green', head: 'head.ranger', shield: null, weapon: 'sword', bow: 'bow.long', quiver: true, slung: true, scale: 1 },
+  mage: { ...BODY_PARTS.leather, chest: 'chest.robe', pelvis: 'pelvis.robe', leg: 'robe', arm: 'robe', head: 'head.cowl', shield: null, weapon: 'staff', scale: 1, cape: 'cape.cloak' },
+  cleric: { ...BODY_PARTS.mail, chest: 'chest.cleric', pelvis: 'pelvis.cleric', arm: 'cream', head: 'head.nasal', shield: 'round', weapon: 'mace', scale: 1 },
+  cavalier: { ...BODY_PARTS.plate, chest: 'chest.brigandine', fore: 'house', head: 'head.sallet', shield: 'kite', weapon: 'sword', scale: 1.05, plate: true, cape: 'cape.long' },
 };
-const PLUME_Y = { 'head.kettle': 0.31, 'head.nasal': 0.33, 'head.great': 0.33, 'head.crown': 0.3, 'head.horned': 0.31, 'head.hood': 0.31, 'head.none': 0.3 };
+const PLUME_Y = { 'head.kettle': 0.31, 'head.nasal': 0.33, 'head.great': 0.33, 'head.crown': 0.3, 'head.horned': 0.31, 'head.hood': 0.31, 'head.none': 0.3, 'head.sallet': 0.34, 'head.ranger': 0.32, 'head.cowl': 0.32 };
 
 // ---------------------------------------------------------------- rigs
 const joint = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
@@ -95,7 +99,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const add = (node, name, on = true) => { const p = { node, shape: getShape(name), on }; parts.push(p); return p; };
   add(pelvis, desc.pelvis); add(torso, desc.chest); add(head, desc.head);
   add(hipL, 'thigh.' + desc.leg); add(hipR, 'thigh.' + desc.leg); add(kneeL, 'shin.' + desc.leg); add(kneeR, 'shin.' + desc.leg);
-  const foreStyle = arm === 'leather' ? 'cloth' : arm;
+  const foreStyle = arm === desc.arm && desc.fore ? desc.fore : arm === 'leather' ? 'cloth' : arm;
   add(shL, 'arm.' + arm); add(shR, 'arm.' + arm); add(elL, 'fore.' + foreStyle); add(elR, 'fore.' + foreStyle);
   if (desc.shield) add(elL, 'shield.' + desc.shield);
   let weapon = null, weaponPart = null, bowPart = null, bowDrawn = null;
@@ -109,6 +113,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const cape = desc.cape ? joint(torso, 0, 0.42, -0.125) : null;
   if (cape) add(cape, desc.cape);
   if (desc.quiver) add(torso, 'quiver');
+  const bowBack = desc.slung && desc.bow ? add(torso, 'bow.back', desc.weapon !== 'bow') : null;   // (the bow on his back while the sword is out)
   const kit = add(torso, 'kit.torso', false);
   const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
   const kitShield = desc.shield ? add(elL, 'kit.shield.' + desc.shield, false) : null;
@@ -118,7 +123,7 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   const look = lookFor(variant + 1);
   const m = {
     kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, shL, shR, elL, elR, weapon, cape,
-    weaponTilt: WEAPON_TILT[wk] ?? -1, weaponRoll: WEAPON_ROLL[wk] || 0, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart, bowDrawn,
+    weaponTilt: WEAPON_TILT[wk] ?? -1, weaponRoll: WEAPON_ROLL[wk] || 0, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart, bowDrawn, bowBack,
     kitArms, kitShield, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
   };
   m.farKey = `${m.hero || type}${raider && !desc.plate ? ':r' : ''}${m.mounted ? ':m' : ''}`;
@@ -133,10 +138,22 @@ export function buildSoldier(type, team, variant = Math.floor(Math.random() * 6)
   m.inst[12] = (variant * 0.37 + team * 0.11) % 1;
   root.userData.rig = m;
   if (tier) rigSetTier(m, tier);
+  if (m.hero) warmRig(m);   // (a hero's body: a player's, a bot's or a lord's)
   return m;
 }
 // (`cell`: the emblem cell of the arms the hero's lord bears, heraldry.js; -1 for the house's own)
-export function buildHeroBody(classId, team, variant = 2, cape = null, cell = -1) { return buildSoldier('lord', team, variant, 0, { hero: classId, cape, cell: cell >= 0 ? cell : team > 4 || team < 0 ? 0 : team }); }
+export function buildHeroBody(classId, team, variant = 2, cape = null, cell = -1) {
+  return buildSoldier('lord', team, variant, 0, { hero: classId, cape, cell: cell >= 0 ? cell : team > 4 || team < 0 ? 0 : team });
+}
+// (a hero's shapes are richer than a soldier's: they are built a few at a time in the frames after he is made, not all in the frame he is first seen)
+function warmRig(m) {
+  const key = 'hero:' + m.farKey + ':' + (m.desc.cape || '');
+  if (warmed.has(key)) return;
+  warmed.add(key);
+  const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
+  for (const p of m.parts) if (p.on || p === m.bowPart || p === m.bowDrawn || p === m.bowBack) for (const l of levels) if (!p.shape.geo[l]) warmTasks.push([p.shape, l]);
+  warmTasks.push([m, 3]);
+}
 
 // Better training, better kit: tier 1 steel pauldrons, 2 a cloak, 3 gold at the throat and on the shield, 4 gold pauldrons and wings on the
 // helm, 5 a gilded breastplate and a long cloak.
@@ -163,6 +180,7 @@ export function rigSetBow(m, bow) {
   m.bowOn = !!bow;
   m.bowPart.on = !!bow;
   m.bowDrawn.on = false;
+  if (m.bowBack) m.bowBack.on = !bow;
   if (m.weaponPart) m.weaponPart.on = !bow;
   m.ranged = !!bow;
 }

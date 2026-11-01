@@ -4,7 +4,8 @@
 //   color   the colour itself, or a grey shade when the part takes a per-soldier colour (house cloth, skin, hair)
 //   aSurf   roughness, metalness, colour slot (SLOT), feature gate (0 always shown; n shown while bit n of the soldier's flags is set;
 //           -n shown while it is clear)
-//   aFx     cloth sway weight (0..0.99 hanging cloth, 1..2 capes; + SKIRT on a skirt), pattern (PAT), u, v (for the face and emblem atlases)
+//   aFx     cloth sway weight (0..0.99 hanging cloth, 1..2 capes; + SKIRT on a skirt), pattern (PAT) + 0.4 x dirt (0..1: mud and dust, thickest
+//           at the feet; the shader reads the fraction), u, v (for the face and emblem atlases)
 // unitmat.js reads them in the shader. Ambient occlusion is baked into `color` (darker under things, lighter on top).
 import * as THREE from 'three';
 
@@ -13,7 +14,7 @@ export const SLOT = { fixed: 0, cloth: 1, skin: 2, hair: 3, clothDark: 4, clothL
 // added to the sway weight of the parts of a skirt (hanging from the pelvis): they follow the thighs up in a crouch (unitmat.js)
 export const SKIRT = 2;
 // surface patterns drawn in the fragment shader
-export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11, badge: 12 };
+export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11, badge: 12, hair: 13 };
 // [roughness, metalness]
 export const MAT = {
   cloth: [0.92, 0], wool: [0.97, 0], silk: [0.55, 0], leather: [0.6, 0.02], skin: [0.58, 0], hair: [0.78, 0], fur: [1, 0], wood: [0.74, 0], bone: [0.5, 0],
@@ -33,6 +34,7 @@ export class Builder {
     this.P = []; this.N = []; this.C = []; this.S = []; this.F = []; this.I = [];
     this.count = 0;
     this.xf = null;   // a matrix applied to everything placed while it is set (see within)
+    this.dirt = null; // (x, y, z) in the shape's frame -> 0..1: how muddy what is placed while it is set gets (a primitive's own `d` wins)
   }
 
   // build part of a shape through matrix M (a helmet scaled to the head, a torso piece moved)
@@ -50,6 +52,7 @@ export class Builder {
   // Place a three.js geometry through matrix M. Options:
   //   m material (MAT key)  c fixed colour (hex)  s slot (SLOT key)  a [shade at the bottom, at the top] of the primitive's y extent
   //   g feature gate  w cloth sway weight, or [bottom, top]  p pattern  uv [cx, cy, sx, sy] planar (x, y) or a function  flat faceted normals
+  //   d dirt: a number, or a function of the point in the shape's frame (Builder.dirt when it is not given)
   add(geo, M, o = {}) {
     const M0 = M;   // (texture coordinates are laid on in the shape's own frame, before `within` moves it)
     if (this.xf) M = _mx.multiplyMatrices(this.xf, M);
@@ -66,6 +69,7 @@ export class Builder {
     const uv = o.uv;
     const base = this.count;
     const flat = !!o.flat;
+    const dfn = o.d !== undefined ? o.d : this.dirt;
     const mirrored = M.determinant() < 0;   // (a mirrored placement turns the triangles inside out)
     // (faceted shapes get their own copy of each vertex per triangle, with the face normal)
     const place = (i, forceN) => {
@@ -85,7 +89,9 @@ export class Builder {
         if (typeof uv === 'function') { const r = uv(q.x, q.y, q.z); u = r[0]; v = r[1]; }
         else { u = (q.x - uv[0]) / uv[2] + 0.5; v = (q.y - uv[1]) / uv[3] + 0.5; }
       }
-      this.F.push(w0 + (w1 - w0) * t, o.p || 0, u, v);
+      let dv = 0;
+      if (dfn) dv = typeof dfn === 'function' ? dfn(_tp.x, _tp.y, _tp.z) : dfn;
+      this.F.push(w0 + (w1 - w0) * t, (o.p || 0) + 0.4 * (dv < 0 ? 0 : dv > 1 ? 1 : dv), u, v);
     };
     if (flat) {
       const tris = ia ? ia.length / 3 : nv / 3;
@@ -120,7 +126,8 @@ export class Builder {
   // how finely a sphere of this radius is cut at this level of detail: [around, down]
   ellSeg(rm, seg) {
     if (seg) return typeof seg === 'number' ? [seg, Math.max(3, Math.round(seg * 0.7))] : seg;
-    const t = rm >= 0.2 ? [[14, 10], [9, 6], [7, 5], [5, 4]] : rm >= 0.1 ? [[10, 7], [7, 5], [6, 4], [4, 3]] : rm >= 0.05 ? [[8, 6], [6, 4], [5, 3], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]];
+    // (the richest level is cut finely enough that no facet shows on a hero a few metres away)
+    const t = rm >= 0.2 ? [[20, 14], [9, 6], [7, 5], [5, 4]] : rm >= 0.1 ? [[16, 11], [7, 5], [6, 4], [4, 3]] : rm >= 0.05 ? [[12, 8], [6, 4], [5, 3], [4, 3]] : [[8, 6], [5, 3], [4, 3], [4, 3]];
     return t[Math.min(3, this.level)];
   }
 
@@ -137,7 +144,7 @@ export class Builder {
   }
 
   torus(c, R, r, o = {}) {
-    return this.place(new THREE.TorusGeometry(R, r, o.sides || this.pick(5, 4, 3), o.seg || this.pick(20, 14, 9)), c, o.rot || [0, 0, 0], o.sc || 1, o);
+    return this.place(new THREE.TorusGeometry(R, r, o.sides || this.pick(6, 4, 3), o.seg || this.pick(24, 14, 9)), c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 
   // tapered rod from a to b, radius ra at a and rb at b
@@ -145,7 +152,7 @@ export class Builder {
     _v.fromArray(b).sub(_p2.fromArray(a));
     const len = _v.length();
     if (len < 1e-6) return this;
-    const g = new THREE.CylinderGeometry(rb, ra, len, o.seg || this.pick(10, 8, 6), 1, !!o.open);
+    const g = new THREE.CylinderGeometry(rb, ra, len, o.seg || this.pick(14, 8, 6), 1, !!o.open);
     _q.setFromUnitVectors(UP, _v.divideScalar(len));
     _p.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
     _m.compose(_p, _q, _one);
@@ -161,13 +168,14 @@ export class Builder {
   rbox(c, s, o = {}) {
     const e = o.e || 0.3;
     if (o.sharp) return this.place(new THREE.BoxGeometry(1, 1, 1), c, o.rot || [0, 0, 0], s, o);
-    const sg = o.seg || (Math.max(s[0], s[1], s[2]) >= 0.2 ? [[10, 8], [8, 6], [6, 4], [4, 3]] : [[6, 4], [5, 3], [4, 3], [4, 3]])[Math.min(3, this.level)];
+    const sg = o.seg || (Math.max(s[0], s[1], s[2]) >= 0.2 ? [[14, 10], [8, 6], [6, 4], [4, 3]] : [[9, 6], [5, 3], [4, 3], [4, 3]])[Math.min(3, this.level)];
     return this.place(superGeo(e, o.e2 || e, sg[0], sg[1]), c, o.rot || [0, 0, 0], s, o);
   }
 
   // surface of revolution about y: pts [[radius, y], ...]; sc scales the result (elliptical sections); arc [start, length] radians (0 = +z)
   lathe(pts, c, o = {}) {
-    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg || this.pick(18, 12, 8), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
+    if (pts[0][1] > pts[pts.length - 1][1]) pts = pts.slice().reverse();   // (a profile drawn downward would face its surface inward)
+    const g = new THREE.LatheGeometry(pts.map((p) => new THREE.Vector2(p[0], p[1])), o.seg || this.pick(28, 12, 8), o.arc ? o.arc[0] : 0, o.arc ? o.arc[1] : Math.PI * 2);
     return this.place(g, c, o.rot || [0, 0, 0], o.sc || 1, o);
   }
 
@@ -185,7 +193,7 @@ export class Builder {
   // a tube along a smooth path with its radius changing from r0 to r1
   sweep(pts, r0, r1, o = {}) {
     const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
-    const segs = o.segs || this.pick(12, 8, 5), rs = o.seg || this.pick(8, 6, 4);
+    const segs = o.segs || this.pick(16, 8, 5), rs = o.seg || this.pick(10, 6, 4);
     const g = new THREE.TubeGeometry(curve, segs, 1, rs, false);
     const pa = g.attributes.position;
     for (let i = 0; i < pa.count; i++) {
@@ -206,7 +214,9 @@ export class Builder {
   loft(rings, o = {}) {
     // (the plain levels keep every other ring: a distant limb needs its taper, not its muscles)
     if (this.level >= 2 && rings.length > 4) rings = rings.filter((r, i) => i % 2 === 0 || i === rings.length - 1);
-    const n = o.seg || this.pick(16, 12, 8), sq = o.sq || 2, e = 2 / sq;
+    // (the richest level puts a ring between each two, on a smooth curve through them: the swell of a calf without a crease at every ring)
+    if (this.level === 0 && rings.length >= 3 && o.smooth !== false) rings = smoothRings(rings);
+    const n = o.seg || this.pick(24, 12, 8), sq = o.sq || 2, e = 2 / sq;
     const a0 = o.arc ? o.arc[0] : 0, al = o.arc ? o.arc[1] : Math.PI * 2, closed = !o.arc;
     const pos = [], idx = [], cols = n + 1;
     const down = rings[rings.length - 1][0] < rings[0][0];   // (rings listed downward wind the other way round)
@@ -243,6 +253,42 @@ export class Builder {
     return this;
   }
 
+  // A flat band along a smooth path (a strap, a belt, a hem): w wide and t thick, its face turned to o.out(x, y, z) -> [x, y, z] (outward
+  // from whatever it lies on), standing that far off the path's points. The face and both edges are drawn; the underside lies on the body.
+  band(pts, w, t, o = {}) {
+    const curve = new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(p[0], p[1], p[2])));
+    const n = o.segs || this.pick(16, 6, 3), out = o.out || (() => [0, 0, 1]);
+    const pos = [], nor = [], idx = [];
+    const P = new THREE.Vector3(), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3(), O = new THREE.Vector3();
+    const hw = w / 2;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n;
+      curve.getPointAt(u, P); curve.getTangentAt(u, T);
+      const q = out(P.x, P.y, P.z);
+      O.set(q[0], q[1], q[2]);
+      N.copy(O).addScaledVector(T, -T.dot(O)).normalize();
+      B.crossVectors(T, N).normalize();
+      // across the band: an edge (two points), the face (two), the other edge (two), each pair with its own normal for hard corners
+      const c = (sx, lift) => [P.x + B.x * hw * sx + N.x * lift, P.y + B.y * hw * sx + N.y * lift, P.z + B.z * hw * sx + N.z * lift];
+      const rows = [[c(-1, 0), B, -1], [c(-1, t), B, -1], [c(-1, t), N, 1], [c(1, t), N, 1], [c(1, t), B, 1], [c(1, 0), B, 1]];
+      for (const [p3, nn, k] of rows) { pos.push(p3[0], p3[1], p3[2]); nor.push(nn.x * k, nn.y * k, nn.z * k); }
+    }
+    for (let i = 0; i < n; i++) {
+      for (const k of [0, 2, 4]) {
+        const a = i * 6 + k, b = a + 1, c2 = a + 6, d = c2 + 1;
+        idx.push(a, b, c2, b, d, c2);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+    g.setIndex(idx);
+    _m.identity();
+    this.add(g, _m, o);
+    g.dispose();
+    return this;
+  }
+
   // an outline (array of [x, y]) extruded along z (thickness d, bevel b), centred on z = 0
   extrude(outline, d, bevel, c, o = {}) {
     const sh = new THREE.Shape();
@@ -264,6 +310,20 @@ export class Builder {
     g.userData.tris = this.I.length / 3;
     return g;
   }
+}
+
+// a ring between each two of a loft's (Catmull-Rom through the four around it, every number of the ring alike)
+function smoothRings(rings) {
+  const out = [], n = rings.length, k = Math.max(...rings.map((r) => r.length));
+  for (let i = 0; i < n - 1; i++) {
+    const a = rings[Math.max(0, i - 1)], b = rings[i], c = rings[i + 1], d = rings[Math.min(n - 1, i + 2)];
+    out.push(b);
+    const m = [];
+    for (let j = 0; j < k; j++) m.push((-(a[j] || 0) + 9 * (b[j] || 0) + 9 * (c[j] || 0) - (d[j] || 0)) / 16);
+    out.push(m);
+  }
+  out.push(rings[n - 1]);
+  return out;
 }
 
 // superellipsoid of unit diameter: e1 rounds the profile, e2 the section (1 is a sphere, small is a box with softened edges)

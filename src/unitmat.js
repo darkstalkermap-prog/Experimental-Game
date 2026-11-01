@@ -88,6 +88,7 @@ varying vec4 vSurf;
 varying vec4 vFx;
 varying vec3 vObj;
 varying vec3 vHair;
+varying float vSeed;
 uniform sampler2D uFace;
 uniform sampler2D uEmblem;
 uniform vec3 uArmsTint[${LORDS}];
@@ -100,38 +101,54 @@ float cNoise(vec2 p) {
 }
 `;
 
+// The surface of each material, drawn here so a shape needs no texture of its own (q is the point in the shape's own frame, so a pattern
+// stays put on a moving limb; vSeed is the soldier's own number, so his stains are not his neighbour's). Every material is a little
+// uneven (stains, fading, oil, wear: the large noise), and mud climbs from the feet (the dirt that modelkit.js bakes into the pattern
+// channel's fraction).
 const FRAG_PATTERNS = `
 if (vFx.w > 0.001) {                       // fading out: a dither, so nothing is blended
   float dth = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
   if (dth < vFx.w) discard;
 }
 float pRough = 0.0, pMetal = 0.0;
-float pat = vSurf.z;
+float pat = floor(vSurf.z + 0.5);
+float pDirt = clamp((vSurf.z - pat) * 2.5, 0.0, 1.0);
+vec3 q = vObj;
+float aa = clamp(1.0 - length(fwidth(q)) * 55.0, 0.0, 1.0);   // fine patterns fade out where they would shimmer
+vec2 sq = q.xy * 6.0 + q.z * 4.3 + vSeed * 13.0;
+float stain = cNoise(sq) * 0.62 + cNoise(sq * 2.9 + 3.1) * 0.38;
 if (pat > 0.5) {
-  vec3 q = vObj;
-  float aa = clamp(1.0 - length(fwidth(q)) * 55.0, 0.0, 1.0);   // fine patterns fade out where they would shimmer
   if (pat < 1.5) {
+    // woven cloth: the weave, dye that took unevenly, and patches faded by sun and washing
     float w = sin(q.x * 300.0) * sin((q.y + q.z) * 300.0);
-    diffuseColor.rgb *= 1.0 + 0.08 * w * aa;
+    diffuseColor.rgb *= (1.0 + 0.09 * w * aa) * mix(0.8, 1.1, stain);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.45, 0.25))) * 1.05, 0.25 * smoothstep(0.55, 0.85, stain));
     pRough += 0.04 * w * aa;
   } else if (pat < 2.5) {
     vec2 d = vec2(q.x + q.y, q.x - q.y) * 36.0;
     float puff = abs(sin(d.x)) * abs(sin(d.y));
-    diffuseColor.rgb *= mix(1.0, 0.72 + 0.32 * puff, aa);
+    diffuseColor.rgb *= mix(1.0, 0.7 + 0.34 * puff, aa) * mix(0.84, 1.08, stain);
   } else if (pat < 3.5) {
     float n = cNoise(q.xy * 220.0 + q.z * 90.0);
     float ring = sin(q.x * 260.0 + n * 3.0) * sin(q.y * 260.0 + n * 3.0);
-    diffuseColor.rgb *= 1.0 + (0.22 * ring + 0.12 * (n - 0.5)) * aa;
-    pRough += 0.1 * (n - 0.5) * aa;
+    diffuseColor.rgb *= (1.0 + (0.24 * ring + 0.12 * (n - 0.5)) * aa) * mix(0.7, 1.12, stain);
+    pRough += 0.1 * (n - 0.5) * aa + 0.2 * (0.5 - stain);
   } else if (pat < 4.5) {
+    // leather: pores, a coarser mottle, creases where it bends, darker where it was oiled or sweated through, paler where it rubs
     float n = cNoise(q.xy * 140.0 + q.z * 70.0);
-    diffuseColor.rgb *= 1.0 + 0.2 * (n - 0.5) * aa;
+    float pore = cNoise(q.xy * 560.0 + q.z * 410.0);
+    float crease = abs(cNoise(vec2(q.x * 26.0 + q.z * 19.0, q.y * 95.0) + vSeed * 3.0) - 0.5);
+    diffuseColor.rgb *= 1.0 + 0.22 * (n - 0.5) + 0.16 * (pore - 0.5) * aa;
+    diffuseColor.rgb *= mix(0.74, 1.16, stain) * (1.0 - 0.2 * smoothstep(0.05, 0.0, crease) * aa);
+    pRough += 0.2 * (stain - 0.5) + 0.1 * (pore - 0.5) * aa;
   } else if (pat < 5.5) {
     float n = cNoise(vec2((q.x + q.z) * 90.0, q.y * 8.0));
-    diffuseColor.rgb *= 1.0 + 0.3 * (n - 0.5) * aa;
+    diffuseColor.rgb *= (1.0 + 0.3 * (n - 0.5)) * mix(0.82, 1.1, stain);
   } else if (pat < 6.5) {
-    float n = cNoise(q.xy * 60.0 + q.z * 40.0) * 0.6 + cNoise(q.xy * 190.0 + q.z * 120.0) * 0.4;
-    diffuseColor.rgb *= 0.7 + 0.6 * n;
+    // fur: tufts and strands that run down the pelt
+    float n = cNoise(q.xy * 60.0 + q.z * 40.0) * 0.5 + cNoise(vec2((q.x + q.z) * 230.0, q.y * 30.0)) * 0.5;
+    diffuseColor.rgb *= (0.62 + 0.7 * n) * mix(0.85, 1.1, stain);
+    pRough += 0.1 * (0.5 - n);
   } else if (pat < 7.5) {
     vec2 fuv = clamp(vFx.xy, 0.0, 1.0);
     vec4 f = texture2D(uFace, vec2((fuv.x + vSurf.w) * 0.125, fuv.y));
@@ -140,7 +157,9 @@ if (pat > 0.5) {
     c = mix(c, vec3(0.7, 0.66, 0.6), f.b);
     c = mix(c, vec3(0.04, 0.03, 0.025), f.a);
     diffuseColor.rgb = c;
-  } else if (pat < 8.5 || pat > 11.5) {
+    float n = cNoise(q.xy * 34.0 + q.z * 27.0);
+    diffuseColor.rgb *= mix(vec3(0.96, 0.98, 1.0), vec3(1.05, 0.98, 0.95), n);
+  } else if (pat < 8.5 || (pat > 11.5 && pat < 12.5)) {
     // the emblem (8: a surcoat or shield, the whole of the arms; 12: a badge on a cloak of fixed colours, the sigil only)
     vec2 euv = clamp(vFx.xy, 0.0, 1.0);
     vec4 e = texture2D(uEmblem, vec2((euv.x + vSurf.w) * 0.0625, euv.y));
@@ -150,21 +169,36 @@ if (pat > 0.5) {
       if (pat < 8.5) diffuseColor.rgb = mix(diffuseColor.rgb, uArmsTint[k] * 0.85, e.b);
       ink = uArmsInk[k];
     }
-    if (pat > 11.5) diffuseColor.rgb *= 1.0 + 0.08 * sin(q.x * 300.0) * sin((q.y + q.z) * 300.0) * aa;   // (the weave of the cloth)
+    float w = sin(q.x * 300.0) * sin((q.y + q.z) * 300.0);   // (the weave of the cloth, under the paint as well)
     diffuseColor.rgb = mix(diffuseColor.rgb, ink, e.r);
-    diffuseColor.rgb *= 1.0 - 0.45 * e.g;
+    diffuseColor.rgb *= (1.0 - 0.45 * e.g) * (1.0 + 0.08 * w * aa) * mix(0.84, 1.08, stain);
   } else if (pat > 10.5 && pat < 11.5) {
     // skin: blotches of colour (a little ruddier here, paler there) and a fine grain in the sheen
     float n = cNoise(q.xy * 34.0 + q.z * 27.0);
     diffuseColor.rgb *= mix(vec3(0.96, 0.98, 1.0), vec3(1.05, 0.98, 0.95), n);
     pRough += 0.1 * (cNoise(q.xy * 420.0 + q.z * 300.0) - 0.5) * aa;
+  } else if (pat > 12.5 && pat < 13.5) {
+    // hair and beards: strands running down, in locks of lighter and darker
+    float s1 = cNoise(vec2((q.x + q.z * 0.7) * 300.0, q.y * 22.0)), s2 = cNoise(vec2((q.x - q.z) * 70.0, q.y * 7.0));
+    diffuseColor.rgb *= 0.62 + 0.42 * s2 + 0.3 * (s1 - 0.5) * aa;
+    pRough += 0.14 * (0.5 - s1);
   }
-} else if (vSurf.y > 0.5) {
-  // bare metal: hammer marks and wear make the shine uneven
-  vec3 q = vObj;
-  float n = cNoise(q.xy * 70.0 + q.z * 55.0), m = cNoise(q.yz * 23.0 + q.x * 17.0);
-  pRough += 0.16 * (n - 0.5) + 0.1 * (m - 0.5);
-  diffuseColor.rgb *= 0.9 + 0.14 * m;
+}
+if (vSurf.y > 0.5 && (pat < 0.5 || pat > 13.5)) {
+  // bare metal: hammer marks and wear make the shine uneven; fine scratches catch the light; oil, soot and a bloom of rust dull it in patches
+  float n = cNoise(q.xy * 70.0 + q.z * 55.0), m = cNoise(q.yz * 23.0 + q.x * 17.0 + vSeed * 9.0);
+  float scr = smoothstep(0.8, 0.97, cNoise(vec2(q.x * 700.0 + q.z * 520.0, q.y * 22.0 + q.z * 30.0))) * aa;
+  float grime = smoothstep(0.56, 0.9, stain);
+  pRough += 0.12 * (n - 0.5) + 0.12 * (m - 0.5) + 0.26 * grime - 0.12 * scr;
+  diffuseColor.rgb *= (0.88 + 0.16 * m) * mix(vec3(1.0), vec3(0.72, 0.66, 0.58), grime);
+  diffuseColor.rgb += scr * 0.07;
+}
+if (pDirt > 0.003) {
+  float dn = cNoise(q.xy * 19.0 + q.z * 15.0 + vSeed * 5.0) * 0.62 + cNoise(q.xy * 71.0 + q.z * 53.0) * 0.38;
+  float d = smoothstep(0.22, 0.8, pDirt * (0.35 + 1.15 * dn));
+  diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.42 + vec3(0.075, 0.058, 0.04), d);
+  pRough += 0.45 * d;
+  pMetal -= 0.75 * d;
 }
 `;
 
@@ -173,10 +207,10 @@ const FRAG_RIM = `
   float nv = clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0);
   float rim = pow(1.0 - nv, 3.0);
   // (skin lets light through at its edges, warm, where cloth and steel catch a cool sky rim)
-  float flesh = step(6.5, vSurf.z) * step(vSurf.z, 7.5) + step(10.5, vSurf.z) * step(vSurf.z, 11.5);
+  float flesh = step(6.5, pat) * step(pat, 7.5) + step(10.5, pat) * step(pat, 11.5);
   totalEmissiveRadiance += diffuseColor.rgb * rim * mix(vec3(0.17, 0.19, 0.21), vec3(0.42, 0.17, 0.1), flesh);
   totalEmissiveRadiance += vec3(1.0, 0.8, 0.55) * vFx.z * 0.9;
-  if (vSurf.z > 9.5 && vSurf.z < 10.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
+  if (pat > 9.5 && pat < 10.5) totalEmissiveRadiance += diffuseColor.rgb * 2.2;
 }
 `;
 
@@ -187,7 +221,8 @@ function mainShader(shader) {
 varying vec4 vSurf;
 varying vec4 vFx;
 varying vec3 vObj;
-varying vec3 vHair;`)
+varying vec3 vHair;
+varying float vSeed;`)
     .replace('#include <color_vertex>', `#include <color_vertex>
 ${DECODE}
 float cSlot = aSurf.z;
@@ -205,6 +240,7 @@ float cPat = aFx.y;
 vSurf = vec4(aSurf.x, aSurf.y, cPat, cPat > 7.5 ? mod(cB.w, 16.0) : floor(cB.w / 16.0));
 vFx = vec4(aFx.zw, cD.z, cD.w);
 vHair = cC.rgb;
+vSeed = fract(cD.x * 7.31);
 vObj = position;`)
     .replace('#include <begin_vertex>', `#include <begin_vertex>${poseCloth('normalize(objectNormal)', true)}`);
   shader.fragmentShader = shader.fragmentShader

@@ -5,8 +5,13 @@
 // hollow shells and are drawn double-sided. Gates (see modelkit.js) used here: 1 steel pauldrons (tier 1-3), 2 cloak (tier 2+),
 // 3 gold gorget and band (tier 3+), 4 gold pauldrons and helm wings (tier 4+), 5 long cloak and gilded plate (tier 5), 6 beard,
 // 7 8 9 hair cuts, 12 gilded shield rim (tier 3+).
+// Kit is built in layers, as it is worn: cloth or a quilted coat next to the body, mail or leather over it, plates over that held on by
+// straps and buckles, a surcoat or tabard on top; every piece is its own surface with its own edge (a rolled rim on a plate, a hem on cloth),
+// and dust and mud climb from the feet (modelkit.js `dirt`). The richest level carries the small things (rivets, buckles, lacing, stitched
+// hems); the plain levels keep the layers and the silhouette, so a crowd stays cheap.
 import * as THREE from 'three';
 import { Builder, PAT, SKIRT } from './modelkit.js';
+import { sculptHead, sculptHair, sculptBeard } from './heads.js';
 
 export const SHAPES = new Map();
 function def(name, make, open = false) { SHAPES.set(name, { name, make, open, geo: [null, null, null, null] }); }
@@ -21,15 +26,36 @@ export function shapeGeo(shape, level) {
 }
 
 const K = {
-  steel: 0xc9ced6, iron: 0x5a5c62, ironDk: 0x2e2f33, gold: 0xd8a83a, brass: 0xb8862a, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,
-  boot: 0x3a2a1c, cuff: 0x4d3826, pants: 0x4c4237, trim: 0xe7d8a8, wood: 0x6b4a2c, woodDk: 0x4a3420, bone: 0xe8dcc0, mail: 0x7d828a, gamb: 0x9d8862,
-  fur: 0x5a4634, furLt: 0x7a6450, linen: 0xd8d0b8, hoof: 0x2a2420, dark: 0x0a0a0c, red: 0xc0392b, quiver: 0x6a4a2a,
+  steel: 0xaeb3ba, steelLt: 0xc4c8ce, iron: 0x55575c, ironDk: 0x2e2f33, gold: 0xc9973a, brass: 0xa77a2c, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,
+  boot: 0x3b2a1c, bootDk: 0x2a1d13, cuff: 0x4d3826, pants: 0x4c4237, trim: 0xd9c89a, wood: 0x6b4a2c, woodDk: 0x4a3420, bone: 0xe0d4b8, mail: 0x7a7f86, gamb: 0x9a8560,
+  fur: 0x5a4634, furLt: 0x7a6450, linen: 0xd2c9b0, hoof: 0x2a2420, dark: 0x0a0a0c, red: 0xc0392b, quiver: 0x6a4a2a, sole: 0x1e1712,
+  robe: 0x2b2160, robeDk: 0x1d1640, cream: 0xe2d8bc, green: 0x2f5a34, greenDk: 0x22422a, rope: 0xb09a6c,
 };
 const TAU = Math.PI * 2, PI = Math.PI;
-const steel = { c: K.steel, m: 'steel' }, plate = { c: K.steel, m: 'plate' }, iron = { c: K.iron, m: 'iron' }, gold = { c: K.gold, m: 'gold' };
-const leather = { c: K.leather, m: 'leather', p: PAT.leather }, wood = { c: K.wood, m: 'wood', p: PAT.grain }, skin = { s: 'skin', m: 'skin', p: PAT.skin };
-const cloth = { s: 'cloth', m: 'cloth', p: PAT.weave }, clothDk = { s: 'clothDark', m: 'cloth', p: PAT.weave };
-const mailM = { c: K.mail, m: 'mail', p: PAT.mail };
+const steel = { c: K.steel, m: 'steel' }, plate = { c: K.steel, m: 'plate' }, iron = { c: K.iron, m: 'iron' }, gold = { c: K.gold, m: 'gold' }, brass = { c: K.brass, m: 'brass' };
+const leather = { c: K.leather, m: 'leather', p: PAT.leather }, leatherDk = { c: K.leatherDk, m: 'leather', p: PAT.leather }, leatherLt = { c: K.leatherLt, m: 'leather', p: PAT.leather };
+const wood = { c: K.wood, m: 'wood', p: PAT.grain }, skin = { s: 'skin', m: 'skin', p: PAT.skin };
+const cloth = { s: 'cloth', m: 'cloth', p: PAT.weave }, clothDk = { s: 'clothDark', m: 'cloth', p: PAT.weave }, clothLt = { s: 'clothLight', m: 'cloth', p: PAT.weave };
+const mailM = { c: K.mail, m: 'mail', p: PAT.mail }, linen = { c: K.linen, m: 'cloth', p: PAT.weave }, trim = { c: K.trim, m: 'cloth', p: PAT.weave };
+const sat = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+// dirt in a frame: none above y1, all of k at y0 and below (mud splashed up from the feet, dust on a hem)
+const mud = (y0, y1, k = 1) => (x, y) => k * sat((y1 - y) / (y1 - y0));
+// an outward direction for a band lying on something round about the point c
+const from = (c) => (x, y, z) => [x - c[0], y - c[1], z - c[2]];
+// a rim: a thin ring (a rolled plate edge, a hem, a belt) round the y axis at height y, radii rx and rz, centred at z0
+const rim = (b, y, rx, rz, z0, r, o, arc) => {
+  if (arc) return b.lathe([[rx - r, y - r], [rx + r * 0.6, y - r * 0.2], [rx - r, y + r]], [0, 0, z0], { arc, sc: [1, 1, rz / rx], seg: b.pick(18, 10, 6), ...o });
+  return b.torus([0, y, z0], rx, r, { rot: [PI / 2, 0, 0], sc: [1, rz / rx, 1], seg: b.pick(20, 12, 8), sides: b.pick(4, 3, 3), ...o });
+};
+// rivets: little domes at the points given (the richest level only)
+const rivets = (b, pts, r, o = steel) => { if (b.level < 1) for (const p of pts) b.ell(p, r, { ...o, seg: [5, 3] }); };
+// a buckle: a frame and its tongue, the face toward `n` (the richest level only)
+function buckle(b, c, n, s = 1, o = brass) {
+  if (b.level >= 1) return;
+  const ry = Math.atan2(n[0], n[2]), rx = -Math.asin(Math.max(-1, Math.min(1, n[1])));
+  b.torus(c, 0.014 * s, 0.0032 * s, { ...o, rot: [rx, ry, 0], sc: [1, 1.25, 1], seg: 10, sides: 4 });
+  b.rod([c[0], c[1] + 0.012 * s, c[2]], [c[0], c[1] - 0.012 * s, c[2]], 0.002 * s, 0.002 * s, { ...o, seg: 4 });
+}
 
 // ---------------------------------------------------------------- the body plan (see models.js for the joints)
 // A man 1.8 m tall, about 7.5 heads: hip joints at 0.95, knees at 0.51, ankles at 0.08, the waist at 1.07, shoulder joints at 1.43 and
@@ -38,65 +64,155 @@ const mailM = { c: K.mail, m: 'mail', p: PAT.mail };
 // and taper at the joints; a ball at each joint keeps a bent knee or elbow closed.
 
 // ---------------------------------------------------------------- legs (hip frame, knee frame)
-const LEG = { cloth: { c: K.pants, m: 'cloth', p: PAT.weave }, mail: mailM, plate, skin };
+const LEG = { cloth: { c: K.pants, m: 'cloth', p: PAT.weave }, mail: mailM, plate, skin, robe: { c: K.pants, m: 'cloth', p: PAT.weave } };
 const THIGH = [[0.05, 0.08, 0.085, -0.01], [-0.04, 0.084, 0.088, 0.004], [-0.16, 0.074, 0.08, 0.014], [-0.3, 0.06, 0.066, 0.01], [-0.4, 0.05, 0.054, 0.006], [-0.45, 0.048, 0.05, 0.004]];
 const CALF = [[0.03, 0.048, 0.05, 0.0], [-0.05, 0.05, 0.058, -0.01], [-0.13, 0.05, 0.06, -0.016], [-0.24, 0.04, 0.046, -0.008], [-0.34, 0.032, 0.035, 0.0], [-0.43, 0.03, 0.033, 0.0]];
 const grow = (rings, d, dz = d) => rings.map(([y, rx, rz, z]) => [y, rx + d, rz + dz, z]);
-function boot(b, fur) {
-  const bc = fur ? { c: K.fur, m: 'fur', p: PAT.fur } : { c: K.boot, m: 'leather', p: PAT.leather };
-  // the shaft to below the calf, the ankle, the foot (heel behind the ankle, toes well forward) and its sole
-  b.loft([[-0.14, 0.05, 0.056, -0.012], [-0.24, 0.046, 0.052, -0.008], [-0.34, 0.039, 0.042, 0.0], [-0.43, 0.04, 0.044, 0.0], [-0.47, 0.044, 0.05, 0.01]], { ...bc, a: [0.78, 1], seg: b.pick(12, 8, 6) });
-  b.loft([[-0.425, 0.04, 0.05, 0.02], [-0.45, 0.047, 0.085, 0.045], [-0.48, 0.05, 0.13, 0.07], [-0.505, 0.05, 0.135, 0.075]], { ...bc, a: [0.8, 1], seg: b.pick(12, 8, 6), sq: 2.6 });
+// a loft along +z instead of +y (a foot): rings [z, half width, half height, -y of the centre]
+const ALONG_Z = new THREE.Matrix4().makeRotationX(PI / 2);
+// The boot: a shaft to below the knee with its top turned down, the ankle, a foot with a heel and a rounded toe on a sole, a strap and
+// buckle over the instep. `kind`: 'leather', 'fur' (wrapped in pelt and thongs) or 'plate' (a sabaton of lames over a mail foot).
+function boot(b, kind) {
+  const bc = kind === 'fur' ? { c: K.fur, m: 'fur', p: PAT.fur } : kind === 'plate' ? { c: K.bootDk, m: 'leather', p: PAT.leather } : { c: K.boot, m: 'leather', p: PAT.leather };
+  b.dirt = mud(-0.5, -0.22);
+  b.loft([[-0.135, 0.051, 0.057, -0.012], [-0.24, 0.047, 0.053, -0.008], [-0.34, 0.04, 0.043, 0.0], [-0.415, 0.039, 0.043, 0.004], [-0.45, 0.043, 0.05, 0.012]], { ...bc, a: [0.78, 1], seg: b.pick(18, 8, 6) });
+  const foot = [[-0.085, 0.006, 0.006, 0.474], [-0.078, 0.03, 0.026, 0.472], [-0.05, 0.041, 0.04, 0.466], [-0.01, 0.045, 0.048, 0.458], [0.04, 0.047, 0.038, 0.468],
+    [0.09, 0.048, 0.03, 0.477], [0.14, 0.046, 0.024, 0.483], [0.18, 0.039, 0.019, 0.488], [0.207, 0.024, 0.013, 0.492], [0.218, 0.006, 0.006, 0.494]];
+  b.within(ALONG_Z, () => b.loft(foot, { ...bc, a: [0.8, 1], seg: b.pick(16, 8, 6), sq: 2.4 }));
   if (b.level < 2) {
-    b.ell([0, -0.49, 0.18], [0.045, 0.026, 0.035], { ...bc, seg: [b.pick(8, 6, 4), b.pick(5, 4, 3)] });
-    b.loft([[-0.125, 0.056, 0.062, -0.012], [-0.165, 0.058, 0.064, -0.012]], { c: K.cuff, m: 'leather', seg: b.pick(12, 8, 6) });
-    b.rbox([0, -0.506, 0.075], [0.104, 0.014, 0.285], { c: K.ironDk, m: 'rubber', e: 0.2 });
+    // the sole and the heel, darker and worn
+    b.within(ALONG_Z, () => b.loft([[-0.082, 0.026, 0.006, 0.503], [-0.07, 0.04, 0.008, 0.503], [0.0, 0.046, 0.007, 0.504], [0.1, 0.05, 0.007, 0.504], [0.18, 0.042, 0.006, 0.503], [0.215, 0.022, 0.006, 0.501], [0.222, 0.004, 0.004, 0.5]], { c: K.sole, m: 'rubber', seg: b.pick(12, 6, 4), sq: 3 }));
+    b.rbox([0, -0.493, -0.055], [0.068, 0.022, 0.05], { c: K.sole, m: 'rubber', e: 0.3 });
+    if (kind === 'leather') {
+      b.loft([[-0.118, 0.056, 0.062, -0.012], [-0.135, 0.059, 0.065, -0.012], [-0.175, 0.058, 0.064, -0.012], [-0.185, 0.053, 0.059, -0.011]], { c: K.cuff, m: 'leather', p: PAT.leather, a: [0.85, 1], seg: b.pick(18, 8, 6), smooth: false });   // the turned-down top
+      b.band([[-0.046, -0.452, 0.025], [0, -0.438, 0.06], [0.046, -0.452, 0.025]], 0.016, 0.004, { ...leatherDk, out: from([0, -0.5, 0.0]), segs: b.pick(8, 4, 2) });   // the instep strap
+      buckle(b, [0.044, -0.452, 0.034], [0.8, 0, 0.6], 0.8);
+    } else if (kind === 'fur') {
+      for (const y of [-0.2, -0.29, -0.38]) b.band([[0.05, y, 0.015], [0, y - 0.015, 0.06], [-0.05, y - 0.03, 0.015], [-0.01, y - 0.045, -0.05], [0.05, y - 0.06, -0.02]], 0.008, 0.004, { ...leatherDk, out: from([0, y, -0.005]), segs: b.pick(12, 5, 3) });   // thongs wound round
+    }
   }
+  if (kind === 'plate') {
+    // the sabaton: lames from the ankle to the toe, each overlapping the next
+    for (let i = 0; i < (b.level < 2 ? 4 : 2); i++) {
+      const z0 = 0.0 + i * 0.05, w = 0.054 - i * 0.002;
+      b.lathe([[w, -0.012], [w + 0.004, 0.004], [w - 0.004, 0.016]], [0, -0.47 + i * -0.006, z0 + 0.03], { arc: [-PI / 2, PI], rot: [-PI / 2 + 0.25, 0, 0], sc: [1, 0.62, 1], ...plate, seg: b.pick(14, 8, 5) });
+    }
+    if (b.level < 2) b.ell([0, -0.486, 0.19], [0.042, 0.02, 0.04], { ...plate, a: [0.9, 1] });
+  }
+  b.dirt = null;
 }
 for (const st of Object.keys(LEG)) {
   def('thigh.' + st, (b) => {
     // (the joints are balls a little inside the limb, so a straight leg shows no knob and a bent one no gap; they are shaded flat, like
     // the limb where they sit)
-    const o = { ...LEG[st], a: [0.92, 0.97] }, j = { ...o, a: [0.92, 0.92] }, pad = st === 'cloth' ? 0.006 : st === 'mail' ? 0.004 : 0;
-    b.loft(grow(THIGH, pad), { ...o, seg: b.pick(12, 8, 6) });
+    const o = { ...LEG[st], a: [0.92, 0.97] }, j = { ...o, a: [0.92, 0.92] }, pad = st === 'cloth' || st === 'robe' ? 0.006 : st === 'mail' ? 0.004 : 0;
+    b.dirt = mud(-0.6, -0.3, 0.35);
+    b.loft(grow(THIGH, pad), { ...o, seg: b.pick(20, 8, 6) });
     b.ell([0, 0.04, -0.005], [0.08, 0.05, 0.085], { ...o, a: [0.97, 0.97] });
     if (b.level < 2) b.ell([0, -0.44, 0.004], [0.045 + pad, 0.048, 0.048 + pad], j);   // the knee
-    if (b.level < 2 && st !== 'plate') b.ell([0, -0.425, 0.03 + pad], [0.03, 0.034, 0.02], { ...j, seg: [6, 4] });   // the kneecap
+    if (b.level < 2 && st !== 'plate') b.ell([0, -0.425, 0.03 + pad], [0.03, 0.034, 0.02], { ...j, seg: [8, 6] });   // the kneecap
     if (st === 'plate' && b.level < 2) {
-      // cuisse over the front of the thigh and a poleyn (knee cop) with its wing
-      b.loft(grow(THIGH.slice(1, 5), 0.014), { ...plate, arc: [-1.35, 2.7], a: [0.85, 1], seg: b.pick(10, 8, 6) });
-      b.ell([0, -0.44, 0.03], [0.058, 0.058, 0.045], { ...plate, a: [1, 1] });
-      b.ell([0, -0.445, 0.05], [0.032, 0.05, 0.03], { ...plate, a: [1, 1], seg: [6, 5] });
+      // the cuisse over the front of the thigh in two lames with rolled edges, strapped round the back; the poleyn (knee cop) with its
+      // fan on each side
+      b.loft(grow(THIGH.slice(1, 4), 0.02), { ...plate, arc: [-1.45, 2.9], a: [0.85, 1], seg: b.pick(16, 8, 6) });
+      b.loft(grow(THIGH.slice(3, 5), 0.022), { ...plate, arc: [-1.4, 2.8], a: [0.85, 1], seg: b.pick(14, 8, 6) });
+      if (b.level < 1) {
+        rim(b, -0.04, 0.106, 0.11, 0.004, 0.005, { c: K.steelLt, m: 'plate' }, [-1.45, 2.9]);
+        rim(b, -0.3, 0.084, 0.09, 0.01, 0.004, { c: K.steelLt, m: 'plate' }, [-1.4, 2.8]);
+        b.band([[0.07, -0.2, 0.03], [0.05, -0.2, -0.06], [0, -0.2, -0.085], [-0.05, -0.2, -0.06], [-0.07, -0.2, 0.03]], 0.018, 0.004, { ...leatherDk, out: from([0, -0.2, 0.01]), segs: 10 });
+        rivets(b, [[0.075, -0.1, 0.06], [-0.075, -0.1, 0.06], [0.06, -0.33, 0.05], [-0.06, -0.33, 0.05]], 0.006);
+      }
+      b.ell([0, -0.44, 0.032], [0.064, 0.062, 0.05], { ...plate, a: [1, 1] });
+      b.ell([0, -0.445, 0.056], [0.034, 0.052, 0.03], { ...plate, a: [1, 1], seg: [8, 6] });
+      for (const s of [-1, 1]) b.ell([s * 0.056, -0.44, 0.012], [0.014, 0.05, 0.046], { ...plate, a: [0.9, 1], seg: [8, 6] });   // the fans
     }
+    if (st === 'mail' && b.level < 2) b.loft([[-0.36, 0.058, 0.064, 0.008], [-0.4, 0.06, 0.066, 0.007]], { ...leatherDk, seg: b.pick(16, 8, 6), smooth: false });   // the garter
+    if (st === 'robe') robeLeg(b);
+    b.dirt = null;
   });
   def('shin.' + st, (b) => {
-    const o = { ...LEG[st], a: [0.88, 0.92] }, pad = st === 'cloth' ? 0.006 : st === 'mail' ? 0.004 : 0;
+    const o = { ...LEG[st], a: [0.88, 0.92] }, pad = st === 'cloth' || st === 'robe' ? 0.006 : st === 'mail' ? 0.004 : 0;
+    b.dirt = mud(-0.5, -0.1, 0.8);
     b.ell([0, 0, 0.004], [0.044 + pad, 0.046, 0.046 + pad], { ...o, a: [0.92, 0.92], seg: b.ellSeg(0.05) });
-    b.loft(pad ? grow(CALF.slice(0, 3), pad) : CALF.slice(0, 4), { ...o, seg: b.pick(12, 8, 6) });
-    if (st === 'plate' && b.level < 2) b.loft(grow(CALF.slice(0, 4), 0.013), { ...plate, arc: [-1.5, 3.0], a: [0.9, 1], seg: b.pick(10, 8, 6) });   // the greave
-    boot(b, st === 'skin');
+    b.loft(pad ? grow(CALF.slice(0, 3), pad) : CALF.slice(0, 4), { ...o, seg: b.pick(20, 8, 6) });
+    if (st === 'plate' && b.level < 2) {
+      // the greave, front and back halves, with a rolled top edge and a hinge of rivets
+      b.loft(grow(CALF.slice(0, 5), 0.019), { ...plate, arc: [-1.55, 3.1], a: [0.9, 1], seg: b.pick(16, 8, 6) });
+      b.loft(grow(CALF.slice(1, 5), 0.016), { ...plate, arc: [PI - 1.5, 3.0], a: [0.8, 0.95], seg: b.pick(14, 8, 6) });
+      if (b.level < 1) {
+        rim(b, -0.04, 0.07, 0.078, -0.01, 0.004, { c: K.steelLt, m: 'plate' }, [-1.55, 3.1]);
+        rivets(b, [[0.06, -0.09, -0.01], [-0.06, -0.09, -0.01], [0.05, -0.27, -0.005], [-0.05, -0.27, -0.005]], 0.0055);
+      }
+    }
+    boot(b, st === 'skin' ? 'fur' : st === 'plate' ? 'plate' : 'leather');
+    if (st === 'robe') robeLeg(b, true);
+    b.dirt = null;
   });
+}
+// A robe's skirt worn on the legs: the half on each side, from the hip to the knee on the thigh (the hip frame) and from the knee to the
+// calf on the shin (lower: the knee frame), so it swings and folds with the leg and never cuts through it; the halves meet between the legs
+function robeLeg(b, lower = false) {
+  const o = { c: K.robe, m: 'wool', p: PAT.weave };
+  if (lower) {
+    b.dirt = mud(-0.36, -0.1, 0.7);
+    b.loft([[0.03, 0.118, 0.122, 0.0], [-0.12, 0.128, 0.132, 0.004], [-0.3, 0.14, 0.142, 0.008], [-0.34, 0.142, 0.145, 0.01]], { ...o, a: [0.65, 0.95], seg: b.pick(20, 10, 6), sq: 2.2 });
+    if (b.level < 2) rim(b, -0.335, 0.142, 0.145, 0.01, 0.007, { ...gold });
+  } else {
+    b.loft([[0.04, 0.1, 0.11, 0.0], [-0.2, 0.112, 0.118, 0.0], [-0.42, 0.122, 0.126, 0.004], [-0.48, 0.124, 0.128, 0.004]], { ...o, a: [0.7, 1], seg: b.pick(20, 10, 6), sq: 2.2 });
+  }
+  b.dirt = null;
 }
 
 // ---------------------------------------------------------------- arms (shoulder frame, elbow frame)
-const ARM = { cloth: { c: K.gamb, m: 'cloth', p: PAT.quilt }, mail: mailM, plate, skin, leather: { c: K.leather, m: 'leather', p: PAT.leather } };
+const ARM = { cloth: { c: K.gamb, m: 'cloth', p: PAT.quilt }, mail: mailM, plate, skin, leather: { c: K.leather, m: 'leather', p: PAT.leather }, robe: { c: K.robe, m: 'wool', p: PAT.weave }, green: { c: K.green, m: 'wool', p: PAT.weave }, cream: { c: K.cream, m: 'cloth', p: PAT.weave }, house: cloth };
 const UPPER = [[0.0, 0.05, 0.054, 0.0], [-0.08, 0.05, 0.054, 0.0], [-0.16, 0.044, 0.052, 0.008], [-0.25, 0.04, 0.044, 0.004], [-0.32, 0.037, 0.04, 0.0]];
 const FOREARM = [[0.02, 0.04, 0.041, 0.0], [-0.06, 0.044, 0.043, 0.004], [-0.15, 0.037, 0.035, 0.002], [-0.235, 0.028, 0.026, 0.0], [-0.26, 0.027, 0.025, 0.0]];
+// The pauldron of a plate arm: a dome over the shoulder and three lames below it stepping out and down, each with a rolled lower edge,
+// rivets front and back, and the strap round the arm that holds it. (Both arms wear the same shape, so it is the same on either side.)
+function pauldron(b, k = 1, o = plate) {
+  const edge = { c: K.steelLt, m: o.m || 'plate' };
+  b.shell([0, 0.018 * k, 0], [0.094 * k, 0.07 * k, 0.092 * k], 0, TAU, 0, PI * 0.56, { ...o, a: [0.85, 1] });
+  const n = b.level < 2 ? 3 : 1;
+  for (let i = 0; i < n; i++) {
+    const y = (-0.012 - i * 0.04) * k, r0 = (0.094 + i * 0.004) * k, r1 = (0.088 + i * 0.004) * k;
+    b.lathe([[r0 - 0.012, y + 0.02], [r0, y + 0.012], [r1 + 0.004, y - 0.026]], [0, 0, 0], { ...o, sc: [1, 1, 0.98], a: [0.8, 1] });
+    if (b.level < 2) rim(b, y - 0.026, r1 + 0.004, (r1 + 0.004) * 0.98, 0, 0.0035, edge);
+    rivets(b, [[0, y - 0.004, r1 + 0.004], [0, y - 0.004, -r1 - 0.004]], 0.006);
+  }
+  if (b.level < 1) {
+    b.band([[0.05, -0.15, 0.03], [0.0, -0.15, 0.055], [-0.05, -0.15, 0.03], [-0.03, -0.15, -0.045], [0.03, -0.15, -0.045], [0.05, -0.15, 0.03]], 0.016, 0.004, { ...leatherDk, out: from([0, -0.15, 0.004]), segs: 14 });
+    buckle(b, [0, -0.15, 0.058], [0, 0, 1], 0.8);
+  }
+}
 for (const st of Object.keys(ARM)) {
   def('arm.' + st, (b) => {
     const o = { ...ARM[st], a: [0.9, 1] };
-    const pad = st === 'cloth' || st === 'leather' ? 0.008 : st === 'mail' ? 0.004 : 0;
+    const pad = st === 'cloth' || st === 'leather' || st === 'green' || st === 'cream' || st === 'house' ? 0.008 : st === 'mail' ? 0.004 : 0;
+    if (st === 'robe') { robeSleeve(b); return; }
     b.ell([0, -0.035, 0.0], [0.056 + pad, 0.085, 0.062 + pad], { ...o, a: [0.9, 1] });   // the deltoid, which rounds the shoulder into the trunk
-    b.loft(grow(UPPER, pad), { ...o, seg: b.pick(12, 8, 6) });
+    b.loft(grow(UPPER, pad), { ...o, seg: b.pick(20, 8, 6) });
     if (b.level < 2) b.ell([0, -0.31, 0], [0.034 + pad, 0.036, 0.036 + pad], { ...o, a: [0.9, 0.9] });       // the elbow
+    if (st === 'skin' && b.level < 2) {
+      b.ell([0, -0.14, 0.022], [0.034, 0.07, 0.034], { ...skin, a: [0.85, 1] });   // the biceps
+      b.ell([0, -0.13, -0.02], [0.036, 0.075, 0.034], { ...skin, a: [0.8, 0.95] });   // the triceps
+      if (b.level < 1) for (const y of [-0.06, -0.075]) b.lathe([[0.058, y], [0.06, y - 0.006], [0.058, y - 0.012]], [0, 0, 0], { ...brass, sc: [1, 1, 1.05], seg: 18 });   // arm rings
+    }
+    if (st === 'mail' && b.level < 2) b.lathe([[0.046, -0.24], [0.05, -0.26], [0.047, -0.29]], [0, 0, 0.002], { ...mailM, seg: b.pick(16, 8, 6) });   // the sleeve's end
     if (st === 'plate') {
       if (b.level < 2) {
-        b.ell([0, 0.02, 0], [0.09, 0.062, 0.088], { ...plate, a: [0.85, 1] });
-        b.ell([0, -0.04, 0], [0.084, 0.05, 0.082], { ...plate, a: [0.8, 0.95] });
-        b.loft(grow(UPPER.slice(2), 0.01), { ...plate, a: [0.85, 1], seg: b.pick(10, 8, 6) });
+        pauldron(b);
+        b.loft(grow(UPPER.slice(2), 0.014), { ...plate, a: [0.85, 1], seg: b.pick(16, 8, 6) });   // the rerebrace
+        if (b.level < 1) rim(b, -0.16, 0.058, 0.066, 0.008, 0.003, { c: K.steelLt, m: 'plate' });
       } else b.ell([0, 0.01, 0], [0.088, 0.072, 0.086], plate);
     }
   });
+}
+// a robe's wide sleeve, hanging open below the elbow (the mage)
+function robeSleeve(b) {
+  const o = { c: K.robe, m: 'wool', p: PAT.weave, a: [0.8, 1] };
+  b.ell([0, -0.035, 0.0], [0.066, 0.088, 0.07], o);
+  b.loft([[0.0, 0.06, 0.064, 0.0], [-0.1, 0.058, 0.062, 0.0], [-0.2, 0.054, 0.058, 0.006], [-0.3, 0.052, 0.054, 0.004], [-0.33, 0.05, 0.052, 0.0]], { ...o, seg: b.pick(20, 8, 6) });
+  if (b.level < 2) b.ell([0, -0.31, 0], [0.048, 0.044, 0.048], o);
 }
 // the pauldrons of a trained soldier (gates 1 steel, 4 gold)
 def('kit.arm', (b) => {
@@ -105,17 +221,26 @@ def('kit.arm', (b) => {
 });
 // A fist (the hands always hold something: a weapon, a shield's grip, a bow, a rope): the back of the hand, the fingers rolled round
 // the grip, the thumb over them. Shared by both arms, so it is the same seen from either side.
-function fist(b, o) {
+function fist(b, o, gaunt = false) {
   b.rbox([0, -0.284, 0.004], [0.044, 0.07, 0.08], { ...o, e: 0.55, a: [0.9, 1] });
-  b.rod([0, -0.318, -0.038], [0, -0.318, 0.042], 0.029, 0.026, { ...o, a: [0.85, 1], seg: b.pick(8, 6, 5) });
-  if (b.level < 2) b.ell([0, -0.296, 0.046], [0.02, 0.032, 0.018], { ...o, rot: [0.4, 0, 0], seg: [6, 4] });
-  if (b.level < 1) for (let k = 0; k < 4; k++) b.ell([0, -0.302, -0.028 + k * 0.022], [0.026, 0.012, 0.011], { ...o, seg: [5, 3] });   // the knuckles
+  b.rod([0, -0.318, -0.038], [0, -0.318, 0.042], 0.029, 0.026, { ...o, a: [0.85, 1], seg: b.pick(12, 6, 5) });
+  if (b.level < 2) b.ell([0, -0.296, 0.046], [0.02, 0.032, 0.018], { ...o, rot: [0.4, 0, 0], seg: [8, 6] });
+  if (b.level < 1) for (let k = 0; k < 4; k++) b.ell([0, -0.302, -0.028 + k * 0.022], [0.026, 0.012, 0.011], { ...o, seg: [7, 4] });   // the knuckles
+  if (gaunt && b.level < 2) {
+    // the gauntlet's plates: over the back of the hand, a ridge across the knuckles, lames over the fingers
+    b.shell([0, -0.272, 0.004], [0.031, 0.05, 0.05], 0, TAU, 0, PI * 0.5, { ...plate, rot: [0, 0, PI / 2], a: [0.9, 1] });
+    for (let k = 0; k < (b.level < 1 ? 2 : 1); k++) b.rod([0.026, -0.304 - k * 0.016, -0.036], [0.026, -0.304 - k * 0.016, 0.04], 0.008, 0.008, { ...plate, seg: 6 });
+  }
 }
 const FORE = {
   cloth: { arm: { c: K.gamb, m: 'cloth', p: PAT.quilt }, hand: skin, bracer: true },
   mail: { arm: mailM, hand: leather },
-  plate: { arm: plate, hand: { ...plate } },
+  plate: { arm: plate, hand: { ...plate }, gaunt: true },
   skin: { arm: skin, hand: skin, bracer: true },
+  green: { arm: { c: K.green, m: 'wool', p: PAT.weave }, hand: leatherLt, bracer: true },
+  cream: { arm: { c: K.cream, m: 'cloth', p: PAT.weave }, hand: skin, cuff: cloth },
+  house: { arm: cloth, hand: leather, vambrace: true },
+  robe: { arm: { c: K.robe, m: 'wool', p: PAT.weave }, hand: skin, sleeve: true },
 };
 for (const st of Object.keys(FORE)) {
   def('fore.' + st, (b) => {
@@ -125,18 +250,40 @@ for (const st of Object.keys(FORE)) {
       b.rbox([0, -0.3, 0.004], [0.046, 0.09, 0.08], { ...f.hand, seg: [4, 2] });
       return;
     }
-    const pad = st === 'cloth' ? 0.007 : st === 'mail' ? 0.004 : 0;
-    b.loft(grow(FOREARM, pad), { ...f.arm, a: [0.88, 0.9], seg: b.pick(12, 8, 6) });
-    b.ell([0, 0.0, 0], [0.034 + pad, 0.036, 0.036 + pad], { ...f.arm, a: [0.9, 0.9] });   // (the elbow, again: it closes a bent arm)
-    if (b.level < 2) {
-      if (st === 'plate') {
-        b.ell([0, 0.0, 0.02], [0.05, 0.05, 0.05], { ...plate, a: [1, 1] });   // the couter
-        b.lathe([[0.034, -0.2], [0.046, -0.265], [0.05, -0.27]], [0, 0, 0], { ...plate, sc: [1, 1, 1.05], seg: b.pick(12, 8, 6) });   // the gauntlet's cuff
-      } else if (f.bracer) b.loft(grow(FOREARM.slice(2, 4), 0.008), { ...leather, a: [0.9, 1], seg: b.pick(10, 8, 6) });
-      else b.lathe([[0.032, -0.19], [0.042, -0.26], [0.045, -0.265]], [0, 0, 0], { ...leather, seg: b.pick(10, 8, 6) });   // a glove's cuff
+    const pad = st === 'cloth' || st === 'green' || st === 'cream' || st === 'house' ? 0.007 : st === 'mail' ? 0.004 : 0;
+    if (f.sleeve) {
+      // the wide sleeve flares open to below the wrist, a gold border at its mouth; the forearm inside it is bare
+      b.loft(grow(FOREARM.slice(1), 0.0), { ...skin, seg: b.pick(14, 8, 6) });
+      b.lathe([[0.05, 0.03], [0.056, -0.06], [0.07, -0.16], [0.086, -0.215]], [0, 0, -0.008], { ...f.arm, sc: [1, 1, 1.1], a: [0.75, 1], seg: b.pick(22, 10, 6) });
+      if (b.level < 2) b.lathe([[0.082, -0.2], [0.09, -0.218], [0.087, -0.226]], [0, 0, -0.008], { ...gold, sc: [1, 1, 1.1], seg: b.pick(22, 10, 6) });
+      b.ell([0, 0.0, 0], [0.048, 0.044, 0.048], f.arm);
+    } else {
+      b.loft(grow(FOREARM, pad), { ...f.arm, a: [0.88, 0.9], seg: b.pick(20, 8, 6) });
+      b.ell([0, 0.0, 0], [0.034 + pad, 0.036, 0.036 + pad], { ...f.arm, a: [0.9, 0.9] });   // (the elbow, again: it closes a bent arm)
     }
-    fist(b, { ...f.hand });
-  });
+    if (b.level < 2) {
+      if (st === 'plate' || f.vambrace) {
+        // the couter, cupped round the point of the elbow (behind: the forearm folds forward) with a fan to each side; the vambrace in
+        // two halves; the gauntlet's flared cuff
+        if (st === 'plate') {
+          b.ell([0, 0.0, -0.024], [0.05, 0.05, 0.048], { ...plate, a: [1, 1] });
+          for (const s of [-1, 1]) b.ell([s * 0.04, -0.005, -0.004], [0.012, 0.04, 0.036], { ...plate, a: [0.9, 1], seg: [8, 6] });
+        }
+        b.loft(grow(FOREARM.slice(1, 4), 0.012), { ...plate, a: [0.85, 1], seg: b.pick(16, 8, 6) });
+        if (b.level < 1) {
+          rim(b, -0.065, 0.057, 0.056, 0.004, 0.003, { c: K.steelLt, m: 'plate' });
+          b.band([[0, -0.12, 0.05], [0.045, -0.12, 0.0], [0, -0.12, -0.048], [-0.045, -0.12, 0.0], [0, -0.12, 0.05]], 0.012, 0.003, { ...leatherDk, out: from([0, -0.12, 0.002]), segs: 12 });
+        }
+        b.lathe([[0.034, -0.2], [0.046, -0.258], [0.052, -0.266], [0.05, -0.272]], [0, 0, 0], { ...(f.gaunt ? plate : leather), sc: [1, 1, 1.05], seg: b.pick(20, 8, 6) });
+      } else if (f.bracer) {
+        // a laced leather bracer
+        b.loft(grow(FOREARM.slice(1, 4), 0.008), { ...leather, a: [0.9, 1], seg: b.pick(16, 8, 6) });
+        if (b.level < 1) for (let k = 0; k < 4; k++) b.band([[-0.012, -0.08 - k * 0.035, 0.05 - k * 0.003], [0.012, -0.095 - k * 0.035, 0.05 - k * 0.003]], 0.004, 0.002, { c: K.linen, m: 'cloth', out: () => [0, 0, 1], segs: 2 });
+      } else if (f.cuff) b.lathe([[0.034, -0.17], [0.046, -0.2], [0.05, -0.235], [0.046, -0.245]], [0, 0, 0], { ...f.cuff, seg: b.pick(20, 8, 6) });
+      else if (!f.sleeve) b.lathe([[0.032, -0.19], [0.042, -0.26], [0.045, -0.265]], [0, 0, 0], { ...leather, seg: b.pick(16, 8, 6) });   // a glove's cuff
+    }
+    fist(b, { ...f.hand }, !!f.gaunt);
+  }, st === 'robe');   // (the sleeve's mouth is seen from inside)
 }
 
 // ---------------------------------------------------------------- pelvis (frame 2 cm above the hip joints) and chest (frame at the waist)
@@ -160,198 +307,460 @@ const over = (y0, y1, d, dz = d) => {
   return ys.map((y) => { const r = ringAt(y); return [y, r[0] + d, r[1] + dz, r[2]]; });
 };
 const SQ = 2.6;   // how square the trunk's sections are
-function belt(b, extras) {
-  b.lathe([[0.164, 0.02], [0.172, 0.02], [0.172, 0.085], [0.164, 0.085]], [0, 0, 0], { sc: [1, 1, 0.72], ...leather, seg: b.pick(20, 14, 9) });
-  b.rbox([0, 0.052, 0.124], [0.052, 0.05, 0.014], { ...gold, sharp: true });
+const spow = (v, e) => Math.sign(v) * Math.pow(Math.abs(v), e);
+// the point on the trunk at height y, angle t round it (0 the front, a quarter turn +x), d outside it
+const onTrunk = (y, t, d = 0) => { const r = ringAt(y), e = 2 / SQ; return [(r[0] + d) * spow(Math.sin(t), e), y, r[2] + (r[1] + d) * spow(Math.cos(t), e)]; };
+const trunkOut = (x, y, z) => { const r = ringAt(y); return [x / (r[0] * r[0]), 0, (z - r[2]) / (r[1] * r[1])]; };
+// the same round the pelvis (the hips and the belt: an ellipse 0.17 by 0.122)
+const onHips = (y, t, d = 0) => [(0.172 + d) * Math.sin(t), y, (0.124 + d * 0.72) * Math.cos(t)];
+
+// The belt: a leather band with a buckle and the tongue's end hanging from it, the purse and the pouches it carries (extras).
+function belt(b, extras, o = leather) {
+  b.lathe([[0.164, 0.02], [0.173, 0.025], [0.173, 0.08], [0.164, 0.085]], [0, 0, 0], { sc: [1, 1, 0.72], ...o, seg: b.pick(36, 14, 9) });
+  if (b.level < 2) {
+    b.torus([0, 0.052, 0.128], 0.026, 0.0055, { ...brass, sc: [1.15, 1, 1], seg: b.pick(16, 8, 6), sides: b.pick(6, 4, 3) });
+    if (b.level < 1) {
+      b.rod([0, 0.074, 0.132], [0, 0.03, 0.132], 0.003, 0.003, { ...brass, seg: 5 });
+      b.band([[0.02, 0.06, 0.128], [0.05, 0.035, 0.124], [0.058, -0.04, 0.118]], 0.034, 0.004, { ...o, out: () => [0, 0, 1], segs: 8 });   // the tongue's end
+      rivets(b, [[0.09, 0.052, 0.104], [-0.09, 0.052, 0.104], [0.15, 0.052, 0.06], [-0.15, 0.052, 0.06]], 0.006, brass);
+    }
+  } else b.rbox([0, 0.052, 0.124], [0.052, 0.05, 0.014], { ...brass, sharp: true });
   if (extras && b.level < 2) {
-    b.rbox([0.165, 0.0, 0.05], [0.07, 0.1, 0.055], { ...leather, sharp: true });
-    b.rbox([-0.15, 0.005, 0.085], [0.06, 0.08, 0.05], { ...leather, sharp: true });
+    // a purse at the left hip and a pouch at the right, each with its flap and a toggle
+    for (const [x, z, w, h, d] of [[0.168, 0.05, 0.075, 0.1, 0.055], [-0.152, 0.08, 0.062, 0.08, 0.05]]) {
+      const ry = Math.atan2(x, z);
+      b.rbox([x, -0.004, z], [w, h, d], { ...leatherLt, e: 0.45, rot: [0, ry, 0], d: 0.15 });
+      b.rbox([x * 1.04, 0.03, z * 1.04], [w * 1.05, h * 0.42, d * 0.5], { ...leatherDk, e: 0.4, rot: [0.1, ry, 0] });
+      if (b.level < 1) b.ell([x * 1.15, 0.005, z * 1.15], 0.008, { ...bone(), seg: [6, 4] });
+    }
   }
 }
-// cloth hanging from the belt, front and back, swaying; the sides stay open
-function tabardSkirt(b, hem, w) {
+function bone() { return { c: K.bone, m: 'bone' }; }
+// cloth hanging from the belt, front and back, swaying; the sides stay open (o: the cloth; trimmed along the hem)
+function tabardSkirt(b, hem, w, o = cloth, wide = 1.24) {
   const prof = [[0.252, hem], [0.2, 0.06]];
-  for (const arc of [[-0.62, 1.24], [PI - 0.62, 1.24]]) {
-    b.lathe(prof, [0, 0, 0], { arc, sc: [1, 1, 0.78], ...cloth, w: [SKIRT + w, SKIRT], a: [0.8, 1], seg: b.pick(8, 6, 4) });
-    if (b.level < 2) b.lathe([[0.256, hem], [0.25, hem + 0.04]], [0, 0, 0], { arc, sc: [1, 1, 0.78], c: K.trim, m: 'cloth', w: [SKIRT + w, SKIRT + w * 0.9], seg: b.pick(8, 6, 4) });
+  const dirt = mud(hem - 0.02, hem + 0.25, 0.45);
+  for (const arc of [[-wide / 2, wide], [PI - wide / 2, wide]]) {
+    b.lathe(prof, [0, 0, 0], { arc, sc: [1, 1, 0.78], ...o, w: [SKIRT + w, SKIRT], a: [0.8, 1], seg: b.pick(12, 6, 4), d: dirt });
+    if (b.level < 2) b.lathe([[0.256, hem], [0.25, hem + 0.04]], [0, 0, 0], { arc, sc: [1, 1, 0.78], ...trim, w: [SKIRT + w, SKIRT + w * 0.9], seg: b.pick(12, 6, 4), d: dirt });
   }
 }
+// the sword's scabbard, hung from the belt at the left hip by two straps: a leather sheath with an iron locket at its mouth and a chape
 function scabbard(b) {
-  b.rod([0.17, -0.03, 0.0], [0.21, -0.43, -0.09], 0.024, 0.02, { ...leather, a: [0.85, 1], seg: 6 });
-  b.rod([0.205, -0.4, -0.085], [0.212, -0.46, -0.1], 0.022, 0.026, { ...iron, seg: 5 });
+  b.rod([0.17, -0.03, 0.0], [0.21, -0.43, -0.09], 0.024, 0.02, { ...leather, a: [0.85, 1], seg: 8 });
+  b.rod([0.168, -0.01, 0.004], [0.175, -0.07, -0.01], 0.028, 0.027, { ...iron, seg: 8 });
+  b.rod([0.205, -0.4, -0.085], [0.212, -0.46, -0.1], 0.022, 0.026, { ...iron, seg: 6 });
+  b.band([[0.15, 0.05, 0.06], [0.175, 0.0, 0.03], [0.178, -0.05, 0.0]], 0.012, 0.003, { ...leatherDk, out: () => [1, 0, 0.2], segs: 5 });
 }
 // the hips and seat: wide at the hip bones, the buttocks behind, closing between the legs
 const hips = (b, o) => {
-  b.loft([[0.14, 0.148, 0.1, 0.0], [0.05, 0.16, 0.108, 0.0], [-0.03, 0.17, 0.114, -0.004], [-0.09, 0.162, 0.108, -0.01], [-0.13, 0.13, 0.088, -0.01]], { a: [0.7, 1], sq: 2.4, seg: b.pick(14, 10, 7), ...o });
+  b.loft([[0.14, 0.148, 0.1, 0.0], [0.05, 0.16, 0.108, 0.0], [-0.03, 0.17, 0.114, -0.004], [-0.09, 0.162, 0.108, -0.01], [-0.13, 0.13, 0.088, -0.01]], { a: [0.7, 1], sq: 2.4, seg: b.pick(22, 10, 7), ...o });
   b.ell([0, -0.13, -0.01], [0.13, 0.05, 0.088], { a: [0.6, 0.8], ...o });
   if (b.level < 2) for (const s of [-1, 1]) b.ell([s * 0.068, -0.07, -0.05], [0.08, 0.085, 0.07], { a: [0.7, 0.95], ...o });
 };
+// a mail skirt from the waist to y (a hauberk's hem, under everything else)
+const mailSkirt = (b, y) => b.lathe([[0.255, y], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], ...mailM, w: SKIRT, a: [0.62, 1], seg: b.pick(28, 12, 8), d: mud(y - 0.02, y + 0.2, 0.4) });
 
 def('pelvis.mail', (b) => {
   hips(b, LEG.cloth);
+  mailSkirt(b, -0.3);
   belt(b, true);
-  b.lathe([[0.255, -0.3], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], ...mailM, w: SKIRT, a: [0.65, 1], seg: b.pick(20, 12, 8) });
   tabardSkirt(b, -0.34, 0.9);
   if (b.level < 1) scabbard(b);
 }, true);
 def('pelvis.plate', (b) => {
   hips(b, LEG.cloth);
+  if (b.level < 2) mailSkirt(b, -0.24);
   belt(b, true);
-  const ys = b.level < 2 ? [0.0, -0.09, -0.18] : [-0.05];
-  ys.forEach((y, i) => b.lathe([[0.215 + i * 0.016, y - 0.1], [0.19 + i * 0.012, y + 0.05]], [0, 0, 0], { sc: [1, 1, 0.8], ...plate, w: SKIRT, a: [0.7, 1], seg: b.pick(20, 12, 8) }));
-  if (b.level < 2) for (const sx of [-1, 1]) b.rbox([sx * 0.085, -0.17, 0.155], [0.14, 0.22, 0.04], { ...plate, w: SKIRT, e: 0.3, rot: [0.12, 0, sx * 0.08] });
-  tabardSkirt(b, -0.38, 0.9);
+  // the fauld: hoops of plate round the belly and hips, each with a rolled edge; the tassets hanging over the thighs on straps
+  const ys = b.level < 2 ? [0.0, -0.06, -0.12] : [-0.04];
+  ys.forEach((y, i) => {
+    b.lathe([[0.21 + i * 0.014, y - 0.075], [0.19 + i * 0.012, y + 0.04]], [0, 0, 0], { sc: [1, 1, 0.8], ...plate, w: SKIRT, a: [0.7, 1], seg: b.pick(28, 12, 8), arc: [-2.2, 4.4] });
+    if (b.level < 1) rim(b, y - 0.074, 0.212 + i * 0.014, (0.212 + i * 0.014) * 0.8, 0, 0.003, { c: K.steelLt, m: 'plate', w: SKIRT }, [-2.2, 4.4]);
+  });
+  if (b.level < 2) {
+    for (const sx of [-1, 1]) {
+      for (let k = 0; k < 2; k++) {
+        const y = -0.2 - k * 0.075;
+        b.rbox([sx * 0.088, y, 0.156 - k * 0.006], [0.15, 0.1, 0.034], { ...plate, w: SKIRT, e: 0.3, rot: [0.1, 0, sx * 0.08], a: [0.8, 1] });
+        if (b.level < 1) b.rbox([sx * 0.088, y - 0.048, 0.166 - k * 0.006], [0.148, 0.01, 0.012], { c: K.steelLt, m: 'plate', w: SKIRT, e: 0.5, rot: [0.1, 0, sx * 0.08] });
+      }
+      rivets(b, [[sx * 0.04, -0.17, 0.176], [sx * 0.13, -0.165, 0.168]], 0.006);
+      if (b.level < 1) b.band([[sx * 0.088, -0.12, 0.155], [sx * 0.088, -0.17, 0.17]], 0.02, 0.004, { ...leatherDk, out: () => [0, 0, 1], segs: 3 });
+    }
+  }
+  tabardSkirt(b, -0.4, 0.9, cloth, 1.1);
   if (b.level < 1) scabbard(b);
 }, true);
 def('pelvis.gambeson', (b) => {
   hips(b, LEG.cloth);
+  b.lathe([[0.24, -0.24], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], c: K.gamb, m: 'cloth', p: PAT.quilt, w: SKIRT, a: [0.7, 1], seg: b.pick(28, 12, 8), d: mud(-0.26, -0.05, 0.4) });
   belt(b, true);
-  b.lathe([[0.24, -0.24], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], c: K.gamb, m: 'cloth', p: PAT.quilt, w: SKIRT, a: [0.7, 1], seg: b.pick(18, 12, 8) });
-  if (b.level < 2) b.rod([-0.13, 0.0, 0.1], [-0.15, -0.14, 0.12], 0.015, 0.012, { c: K.steel, m: 'steel' });
+  if (b.level < 2) {
+    // a knife at the right hip, the hilt forward
+    b.rod([-0.14, 0.02, 0.105], [-0.165, -0.15, 0.11], 0.015, 0.012, { ...leatherDk, seg: 6 });
+    b.rod([-0.135, 0.02, 0.106], [-0.13, 0.09, 0.104], 0.009, 0.009, { ...wood, seg: 6 });
+    b.ell([-0.13, 0.095, 0.104], 0.012, { ...iron, seg: [6, 5] });
+  }
+  if (b.level < 1) scabbard(b);
 }, true);
 def('pelvis.leather', (b) => {
   hips(b, LEG.cloth);
   belt(b, true);
-  b.lathe([[0.235, -0.4], [0.2, 0.06]], [0, 0, 0], { arc: [-0.8, 1.6], sc: [1, 1, 0.78], c: K.leatherLt, m: 'leather', p: PAT.leather, w: SKIRT, a: [0.7, 1], seg: b.pick(10, 8, 5) });
+  b.lathe([[0.235, -0.4], [0.2, 0.06]], [0, 0, 0], { arc: [-0.8, 1.6], sc: [1, 1, 0.78], c: K.leatherLt, m: 'leather', p: PAT.leather, w: SKIRT, a: [0.7, 1], seg: b.pick(14, 8, 5), d: mud(-0.42, -0.1, 0.5) });
   if (b.level < 2) {
     b.rod([0.17, 0.0, 0.05], [0.2, -0.34, 0.05], 0.022, 0.022, { ...wood });
     b.rbox([0.205, -0.38, 0.05], [0.12, 0.07, 0.07], { ...iron, e: 0.3 });
   }
 }, true);
 def('pelvis.fur', (b) => {
+  // a berserker: a kilt of pelt under a fringe of studded leather strips, a broad belt with a big round buckle, the house's sash
   hips(b, { c: K.fur, m: 'fur', p: PAT.fur });
-  b.torus([0, 0.05, 0], 0.18, 0.022, { rot: [PI / 2, 0, 0], sc: [1, 0.72, 1], c: K.leatherLt, m: 'leather', seg: b.pick(18, 12, 8) });
-  for (const arc of [[-0.8, 1.6], [PI - 0.8, 1.6]]) b.lathe([[0.25, -0.34], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.furLt, m: 'fur', p: PAT.fur, w: [SKIRT + 0.8, SKIRT], a: [0.7, 1], seg: b.pick(8, 6, 4) });
+  for (const arc of [[-0.9, 1.8], [PI - 0.9, 1.8]]) b.lathe([[0.25, -0.34], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.furLt, m: 'fur', p: PAT.fur, w: [SKIRT + 0.8, SKIRT], a: [0.7, 1], seg: b.pick(12, 6, 4), d: mud(-0.36, -0.1, 0.5) });
+  b.lathe([[0.17, 0.0], [0.18, 0.01], [0.18, 0.095], [0.17, 0.105]], [0, 0, 0], { sc: [1, 1, 0.74], ...leatherDk, seg: b.pick(36, 14, 9) });
+  if (b.level < 2) {
+    const n = b.level < 1 ? 11 : 7;
+    for (let i = 0; i < n; i++) {
+      const t = -1.25 + (i / (n - 1)) * 2.5 + (i % 2) * 0.04;
+      const p0 = onHips(0.0, t, 0.012), p1 = onHips(-0.24 - (i % 3) * 0.025, t, 0.05);
+      b.band([p0, [(p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2, (p0[2] + p1[2]) / 2], p1], 0.04, 0.005, { ...leather, w: [SKIRT + 0.5, SKIRT], out: () => [Math.sin(t), 0, Math.cos(t)], segs: 3, d: 0.25 });
+      if (b.level < 1) b.ell([p1[0] * 0.98, p1[1] + 0.03, p1[2] * 0.98], 0.007, { ...iron, w: SKIRT, seg: [5, 4] });
+    }
+    b.ell([0, 0.052, 0.13], [0.044, 0.044, 0.016], { ...iron, a: [0.9, 1] });   // the buckle's round plate
+    if (b.level < 1) b.torus([0, 0.052, 0.144], 0.03, 0.006, { ...brass, seg: 16, sides: 5 });
+  }
+}, true);
+// The mage's robe below the waist: the skirt's upper part, front and back to mid-thigh (the thighs carry the rest, robeLeg), the house's
+// sash knotted at the hip with its ends hanging, a rope girdle with a purse and a book on a chain
+def('pelvis.robe', (b) => {
+  const o = { c: K.robe, m: 'wool', p: PAT.weave };
+  hips(b, o);
+  for (const arc of [[-0.95, 1.9], [PI - 0.95, 1.9]]) b.lathe([[0.25, -0.3], [0.2, 0.06]], [0, 0, 0], { arc, sc: [1, 1, 0.8], ...o, w: [SKIRT + 0.6, SKIRT], a: [0.7, 1], seg: b.pick(14, 8, 4) });
+  b.lathe([[0.168, 0.015], [0.178, 0.025], [0.178, 0.095], [0.168, 0.105]], [0, 0, 0], { sc: [1, 1, 0.74], ...cloth, seg: b.pick(36, 14, 9) });
+  if (b.level < 2) {
+    b.ell([-0.12, 0.06, 0.1], [0.035, 0.03, 0.025], { ...cloth });   // the knot
+    for (const [dx, len] of [[-0.11, 0.36], [-0.14, 0.3]]) b.band([[dx, 0.05, 0.11], [dx - 0.01, -0.1, 0.13], [dx - 0.015, 0.05 - len, 0.13]], 0.05, 0.005, { ...cloth, w: [0.6, 0], out: () => [-0.3, 0, 1], segs: b.pick(8, 4, 2) });
+    b.torus([0, 0.0, 0], 0.18, 0.007, { rot: [PI / 2 + 0.06, 0, 0], sc: [1, 0.76, 1], c: K.rope, m: 'cloth', seg: b.pick(28, 12, 8), sides: 4 });   // the girdle
+    b.rbox([0.17, -0.06, 0.04], [0.04, 0.11, 0.08], { ...leatherDk, e: 0.25, rot: [0, 0.3, 0.05] });   // the book
+    if (b.level < 1) {
+      b.rbox([0.174, -0.06, 0.04], [0.032, 0.1, 0.072], { c: 0xd8cca8, m: 'cloth', e: 0.2, rot: [0, 0.3, 0.05] });
+      b.ell([0.15, -0.08, 0.1], [0.03, 0.04, 0.025], { ...leatherLt });
+    }
+  }
+}, true);
+// the Cleric below the waist: a long undertunic in cream to the knee, the mail's hem over it, the house tabard, a rope cincture with its
+// tasselled end
+def('pelvis.cleric', (b) => {
+  hips(b, LEG.cloth);
+  for (const arc of [[-1.2, 2.4], [PI - 1.2, 2.4]]) b.lathe([[0.262, -0.46], [0.2, 0.0]], [0, 0, 0], { arc, sc: [1, 1, 0.8], c: K.cream, m: 'cloth', p: PAT.weave, w: [SKIRT + 0.8, SKIRT], a: [0.7, 1], seg: b.pick(14, 8, 4), d: mud(-0.48, -0.2, 0.55) });
+  mailSkirt(b, -0.28);
+  belt(b, true);
+  tabardSkirt(b, -0.36, 0.9);
+  if (b.level < 2) {
+    b.torus([0, -0.005, 0], 0.192, 0.008, { rot: [PI / 2 + 0.08, 0, 0], sc: [1, 0.78, 1], c: K.rope, m: 'cloth', seg: b.pick(28, 12, 8), sides: 4 });
+    b.sweep([[0.1, -0.02, 0.15], [0.115, -0.15, 0.16], [0.11, -0.3, 0.15]], 0.008, 0.008, { c: K.rope, m: 'cloth', w: [0.0, 0.7], seg: 4, segs: b.pick(8, 4, 3) });
+    b.ell([0.11, -0.32, 0.15], [0.014, 0.03, 0.014], { c: K.rope, m: 'cloth', w: 0.7, seg: [6, 5] });
+  }
 }, true);
 
-// the surcoat over a torso: front and back panels, the front carrying the house emblem
-function tabardTop(b, top, bottom) {
-  const rings = over(bottom, top, 0.012);
-  const o = { sq: SQ, seg: b.pick(10, 8, 5) };
-  b.loft(rings, { ...o, arc: [-0.7, 1.4], ...cloth, p: PAT.emblem, uv: [0, 0.2, 0.3, 0.3], a: [0.85, 1] });
-  b.loft(rings, { ...o, arc: [PI - 0.7, 1.4], ...cloth, a: [0.85, 1] });
-  if (b.level < 2) b.loft(over(top - 0.03, top, 0.014), { ...o, arc: [-0.72, 1.44], c: K.trim, m: 'cloth' });
+// the surcoat over a torso: front and back panels (the front with the house's arms), its neck and armholes trimmed
+function tabardTop(b, top, bottom, d = 0.012, o = cloth, wide = 0.7) {
+  const rings = over(bottom, top, d, d + 0.004);
+  const q = { sq: SQ, seg: b.pick(16, 8, 5) };
+  b.loft(rings, { ...q, arc: [-wide, wide * 2], ...o, p: PAT.emblem, uv: [0, 0.2, 0.3, 0.3], a: [0.85, 1] });
+  b.loft(rings, { ...q, arc: [PI - wide, wide * 2], ...o, a: [0.85, 1] });
+  if (b.level < 2) {
+    b.loft(over(top - 0.03, top, d + 0.002, d + 0.006), { ...q, arc: [-wide - 0.02, wide * 2 + 0.04], ...trim });
+    b.loft(over(top - 0.03, top, d + 0.002, d + 0.006), { ...q, arc: [PI - wide - 0.02, wide * 2 + 0.04], ...trim });
+  }
+  if (b.level < 1) for (const s of [-1, 1]) for (const back of [0, PI]) {
+    // the trimmed side edges of each panel
+    const t = back + s * wide;
+    b.band([onTrunk(bottom + 0.01, t, d + 0.004), onTrunk((bottom + top) / 2, t, d + 0.004), onTrunk(top - 0.02, t, d + 0.004)], 0.012, 0.003, { ...trim, out: trunkOut, segs: 6 });
+  }
 }
-const trunk = (b, o) => b.loft(TRUNK, { sq: SQ, seg: b.pick(20, 14, 9), ...o });
+const trunk = (b, o) => b.loft(TRUNK, { sq: SQ, seg: b.pick(28, 12, 9), ...o });
 // a high collar round the base of the neck (a scarf, the top of a gambeson, a gorget)
 const neckband = (b, o, k = 1) => b.lathe([[0.1 * k, 0.4], [0.105 * k, 0.43], [0.072 * k, 0.48]], [0, 0, -0.012], { sc: [1, 1, 0.85], ...o });
+// the strap over each shoulder that holds a breastplate to its back
+function shoulderStraps(b, d = 0.03) {
+  if (b.level >= 1) return;
+  for (const s of [-1, 1]) {
+    b.band([onTrunk(0.33, s * 0.62, d), [s * 0.115, 0.43, 0.035], [s * 0.12, 0.445, -0.02], onTrunk(0.33, s * (PI - 0.62), d)], 0.026, 0.004, { ...leatherDk, out: from([s * 0.08, 0.3, -0.01]), segs: 10 });
+    buckle(b, onTrunk(0.34, s * 0.62, d + 0.004), trunkOut(...onTrunk(0.34, s * 0.62, d)).map((v) => v * 0.05), 0.9);
+  }
+}
+// the gorget: two lames of plate round the base of the neck, rolled at the top
+function gorget(b, o = plate) {
+  b.lathe([[0.126, 0.36], [0.128, 0.4], [0.098, 0.445]], [0, 0, -0.012], { sc: [1, 1, 0.86], ...o, a: [0.85, 1] });
+  if (b.level < 2) {
+    b.lathe([[0.1, 0.43], [0.098, 0.46], [0.078, 0.49]], [0, 0, -0.012], { sc: [1, 1, 0.86], ...o, a: [0.9, 1] });
+    if (b.level < 1) rim(b, 0.49, 0.078, 0.067, -0.012, 0.004, { c: K.steelLt, m: 'plate' });
+  }
+}
 
 def('chest.mail', (b) => {
   trunk(b, { ...mailM, a: [0.75, 1] });
   tabardTop(b, 0.36, -0.03);
-  if (b.level < 2) neckband(b, mailM);
+  if (b.level < 2) {
+    neckband(b, mailM);
+    b.lathe([[0.116, 0.37], [0.12, 0.4], [0.104, 0.425]], [0, 0, -0.01], { sc: [1, 1, 0.86], ...{ c: K.gamb, m: 'cloth', p: PAT.quilt } });   // the padded collar under it
+  }
 }, true);
 def('chest.plate', (b) => {
   trunk(b, { c: K.ironDk, m: 'iron', a: [0.7, 1] });
-  // breastplate and backplate with a ridge down the middle, a gorget at the neck
-  b.loft(over(-0.05, 0.37, 0.022, 0.026), { sq: SQ, arc: [-1.2, 2.4], ...plate, a: [0.85, 1], seg: b.pick(14, 10, 6) });
-  b.loft(over(-0.05, 0.4, 0.02), { sq: SQ, arc: [PI - 1.05, 2.1], ...plate, a: [0.85, 1], seg: b.pick(12, 8, 5) });
+  // breastplate and backplate, the breast with a keel down the middle and rolled edges at the neck and armholes; the surcoat over them
+  b.loft(over(-0.05, 0.37, 0.022, 0.026), { sq: SQ, arc: [-1.2, 2.4], ...plate, a: [0.85, 1], seg: b.pick(20, 10, 6) });
+  b.loft(over(-0.05, 0.4, 0.02), { sq: SQ, arc: [PI - 1.05, 2.1], ...plate, a: [0.85, 1], seg: b.pick(16, 8, 5) });
   if (b.level < 2) {
-    b.rbox([0, 0.19, 0.146], [0.026, 0.28, 0.024], { ...plate, e: 0.4, rot: [0.06, 0, 0] });
-    b.lathe([[0.122, 0.37], [0.124, 0.42], [0.078, 0.48]], [0, 0, -0.012], { sc: [1, 1, 0.86], ...plate });
+    b.rbox([0, 0.3, 0.145], [0.026, 0.12, 0.024], { ...plate, e: 0.4, rot: [-0.1, 0, 0] });
+    if (b.level < 1) for (const s of [-1, 1]) b.band([onTrunk(0.37, s * 0.2, 0.028), onTrunk(0.33, s * 0.75, 0.028), onTrunk(0.25, s * 1.15, 0.026)], 0.008, 0.005, { c: K.steelLt, m: 'plate', out: trunkOut, segs: 8 });
+    gorget(b);
   }
-  tabardTop(b, 0.3, -0.03);
+  tabardTop(b, 0.31, -0.03, 0.034, cloth, 0.75);
+  shoulderStraps(b, 0.03);
+  rivets(b, [onTrunk(0.15, 1.15, 0.03), onTrunk(0.15, -1.15, 0.03), onTrunk(0.05, 1.15, 0.03), onTrunk(0.05, -1.15, 0.03)], 0.007);
+}, true);
+// The Cavalier's brigandine: a coat of the house's cloth riveted over steel plates (rows of brass heads), closed at the front with straps
+// and buckles, over mail; the house's arms on the breast; a gorget at the throat
+def('chest.brigandine', (b) => {
+  trunk(b, { ...mailM, a: [0.75, 1] });
+  const rings = over(-0.06, 0.37, 0.026, 0.03);
+  b.loft(rings, { sq: SQ, ...cloth, p: PAT.emblem, uv: [0, 0.18, 0.26, 0.26], a: [0.8, 1], seg: b.pick(28, 12, 7) });
+  if (b.level < 2) {
+    b.loft(over(0.34, 0.39, 0.03, 0.034), { sq: SQ, ...trim, seg: b.pick(28, 12, 7) });
+    b.loft(over(-0.07, -0.03, 0.03, 0.034), { sq: SQ, ...trim, seg: b.pick(28, 12, 7) });
+    gorget(b);
+  }
+  if (b.level < 1) {
+    // the rivet heads in rows round the coat (not over the arms on the breast), and the front's straps
+    const pts = [];
+    for (let r = 0; r < 5; r++) {
+      const y = -0.02 + r * 0.075;
+      for (let k = 0; k < 14; k++) {
+        const t = -PI + (k + 0.5) * (TAU / 14);
+        if (Math.abs(t) < 0.55 && y > 0.06) continue;
+        pts.push(onTrunk(y, t, 0.033));
+      }
+    }
+    rivets(b, pts, 0.0055, brass);
+    for (const y of [0.04, 0.16]) {
+      b.band([onTrunk(y, -0.42, 0.033), onTrunk(y, 0, 0.036), onTrunk(y, 0.42, 0.033)], 0.018, 0.004, { ...leatherDk, out: trunkOut, segs: 6 });
+      buckle(b, onTrunk(y, 0.42, 0.04), [0.4, 0, 1], 0.9);
+    }
+  }
+  shoulderStraps(b, 0.034);
 }, true);
 def('chest.gambeson', (b) => {
   trunk(b, { c: K.gamb, m: 'cloth', p: PAT.quilt, a: [0.78, 1] });
   if (b.level < 2) {
     neckband(b, clothDk, 1.08);            // a scarf
-    b.sweep([[0.13, 0.36, 0.085], [0.05, 0.25, 0.13], [-0.04, 0.12, 0.124], [-0.14, 0.0, 0.1]], 0.016, 0.016, { ...leather });
+    b.band([[0.15, 0.4, -0.02], [0.13, 0.36, 0.085], [0.05, 0.25, 0.13], [-0.04, 0.12, 0.128], [-0.14, 0.0, 0.106]], 0.034, 0.005, { ...leather, out: trunkOut, segs: b.pick(14, 6, 3) });
     b.rbox([0.165, -0.0, 0.04], [0.06, 0.08, 0.05], { ...leather, e: 0.35 });
+  }
+}, true);
+// The Ranger: a laced leather jerkin over the quilted coat, a short mantle of the house's colour over the shoulders (its hood is the
+// head's), the quiver's baldric across the chest
+def('chest.ranger', (b) => {
+  trunk(b, { c: K.gamb, m: 'cloth', p: PAT.quilt, a: [0.78, 1] });
+  // the jerkin, open a little at the front over its lacing
+  b.loft(over(-0.08, 0.34, 0.014, 0.018), { sq: SQ, arc: [0.1, TAU - 0.2], ...leather, a: [0.8, 1], seg: b.pick(28, 12, 7) });
+  if (b.level < 2) {
+    b.loft(over(-0.09, -0.05, 0.018, 0.022), { sq: SQ, arc: [0.1, TAU - 0.2], ...leatherDk, seg: b.pick(28, 12, 7) });
+    if (b.level < 1) for (let k = 0; k < 6; k++) {
+      const y = -0.02 + k * 0.055;
+      b.band([onTrunk(y, -0.11, 0.02), onTrunk(y + 0.03, 0.11, 0.02)], 0.0045, 0.002, { c: K.linen, m: 'cloth', out: trunkOut, segs: 2 });
+      b.band([onTrunk(y, 0.11, 0.02), onTrunk(y + 0.03, -0.11, 0.02)], 0.0045, 0.002, { c: K.linen, m: 'cloth', out: trunkOut, segs: 2 });
+    }
+  }
+  // the mantle: from the neck over the shoulders, down to the chest, its edge cut in points
+  const mo = { ...clothDk };
+  b.lathe([[0.27, 0.22], [0.24, 0.3], [0.19, 0.38], [0.12, 0.43], [0.07, 0.47]], [0, 0, -0.012], { sc: [1, 1, 0.74], ...mo, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
+  if (b.level < 2) {
+    const n = b.level < 1 ? 12 : 8;
+    for (let i = 0; i < n; i++) {
+      const t = (i / n) * TAU;
+      b.cone([Math.sin(t) * 0.262, 0.235, Math.cos(t) * 0.262 * 0.74 - 0.012], [Math.sin(t) * 0.285, 0.15, Math.cos(t) * 0.285 * 0.74 - 0.012], 0.04, { ...mo, w: [0.3, 0.45], seg: 4, sc: 1 });
+    }
+    b.band([[-0.16, 0.36, -0.12], [-0.17, 0.38, 0.0], [-0.12, 0.3, 0.13], [0.02, 0.14, 0.135], [0.13, 0.0, 0.11]], 0.036, 0.005, { ...leatherDk, out: trunkOut, segs: b.pick(14, 6, 3) });   // the baldric
+    buckle(b, [-0.06, 0.24, 0.14], [0, 0, 1], 1.1);
   }
 }, true);
 def('chest.leather', (b) => {
   trunk(b, { c: K.leather, m: 'leather', p: PAT.leather, a: [0.78, 1] });
   if (b.level < 2) {
-    b.sweep([[0.13, 0.36, 0.085], [0.05, 0.25, 0.13], [-0.04, 0.12, 0.124], [-0.14, 0.0, 0.1]], 0.016, 0.016, { c: K.leatherDk, m: 'leather' });
+    b.band([[0.15, 0.4, -0.02], [0.13, 0.36, 0.085], [0.05, 0.25, 0.13], [-0.04, 0.12, 0.128], [-0.14, 0.0, 0.106]], 0.03, 0.005, { ...leatherDk, out: trunkOut, segs: b.pick(14, 6, 3) });
     neckband(b, clothDk, 1.08);
   }
-  b.loft(over(-0.04, 0.3, 0.008), { sq: SQ, arc: [-0.72, 1.44], c: K.linen, m: 'cloth', p: PAT.weave, a: [0.8, 1], seg: b.pick(8, 6, 4) });   // an apron bib
+  b.loft(over(-0.04, 0.3, 0.008), { sq: SQ, arc: [-0.72, 1.44], c: K.linen, m: 'cloth', p: PAT.weave, a: [0.8, 1], seg: b.pick(12, 6, 4) });   // an apron bib
 }, true);
+// The Mage's robe: deep blue wool to the throat, a high collar, the front's opening edged in gold, the house's stole hanging from the neck
+// down the front, an amulet
+def('chest.robe', (b) => {
+  const o = { c: K.robe, m: 'wool', p: PAT.weave };
+  trunk(b, { ...o, a: [0.75, 1] });
+  b.lathe([[0.115, 0.37], [0.112, 0.42], [0.086, 0.5], [0.09, 0.52]], [0, 0, -0.016], { sc: [1, 1, 0.88], ...o, a: [0.8, 1] });   // the collar
+  if (b.level < 2) {
+    b.band([onTrunk(-0.1, 0, 0.004), onTrunk(0.15, 0, 0.004), onTrunk(0.37, 0, 0.004)], 0.03, 0.003, { ...gold, out: trunkOut, segs: b.pick(10, 4, 2) });
+    rim(b, 0.52, 0.09, 0.079, -0.016, 0.005, gold);
+    for (const s of [-1, 1]) {
+      // the stole: over the shoulder from behind the neck, down the front to the waist, its end weighted with a fringe of gold
+      b.band([onTrunk(0.4, s * 2.3, 0.01), [s * 0.1, 0.45, -0.01], [s * 0.09, 0.42, 0.06], onTrunk(0.3, s * 0.32, 0.012), onTrunk(0.05, s * 0.3, 0.014), onTrunk(-0.12, s * 0.3, 0.016)], 0.055, 0.004, { ...cloth, out: from([s * 0.02, 0.2, -0.02]), segs: b.pick(14, 6, 3) });
+      if (b.level < 1) b.band([onTrunk(-0.1, s * 0.22, 0.02), onTrunk(-0.1, s * 0.38, 0.02)], 0.016, 0.004, { ...gold, out: trunkOut, segs: 3 });
+    }
+    b.ell([0, 0.25, 0.135], [0.022, 0.026, 0.01], { ...gold });   // the amulet
+    if (b.level < 1) b.ell([0, 0.25, 0.144], [0.011, 0.013, 0.006], { c: 0xff9a3a, m: 'gem', p: PAT.glow });
+  }
+}, true);
+// The Berserker: bare to the waist, a heavy chest, a mantle of pelt over the shoulders, leather straps crossed over the chest with a round
+// iron boss where they meet, the house's colour in a sash
 def('chest.fur', (b) => {
-  // a giant: bare skin, a heavy chest, a fur mantle, the house sash
   trunk(b, { ...skin, a: [0.72, 1] });
   for (const sx of [-1, 1]) b.ell([sx * 0.08, 0.27, 0.075], [0.085, 0.07, 0.055], { ...skin, a: [0.8, 1], rot: [0, 0, sx * 0.15] });   // the pectorals
   if (b.level < 2) {
     b.ell([0, 0.11, 0.075], [0.085, 0.11, 0.04], { ...skin, a: [0.85, 1] });   // the belly
+    if (b.level < 1) for (let r = 0; r < 3; r++) for (const sx of [-1, 1]) b.ell([sx * 0.032, 0.04 + r * 0.055, 0.105], [0.03, 0.024, 0.016], { ...skin, a: [0.85, 1], seg: [8, 6] });   // the muscles of the belly
     for (const sx of [-1, 1]) b.ell([sx * 0.11, 0.33, -0.06], [0.08, 0.08, 0.06], { ...skin, a: [0.8, 1] });   // the shoulder blades
+    for (const sx of [-1, 1]) b.band([onTrunk(0.4, sx * 2.6, 0.012), [sx * 0.13, 0.44, 0.02], onTrunk(0.3, sx * 0.55, 0.014), onTrunk(0.17, 0, 0.026), onTrunk(0.0, -sx * 0.75, 0.01)], 0.032, 0.005, { ...leatherDk, out: from([0, 0.2, -0.01]), segs: b.pick(14, 6, 3) });
+    b.ell([0, 0.17, 0.142], [0.034, 0.034, 0.014], { ...iron, a: [0.9, 1] });
+    if (b.level < 1) rivets(b, [[0, 0.17, 0.156]], 0.009, brass);
   }
-  b.loft([[0.29, 0.188, 0.128, 0.0], [0.35, 0.212, 0.138, -0.004], [0.405, 0.198, 0.122, -0.01], [0.445, 0.13, 0.092, -0.013], [0.48, 0.068, 0.064, -0.014]], { c: K.furLt, m: 'fur', p: PAT.fur, a: [0.7, 1], seg: b.pick(14, 10, 7) });
-  b.sweep([[-0.2, 0.4, 0.0], [-0.1, 0.3, 0.13], [0.05, 0.12, 0.135], [0.16, -0.04, 0.11]], 0.04, 0.04, { ...cloth, seg: 6 });
+  // the pelt: a thick ruff from the neck over the shoulders, ragged at its edge
+  const fo = { c: K.furLt, m: 'fur', p: PAT.fur };
+  b.loft([[0.29, 0.188, 0.128, 0.0], [0.35, 0.212, 0.138, -0.004], [0.405, 0.198, 0.122, -0.01], [0.445, 0.13, 0.092, -0.013], [0.48, 0.068, 0.064, -0.014]], { ...fo, a: [0.7, 1], seg: b.pick(24, 10, 7) });
+  if (b.level < 2) {
+    const n = b.level < 1 ? 16 : 9;
+    for (let i = 0; i < n; i++) {
+      const t = (i / n) * TAU + 0.2;
+      const p = [Math.sin(t) * 0.2, 0.29 - (i % 2) * 0.02, Math.cos(t) * 0.135];
+      b.ell(p, [0.05, 0.045, 0.04], { ...fo, rot: [0, t, 0], a: [0.7, 1], seg: [8, 6] });
+    }
+  }
+  b.sweep([[-0.2, 0.4, 0.0], [-0.1, 0.3, 0.13], [0.05, 0.12, 0.135], [0.16, -0.04, 0.11]], 0.035, 0.035, { ...cloth, seg: 6 });
+}, true);
+// The Cleric: mail, the house's tabard with its arms, and over it a cream stole edged in gold that hangs to the belt, a holy sun on a chain
+def('chest.cleric', (b) => {
+  trunk(b, { ...mailM, a: [0.75, 1] });
+  tabardTop(b, 0.36, -0.03, 0.012, cloth, 0.62);
+  if (b.level < 2) {
+    neckband(b, mailM);
+    for (const s of [-1, 1]) {
+      b.band([onTrunk(0.4, s * 2.4, 0.02), [s * 0.11, 0.45, -0.01], [s * 0.1, 0.42, 0.06], onTrunk(0.3, s * 0.36, 0.022), onTrunk(0.05, s * 0.34, 0.024), onTrunk(-0.08, s * 0.34, 0.026)], 0.05, 0.004, { c: K.cream, m: 'cloth', p: PAT.weave, out: from([s * 0.02, 0.2, -0.02]), segs: b.pick(14, 6, 3) });
+      if (b.level < 1) for (const y of [0.25, 0.0]) b.rbox(onTrunk(y, s * 0.35, 0.03), [0.03, 0.012, 0.004], { ...gold, rot: [0, s * 0.35, 0] });
+    }
+    b.ell([0, 0.25, 0.155], [0.028, 0.028, 0.008], { ...gold, a: [0.9, 1] });   // the sun
+    if (b.level < 1) for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; b.cone([Math.cos(a) * 0.026, 0.25 + Math.sin(a) * 0.026, 0.155], [Math.cos(a) * 0.045, 0.25 + Math.sin(a) * 0.045, 0.153], 0.007, { ...gold, seg: 4 }); }
+  }
 }, true);
 
 // ---------------------------------------------------------------- heads (frame at the base of the neck)
-// The neck rises a little forward to the skull; the skull is longer than it is wide, the face is narrower than the skull with a brow
-// ridge, cheekbones, a nose and a jaw; the eyes are at y 0.18 (the face atlas is laid on the front of it), the chin at 0.055, the crown at
-// 0.3. Helmets are built round that skull (HELM: the shell of a helmet, padding included).
+// The neck rises a little forward to the skull; the head itself is one smooth surface (heads.js: the skull, the brow, the cheekbones, a
+// nose, lips and a jaw blended together) with the face atlas laid on the front: the eyes at y 0.18, the chin at 0.065, the crown at 0.3.
+// Hair and beards are grown from the same surface. Helmets are built round that skull (HELM: the shell of a helmet, padding included).
 const HC = [0, 0.205, -0.006], HELM = [0.088, 0.106, 0.108];
-function headBase(b, brow = 1, neck = true) {
+// the faces of the classes (heads.js faceField): the plain soldier's, a heavy-browed warrior's, an old man's
+const FACE = { man: {}, brute: { brow: 1.35, jaw: 1.12, nose: 1.15, cheek: 1.1 }, sage: { age: 1, nose: 1.1, brow: 1.05 }, lean: { jaw: 0.94, cheek: 1.1 } };
+function headBase(b, face = FACE.man, neck = true) {
   if (b.level >= 3) { b.ell([0, 0.19, 0.0], [0.08, 0.115, 0.1], { ...skin, seg: [5, 3] }); return; }
-  if (neck) b.loft([[-0.04, 0.058, 0.056, -0.004], [0.04, 0.054, 0.053, 0.004], [0.11, 0.052, 0.054, 0.0]], { ...skin, a: [0.55, 0.8], seg: b.pick(10, 7, 5) });
-  const front = (x, y, z) => (z < 0.0 ? [-3, -3] : [x / 0.175 + 0.5, (y - 0.167) / 0.234 + 0.5]);
-  const fp = { ...skin, p: PAT.face, uv: front };
-  b.ell([0, 0.205, -0.006], [0.079, 0.098, 0.098], { ...fp, seg: [b.pick(14, 10, 8), b.pick(10, 7, 5)] });   // the skull
-  b.ell([0, 0.15, 0.025], [0.069, 0.085, 0.072], { ...fp, seg: [b.pick(12, 8, 6), b.pick(8, 6, 4)] });       // the face
-  b.ell([0, 0.098, 0.03], [0.057, 0.046, 0.062], { ...fp, seg: [b.pick(10, 7, 6), b.pick(7, 5, 4)] });       // the jaw
-  if (b.level < 2) {
-    if (b.level < 1) b.ell([0, 0.078, 0.068], [0.026, 0.02, 0.02], { ...fp, seg: [6, 4] });                  // the chin
-    b.ell([0, 0.16, 0.102], [0.013, 0.03, 0.02], { ...skin, rot: [0.35, 0, 0], seg: [b.pick(8, 6, 5), b.pick(6, 4, 3)] });   // the nose
-    if (b.level < 1) b.ell([0, 0.139, 0.107], [0.014, 0.011, 0.011], { ...skin, seg: [6, 4] });
-    b.ell([0, 0.2, 0.083], [0.066 * brow, 0.014 * brow, 0.024], { ...skin, a: [0.85, 0.85], seg: [b.pick(10, 7, 5), b.pick(5, 4, 3)] });   // the brow
-    if (b.level < 1) for (const s of [-1, 1]) b.ell([s * 0.042, 0.158, 0.058], [0.026, 0.018, 0.026], { ...fp, seg: [6, 4] });           // cheekbones
-    for (const s of [-1, 1]) b.ell([s * 0.078, 0.172, -0.008], [0.012, 0.03, 0.02], { s: 'skinDark', m: 'skin', seg: [b.pick(6, 5, 4), b.pick(4, 3, 3)] });   // the ears
+  if (neck) b.loft([[-0.04, 0.058, 0.056, -0.004], [0.04, 0.054, 0.053, 0.004], [0.11, 0.052, 0.054, 0.0]], { ...skin, a: [0.55, 0.8], seg: b.pick(16, 7, 5) });
+  sculptHead(b, face);
+  if (b.level < 2) for (const s of [-1, 1]) {   // the ears
+    b.ell([s * 0.077, 0.172, -0.008], [0.012, 0.03, 0.02], { s: 'skinDark', m: 'skin', seg: [b.pick(8, 5, 4), b.pick(6, 3, 3)] });
+    if (b.level < 1) b.ell([s * 0.084, 0.174, -0.006], [0.006, 0.022, 0.014], { s: 'skin', m: 'skin', seg: [6, 4] });
   }
 }
-const hairM = { s: 'hair', m: 'hair' };
-function hairSet(b) {
+const hairM = { s: 'hair', m: 'hair', p: PAT.hair };
+// the three cuts a soldier may wear (gates 7 8 9): cropped, long behind, thinning on the crown
+function hairSet(b, face = FACE.man) {
   if (b.level >= 2) return;
-  const sg = [b.pick(8, 7, 5), b.pick(5, 4, 3)];
-  b.shell([0, 0.212, -0.012], [0.084, 0.101, 0.104], 0, TAU, 0, PI * 0.56, { ...hairM, g: 7, rot: [-0.25, 0, 0], seg: sg });
-  b.shell([0, 0.212, -0.014], [0.086, 0.104, 0.107], 0, TAU, 0, PI * 0.6, { ...hairM, g: 8, rot: [-0.3, 0, 0], seg: sg });
-  b.ell([0, 0.14, -0.075], [0.074, 0.12, 0.05], { ...hairM, g: 8, a: [0.6, 1], seg: [b.pick(8, 6, 5), b.pick(6, 4, 3)] });
-  b.shell([0, 0.195, -0.008], [0.083, 0.1, 0.103], 0, TAU, PI * 0.5, PI * 0.2, { ...hairM, g: 9, seg: sg });
+  sculptHair(b, face, 0, { opt: { g: 7 } });
+  sculptHair(b, face, 1, { opt: { g: 8 } });
+  sculptHair(b, face, 2, { opt: { g: 9 } });
 }
-function beard(b, big = 1) {
+function beard(b, face = FACE.man, big = 1, shape = 1) {
   if (b.level >= 2) return;
-  b.ell([0, 0.098, 0.048], [0.062 * big, 0.062 * big, 0.058], { ...hairM, g: 6, a: [0.6, 1] });
-  if (b.level < 1) b.ell([0, 0.121, 0.1], [0.04, 0.011, 0.018], { ...hairM, g: 6 });
+  sculptBeard(b, face, big, shape, { opt: { g: 6 } });
 }
 function coif(b) {
   if (b.level >= 3) return;
-  b.shell([0, 0.2, -0.008], [0.09, 0.112, 0.108], PI * 0.5 + 0.95, TAU - 1.9, 0, PI * 0.86, { ...mailM, a: [0.7, 1], seg: [b.pick(12, 9, 7), b.pick(8, 6, 4)] });
+  b.shell([0, 0.2, -0.008], [0.09, 0.112, 0.108], PI * 0.5 + 0.95, TAU - 1.9, 0, PI * 0.86, { ...mailM, a: [0.7, 1], seg: [b.pick(18, 9, 7), b.pick(12, 6, 4)] });
   b.lathe([[0.185, -0.1], [0.14, -0.03], [0.072, 0.07]], [0, 0, -0.008], { sc: [1, 1, 0.74], ...mailM, a: [0.7, 1] });
+  if (b.level < 1) b.torus([0, 0.2, 0.025], 0.084, 0.004, { ...leatherDk, rot: [0.25, 0, 0], sc: [1, 1.15, 1], seg: 24, sides: 4 });   // the band at its face opening
 }
 function wings(b, y) {
   if (b.level > 0) return;
   for (const s of [-1, 1]) b.cone([s * 0.09, y, 0], [s * 0.2, y + 0.18, 0], 0.026, { ...gold, g: 4, seg: 5 });
 }
 const helm = (r = 1) => [HELM[0] * r, HELM[1] * r, HELM[2] * r];
+// a band of rivets round a helmet at height y (radii rx, rz, centre z0)
+const helmRivets = (b, y, rx, rz, z0, n = 10) => {
+  if (b.level >= 1) return;
+  const pts = [];
+  for (let i = 0; i < n; i++) { const a = (i / n) * TAU; pts.push([Math.sin(a) * rx, y, z0 + Math.cos(a) * rz]); }
+  rivets(b, pts, 0.0045, iron);
+};
 
 def('head.kettle', (b) => {
   headBase(b); hairSet(b); beard(b); coif(b);
   b.shell(HC, helm(1.02), 0, TAU, 0, PI * 0.53, { ...steel, a: [0.8, 1] });
-  b.lathe([[0.088, 0.196], [0.19, 0.18], [0.193, 0.188], [0.088, 0.208]], [0, 0, -0.006], { sc: [1, 1, 1.12], ...steel, a: [0.8, 1], seg: b.pick(24, 16, 10) });
+  b.lathe([[0.088, 0.196], [0.19, 0.18], [0.193, 0.188], [0.088, 0.208]], [0, 0, -0.006], { sc: [1, 1, 1.12], ...steel, a: [0.8, 1], seg: b.pick(32, 16, 10) });
+  if (b.level < 2) {
+    rim(b, 0.182, 0.193, 0.216, -0.006, 0.0045, { c: K.steelLt, m: 'steel' });
+    b.lathe([[0.09, 0.205], [0.093, 0.21], [0.093, 0.232], [0.09, 0.237]], [0, 0, -0.006], { sc: [1, 1, 1.1], ...iron });
+    helmRivets(b, 0.222, 0.094, 0.103, -0.006, 12);
+    if (b.level < 1) b.band([[0.075, 0.2, -0.01], [0.06, 0.1, 0.03], [0, 0.06, 0.07], [-0.06, 0.1, 0.03], [-0.075, 0.2, -0.01]], 0.01, 0.003, { ...leatherDk, out: from([0, 0.16, 0.0]), segs: 10 });   // the chin strap
+  }
   wings(b, 0.28);
 }, true);
 def('head.nasal', (b) => {
   headBase(b); beard(b); coif(b);
-  b.lathe([[0.092, 0.192], [0.093, 0.25], [0.07, 0.296], [0.02, 0.33], [0.0, 0.334]], [0, 0, -0.006], { sc: [1, 1, 1.17], ...steel, a: [0.8, 1], seg: b.pick(18, 12, 8) });
-  b.lathe([[0.091, 0.19], [0.097, 0.19], [0.097, 0.225], [0.091, 0.225]], [0, 0, -0.006], { sc: [1, 1, 1.17], ...iron, seg: b.pick(18, 12, 8) });
+  b.lathe([[0.092, 0.192], [0.093, 0.25], [0.07, 0.296], [0.02, 0.33], [0.0, 0.334]], [0, 0, -0.006], { sc: [1, 1, 1.17], ...steel, a: [0.8, 1], seg: b.pick(28, 12, 8) });
+  b.lathe([[0.091, 0.19], [0.097, 0.19], [0.097, 0.225], [0.091, 0.225]], [0, 0, -0.006], { sc: [1, 1, 1.17], ...iron, seg: b.pick(28, 12, 8) });
   b.rbox([0, 0.16, 0.108], [0.02, 0.085, 0.01], { ...steel, e: 0.3, rot: [-0.12, 0, 0] });
+  if (b.level < 2) {
+    for (const t of [0, PI / 2, PI, -PI / 2]) b.band([[Math.sin(t) * 0.094, 0.225, Math.cos(t) * 0.11 - 0.006], [Math.sin(t) * 0.08, 0.28, Math.cos(t) * 0.094 - 0.006], [0, 0.333, -0.006]], 0.014, 0.003, { ...iron, out: from([0, 0.2, -0.006]), segs: b.pick(8, 4, 2) });   // the frame's bands
+    helmRivets(b, 0.207, 0.098, 0.115, -0.006, 12);
+  }
   wings(b, 0.27);
 }, true);
+// The great helm: a flat-topped drum of plate over the whole head, the sight a slot under a brow plate, breaths pierced in the cheeks,
+// a cross of brass to stiffen the face, rivets round the crown
 def('head.great', (b) => {
-  if (b.level < 3) b.loft([[-0.04, 0.06, 0.058, -0.004], [0.06, 0.056, 0.056, 0.0]], { ...skin, seg: b.pick(10, 7, 5) });
-  b.lathe([[0.09, 0.03], [0.1, 0.08], [0.103, 0.2], [0.098, 0.265], [0.077, 0.31], [0.032, 0.328], [0.0, 0.33]], [0, 0, 0.0], { sc: [1, 1, 1.16], ...plate, a: [0.8, 1], seg: b.pick(22, 14, 9) });
+  if (b.level < 3) b.loft([[-0.04, 0.06, 0.058, -0.004], [0.06, 0.056, 0.056, 0.0]], { ...skin, seg: b.pick(14, 7, 5) });
+  b.lathe([[0.09, 0.03], [0.1, 0.08], [0.103, 0.2], [0.098, 0.265], [0.077, 0.31], [0.032, 0.328], [0.0, 0.33]], [0, 0, 0.0], { sc: [1, 1, 1.16], ...plate, a: [0.75, 1], seg: b.pick(32, 14, 9) });
   b.rbox([0, 0.19, 0.116], [0.15, 0.018, 0.02], { c: K.dark, m: 'iron', e: 0.2 });
-  b.rbox([0, 0.14, 0.12], [0.02, 0.17, 0.012], { ...gold, e: 0.4 });
-  if (b.level < 1) for (let i = 0; i < 4; i++) b.rbox([0.045 + i * 0.011, 0.1 + (i % 2) * 0.022, 0.104], [0.009, 0.009, 0.012], { c: K.dark, m: 'iron', sharp: true });
+  if (b.level < 2) {
+    b.lathe([[0.104, 0.205], [0.108, 0.212], [0.108, 0.235], [0.103, 0.242]], [0, 0, 0], { arc: [-1.25, 2.5], sc: [1, 1, 1.16], ...plate, seg: b.pick(20, 10, 6) });   // the brow plate
+    rim(b, 0.032, 0.092, 0.107, 0, 0.005, { c: K.steelLt, m: 'plate' });
+    helmRivets(b, 0.262, 0.1, 0.116, 0, 14);
+  }
+  b.rbox([0, 0.135, 0.121], [0.02, 0.16, 0.012], { ...brass, e: 0.4 });
+  if (b.level < 2) b.rbox([0, 0.155, 0.12], [0.11, 0.016, 0.012], { ...brass, e: 0.4, rot: [0, 0, 0] });
+  if (b.level < 1) for (const s of [-1, 1]) for (let i = 0; i < 6; i++) b.rbox([s * (0.04 + (i % 3) * 0.013), 0.09 + Math.floor(i / 3) * 0.022, 0.11 - (i % 3) * 0.006], [0.008, 0.008, 0.012], { c: K.dark, m: 'iron', sharp: true, rot: [0, s * 0.3, 0] });
   wings(b, 0.27);
+}, true);
+// The Cavalier's sallet: a rounded bowl drawn out into a tail over the nape, a visor with its sight slit and a ridge, a bevor guarding the
+// chin and throat, and a crest of the house's colour that streams back
+def('head.sallet', (b) => {
+  if (b.level < 3) b.loft([[-0.04, 0.06, 0.058, -0.004], [0.06, 0.056, 0.056, 0.0]], { ...skin, seg: b.pick(14, 7, 5) });
+  b.loft([[0.13, 0.098, 0.13, -0.025], [0.19, 0.101, 0.125, -0.012], [0.25, 0.096, 0.116, -0.008], [0.29, 0.078, 0.096, -0.008], [0.318, 0.045, 0.06, -0.01], [0.33, 0.01, 0.014, -0.01]], { ...plate, a: [0.8, 1], seg: b.pick(32, 14, 9) });
+  b.shell([0, 0.155, -0.04], [0.1, 0.05, 0.13], PI * 0.5 + 0.9, TAU - 1.8, PI * 0.5, PI * 0.3, { ...plate, a: [0.75, 0.9] });   // the tail
+  b.shell([0, 0.165, 0.005], [0.104, 0.07, 0.118], PI * 0.5 - 1.15, 2.3, PI * 0.3, PI * 0.42, { ...plate, a: [0.8, 1] });   // the visor
+  b.rbox([0, 0.193, 0.112], [0.12, 0.012, 0.03], { c: K.dark, m: 'iron', e: 0.2 });
+  b.lathe([[0.076, 0.0], [0.09, 0.06], [0.1, 0.12], [0.098, 0.15]], [0, 0, 0.012], { arc: [-1.4, 2.8], sc: [1, 1, 1.12], ...plate, a: [0.8, 1], seg: b.pick(22, 10, 6) });   // the bevor
+  if (b.level < 2) {
+    b.rbox([0, 0.24, 0.07], [0.014, 0.14, 0.012], { ...plate, rot: [0.95, 0, 0], e: 0.4 });
+    rim(b, 0.15, 0.098, 0.11, 0.012, 0.004, { c: K.steelLt, m: 'plate' }, [-1.4, 2.8]);
+    helmRivets(b, 0.2, 0.099, 0.123, -0.012, 12);
+    // the crest: a fan of the house's cloth that rises from the crown and streams back over the tail
+    b.sweep([[0, 0.32, 0.03], [0, 0.37, -0.02], [0, 0.36, -0.12], [0, 0.29, -0.22]], 0.04, 0.012, { ...cloth, w: [0.2, 0.95], seg: b.pick(8, 5, 4), segs: b.pick(12, 6, 4), sc: 1 });
+    b.ell([0, 0.33, 0.0], [0.016, 0.02, 0.03], { ...brass });
+  }
 }, true);
 def('head.crown', (b) => {
   headBase(b); hairSet(b); beard(b); coif(b);
   b.shell(HC, helm(1), 0, TAU, 0, PI * 0.5, { ...steel, a: [0.8, 1] });
-  b.lathe([[0.091, 0.215], [0.098, 0.215], [0.098, 0.252], [0.091, 0.252]], [0, 0, -0.006], { sc: [1, 1, 1.15], ...gold, seg: b.pick(20, 14, 9) });
+  b.lathe([[0.091, 0.215], [0.098, 0.215], [0.098, 0.252], [0.091, 0.252]], [0, 0, -0.006], { sc: [1, 1, 1.15], ...gold, seg: b.pick(28, 14, 9) });
   const n = b.pick(7, 6, 5);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * TAU;
@@ -359,21 +768,59 @@ def('head.crown', (b) => {
   }
   if (b.level < 2) b.ell([0, 0.234, 0.108], [0.014, 0.017, 0.009], { c: K.red, m: 'gem', seg: [6, 5] });
 }, true);
+// The Berserker: a heavy brow and jaw, an iron cap with a fur brim and a nasal, two great horns, a wild mane and a beard plaited in two
 def('head.horned', (b) => {
-  headBase(b, 1.2); hairSet(b); beard(b, 1.2);
+  headBase(b, FACE.brute);
+  if (b.level < 2) { sculptHair(b, FACE.brute, 1, { wild: 1 }); sculptBeard(b, FACE.brute, 1.25, 3, { opt: { g: 6 } }); }
   b.shell(HC, helm(1), 0, TAU, 0, PI * 0.5, { c: K.iron, m: 'iron', a: [0.8, 1] });
-  b.lathe([[0.09, 0.19], [0.097, 0.19], [0.097, 0.222], [0.09, 0.222]], [0, 0, -0.006], { sc: [1, 1, 1.15], c: K.fur, m: 'fur', p: PAT.fur });
-  for (const s of [-1, 1]) b.sweep([[s * 0.08, 0.245, 0.0], [s * 0.16, 0.27, 0.0], [s * 0.23, 0.35, 0.02], [s * 0.23, 0.45, 0.04]], 0.032, 0.006, { c: K.bone, m: 'bone', seg: 6 });
+  b.lathe([[0.09, 0.185], [0.1, 0.188], [0.102, 0.205], [0.1, 0.222], [0.09, 0.226]], [0, 0, -0.006], { sc: [1, 1, 1.15], c: K.fur, m: 'fur', p: PAT.fur });
+  for (const s of [-1, 1]) {
+    b.sweep([[s * 0.08, 0.245, 0.0], [s * 0.16, 0.27, 0.0], [s * 0.23, 0.35, 0.02], [s * 0.23, 0.45, 0.04]], 0.032, 0.006, { c: K.bone, m: 'bone', seg: b.pick(10, 6, 5), segs: b.pick(14, 8, 5) });
+  }
   b.rbox([0, 0.165, 0.108], [0.02, 0.09, 0.01], { c: K.iron, m: 'iron', e: 0.3, rot: [-0.12, 0, 0] });
+  if (b.level < 2) {
+    b.band([[0, 0.3, 0.09], [0, 0.31, 0.0], [0, 0.29, -0.09]], 0.018, 0.003, { c: K.iron, m: 'iron', out: from(HC), segs: 6 });
+    helmRivets(b, 0.232, 0.09, 0.106, -0.006, 10);
+    // the plaits of the beard, bound with iron rings
+    for (const s of [-1, 1]) {
+      b.sweep([[s * 0.02, 0.05, 0.085], [s * 0.024, 0.0, 0.09], [s * 0.022, -0.06, 0.085]], 0.014, 0.008, { ...hairM, g: 6, seg: 6, segs: b.pick(8, 4, 3) });
+      if (b.level < 1) b.torus([s * 0.022, -0.05, 0.086], 0.011, 0.003, { ...iron, g: 6, rot: [PI / 2, 0, 0], seg: 10, sides: 4 });
+    }
+  }
 }, true);
+// the plain hood (archers, engineers): a cowl over the head with a short tail behind, its cape over the shoulders
 def('head.hood', (b) => {
   headBase(b); beard(b);
   b.shell([0, 0.195, -0.014], [0.1, 0.125, 0.115], PI * 0.5 + 0.8, TAU - 1.6, 0, PI * 0.9, { ...clothDk, a: [0.7, 1] });
   b.cone([0, 0.3, -0.05], [0, 0.33, -0.2], 0.065, { ...clothDk, seg: 6 });
   b.lathe([[0.2, -0.1], [0.15, -0.03], [0.08, 0.06]], [0, 0, -0.01], { sc: [1, 1, 0.76], ...clothDk, w: [0.2, 0], a: [0.65, 1] });
+  if (b.level < 2) b.torus([0, 0.2, 0.06], 0.088, 0.008, { ...clothDk, rot: [0.18, 0, 0], sc: [1, 1.25, 1], seg: b.pick(24, 10, 6) });   // the rolled edge round the face
+}, true);
+// The Ranger's hood: the house's colour, pulled forward over the brow so the face is in its shadow, the edge rolled; a green scarf round
+// the neck; a short beard
+def('head.ranger', (b) => {
+  headBase(b, FACE.lean); beard(b, FACE.lean, 0.8, 0);
+  const g = { ...clothDk };
+  b.shell([0, 0.2, -0.01], [0.104, 0.13, 0.12], PI * 0.5 + 0.72, TAU - 1.44, 0, PI * 0.9, { ...g, a: [0.6, 1] });
+  b.shell([0, 0.2, 0.012], [0.11, 0.135, 0.13], PI * 0.5 - 0.8, 1.6, PI * 0.16, PI * 0.2, { ...g, a: [0.7, 1] });   // the peak over the brow
+  b.torus([0, 0.205, 0.07], 0.09, 0.011, { ...g, rot: [0.3, 0, 0], sc: [1, 1.3, 1], seg: b.pick(24, 10, 6) });
+  b.lathe([[0.15, -0.02], [0.12, 0.02], [0.075, 0.07]], [0, 0, -0.01], { sc: [1, 1, 0.8], ...g, a: [0.65, 1] });
+  const sc = { c: K.green, m: 'wool', p: PAT.weave };
+  b.lathe([[0.08, 0.0], [0.082, 0.04], [0.068, 0.09]], [0, 0, 0.004], { sc: [1, 1, 0.95], ...sc, a: [0.75, 1] });   // the scarf
+  if (b.level < 2) b.band([[0.03, 0.04, 0.075], [0.04, -0.02, 0.09], [0.035, -0.1, 0.085]], 0.04, 0.004, { ...sc, w: [0, 0.5], out: () => [0, 0, 1], segs: b.pick(6, 3, 2) });
+}, true);
+// The Mage's cowl: a deep hood of the robe's blue, edged in gold round the face, the face beneath it lined and old, a long beard
+def('head.cowl', (b) => {
+  headBase(b, FACE.sage);
+  if (b.level < 2) { sculptHair(b, FACE.sage, 2, {}); sculptBeard(b, FACE.sage, 1.15, 2, { opt: { g: 6 } }); }
+  const o = { c: K.robe, m: 'wool', p: PAT.weave };
+  b.shell([0, 0.2, -0.016], [0.108, 0.135, 0.124], PI * 0.5 + 0.7, TAU - 1.4, 0, PI * 0.92, { ...o, a: [0.6, 1] });
+  b.cone([0, 0.31, -0.06], [0, 0.29, -0.2], 0.07, { ...o, seg: b.pick(10, 6, 5) });
+  b.torus([0, 0.205, 0.072], 0.094, 0.009, { ...gold, rot: [0.28, 0, 0], sc: [1, 1.3, 1], seg: b.pick(28, 12, 6) });
+  b.lathe([[0.16, -0.03], [0.13, 0.01], [0.08, 0.07]], [0, 0, -0.012], { sc: [1, 1, 0.8], ...o, a: [0.65, 1] });
 }, true);
 def('head.none', (b) => {
-  headBase(b, 1.45); hairSet(b); beard(b, 1.15);
+  headBase(b, FACE.brute); hairSet(b, FACE.brute); beard(b, FACE.brute, 1.15);
   if (b.level < 2) for (const s of [-1, 1]) b.cone([s * 0.03, 0.1, 0.085], [s * 0.04, 0.165, 0.112], 0.012, { c: K.bone, m: 'bone', seg: 5 });
 }, true);
 
@@ -381,11 +828,21 @@ def('head.none', (b) => {
 def('quiver', (b) => {
   b.rod([0.07, 0.02, -0.17], [0.15, 0.46, -0.2], 0.052, 0.058, { c: K.quiver, m: 'leather', p: PAT.leather, a: [0.7, 1] });
   b.rod([0.075, 0.0, -0.17], [0.078, 0.03, -0.17], 0.056, 0.056, { c: K.leatherDk, m: 'leather' });
-  const n = b.pick(5, 4, 3);
+  if (b.level < 2) for (const t of [0.25, 0.7]) b.rod([0.07 + 0.08 * t, 0.02 + 0.44 * t, -0.17 - 0.03 * t], [0.07 + 0.08 * (t + 0.05), 0.02 + 0.44 * (t + 0.05), -0.17 - 0.03 * (t + 0.05)], 0.061, 0.061, { ...leatherDk, seg: b.pick(14, 8, 6) });
+  const n = b.pick(7, 4, 3);
   for (let i = 0; i < n; i++) {
-    const dx = (i - n / 2) * 0.016;
-    b.rod([0.13 + dx, 0.44, -0.2], [0.15 + dx, 0.6 + (i % 2) * 0.03, -0.205], 0.006, 0.006, { c: K.wood, m: 'wood', seg: 4 });
-    b.cone([0.15 + dx, 0.58 + (i % 2) * 0.03, -0.205], [0.152 + dx, 0.65 + (i % 2) * 0.03, -0.206], 0.022, { c: K.linen, m: 'cloth', seg: 4 });
+    const dx = (i - n / 2) * 0.014, dz = ((i * 7) % 3 - 1) * 0.012;
+    b.rod([0.13 + dx, 0.44, -0.2 + dz], [0.15 + dx, 0.6 + (i % 2) * 0.03, -0.205 + dz], 0.006, 0.006, { c: K.wood, m: 'wood', seg: 4 });
+    b.cone([0.15 + dx, 0.58 + (i % 2) * 0.03, -0.205 + dz], [0.152 + dx, 0.65 + (i % 2) * 0.03, -0.206 + dz], 0.022, { c: i % 3 ? K.linen : 0x8a2a20, m: 'cloth', seg: 4 });
+  }
+}, true);
+// a longbow slung across the back when it is not in the hand: the string over the chest, the stave from the right hip to over the left shoulder
+def('bow.back', (b) => {
+  const pts = [[-0.24, -0.14, -0.15], [-0.1, 0.08, -0.17], [0.02, 0.3, -0.175], [0.13, 0.52, -0.165], [0.24, 0.74, -0.14]];
+  b.sweep(pts, 0.016, 0.014, { c: 0x8a6a3c, m: 'wood', p: PAT.grain, seg: 5, segs: b.pick(14, 8, 5) });
+  if (b.level < 2) {
+    b.rod([-0.23, -0.12, -0.13], [0.23, 0.72, -0.12], 0.003, 0.003, { c: K.linen, m: 'cloth', seg: 3 });
+    b.rod([-0.012, 0.25, -0.18], [0.03, 0.33, -0.18], 0.02, 0.02, { ...leather, seg: 6 });
   }
 }, true);
 def('plume.cloth', (b) => {
@@ -396,9 +853,9 @@ def('plume.gold', (b) => {
 }, true);
 // the cloak and fittings of a trained soldier (gates: see the top of the file)
 def('kit.torso', (b) => {
-  b.sheet([0, -0.02, -0.135], 0.5, 0.9, 5, b.pick(8, 5, 3), { rot: [0.05, 0, 0], ...cloth, g: 2, w: [1.9, 1.0], dz: (x) => -0.03 * (x / 0.25) ** 2 });
-  b.sheet([0, -0.72, -0.135], 0.5, 0.5, 5, b.pick(5, 3, 2), { rot: [0.05, 0, 0], ...cloth, g: 5, w: [1.95, 1.8], dz: (x) => -0.03 * (x / 0.25) ** 2 });
-  b.sheet([0, 0.42, -0.13], 0.52, 0.045, 5, 1, { c: K.trim, m: 'cloth', g: 2 });
+  b.sheet([0, -0.02, -0.135], 0.5, 0.9, 5, b.pick(8, 5, 3), { rot: [0.05, 0, 0], ...cloth, g: 2, w: [1.9, 1.0], dz: (x) => -0.03 * (x / 0.25) ** 2, d: mud(-0.47, -0.2, 0.4) });
+  b.sheet([0, -0.72, -0.135], 0.5, 0.5, 5, b.pick(5, 3, 2), { rot: [0.05, 0, 0], ...cloth, g: 5, w: [1.95, 1.8], dz: (x) => -0.03 * (x / 0.25) ** 2, d: mud(-0.97, -0.6, 0.55) });
+  b.sheet([0, 0.42, -0.13], 0.52, 0.045, 5, 1, { ...trim, g: 2 });
   b.lathe([[0.112, 0.39], [0.118, 0.42], [0.08, 0.475]], [0, 0, -0.012], { sc: [1, 1, 0.86], ...gold, g: 3 });
   b.loft(over(-0.005, 0.03, 0.016), { sq: SQ, arc: [-0.7, 1.4], ...gold, g: 3 });
   if (b.level < 2) b.loft(over(0.02, 0.33, 0.03, 0.034), { sq: SQ, arc: [-0.95, 1.9], c: 0xe0b040, m: 'gold', g: 5, a: [0.8, 1] });
@@ -514,34 +971,51 @@ def('kit.shield.kite', (b) => {
 });
 
 // ---------------------------------------------------------------- weapons (hand frame: the weapon extends along -y)
+// The arming sword: a blade of lozenge section that narrows to its point, a fuller down the first half of each face, a crossguard whose
+// arms turn down at the ends, a leather grip bound with wire and a wheel pommel. (Modelled with its edges across the hand: models.js turns it.)
 def('weapon.sword', (b) => {
-  b.place(new THREE.CylinderGeometry(0.004, 0.03, 0.9, 4, 1), [0, -0.57, 0], [0, PI / 4, 0], [1, 1, 0.3], { ...steel, a: [1, 1] });
-  b.rbox([0, -0.115, 0], [0.27, 0.032, 0.042], { ...iron, e: 0.4 });
-  b.rod([0, 0.07, 0], [0, -0.11, 0], 0.019, 0.019, { c: K.leatherDk, m: 'leather' });
-  b.ell([0, 0.075, 0], 0.036, { c: K.brass, m: 'brass', seg: [8, 6] });
-  if (b.level < 2) for (const s of [-1, 1]) b.ell([s * 0.135, -0.115, 0], [0.02, 0.02, 0.022], { ...iron, seg: [6, 5] });
+  const bl = [[-0.122, 0.026, 0.0058], [-0.3, 0.0245, 0.0054], [-0.6, 0.0215, 0.0048], [-0.84, 0.0175, 0.0042], [-0.95, 0.012, 0.0036], [-1.005, 0.0055, 0.0024], [-1.03, 0.001, 0.001]];
+  b.loft(b.level >= 2 ? [bl[0], bl[3], bl[6]] : bl, { ...steel, sq: 1.35, seg: b.pick(12, 8, 4), a: [1, 1] });
+  if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.4, s * 0.0052], [0.009, 0.52, 0.0016], { c: K.iron, m: 'steel', e: 0.5 });
+  if (b.level < 2) b.sweep([[-0.12, -0.098, 0], [-0.07, -0.114, 0], [0, -0.118, 0], [0.07, -0.114, 0], [0.12, -0.098, 0]], 0.011, 0.011, { ...iron, seg: 6, segs: b.pick(10, 6, 4) });
+  else b.rbox([0, -0.115, 0], [0.25, 0.026, 0.03], { ...iron, e: 0.4 });
+  b.rbox([0, -0.116, 0], [0.04, 0.03, 0.03], { ...iron, e: 0.45 });
+  b.rod([0, 0.07, 0], [0, -0.105, 0], 0.017, 0.019, { c: K.leatherDk, m: 'leather', p: PAT.leather, seg: b.pick(10, 7, 5) });
+  if (b.level < 1) for (const y of [0.06, -0.095]) b.torus([0, y, 0], 0.019, 0.003, { ...brass, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
+  b.rod([0, 0.085, -0.012], [0, 0.085, 0.012], 0.03, 0.03, { ...brass, seg: b.pick(14, 8, 6) });
+  if (b.level < 2) for (const s of [-1, 1]) b.ell([0, 0.085, s * 0.013], [0.014, 0.014, 0.006], { ...brass, seg: [8, 6] });
+  if (b.level < 2) for (const s of [-1, 1]) b.ell([s * 0.12, -0.096, 0], [0.014, 0.014, 0.014], { ...iron, seg: [7, 5] });
 });
 def('weapon.spear', (b) => {
-  b.rod([0, 0.55, 0], [0, -1.86, 0], 0.021, 0.019, { ...wood, seg: b.pick(8, 6, 4) });
-  b.ell([0, -2.03, 0], [0.047, 0.19, 0.015], { ...steel, seg: [8, 8] });
-  b.rod([0, -1.86, 0], [0, -1.95, 0], 0.03, 0.026, { ...iron });
+  b.rod([0, 0.55, 0], [0, -1.86, 0], 0.021, 0.019, { ...wood, seg: b.pick(10, 6, 4) });
+  b.loft([[-1.86, 0.016, 0.01], [-1.9, 0.045, 0.012], [-2.02, 0.04, 0.01], [-2.14, 0.018, 0.006], [-2.22, 0.001, 0.001]], { ...steel, sq: 1.4, seg: b.pick(10, 8, 4) });
+  b.rod([0, -1.8, 0], [0, -1.9, 0], 0.03, 0.022, { ...iron });
   b.cone([0, 0.55, 0], [0, 0.63, 0], 0.024, { ...iron, seg: 5 });
   if (b.level < 2) for (const y of [-1.2, -0.9]) b.rod([0, y, 0], [0, y - 0.03, 0], 0.027, 0.027, { ...leather });
 });
 def('weapon.lance', (b) => {
-  b.rod([0, 0.35, 0], [0, -2.95, 0], 0.034, 0.018, { c: 0xd9cfb8, m: 'wood', p: PAT.grain, seg: b.pick(8, 6, 4) });
+  b.rod([0, 0.35, 0], [0, -2.95, 0], 0.034, 0.018, { c: 0xd9cfb8, m: 'wood', p: PAT.grain, seg: b.pick(10, 6, 4) });
   b.cone([0, -2.92, 0], [0, -3.2, 0], 0.024, { ...steel, seg: 6 });
-  b.lathe([[0.03, -0.3], [0.12, -0.2], [0.1, -0.12], [0.03, -0.1]], [0, 0, 0], { ...iron, seg: 10 });
+  b.lathe([[0.03, -0.3], [0.12, -0.2], [0.1, -0.12], [0.03, -0.1]], [0, 0, 0], { ...iron, seg: b.pick(16, 10, 6) });
   b.place(new THREE.PlaneGeometry(0.2, 0.55, 3, 3), [0.3, -2.65, 0], [0, 0, PI / 2], 1, { ...cloth, w: [0.95, 0] });
 }, true);
 def('weapon.axe', (b) => {
   b.rod([0, 0.1, 0], [0, -0.95, 0], 0.024, 0.022, { ...wood, seg: 7 });
   b.extrude([[0, 0.12], [0.1, 0.18], [0.2, 0.15], [0.2, -0.17], [0.1, -0.2], [0, -0.14]], 0.02, 0.004, [0, -0.78, 0], { ...steel, rot: [0, -PI / 2, 0] });
 });
+// The Berserker's great axe: a long haft bound in leather where the hands go, iron langets up to the head, a broad bearded crescent of a
+// blade with a spike behind it
 def('weapon.greataxe', (b) => {
-  b.rod([0, 0.3, 0], [0, -1.5, 0], 0.027, 0.025, { ...wood, seg: b.pick(8, 6, 5) });
-  b.extrude([[0, 0.22], [0.12, 0.3], [0.27, 0.25], [0.31, 0.1], [0.31, -0.1], [0.27, -0.25], [0.12, -0.3], [0, -0.22]], 0.026, 0.005, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
-  b.extrude([[0, 0.2], [-0.1, 0.24], [-0.22, 0.2], [-0.25, 0.08], [-0.25, -0.08], [-0.22, -0.2], [-0.1, -0.24], [0, -0.2]], 0.026, 0.005, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
+  b.rod([0, 0.3, 0], [0, -1.5, 0], 0.027, 0.025, { ...wood, seg: b.pick(10, 6, 5) });
+  if (b.level < 2) {
+    b.rod([0, 0.14, 0], [0, -0.24, 0], 0.031, 0.031, { ...leatherDk, seg: b.pick(10, 6, 5) });
+    for (const s of [-1, 1]) b.rbox([s * 0.026, -1.08, 0], [0.006, 0.26, 0.022], { ...iron, e: 0.5 });
+    if (b.level < 1) for (const y of [0.14, -0.24]) b.torus([0, y, 0], 0.031, 0.004, { ...iron, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
+  }
+  const bit = [[0, 0.17], [0.07, 0.2], [0.17, 0.27], [0.27, 0.26], [0.33, 0.14], [0.35, -0.02], [0.33, -0.18], [0.26, -0.32], [0.15, -0.33], [0.07, -0.2], [0, -0.15]];
+  b.extrude(bit, 0.024, b.level < 2 ? 0.007 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
+  b.extrude([[0, 0.06], [-0.12, 0.025], [-0.2, 0], [-0.12, -0.025], [0, -0.06]], 0.024, b.level < 2 ? 0.005 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
+  b.rbox([0, -1.25, 0], [0.07, 0.15, 0.07], { ...iron, e: 0.4 });
   b.cone([0, -1.5, 0], [0, -1.58, 0], 0.03, { ...iron, seg: 5 });
 });
 def('weapon.club', (b) => {
@@ -554,21 +1028,33 @@ def('weapon.club', (b) => {
   }
   if (b.level < 2) b.rod([0, -0.1, 0], [0, -0.3, 0], 0.057, 0.058, { ...leather });
 });
+// The Mage's staff: a crooked shaft of dark wood with bands of gold, its head three tines of bone curled round a glowing stone
 def('weapon.staff', (b) => {
-  b.rod([0, 0.6, 0], [0, -1.35, 0], 0.027, 0.024, { c: K.woodDk, m: 'wood', p: PAT.grain, seg: b.pick(8, 6, 5) });
-  b.ell([0, -1.5, 0], 0.085, { c: 0xff9a3a, m: 'gem', p: PAT.glow, seg: [b.pick(12, 8, 6), b.pick(8, 6, 4)] });
-  if (b.level < 2) for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * TAU;
-    b.sweep([[0, -1.33, 0], [Math.cos(a) * 0.09, -1.42, Math.sin(a) * 0.09], [Math.cos(a) * 0.11, -1.58, Math.sin(a) * 0.11], [Math.cos(a) * 0.05, -1.68, Math.sin(a) * 0.05]], 0.018, 0.006, { c: K.bone, m: 'bone', seg: 5 });
+  const shaft = [[0, 0.6, 0], [0.008, 0.3, -0.006], [-0.006, 0.0, 0.004], [0.006, -0.4, 0.008], [-0.008, -0.8, -0.004], [0.004, -1.15, 0.006], [0, -1.35, 0]];
+  b.sweep(shaft, 0.029, 0.023, { c: K.woodDk, m: 'wood', p: PAT.grain, seg: b.pick(8, 6, 5), segs: b.pick(16, 8, 5) });
+  b.ell([0, -1.5, 0], 0.085, { c: 0xff9a3a, m: 'gem', p: PAT.glow, seg: [b.pick(16, 8, 6), b.pick(12, 6, 4)] });
+  if (b.level < 2) {
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * TAU;
+      b.sweep([[0, -1.33, 0], [Math.cos(a) * 0.09, -1.42, Math.sin(a) * 0.09], [Math.cos(a) * 0.11, -1.58, Math.sin(a) * 0.11], [Math.cos(a) * 0.05, -1.68, Math.sin(a) * 0.05]], 0.018, 0.006, { c: K.bone, m: 'bone', seg: 6 });
+    }
+    for (const y of [-1.3, -0.95, 0.05]) b.lathe([[0.027, y - 0.02], [0.031, y - 0.01], [0.031, y + 0.01], [0.027, y + 0.02]], [0, 0, 0], { ...gold, seg: b.pick(14, 8, 6) });
+    if (b.level < 1) b.ell([0, -1.5, 0], 0.05, { c: 0xfff0c0, m: 'gem', p: PAT.glow, seg: [10, 8] });
   }
 });
+// The Cleric's flanged mace: an iron head of seven flanges on a collar, a haft bound in leather, a knob at its end
 def('weapon.mace', (b) => {
-  b.rod([0, 0.1, 0], [0, -0.8, 0], 0.024, 0.022, { ...wood, seg: 7 });
-  b.ell([0, -0.9, 0], [0.07, 0.08, 0.07], { ...iron, seg: [10, 8] });
+  b.rod([0, 0.1, 0], [0, -0.8, 0], 0.024, 0.022, { ...wood, seg: b.pick(10, 7, 5) });
+  if (b.level < 2) {
+    b.rod([0, 0.09, 0], [0, -0.13, 0], 0.027, 0.027, { ...leatherDk, seg: b.pick(10, 7, 5) });
+    b.ell([0, 0.11, 0], 0.03, { ...iron, seg: [8, 6] });
+    b.lathe([[0.028, -0.86], [0.036, -0.82], [0.036, -0.79], [0.026, -0.76]], [0, 0, 0], { ...iron, seg: b.pick(14, 8, 6) });
+  }
+  b.ell([0, -0.9, 0], [0.06, 0.08, 0.06], { ...iron, seg: [b.pick(12, 10, 6), b.pick(10, 8, 5)] });
   const n = b.pick(7, 6, 5);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * TAU;
-    b.rbox([Math.cos(a) * 0.07, -0.9, Math.sin(a) * 0.07], [0.05, 0.14, 0.012], { ...steel, e: 0.3, rot: [0, -a, 0] });
+    b.extrude([[0, 0.08], [0.035, 0.05], [0.05, -0.02], [0.03, -0.075], [0, -0.09]], 0.01, b.level < 1 ? 0.002 : 0, [Math.cos(a) * 0.045, -0.9, Math.sin(a) * 0.045], { ...steel, rot: [0, -a, 0] });
   }
   b.cone([0, -0.97, 0], [0, -1.04, 0], 0.03, { ...steel, seg: 5 });
 });
@@ -680,57 +1166,78 @@ for (const kind of ['fore', 'hind']) {
 }
 
 // ---------------------------------------------------------------- capes (frame at the shoulders, a little behind the back)
+// A cloak is cut as cloth hangs: it comes forward round the shoulders at the top, lies on the back, falls in folds that deepen toward the
+// hem and flares as it goes; the hem is a little uneven and carries the dust of the road. `w` is its width at the neck, h its length.
+// (Every cloak, the earned ones too, is draped by this, so all of them hang alike and the sigil sits between the shoulder blades.)
+const FLARE = 0.3;
+function drapeGeo(b, w, h, k = {}) {
+  const flare = k.flare ?? FLARE, folds = k.folds ?? 1, phase = k.phase ?? 0.6;
+  const g = new THREE.PlaneGeometry(w, h, b.pick(16, 7, 3), b.pick(18, 9, 4));
+  const pa = g.attributes.position;
+  for (let i = 0; i < pa.count; i++) {
+    const x0 = pa.getX(i), y0 = pa.getY(i);
+    const down = (h / 2 - y0) / h, u = x0 / (w / 2), top = Math.max(0, 1 - down / 0.18);
+    const kx = 1 + flare * down;
+    // forward round the shoulders at the top, gently round the back below it, pleats that open toward the hem
+    let z = 0.13 * top * top * u * u + 0.045 * (1 - top) * u * u;
+    z += folds * (0.012 + 0.03 * down) * Math.sin(u * 7.2 + phase) * Math.min(1, down * 3);
+    const y = y0 + 0.012 * Math.sin(u * 9.1 + 1.3) * down * down;
+    pa.setXYZ(i, x0 * kx * (1 - 0.08 * top * u * u), y, z);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+const capeDirt = (h) => mud(-h, -h + 0.35, 0.5);
+const hang = (b, w, h, o, k) => b.place(drapeGeo(b, w, h, k), [0, -h / 2, -0.03], [0, 0, 0], 1, { ...o, w: [1.95, 1.0], a: [0.7, 1], d: capeDirt(h) });
+// a band along the hem (swaying with the cloth) or the collar (still)
+const hem = (b, w, h, y, o) => {
+  const g = drapeGeo(b, w, h);
+  // (the bottom row of the drape, as a band a little outside it)
+  const pa = g.attributes.position, nx = b.pick(16, 7, 3), row = [];
+  for (let i = 0; i <= nx; i++) { const j = pa.count - 1 - nx + i; row.push([pa.getX(j), pa.getY(j) - h / 2 + 0.02, pa.getZ(j) - 0.03 - 0.004]); }
+  g.dispose();
+  b.band(row, 0.05, 0.004, { ...o, w: [1.95, 1.9], out: () => [0, 0, -1], segs: nx * 2, d: capeDirt(h) });
+};
+const collar = (b, w, hgt, o, bend = 0.12) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(10, 5, 3), 1, { ...o, dz: (x) => bend * (x / (w / 2)) ** 2 });
+const clasp = (b, o = gold) => { if (b.level < 2) { b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...o, e: 0.4 }); if (b.level < 1) b.rod([-0.12, 0.005, 0.07], [0.12, 0.005, 0.07], 0.004, 0.004, { ...o, seg: 4 }); } };
 def('cape.long', (b) => {
-  b.sheet([0, -0.5, -0.03], 0.58, 1.0, b.pick(8, 5, 3), b.pick(12, 8, 4), { ...cloth, w: [1.95, 1.0], dz: (x) => -0.08 * (x / 0.29) ** 2, a: [0.7, 1] });
-  b.sheet([0, 0.015, -0.015], 0.62, 0.075, b.pick(8, 5, 3), 1, { c: K.furLt, m: 'fur', p: PAT.fur, dz: (x) => -0.07 * (x / 0.31) ** 2 });
-  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...gold, e: 0.4 });
+  hang(b, 0.58, 1.0, { ...cloth });
+  if (b.level < 2) hem(b, 0.58, 1.0, -0.99, trim);
+  collar(b, 0.66, 0.08, { c: K.furLt, m: 'fur', p: PAT.fur });
+  clasp(b);
 }, true);
 def('cape.cloak', (b) => {
-  b.sheet([0, -0.38, -0.03], 0.54, 0.78, b.pick(8, 5, 3), b.pick(10, 6, 3), { ...clothDk, w: [1.95, 1.0], dz: (x) => -0.07 * (x / 0.27) ** 2, a: [0.7, 1] });
+  hang(b, 0.54, 0.8, { ...clothDk }, { folds: 0.8, phase: 1.4 });
+  collar(b, 0.6, 0.06, { ...clothDk });
+  clasp(b, brass);
 }, true);
 
 // ---- the cloaks a lord can earn with Renown (unlocks.js): the colours are fixed, so they never take the house colour. They hang where the others do.
-// (a cloak hangs from the shoulders and flares toward the hem: `w` is its width at the neck, the hem is `flare` wider)
-const FLARE = 0.3;
-const hang = (b, w, h, o, bend = 0.08) => {
-  const g = new THREE.PlaneGeometry(w, h, b.pick(8, 5, 3), b.pick(12, 8, 4));
-  const pa = g.attributes.position;
-  for (let i = 0; i < pa.count; i++) {
-    const x = pa.getX(i), k = 1 + FLARE * (h / 2 - pa.getY(i)) / h;   // 1 at the neck, 1 + FLARE at the hem
-    pa.setX(i, x * k);
-    pa.setZ(i, -bend * (x / (w / 2)) ** 2 * k);
-  }
-  g.computeVertexNormals();
-  return b.place(g, [0, -h / 2, -0.03], [0, 0, 0], 1, { ...o, w: [1.95, 1.0], a: [0.7, 1] });
-};
 // the lord's sigil on the back, between the shoulder blades (the uv runs right to left: the badge is seen from behind)
 const BADGE = { p: PAT.badge, uv: [0, -0.3, -0.3, 0.3] };
-// a band along the hem (swaying with the cloth) or the collar (still)
-const hem = (b, w, h, y, o, bend = 0.08) => b.sheet([0, y, -0.034], w * (1 + FLARE), 0.05, b.pick(8, 5, 3), 1, { ...o, w: [1.95, 1.9], dz: (x) => -bend * (x / (w * (1 + FLARE) / 2)) ** 2 * (1 + FLARE) });
-const collar = (b, w, hgt, o, bend = 0.07) => b.sheet([0, 0.015, -0.015], w, hgt, b.pick(8, 5, 3), 1, { ...o, dz: (x) => -bend * (x / (w / 2)) ** 2 });
 def('cape.crimson', (b) => {   // deep red wool, a gold hem and collar, a gold clasp
   hang(b, 0.58, 1.0, { c: 0x8c1f24, m: 'wool', ...BADGE });
-  hem(b, 0.58, 1.0, -0.99, { ...gold });
+  if (b.level < 2) hem(b, 0.58, 1.0, -0.99, { ...gold });
   collar(b, 0.62, 0.075, { ...gold });
-  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.06, 0.05, 0.02], { ...gold, e: 0.4 });
+  clasp(b);
 }, true);
 def('cape.greenwood', (b) => {   // a shorter travelling cloak, a leather hem, a rolled hood at the neck
-  hang(b, 0.56, 0.86, { c: 0x2f5a34, m: 'wool', ...BADGE }, 0.07);
-  hem(b, 0.56, 0.86, -0.85, { c: K.leather, m: 'leather', p: PAT.leather }, 0.07);
+  hang(b, 0.56, 0.86, { c: 0x2f5a34, m: 'wool', ...BADGE }, { folds: 0.9, phase: 1.1 });
+  if (b.level < 2) hem(b, 0.56, 0.86, -0.85, { c: K.leather, m: 'leather', p: PAT.leather });
   collar(b, 0.6, 0.11, { c: 0x25472a, m: 'wool', p: PAT.weave });
-  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.04, 0.02], { c: K.brass, m: 'brass', e: 0.4 });
+  clasp(b, brass);
 }, true);
 def('cape.wolfpelt', (b) => {   // grey wool under a deep collar and shoulders of wolf fur
   const fur = { c: 0xcfc8b8, m: 'fur', p: PAT.fur };
-  hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', ...BADGE }, 0.07);
-  hem(b, 0.6, 0.9, -0.89, fur, 0.07);
-  collar(b, 0.7, 0.17, fur, 0.07);
-  for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, -0.045], [0.11, 0.06, 0.09], { ...fur, seg: [b.pick(8, 6, 4), b.pick(6, 4, 3)] });
+  hang(b, 0.6, 0.9, { c: 0x6a6e74, m: 'wool', ...BADGE }, { folds: 0.9 });
+  if (b.level < 2) hem(b, 0.6, 0.9, -0.89, fur);
+  collar(b, 0.7, 0.17, fur);
+  for (const s of [-1, 1]) b.ell([s * 0.2, 0.0, 0.0], [0.11, 0.06, 0.09], { ...fur, seg: [b.pick(10, 6, 4), b.pick(8, 4, 3)] });
 }, true);
 def('cape.midnight', (b) => {   // dark blue silk edged in silver
   const silver = { c: 0xc8ced8, m: 'steel' };
-  hang(b, 0.58, 1.0, { c: 0x1c2756, m: 'silk', ...BADGE });
-  hem(b, 0.58, 1.0, -0.99, silver);
+  hang(b, 0.58, 1.0, { c: 0x1c2756, m: 'silk', ...BADGE }, { folds: 1.2, phase: 0.2 });
+  if (b.level < 2) hem(b, 0.58, 1.0, -0.99, silver);
   collar(b, 0.62, 0.06, silver);
-  if (b.level < 2) b.rbox([0, 0.0, 0.1], [0.05, 0.05, 0.02], { ...silver, e: 0.4 });
+  clasp(b, silver);
 }, true);
