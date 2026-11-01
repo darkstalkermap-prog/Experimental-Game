@@ -463,7 +463,7 @@ export function poseSoldier(m, st) {
   // going sideways or backwards at speed the hips turn part way toward where he goes (the shoulders stay on his facing), so the legs stride
   // along their own line rather than shuffle; the stride is shorter the more sideways it still is
   const travel = v > 0.3 ? Math.atan2(lvx, lvz) : 0;
-  const turnTo = Math.max(-0.6, Math.min(0.6, Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI)) * smooth(0.3, 1.5, v);
+  const turnTo = Math.max(-0.85, Math.min(0.85, Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI)) * smooth(0.3, 1.5, v);
   A.hipTurn += (turnTo - A.hipTurn) * (live ? (1 - Math.exp(-dt / 0.15)) : 1);
   const rel0 = travel - A.hipTurn, fwdK = v > 0.05 ? Math.cos(rel0) : 1, latK = v > 0.05 ? Math.abs(Math.sin(rel0)) : 0;
   const gx = st.gx || 0, gz = st.gz || 0;
