@@ -342,35 +342,47 @@ const _a = new THREE.Vector3(), _fw = new THREE.Vector3(), _sh = new THREE.Vecto
 // the engine does not inline, garbage for every soldier in every frame)
 const smooth = (a, b, x) => ease(clamp01((x - a) / (b - a)));
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
-// a damped spring on one number, stepped semi-implicitly (sub-steps keep it stable at any frame time): returns the new velocity, the new
-// value is left in SX[0] (a typed array: a number kept in a module variable is boxed afresh at every write, garbage for every soldier)
-const SX = new Float64Array(1);
-function spring(x, v, target, w, zeta, dt) {
-  const n = dt > 0.034 ? Math.ceil(dt / 0.034) : 1, h = dt / n;
-  for (let i = 0; i < n; i++) { v += (w * w * (target - x) - 2 * zeta * w * v) * h; x += v * h; }
-  SX[0] = x;
-  return v;
+// A rig's springs and its frame time live in one typed array (A.sp): [0] the frame's dt, then for each spring its value, its speed and its
+// target. spring() steps one semi-implicitly toward its target (sub-steps keep it stable at any frame time). (Numbers kept in a typed array
+// are never boxed; handed to and from calls they can be, garbage for every soldier in every frame.)
+const SP_DT = 0, SP_ARM = 1, SP_HIT = 4, SP_LAND = 7, SP_CX = 10, SP_CZ = 13, SP_BIL = 16, SP_PX = 19, SP_PZ = 22, SP_N = 25;
+function spring(S, i, w, zeta) {
+  const dt = S[SP_DT], n = dt > 0.034 ? Math.ceil(dt / 0.034) : 1, h = dt / n, target = S[i + 2];
+  let x = S[i], v = S[i + 1];
+  for (let k = 0; k < n; k++) { v += (w * w * (target - x) - 2 * zeta * w * v) * h; x += v * h; }
+  S[i] = x; S[i + 1] = v;
 }
 // the ankle's height over the ground for a shin tilted psi over the foot (+ toes down): onto the toe behind, the heel in front
 function ankleH(psi) { const c = Math.cos(psi), s = Math.sin(psi); return ANK * c + (s > 0 ? TOE * s : -HEEL * s); }
 
-function newFoot(o) { return { o, up: false, w: 1, tilt: 0, ax: 0, ay: 0, az: 0, x: 0, y: 0, z: 0, yaw: 0, lx: 0, ly: 0, lz: 0, lyaw: 0, u0: 0, pu: 0, psi: 0, cx: 0, cy: 0, cz: 0, cyaw: 0, rx: 0, rz: 0, toe: 0, tx: 0, tz: 0 }; }
+// (Math.hypot is not used in the pose: it makes garbage with every call.)
+// (every number of the motion state starts as -0: a field made with a whole number turns into a fraction's at the first fraction written to
+// it, a new shape for the engine and a boxed number for every write after, garbage for every soldier; a fraction's field is updated in place.
+// Units.js does the same, see Z in the Unit constructor)
+function newFoot(o) {
+  const F = { o: -0, up: false, w: -0, tilt: -0, ax: -0, ay: -0, az: -0, x: -0, y: -0, z: -0, yaw: -0, lx: -0, ly: -0, lz: -0, lyaw: -0, u0: -0, pu: -0, psi: -0,
+    cx: -0, cy: -0, cz: -0, cyaw: -0, rx: -0, rz: -0, toe: -0, tx: -0, tz: -0 };
+  F.o = o; F.w = 1;
+  return F;
+}
 function animOf(m) {
   if (m.anim) return m.anim;
   const nodes = [m.body, m.pelvis, m.torso, m.head, m.hipL, m.hipR, m.kneeL, m.kneeR, m.shL, m.shR, m.elL, m.elR];
   if (m.weapon) nodes.push(m.weapon);
   const lt = -m.kneeL.position.y, hipY = m.pelvis.position.y + m.hipL.position.y;
-  return (m.anim = {
-    init: false, nodes, lt, ls: lt * SHIN, hipY, hipX: m.hipL.position.x, prevQ: new Float32Array(nodes.length * 4), offQ: new Float32Array(nodes.length * 4), prevP: new Float32Array(3), offP: new Float32Array(3),
-    inT: 1, inDur: 1, inCap: false,
-    x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, acc: 0, accS: 0, turn: 0, jolt: false,
-    ph: 0, gaitOn: false, gait: 0, drop: 0, hipTurn: 0, replant: true, feet: [newFoot(0), newFoot(0.5)],
-    block: 0, stag: 0, climb: 0, air: 0,
-    arm: 0, armV: 0, hit: 0, hitV: 0, hitX: 0, hitZ: -1, land: 0, landV: 0,
-    capeX: 0, capeXV: 0, capeZ: 0, capeZV: 0, bil: 0, bilV: 0, plX: 0, plXV: 0, plZ: 0, plZV: 0,
+  const A = {
+    init: false, nodes, lt: -0, ls: -0, hipY: -0, hipX: -0, prevQ: new Float32Array(nodes.length * 4), offQ: new Float32Array(nodes.length * 4), prevP: new Float32Array(3), offP: new Float32Array(3),
+    inT: -0, inDur: -0, inCap: false,
+    x: -0, y: -0, z: -0, yaw: -0, vx: -0, vz: -0, vy: -0, acc: -0, accS: -0, turn: -0, jolt: false, fwdK: -0, latK: -0,
+    ph: -0, gaitOn: false, gait: -0, drop: -0, hipTurn: -0, run: -0, D: -0, replant: true, feet: [newFoot(0), newFoot(0.5)],
+    block: -0, stag: -0, climb: -0, air: -0,
+    sp: new Float64Array(SP_N), hitX: -0, hitZ: -0,
     bowQ: new Float32Array(4), bowQ2: new Float32Array(4), bowKept: false,
-    swing: -1, hurt: 0, stagIn: 0, wasClimb: false, wasRide: false, wasRanged: false, wasAir: false, dead: false, deadT: 0,
-  });
+    swing: -0, hurt: -0, stagIn: -0, wasClimb: false, wasRide: false, wasRanged: false, wasAir: false, dead: false, deadT: -0,
+  };
+  A.lt = lt; A.ls = lt * SHIN; A.hipY = hipY; A.hipX = m.hipL.position.x;
+  A.inT = 1; A.inDur = 1; A.hitZ = -1; A.swing = -1; A.fwdK = 1; A.D = 0.58;
+  return (m.anim = A);
 }
 
 // the leg (hip joint `hip` at H in the pelvis frame, knee joint `kn`) puts its ankle on tgt (pelvis frame), the knee bent toward fwd and the
@@ -426,39 +438,58 @@ function track(A, st, R0) {
 // (Cubic segments meeting at matched speeds: no stop at the top of the wind-up, the fastest moment just before the hit, a follow-through
 // that runs out instead of halting at a key.)
 const SW = { wind: 0.18, gather: 0.22, hit: 0.32, through: 0.43, end: 0.62, settle: 0.06, over: 0.25 };
-function herm(p0, m0, p1, m1, s, T) { const s2 = s * s, s3 = s2 * s; return (2 * s3 - 3 * s2 + 1) * p0 + (s3 - 2 * s2 + s) * T * m0 + (3 * s2 - 2 * s3) * p1 + (s3 - s2) * T * m1; }
-const SK = new Float64Array(5);
-// all five numbers of the blow's keys (WIND / END rows) from the guard a0..a2 (twist and tilt start at 0), into SK
-function swingKeys(t, a0, a1, a2, W, E) {
-  SK[0] = swingAt(t, a0, W[0], E[0]); SK[1] = swingAt(t, a1, W[1], E[1]); SK[2] = swingAt(t, a2, W[2], E[2]);
-  SK[3] = swingAt(t, 0, W[3], E[3]); SK[4] = swingAt(t, 0, W[4], E[4]);
-}
-function swingAt(t, a, w, e) {
-  const w2 = w + SW.settle * (w - a), f = e + SW.over * (e - w), T3 = SW.through - SW.hit, mh = 2.7 * (f - e) / T3;
-  if (t < SW.wind) return herm(a, 0, w, 0.6 * (w2 - w) / (SW.gather - SW.wind), t / SW.wind, SW.wind);
-  if (t < SW.gather) return herm(w, 0.6 * (w2 - w) / (SW.gather - SW.wind), w2, 0, (t - SW.wind) / (SW.gather - SW.wind), SW.gather - SW.wind);
-  if (t < SW.hit) return herm(w2, 0, e, mh, (t - SW.gather) / (SW.hit - SW.gather), SW.hit - SW.gather);
-  if (t < SW.through) return herm(e, mh, f, 0, (t - SW.hit) / T3, T3);
-  return herm(f, 0, a, 0, Math.min(1, (t - SW.through) / (SW.end - SW.through)), SW.end - SW.through);
+// SK in: [0..2] the guard's shoulder x, elbow x, shoulder z, [5] the clock; out: [0..4] the five numbers of the WIND / END rows (twist and
+// tilt start from 0). (One call, its numbers handed through the typed array: see U below.)
+const SK = new Float64Array(6);
+function swingKeys(W, E) {
+  const t = SK[5];
+  // which segment, how far through it (s) and how long it is (T)
+  let seg, s, T;
+  if (t < SW.wind) { seg = 0; T = SW.wind; s = t / T; }
+  else if (t < SW.gather) { seg = 1; T = SW.gather - SW.wind; s = (t - SW.wind) / T; }
+  else if (t < SW.hit) { seg = 2; T = SW.hit - SW.gather; s = (t - SW.gather) / T; }
+  else if (t < SW.through) { seg = 3; T = SW.through - SW.hit; s = (t - SW.hit) / T; }
+  else { seg = 4; T = SW.end - SW.through; s = Math.min(1, (t - SW.through) / T); }
+  const s2 = s * s, s3 = s2 * s, h00 = 2 * s3 - 3 * s2 + 1, h10 = (s3 - 2 * s2 + s) * T, h01 = 3 * s2 - 2 * s3, h11 = (s3 - s2) * T;
+  for (let i = 0; i < 5; i++) {
+    const a = i < 3 ? SK[i] : 0, w = W[i], e = E[i];
+    const w2 = w + SW.settle * (w - a), f = e + SW.over * (e - w), mh = 2.7 * (f - e) / (SW.through - SW.hit), mw = 0.6 * (w2 - w) / (SW.gather - SW.wind);
+    let p0, m0, p1, m1;
+    if (seg === 0) { p0 = a; m0 = 0; p1 = w; m1 = mw; }
+    else if (seg === 1) { p0 = w; m0 = mw; p1 = w2; m1 = 0; }
+    else if (seg === 2) { p0 = w2; m0 = 0; p1 = e; m1 = mh; }
+    else if (seg === 3) { p0 = e; m0 = mh; p1 = f; m1 = 0; }
+    else { p0 = f; m0 = 0; p1 = a; m1 = 0; }
+    SK[i] = h00 * p0 + h10 * m0 + h01 * p1 + h11 * m1;
+  }
 }
 
 // Pose a soldier (or a hero's body) for this frame.
 export function poseSoldier(m, st) {
   if (m.giant) { poseGiantBase(m, st); return; }
   const A = animOf(m);
+  motionOf(A, m, st);
+  stepFeet(A, m, st);
+  bodyPose(A, m, st);
+  finishPose(A, m, st);
+}
+// (the pose is worked out in four steps that hand their numbers on through A and U, not as arguments or results: as one function this size
+// it ran past what the engine inlines, and every number handed to or from a call it did not inline was boxed, garbage for every soldier
+// in every frame)
+const U = new Float64Array(16);
+const U_TX = 0, U_TY = 1, U_TZ = 2, U_TWIST = 3, U_LOOKT = 4, U_TILT = 5, U_BY = 6, U_LX = 7, U_LY = 8, U_LZ = 9, U_LE = 10, U_SH = 11, U_EL = 12, U_RZ = 13;
+
+// the root (where it is, how fast it goes and turns), the weights that ease toward what he is doing, and the abrupt changes
+function motionOf(A, m, st) {
   const dt = st.dt > 0 ? Math.min(st.dt, 0.1) : 0, live = dt > 0;
-  const idle = st.idle || 0, sc = m.body.scale.y;
   const mounted = !!st.mounted, climbing = !!st.climb && !mounted, inAir = !!st.air && !mounted && !climbing;
-  const cr = mounted ? 0 : st.crouch || 0;
-  const P = m.pelvis, T = m.torso, H = m.head, B = m.body;
-  const sway = Math.sin(idle * 0.5), breath = Math.sin(idle * 1.7);
   // ---- the root, and what it has done since the last frame
   const R0 = m.root;
   const X = st.x !== undefined ? st.x : R0.position.x, Y = st.y !== undefined ? st.y : R0.position.y, Z = st.z !== undefined ? st.z : R0.position.z;
   const yaw = st.yaw !== undefined ? st.yaw : R0.rotation.y, cy = Math.cos(yaw), sy = Math.sin(yaw);
   if (live) track(A, st, R0);
   else { A.x = X; A.y = Y; A.z = Z; A.yaw = yaw; A.vx = A.vz = A.vy = A.acc = A.accS = A.turn = 0; A.replant = true; }
-  const vx = A.vx, vz = A.vz, v = Math.hypot(vx, vz);
+  const vx = A.vx, vz = A.vz, v = Math.sqrt(vx * vx + vz * vz);
   const lvx = vx * cy - vz * sy, lvz = vx * sy + vz * cy;   // (in the root's frame: +z ahead, +x to his left)
   // going sideways or backwards at speed the hips turn part way toward where he goes (the shoulders stay on his facing), so the legs stride
   // along their own line rather than shuffle; the stride is shorter the more sideways it still is
@@ -466,7 +497,7 @@ export function poseSoldier(m, st) {
   const turnTo = Math.max(-0.85, Math.min(0.85, Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI)) * smooth(0.3, 1.5, v);
   A.hipTurn += (turnTo - A.hipTurn) * (live ? (1 - Math.exp(-dt / 0.15)) : 1);
   const rel0 = travel - A.hipTurn, fwdK = v > 0.05 ? Math.cos(rel0) : 1, latK = v > 0.05 ? Math.abs(Math.sin(rel0)) : 0;
-  const gx = st.gx || 0, gz = st.gz || 0;
+  A.fwdK = fwdK; A.latK = latK;
   // ---- weights that ease toward what he is doing, and the abrupt changes, blended by an offset that fades (see inertia below)
   const t = st.swingT;
   if (live) {
@@ -480,28 +511,37 @@ export function poseSoldier(m, st) {
     if (!ranged && A.swing >= 0 && (sw < 0 ? A.swing < 0.6 : sw < A.swing - 0.02 || sw > A.swing + 0.12)) ev = 0.16;   // a blow cut short, its clock jumped
     else if (!ranged && A.swing < 0 && sw > 0.06) ev = 0.12;   // a blow seen late (a guest's view: the snapshot came mid-swing)
     if (climbing !== A.wasClimb || mounted !== A.wasRide || ranged !== A.wasRanged) ev = 0.3;
-    if (A.wasAir && !inAir) { ev = Math.max(ev, 0.14); A.landV -= Math.min(2.6, Math.max(0.6, -A.vy * 0.35)); }   // landing: the knees take it
+    if (A.wasAir && !inAir) { ev = Math.max(ev, 0.14); A.sp[SP_LAND + 1] -= Math.min(2.6, Math.max(0.6, -A.vy * 0.35)); }   // landing: the knees take it
     if ((!A.wasAir && inAir) || (A.jolt && A.inT > A.inDur * 0.5)) ev = Math.max(ev, 0.14);   // off the ground; a burst of speed
     if (ev && A.init) { A.inCap = true; A.inDur = ev; A.inT = 0; }
     A.swing = sw; A.wasClimb = climbing; A.wasRide = mounted; A.wasRanged = ranged; A.wasAir = inAir;
     // a hit (st.hurt jumps up) throws him away from whoever he faces (st.look); heroes' hits come as a stagger
     const hurt = st.hurt || 0;
-    if (hurt > A.hurt + 0.25 || (st.stagger || 0) > A.stagIn + 0.3) { const la = st.look || 0; A.hitX = -Math.sin(la); A.hitZ = -Math.cos(la); A.hitV += hurt > A.hurt + 0.25 ? 7 : 4; }
+    if (hurt > A.hurt + 0.25 || (st.stagger || 0) > A.stagIn + 0.3) { const la = st.look || 0; A.hitX = -Math.sin(la); A.hitZ = -Math.cos(la); A.sp[SP_HIT + 1] += hurt > A.hurt + 0.25 ? 7 : 4; }
     A.hurt = hurt; A.stagIn = st.stagger || 0;
-    A.hitV = spring(A.hit, A.hitV, 0, 15, 0.85, dt); A.hit = SX[0];
-    A.landV = spring(A.land, A.landV, 0, 11, 0.8, dt); A.land = SX[0];
+    const S = A.sp;
+    S[SP_DT] = dt; S[SP_HIT + 2] = 0; S[SP_LAND + 2] = 0;
+    spring(S, SP_HIT, 15, 0.85); spring(S, SP_LAND, 11, 0.8);
   } else {
-    A.block = st.blocking ? 1 : 0; A.stag = st.stagger || 0; A.climb = climbing ? 1 : 0; A.air = inAir ? 1 : 0; A.hit = A.land = 0;
+    A.block = st.blocking ? 1 : 0; A.stag = st.stagger || 0; A.climb = climbing ? 1 : 0; A.air = inAir ? 1 : 0; A.sp[SP_HIT] = A.sp[SP_LAND] = 0;
     A.swing = t >= 0 ? t : -1; A.wasClimb = climbing; A.wasRide = mounted; A.wasRanged = !!m.ranged; A.wasAir = inAir;
   }
-
+}
+// the gait clock and the feet (where each stands, or how far through its step it is)
+function stepFeet(A, m, st) {
+  const dt = st.dt > 0 ? Math.min(st.dt, 0.1) : 0, live = dt > 0;
+  const sc = m.body.scale.y;
+  const mounted = !!st.mounted, climbing = !!st.climb && !mounted, inAir = !!st.air && !mounted && !climbing;
+  const X = A.x, Y = A.y, Z = A.z, yaw = A.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const vx = A.vx, vz = A.vz, v = Math.sqrt(vx * vx + vz * vz), fwdK = A.fwdK, latK = A.latK;
+  const gx = st.gx || 0, gz = st.gz || 0;
   // ---- the gait: how long a stride, how quick, how much of it each foot is down. (Past a sprint, a Shield Bash's run or a shove, no man's
   // legs keep up: the steps are a sprint's and the planted feet are carried along by the rest of the speed, unseen at that pace.)
   const vg = Math.min(v, VSPRINT), kv = v > 0 ? vg / v : 0, gvx = vx * kv, gvz = vz * kv;
   const run = smooth(1.6, 3.0, vg);
-  const D = lerp(0.58, Math.max(0.2, Math.min(0.38, 0.42 - 0.033 * vg)), run);
-  const Smax = lerp(0.7, 0.78, run) * sc * (1 - 0.45 * latK) * (1 - 0.25 * Math.max(0, -fwdK));
-  let f = lerp(0.85 + 0.12 * vg, 1.15 + 0.07 * vg, run);
+  const D = 0.58 + (Math.max(0.2, Math.min(0.38, 0.42 - 0.033 * vg)) - 0.58) * run;
+  const Smax = (0.7 + 0.08 * run) * sc * (1 - 0.45 * latK) * (1 - 0.25 * Math.max(0, -fwdK));
+  let f = 0.85 + 0.12 * vg + (0.3 - 0.05 * vg) * run;
   if (vg * D / f > Smax) f = vg * D / Smax;   // (no longer a stride than the legs reach: quicker steps)
   const S = vg * D / f;
   const onFeet = !mounted && A.climb < 0.5 && !inAir;
@@ -539,7 +579,7 @@ export function poseSoldier(m, st) {
       const F = A.feet[i];
       if (F.up) { anyUp = true; continue; }
       const wx = F.x - X, wz = F.z - Z, lx = wx * cy - wz * sy, lz = wx * sy + wz * cy;
-      const dev = Math.hypot(lx - F.rx, lz - F.rz) / sc, dy = Math.abs(wrap(F.yaw - yaw - F.toe));
+      const dev = Math.sqrt((lx - F.rx) * (lx - F.rx) + (lz - F.rz) * (lz - F.rz)) / sc, dy = Math.abs(wrap(F.yaw - yaw - F.toe));
       const score = dev + dy * 0.3;
       if (dev > 0.15 || dy > 0.6) need = true;
       if (dev > 0.04 || dy > 0.2) settled = false;
@@ -571,24 +611,36 @@ export function poseSoldier(m, st) {
         F.up = false; F.x = tx; F.y = ty; F.z = tz; F.yaw = tyaw;   // down
       } else if (!F.up && fc > 0 && u >= Dn && F.pu < u) {
         const wx = F.x - X, wz = F.z - Z, lx = wx * cy - wz * sy, lz = wx * sy + wz * cy;
-        if (moving || Math.hypot(lx - F.rx, lz - F.rz) > 0.03 * sc || Math.abs(wrap(F.yaw - tyaw)) > 0.15) {
+        if (moving || Math.sqrt((lx - F.rx) * (lx - F.rx) + (lz - F.rz) * (lz - F.rz)) > 0.03 * sc || Math.abs(wrap(F.yaw - tyaw)) > 0.15) {
           F.up = true; F.u0 = u; F.lx = F.x; F.ly = F.y; F.lz = F.z; F.lyaw = F.yaw; F.tx = tx; F.tz = tz;   // up
         }
       }
       F.pu = u;
       if (F.up) {
         const w = clamp01((u - F.u0) / Math.max(1e-3, 1 - F.u0)), h = ease(w);
-        const step = Math.hypot(tx - F.lx, tz - F.lz);
+        const step = Math.sqrt((tx - F.lx) * (tx - F.lx) + (tz - F.lz) * (tz - F.lz));
         // the foot comes up at once (a runner's heel high behind him, so the knee folds) and reaches forward to come down
-        const wp = lerp(0.5, 0.36, run), up = w < wp ? ease(w / wp) : ease((1 - w) / (1 - wp));
-        F.cx = lerp(F.lx, tx, h); F.cz = lerp(F.lz, tz, h);
-        F.cy = lerp(F.ly, ty, h) + lift * Math.min(1, step / (0.4 * sc) + 0.15) * up;
+        const wp = 0.5 - 0.14 * run, up = w < wp ? ease(w / wp) : ease((1 - w) / (1 - wp));
+        F.cx = F.lx + (tx - F.lx) * h; F.cz = F.lz + (tz - F.lz) * h;
+        F.cy = F.ly + (ty - F.ly) * h + lift * Math.min(1, step / (0.4 * sc) + 0.15) * up;
         F.cyaw = F.lyaw + wrap(tyaw - F.lyaw) * h;
         F.w = w;
       } else { F.cx = F.x; F.cy = F.y; F.cz = F.z; F.cyaw = F.yaw; F.w = 1; }
     }
   }
-
+  A.run = run; A.D = D;
+}
+// the body over the feet, the numbers of the trunk and the arms (into U), the hips and the legs
+function bodyPose(A, m, st) {
+  const dt = st.dt > 0 ? Math.min(st.dt, 0.1) : 0, live = dt > 0;
+  const idle = st.idle || 0, sc = m.body.scale.y;
+  const mounted = !!st.mounted, climbing = !!st.climb && !mounted, inAir = !!st.air && !mounted && !climbing;
+  const cr = mounted ? 0 : st.crouch || 0;
+  const P = m.pelvis, T = m.torso, H = m.head, B = m.body;
+  const sway = Math.sin(idle * 0.5), breath = Math.sin(idle * 1.7);
+  const X = A.x, Y = A.y, Z = A.z, yaw = A.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const v = Math.sqrt(A.vx * A.vx + A.vz * A.vz), run = A.run, D = A.D, gw = A.gait, t = st.swingT;
+  const gx = st.gx || 0, gz = st.gz || 0;
   // ---- the body over the feet (or astride)
   let bodyY, bodyZ = 0, shiftX = 0, tx, ty, tz, px, py, pz, turnLook = 0, mountY = 0;
   if (mounted) {
@@ -602,7 +654,7 @@ export function poseSoldier(m, st) {
     const cl = Math.cos(TAU * A.ph);                     // (1: the left foot comes down)
     const mid = TAU * (A.ph - D / 2), cm = Math.cos(mid);   // (1: the left foot is under him)
     bodyY = -gw * ((1 - run) * 0.014 * (1 - Math.cos(2 * mid)) * 0.5 + run * (0.026 * (1 + Math.cos(2 * mid)) * 0.5 + 0.01)) * sc;
-    bodyY += 0.004 * breath * (1 - gw) * sc + A.land * 0.09 * sc;
+    bodyY += 0.004 * breath * (1 - gw) * sc + A.sp[SP_LAND] * 0.09 * sc;
     tx = 0.03 + 0.05 * gw + 0.1 * run * gw + 0.012 * breath * (1 - gw); ty = (0.12 + 0.1 * run) * gw * cl; tz = -0.02 * sway * (1 - gw);
     px = (0.04 + 0.07 * run) * gw; py = -(0.08 + 0.06 * run) * gw * cl + A.hipTurn; ty -= A.hipTurn; pz = (0.045 * (1 - run) + 0.02 * run) * gw * cm + 0.03 * sway * (1 - gw);
     shiftX = ((0.026 * (1 - run) + 0.008 * run) * gw * cm + 0.012 * sway * (1 - gw)) * sc;
@@ -615,8 +667,10 @@ export function poseSoldier(m, st) {
   }
   // the arms swing against the legs, a little behind them, and settle when he stops
   const armT = -Math.cos(TAU * (A.ph + 0.07)) * Math.min(0.55, v * 0.1 + 0.05) * gw;
-  if (live) { A.armV = spring(A.arm, A.armV, armT, 20, 0.6, dt); A.arm = SX[0]; } else A.arm = armT;
-  const swing = A.arm;
+  const S = A.sp;
+  S[SP_ARM + 2] = armT;
+  if (live) spring(S, SP_ARM, 20, 0.6); else S[SP_ARM] = armT;
+  const swing = S[SP_ARM];
   // ---- arms: the shield (or bow) arm and the weapon arm
   let lx, ly = 0, lz, le;
   // (an arm hangs a little away from the trunk, so the elbow clears the ribs: +z turns the shield arm out, -z the weapon arm.)
@@ -625,8 +679,8 @@ export function poseSoldier(m, st) {
   const wB = A.block;
   if (m.ranged) { lx = -0.25 - swing * 0.4; lz = 0.1; le = -0.35; }
   else if (m.desc.shield) {
-    lx = lerp(-0.59 - swing * 0.25, -1.0, wB); ly = lerp(-1.04, -1.19, wB); lz = lerp(-0.22, -0.71, wB); le = lerp(-0.63 - 0.25 * run, -1.42, wB);
-  } else { lx = lerp(-0.45 - swing * 0.3, -1.25, wB); ly = -0.3 * wB; lz = lerp(0.08, -0.2, wB); le = lerp(-0.75 - 0.4 * run, -0.6, wB); }
+    lx = -0.59 - swing * 0.25; lx += (-1.0 - lx) * wB; ly = -1.04 - 0.15 * wB; lz = -0.22 - 0.49 * wB; le = -0.63 - 0.25 * run; le += (-1.42 - le) * wB;
+  } else { lx = -0.45 - swing * 0.3; lx += (-1.25 - lx) * wB; ly = -0.3 * wB; lz = 0.08 - 0.28 * wB; le = -0.75 - 0.4 * run; le += (-0.6 - le) * wB; }
   if (wB > 0) { tx += 0.06 * wB; bodyY -= 0.03 * wB * sc; }   // (braced behind the guard)
   let sh = m.ranged ? -0.15 + swing * 0.5 : -0.3 + swing * 0.4, el = (m.ranged ? -0.3 : -0.55) - 0.45 * run, rz = -0.1;
   let twist = 0, tiltOff = 0;
@@ -638,9 +692,10 @@ export function poseSoldier(m, st) {
     } else if (m.lance && mounted) {
       sh = -1.2; el = -0.3;
     } else {
-      // a blow: the guard, the wind-up gathering, driven through and on, back to the guard (swingAt); the body behind it
+      // a blow: the guard, the wind-up gathering, driven through and on, back to the guard (swingKeys); the body behind it
       const W = WIND[st.attackDir] || WIND.over, E = END[st.attackDir] || END.over;
-      swingKeys(t, sh, el, rz, W, E);
+      SK[0] = sh; SK[1] = el; SK[2] = rz; SK[5] = t;
+      swingKeys(W, E);
       sh = SK[0]; el = SK[1]; rz = SK[2]; twist = SK[3]; tiltOff = SK[4];
       // the weight goes back onto the rear foot in the wind-up, then in behind the blow, and back (the feet stay where they stand)
       const back = t < SW.gather ? ease(t / SW.gather) : 1 - ease(clamp01((t - SW.gather) / (SW.hit - SW.gather)));
@@ -650,21 +705,21 @@ export function poseSoldier(m, st) {
     }
   }
   // knocked back: the body thrown back, the weapon arm flung out; a hit throws him the way it came
-  const stag = A.stag, hk = A.hit;
+  const stag = A.stag, hk = S[SP_HIT];
   if (stag > 0) {
     tx -= 0.4 * stag;
-    sh = lerp(sh, -1.1, stag); rz = lerp(rz, -0.6, stag); el = lerp(el, -0.2, stag);
+    sh += (-1.1 - sh) * stag; rz += (-0.6 - rz) * stag; el += (-0.2 - el) * stag;
     bodyZ -= 0.08 * stag * sc; bodyY -= 0.05 * stag * sc;
   }
   const hurt = st.hurt || 0;
-  if (hurt > 0) { tx -= 0.12 * hurt; sh = lerp(sh, -0.9, hurt * 0.5); el = lerp(el, -0.3, hurt * 0.5); lx = lerp(lx, -0.9, hurt * 0.4); }
+  if (hurt > 0) { tx -= 0.12 * hurt; sh += (-0.9 - sh) * hurt * 0.5; el += (-0.3 - el) * hurt * 0.5; lx += (-0.9 - lx) * hurt * 0.4; }
   if (hk !== 0) {
     tx += 0.5 * hk * A.hitZ; tz -= 0.4 * hk * A.hitX; ty += 0.25 * hk * A.hitX;
     bodyZ += 0.07 * hk * A.hitZ * sc; shiftX += 0.05 * hk * A.hitX * sc; bodyY -= 0.025 * Math.abs(hk) * sc;
   }
   // in the air: the knees come up, the arms out a little for balance
   const wa = ease(A.air);
-  if (wa > 0) { lx = lerp(lx, lx - 0.25, wa); sh = lerp(sh, sh - 0.3, wa); tx += 0.08 * wa; }
+  if (wa > 0) { lx -= 0.25 * wa; sh -= 0.3 * wa; tx += 0.08 * wa; }
   // ---- the hips and the legs
   let legsDone = false;
   if (mounted) {
@@ -704,7 +759,7 @@ export function poseSoldier(m, st) {
       if (wa > 0) {
         // (tucked: one knee higher than the other, both feet under the seat)
         const tx2 = X + F.rx * cy + (F.rz + (i ? -0.1 : 0.12) * sc) * sy, tz2 = Z - F.rx * sy + (F.rz + (i ? -0.1 : 0.12) * sc) * cy;
-        wx = lerp(wx, tx2 - X, wa); wz = lerp(wz, tz2 - Z, wa); wy = lerp(wy, (i ? 0.2 : 0.34) * sc + bodyY, wa);
+        wx += (tx2 - X - wx) * wa; wz += (tz2 - Z - wz) * wa; wy += ((i ? 0.2 : 0.34) * sc + bodyY - wy) * wa;
       }
       const lx2 = wx * cy - wz * sy, lz2 = wx * sy + wz * cy;
       const rel = F.cyaw - yaw, fsx = Math.sin(rel), fsz = Math.cos(rel);
@@ -732,6 +787,17 @@ export function poseSoldier(m, st) {
     }
   } else B.position.set(0, bodyY, bodyZ);
   if (B.rotation.x !== 0 || B.rotation.z !== 0) B.rotation.set(0, 0, 0);   // (only a death turns the body)
+  U[U_TX] = tx; U[U_TY] = ty; U[U_TZ] = tz; U[U_TWIST] = twist; U[U_LOOKT] = turnLook; U[U_TILT] = tiltOff; U[U_BY] = bodyY / sc;
+  U[U_LX] = lx; U[U_LY] = ly; U[U_LZ] = lz; U[U_LE] = le; U[U_SH] = sh; U[U_EL] = el; U[U_RZ] = rz;
+}
+// the trunk, the head and the arms set from U; the bow, the climb, the blend of what was abrupt, and what hangs off him
+function finishPose(A, m, st) {
+  const dt = st.dt > 0 ? Math.min(st.dt, 0.1) : 0, live = dt > 0;
+  const idle = st.idle || 0, mounted = !!st.mounted;
+  const P = m.pelvis, T = m.torso, H = m.head, t = st.swingT, v = Math.sqrt(A.vx * A.vx + A.vz * A.vz), gw = A.gait;
+  const S = A.sp, stag = A.stag, hk = S[SP_HIT], hurt = st.hurt || 0;
+  const tx = U[U_TX], ty = U[U_TY], tz = U[U_TZ], twist = U[U_TWIST], turnLook = U[U_LOOKT], tiltOff = U[U_TILT];
+  const lx = U[U_LX], ly = U[U_LY], lz = U[U_LZ], le = U[U_LE], sh = U[U_SH], el = U[U_EL], rz = U[U_RZ];
   // ---- the trunk, the head and the arms
   const look = Math.max(-1.1, Math.min(1.1, st.look || 0));
   T.rotation.set(tx, ty + twist + look * 0.12 + turnLook * 0.4, tz);
@@ -745,35 +811,34 @@ export function poseSoldier(m, st) {
   if (wc > 0.001 && !mounted) {
     // hauling up a wall: hands over each other above the head, feet scrabbling at the stone
     const w = (st.time || 0) * 9, s = Math.sin(w);
-    const J = (j, x, y, z) => j.rotation.set(lerp(j.rotation.x, x, wc), lerp(j.rotation.y, y, wc), lerp(j.rotation.z, z, wc));
+    const J = (j, x, y, z) => j.rotation.set(j.rotation.x + (x - j.rotation.x) * wc, j.rotation.y + (y - j.rotation.y) * wc, j.rotation.z + (z - j.rotation.z) * wc);
     J(m.shL, -2.7 + s * 0.4, 0, -0.1); J(m.shR, -2.7 - s * 0.4, 0, 0.1);
     J(m.elL, -0.3 - Math.max(0, s) * 0.5, 0, 0); J(m.elR, -0.3 - Math.max(0, -s) * 0.5, 0, 0);
     J(m.hipL, -0.5 - s * 0.7, 0, 0); J(m.hipR, -0.5 + s * 0.7, 0, 0);
     J(m.kneeL, 0.9 - s * 0.6, 0, 0); J(m.kneeR, 0.9 + s * 0.6, 0, 0);
-    T.rotation.x = lerp(T.rotation.x, 0.12, wc);
+    T.rotation.x += (0.12 - T.rotation.x) * wc;
   }
-  if (live) inertia(A, dt); else holdPose(A);
+  if (live) inertia(A); else holdPose(A);
   // ---- what hangs off him
   if (live) {
-    A.capeXV = spring(A.capeX, A.capeXV, Math.max(-0.55, Math.min(0.55, A.acc * 0.05)), 8.5, 0.3, dt); A.capeX = SX[0];
-    A.capeZV = spring(A.capeZ, A.capeZV, Math.max(-0.4, Math.min(0.4, -A.accS * 0.045)), 7.5, 0.3, dt); A.capeZ = SX[0];
-    A.bilV = spring(A.bil, A.bilV, Math.min(1, v / 7), 5.5, 0.45, dt); A.bil = SX[0];
-    const plume = m.plumeC.on || m.plumeG.on;
-    if (plume) {
-      A.plXV = spring(A.plX, A.plXV, Math.max(-0.5, Math.min(0.5, -A.acc * 0.04 - (bodyY / sc) * 2)), 11, 0.25, dt); A.plX = SX[0];
-      A.plZV = spring(A.plZ, A.plZV, Math.max(-0.5, Math.min(0.5, A.accS * 0.04 + A.turn * v * 0.02)), 10, 0.25, dt); A.plZ = SX[0];
-      m.plumeC.node.rotation.set(A.plX, 0, A.plZ);
+    S[SP_CX + 2] = Math.max(-0.55, Math.min(0.55, A.acc * 0.05)); spring(S, SP_CX, 8.5, 0.3);
+    S[SP_CZ + 2] = Math.max(-0.4, Math.min(0.4, -A.accS * 0.045)); spring(S, SP_CZ, 7.5, 0.3);
+    S[SP_BIL + 2] = Math.min(1, v / 7); spring(S, SP_BIL, 5.5, 0.45);
+    if (m.plumeC.on || m.plumeG.on) {
+      S[SP_PX + 2] = Math.max(-0.5, Math.min(0.5, -A.acc * 0.04 - U[U_BY] * 2)); spring(S, SP_PX, 11, 0.25);
+      S[SP_PZ + 2] = Math.max(-0.5, Math.min(0.5, A.accS * 0.04 + A.turn * v * 0.02)); spring(S, SP_PZ, 10, 0.25);
+      m.plumeC.node.rotation.set(S[SP_PX], 0, S[SP_PZ]);
     }
-  } else { A.capeX = A.capeZ = 0; A.bil = Math.min(1, v / 7); }
-  m.inst[13] = clamp01(A.bil);
-  settleCloth(m, A.capeX, A.capeZ);
+  } else { S[SP_CX] = S[SP_CZ] = 0; S[SP_BIL] = Math.min(1, v / 7); }
+  m.inst[13] = clamp01(S[SP_BIL]);
+  settleCloth(m, S);
   if (live) A.init = true;
 }
 
 // The inertial blend: when something abrupt has happened (A.inCap), the offset from the pose drawn last frame to the one worked out now is
 // taken, and from then on added to each new pose, fading out over A.inDur (smoothly: no kink as it ends). The pose drawn is kept for next time.
-function inertia(A, dt) {
-  const N = A.nodes, n = N.length, pq = A.prevQ, oq = A.offQ, B = N[0];
+function inertia(A) {
+  const dt = A.sp[SP_DT], N = A.nodes, n = N.length, pq = A.prevQ, oq = A.offQ, B = N[0];
   if (A.inCap) {
     A.inCap = false;
     for (let i = 0; i < n; i++) {
@@ -865,9 +930,10 @@ function poseGiantBase(m, st) {
 
 // The cloth that hangs from the rig, once the joints are set: the skirt is told how far up the thighs are (unitmat.js bends it), and the
 // cape hangs toward the ground, but never into the back of the hips: a man leaning or kneeling has it hang straight down behind him, one
-// lying on his face has it lie along his back. (swing, side: the cape's own lag, back and out, from poseSoldier's springs)
+// lying on his face has it lie along his back. (S: the rig's springs, whose cape lag swings it back and out; none for a still pose)
 const CAPE_SEAT = [-0.25, -0.14];   // (in the pelvis frame: where the cape passes behind the seat, y and z; standing, it hangs as built)
-function settleCloth(m, swing = 0, side = 0) {
+function settleCloth(m, S = null) {
+  const swing = S ? S[SP_CX] : 0, side = S ? S[SP_CZ] : 0;
   const a = Math.min(0, (m.hipL.rotation.x + m.hipR.rotation.x) * 0.5);
   m.inst[11] = Math.max(-7.99, a) - 8 * Math.round(Math.max(0, m.hipL.position.z) * 100);
   const c = m.cape;
@@ -919,7 +985,8 @@ export function poseDeath(m, t, kind, side = 1) {
   }
   if (m.weapon) m.weapon.rotation.set(m.weaponTilt - 0.4 * e1, m.weaponRoll, 0);
   if (m.giant) poseGiantDead(m, t, kind);
-  inertia(A, Math.max(0, t - A.deadT));
+  A.sp[SP_DT] = Math.max(0, t - A.deadT);
+  inertia(A);
   A.deadT = t;
   m.inst[13] = kind === 1 ? -e2 : 0;   // (no wind of his running left in the cape; face down, it sags over his legs: unitmat.js)
   settleCloth(m);
