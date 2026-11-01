@@ -515,7 +515,7 @@ def('giant.foot', (b) => b.within(frame([0, 0.43, 0], [0, 0, 0]), () => foot(b))
 // ---------------------------------------------------------------- arms (shoulder frame, elbow frame): the top of the arm is a ball round
 // the shoulder joint (so the arm turns in it without a gap) swelling into the deltoid, bulging biceps and triceps; forearms like hams,
 // rag-bound from the middle to the wrist; a fist clenched round the haft's line (the weapon frame's), its other hand the same
-const UPPER = [[0.112, 0.012, 0.012, 0], [0.09, 0.072, 0.066, 0.0], [0.04, 0.12, 0.108, 0.0], [-0.02, 0.13, 0.114, 0.0], [-0.08, 0.12, 0.112, 0.004],
+const UPPER = [[0.092, 0.012, 0.012, 0], [0.074, 0.074, 0.066, 0.0], [0.03, 0.12, 0.108, 0.0], [-0.03, 0.131, 0.115, 0.0], [-0.09, 0.12, 0.112, 0.004],
   [-0.15, 0.106, 0.112, 0.008], [-0.22, 0.093, 0.098, 0.006], [-0.28, 0.078, 0.082, 0.002], [-0.33, 0.067, 0.069, 0], [-0.37, 0.061, 0.063, 0]];
 const UPPER_B = [
   ...mirror((s) => C([s * 0.095, -0.03, 0], [s * 0.065, -0.17, 0.006], 0.045, 0.016)),            // the deltoid's point
