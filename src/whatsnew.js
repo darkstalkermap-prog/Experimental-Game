@@ -5,6 +5,16 @@
 
 export const UPDATES = [
   {
+    id: 9,
+    title: 'Heroes with weight',
+    items: [
+      'The six heroes are rebuilt: layered plate, mail, leather and cloth with straps, buckles and rivets, sculpted faces, hair and beards, capes that hang, mud on the boots; every class has its own silhouette.',
+      'Movement with weight: feet stay planted instead of sliding, poses blend instead of snapping, swings wind up and follow through, capes and plumes lag and settle, and heroes flinch when hit.',
+      'The two-headed giant is sculpted anew: scowling heads with long beards, muscles that flow, rag wrappings and a chipped stone hammer; heavy footfalls and a swing that hangs before it lands.',
+      'Soldiers carry their weapons again (they had been left empty-handed).',
+    ],
+  },
+  {
     id: 8,
     title: 'Steadier and smoother',
     items: [
