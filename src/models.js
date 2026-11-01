@@ -253,7 +253,9 @@ const _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion();
 export const drawWeight = (t) => (t < 0 ? 0 : t < DRAW.lower ? ease(clamp01(t / DRAW.raise)) : 1 - ease(clamp01((t - DRAW.lower) / (DRAW.end - DRAW.lower))));
 // put the fist of the arm (shoulder joint sh at S, elbow joint el) on tgt, the elbow bent toward pole; with `up`, the arm's frame is
 // turned so its z points that way (the bow upright in the hand). w blends from the pose already set.
-function reachArm(sh, el, S, tgt, pole, w, up) {
+// keep (optional): 4 numbers holding last frame's solution, so the arm's frame keeps its sign and the blend from the pose already set keeps
+// the way it went (a plain slerp takes the shorter way round, which turns over when the two are half a turn apart: the arm flipped)
+function reachArm(sh, el, S, tgt, pole, w, up, keep, kept) {
   _d.subVectors(tgt, S);
   const len = _d.length(), d = Math.min(len, BONE * 1.998);
   _d.multiplyScalar(1 / Math.max(len, 1e-4));
@@ -268,13 +270,26 @@ function reachArm(sh, el, S, tgt, pole, w, up) {
   let bend = Math.atan2(-_f.dot(_z), -_f.dot(_y));
   if (bend > 0.01 && !up) { _x.negate(); _z.negate(); bend = Math.atan2(-_f.dot(_z), -_f.dot(_y)); }   // (an elbow only bends one way)
   _q.setFromRotationMatrix(_m4.makeBasis(_x, _y, _z));
-  sh.quaternion.slerp(_q, w);
+  if (keep) {
+    if (kept && _q.x * keep[0] + _q.y * keep[1] + _q.z * keep[2] + _q.w * keep[3] < 0) _q.set(-_q.x, -_q.y, -_q.z, -_q.w);
+    keep[0] = _q.x; keep[1] = _q.y; keep[2] = _q.z; keep[3] = _q.w;
+    slerpOn(sh.quaternion, _q, w);
+  } else sh.quaternion.slerp(_q, w);
   el.rotation.set(lerp(el.rotation.x, bend, w), 0, 0);
+}
+// q toward b by t along the way b's sign gives (not always the shorter one)
+function slerpOn(q, b, t) {
+  const c = Math.max(-1, Math.min(1, q.x * b.x + q.y * b.y + q.z * b.z + q.w * b.w));
+  const th = Math.acos(c), sn = Math.sin(th);
+  let ka = 1 - t, kb = t;
+  if (sn > 1e-4) { ka = Math.sin((1 - t) * th) / sn; kb = Math.sin(t * th) / sn; }
+  q.set(q.x * ka + b.x * kb, q.y * ka + b.y * kb, q.z * ka + b.z * kb, q.w * ka + b.w * kb).normalize();
 }
 function drawPose(m, t) {
   const w = drawWeight(t);
   const drawn = m.bowPart.on || m.bowDrawn.on;
-  if (w <= 0 || !drawn) { if (m.bowDrawn.on) { m.bowDrawn.on = false; m.bowPart.on = true; } return; }
+  const K = m.anim;
+  if (w <= 0 || !drawn) { if (m.bowDrawn.on) { m.bowDrawn.on = false; m.bowPart.on = true; } if (K) K.bowKept = false; return; }
   const loosed = t >= DRAW.loose, pull = loosed ? 1 : ease(clamp01((t - DRAW.pull[0]) / (DRAW.pull[1] - DRAW.pull[0])));
   const fly = loosed ? ease(clamp01((t - DRAW.loose) / 0.08)) : 0;   // (the hand flying back off the string)
   const psi = m.pelvis.rotation.y + m.torso.rotation.y;   // (the torso's turn: the mark is straight ahead of the feet)
@@ -284,9 +299,11 @@ function drawPose(m, t) {
   _grip.copy(_anchor).addScaledVector(_dir, DRAW.arrow); _grip.y -= 0.03;
   if (loosed) _hand.copy(_anchor).addScaledVector(_dir, -0.12 * fly).addScaledVector(_right, 0.06 * fly);
   else _hand.copy(_grip).addScaledVector(_dir, -lerp(DRAW.brace, DRAW.arrow, pull));
-  reachArm(m.shL, m.elL, SHOULDER_L, _grip, DOWN, w, UP);
+  const kept = !!K && K.bowKept;
+  reachArm(m.shL, m.elL, SHOULDER_L, _grip, DOWN, w, UP, K && K.bowQ, kept);
   _pole.copy(_dir).negate().addScaledVector(UP, 0.7).normalize();
-  reachArm(m.shR, m.elR, SHOULDER_R, _hand, _pole, w);
+  reachArm(m.shR, m.elR, SHOULDER_R, _hand, _pole, w, null, K && K.bowQ2, kept);
+  if (K) K.bowKept = true;
   m.head.rotation.y = lerp(m.head.rotation.y, -psi, w);
   const bent = !loosed && pull > 0.55 && w > 0.5;
   m.bowDrawn.on = bent; m.bowPart.on = !bent;
@@ -349,6 +366,7 @@ function animOf(m) {
     block: 0, stag: 0, climb: 0, air: 0,
     arm: 0, armV: 0, hit: 0, hitV: 0, hitX: 0, hitZ: -1, land: 0, landV: 0,
     capeX: 0, capeXV: 0, capeZ: 0, capeZV: 0, bil: 0, bilV: 0, plX: 0, plXV: 0, plZ: 0, plZV: 0,
+    bowQ: new Float32Array(4), bowQ2: new Float32Array(4), bowKept: false,
     swing: -1, hurt: 0, stagIn: 0, wasClimb: false, wasRide: false, wasRanged: false, wasAir: false, dead: false, deadT: 0,
   });
 }
