@@ -148,11 +148,11 @@ export function buildHeroBody(classId, team, variant = 2, cape = null, cell = -1
 // (a hero's shapes are richer than a soldier's: they are built a few at a time in the frames after he is made, not all in the frame he is first seen)
 function warmRig(m) {
   const key = 'hero:' + m.farKey + ':' + (m.desc.cape || '');
-  if (warmed.has(key)) return;
+  if (baking || warmed.has(key)) return;
   warmed.add(key);
   const levels = [...new Set([geoLevel(0), geoLevel(1), 3])];
   for (const p of m.parts) if (p.on || p === m.bowPart || p === m.bowDrawn || p === m.bowBack) for (const l of levels) if (!p.shape.geo[l]) warmTasks.push([p.shape, l]);
-  warmTasks.push([m, 3]);
+  if (!farCache.has(m.farKey)) warmTasks.push([m, 3]);   // (nothing is queued that is made already: the queue keeps its pace)
 }
 
 // Better training, better kit: tier 1 steel pauldrons, 2 a cloak, 3 gold at the throat and on the shield, 4 gold pauldrons and wings on the
@@ -501,6 +501,7 @@ export function poseHorseDead(h, t) {
 // ---------------------------------------------------------------- baked models: the far-away look, and the static meshes other modules ask for
 const _inv = new THREE.Matrix4(), _rel = new THREE.Matrix4(), _tint = new THREE.Color();
 const farCache = new Map();
+let baking = false;
 const bakeCache = new Map();
 
 // the triangles of a part with the gates that are not set cut out, moved into the frame `inv` and optionally with the colour slots resolved
@@ -558,7 +559,9 @@ export function farShapeOf(m) {
   let f = farCache.get(m.farKey);
   if (!f) {
     // (baked from a rig of its own: the one asked about may be mid-stride, or lying dead)
+    baking = true;   // (the rig made to be baked queues nothing of its own)
     const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : null);
+    baking = false;
     f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, bakeRig(t, 3, false)] };
     farCache.set(m.farKey, f);
   }
