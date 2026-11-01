@@ -27,15 +27,15 @@ export function shapeGeo(shape, level) {
 
 const K = {
   steel: 0xa2a7ae, steelLt: 0xbcc0c6, iron: 0x55575c, ironDk: 0x2e2f33, gold: 0xc9973a, brass: 0xa77a2c, leather: 0x5a3a22, leatherLt: 0x7a5330, leatherDk: 0x3a2617,
-  boot: 0x3b2a1c, bootDk: 0x2a1d13, cuff: 0x4d3826, pants: 0x4c4237, trim: 0xd9c89a, wood: 0x6b4a2c, woodDk: 0x4a3420, bone: 0xe0d4b8, mail: 0x7a7f86, gamb: 0x9a8560,
+  boot: 0x3b2a1c, cuff: 0x4d3826, pants: 0x4c4237, trim: 0xd9c89a, wood: 0x6b4a2c, woodDk: 0x4a3420, bone: 0xe0d4b8, mail: 0x7a7f86, gamb: 0x9a8560,
   fur: 0x5a4634, furLt: 0x7a6450, linen: 0xd2c9b0, hoof: 0x2a2420, dark: 0x0a0a0c, red: 0xc0392b, quiver: 0x6a4a2a, sole: 0x1e1712,
-  robe: 0x2b2160, robeDk: 0x1d1640, cream: 0xb3a685, green: 0x2f5a34, greenDk: 0x22422a, rope: 0xb09a6c,
+  robe: 0x2b2160, cream: 0xb3a685, green: 0x2f5a34, rope: 0xb09a6c,
 };
 const TAU = Math.PI * 2, PI = Math.PI;
 const steel = { c: K.steel, m: 'steel' }, plate = { c: K.steel, m: 'plate' }, iron = { c: K.iron, m: 'iron' }, gold = { c: K.gold, m: 'gold' }, brass = { c: K.brass, m: 'brass' };
 const leather = { c: K.leather, m: 'leather', p: PAT.leather }, leatherDk = { c: K.leatherDk, m: 'leather', p: PAT.leather }, leatherLt = { c: K.leatherLt, m: 'leather', p: PAT.leather };
 const wood = { c: K.wood, m: 'wood', p: PAT.grain }, skin = { s: 'skin', m: 'skin', p: PAT.skin };
-const cloth = { s: 'cloth', m: 'cloth', p: PAT.weave }, clothDk = { s: 'clothDark', m: 'cloth', p: PAT.weave }, clothLt = { s: 'clothLight', m: 'cloth', p: PAT.weave };
+const cloth = { s: 'cloth', m: 'cloth', p: PAT.weave }, clothDk = { s: 'clothDark', m: 'cloth', p: PAT.weave };
 const mailM = { c: K.mail, m: 'mail', p: PAT.mail }, linen = { c: K.linen, m: 'cloth', p: PAT.weave }, trim = { c: K.trim, m: 'cloth', p: PAT.weave };
 const sat = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // dirt in a frame: none above y1, all of k at y0 and below (mud splashed up from the feet, dust on a hem)
@@ -330,11 +330,10 @@ function belt(b, extras, o = leather) {
       const ry = Math.atan2(x, z);
       b.rbox([x, -0.004, z], [w, h, d], { ...leatherLt, e: 0.45, rot: [0, ry, 0], d: 0.15 });
       b.rbox([x * 1.04, 0.03, z * 1.04], [w * 1.05, h * 0.42, d * 0.5], { ...leatherDk, e: 0.4, rot: [0.1, ry, 0] });
-      if (b.level < 1) b.ell([x * 1.15, 0.005, z * 1.15], 0.008, { ...bone(), seg: [6, 4] });
+      if (b.level < 1) b.ell([x * 1.15, 0.005, z * 1.15], 0.008, { c: K.bone, m: 'bone', seg: [6, 4] });   // (a toggle of bone)
     }
   }
 }
-function bone() { return { c: K.bone, m: 'bone' }; }
 // cloth hanging from the belt, front and back, swaying; the sides stay open (o: the cloth; trimmed along the hem)
 function tabardSkirt(b, hem, w, o = cloth, wide = 1.24) {
   const prof = [[0.252, hem], [0.2, 0.06]];
