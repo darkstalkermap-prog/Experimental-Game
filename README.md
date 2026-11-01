@@ -1209,8 +1209,10 @@ man is doing, with a little kept on the rig between frames so that nothing snaps
 - **Weight.** A blow settles into its wind-up, is driven through the moment it lands and follows through before it comes back; the body
   goes back onto the rear foot and then in behind it. Men lean into a start and back from a stop and bank into turns; a hit throws the body
   the way it came. The arms' swing, the cape (swung by starts, stops and turns), its billow and the plume lag and settle.
-- **Cost.** The pose makes no garbage; with the IK and the springs it costs about twice the old one (about 4 µs a man on a busy 4-core test
-  machine, 1.2 ms a frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed.
+- **Cost.** With the IK and the springs the pose costs about twice the old one (about 4 µs a man on a busy 4-core test machine, 1.2 ms a
+  frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed. It is worked out in four steps whose
+  numbers pass through typed arrays (one big function ran past what the engine inlines, and boxed the numbers of every call it did not), so
+  it makes little garbage: a 1600-soldier War Mode battle makes about 9% more than before.
 - **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Bash's push and a blow cut short ease in
   and out; the wind-up and the strike leave their rest at a speed instead of jumping to it.
 
