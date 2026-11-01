@@ -71,34 +71,52 @@ const CALF = [[0.03, 0.048, 0.05, 0.0], [-0.05, 0.05, 0.058, -0.01], [-0.13, 0.0
 const grow = (rings, d, dz = d) => rings.map(([y, rx, rz, z]) => [y, rx + d, rz + dz, z]);
 // a loft along +z instead of +y (a foot): rings [z, half width, half height, -y of the centre]
 const ALONG_Z = new THREE.Matrix4().makeRotationX(PI / 2);
-// The boot: a shaft to below the knee with its top turned down, the ankle, a foot with a heel and a rounded toe on a sole, a strap and
-// buckle over the instep. `kind`: 'leather', 'fur' (wrapped in pelt and thongs) or 'plate' (a sabaton of lames over a mail foot).
+// The boot: a shaft to below the knee with its top turned down, on the shin; the foot is its own shape on the ankle joint (models.js), so it
+// can lie flat on the ground or roll onto its toe while the shin leans over it: a heel and a rounded toe on a sole, a strap and buckle over
+// the instep. `kind`: 'leather', 'fur' (wrapped in pelt and thongs) or 'plate' (a sabaton of lames over a mail foot).
+export const ANKLE_Y = 0.443;   // (the ankle joint below the knee; the sole is 6.3 cm under it: models.js ANK)
+const bootColour = (kind) => (kind === 'fur' ? { c: K.fur, m: 'fur', p: PAT.fur } : { c: K.boot, m: 'leather', p: PAT.leather });
 function boot(b, kind) {
-  const bc = kind === 'fur' ? { c: K.fur, m: 'fur', p: PAT.fur } : { c: K.boot, m: 'leather', p: PAT.leather };
-  const fc = kind === 'plate' ? { c: K.steel, m: 'plate' } : bc;   // (a sabaton is plate over the foot)
+  const bc = bootColour(kind);
   b.dirt = mud(-0.5, -0.22);
   b.loft([[-0.135, 0.051, 0.057, -0.012], [-0.24, 0.047, 0.053, -0.008], [-0.34, 0.04, 0.043, 0.0], [-0.415, 0.039, 0.043, 0.004], [-0.45, 0.043, 0.05, 0.012]], { ...bc, a: [0.78, 1], seg: b.pick(18, 8, 6) });
-  const foot = [[-0.085, 0.006, 0.006, 0.474], [-0.078, 0.03, 0.026, 0.472], [-0.05, 0.041, 0.04, 0.466], [-0.01, 0.045, 0.048, 0.458], [0.04, 0.047, 0.038, 0.468],
-    [0.09, 0.048, 0.03, 0.477], [0.14, 0.046, 0.024, 0.483], [0.18, 0.039, 0.019, 0.488], [0.207, 0.024, 0.013, 0.492], [0.218, 0.006, 0.006, 0.494]];
-  b.within(ALONG_Z, () => b.loft(foot, { ...fc, a: [0.8, 1], seg: b.pick(16, 8, 6), sq: 2.4 }));
   if (b.level < 2) {
-    // the sole and the heel, darker and worn
-    b.within(ALONG_Z, () => b.loft([[-0.082, 0.026, 0.006, 0.503], [-0.07, 0.04, 0.008, 0.503], [0.0, 0.046, 0.007, 0.504], [0.1, 0.05, 0.007, 0.504], [0.18, 0.042, 0.006, 0.503], [0.215, 0.022, 0.006, 0.501], [0.222, 0.004, 0.004, 0.5]], { c: K.sole, m: 'rubber', seg: b.pick(10, 6, 4), sq: 3, smooth: false }));
-    b.rbox([0, -0.493, -0.055], [0.068, 0.022, 0.05], { c: K.sole, m: 'rubber', e: 0.3 });
     if (kind === 'leather') {
       b.loft([[-0.118, 0.056, 0.062, -0.012], [-0.135, 0.059, 0.065, -0.012], [-0.175, 0.058, 0.064, -0.012], [-0.185, 0.053, 0.059, -0.011]], { c: K.cuff, m: 'leather', p: PAT.leather, a: [0.85, 1], seg: b.pick(18, 8, 6), smooth: false });   // the turned-down top
-      b.band([[-0.046, -0.452, 0.025], [0, -0.438, 0.06], [0.046, -0.452, 0.025]], 0.016, 0.004, { ...leatherDk, out: from([0, -0.5, 0.0]), segs: b.pick(8, 4, 2) });   // the instep strap
-      buckle(b, [0.044, -0.452, 0.034], [0.8, 0, 0.6], 0.8);
     } else if (kind === 'fur') {
       for (const y of [-0.2, -0.29, -0.38]) b.band([[0.05, y, 0.015], [0, y - 0.015, 0.06], [-0.05, y - 0.03, 0.015], [-0.01, y - 0.045, -0.05], [0.05, y - 0.06, -0.02]], 0.008, 0.004, { ...leatherDk, out: from([0, y, -0.005]), segs: b.pick(12, 5, 3) });   // thongs wound round
     }
   }
-  if (kind === 'plate' && b.level < 1) {
-    // the sabaton's lames: the edge of each across the instep
-    for (const [z, y] of [[0.035, -0.428], [0.085, -0.444], [0.135, -0.457]]) b.band([[-0.048, y - 0.03, z], [0, y, z], [0.048, y - 0.03, z]], 0.006, 0.003, { c: K.steelLt, m: 'plate', out: from([0, -0.5, z]), segs: 6 });
-  }
   b.dirt = null;
 }
+// the foot (the ankle's frame: built where it hangs below the knee, then raised to the joint)
+const FOOT_ON = new THREE.Matrix4().makeTranslation(0, ANKLE_Y, 0);
+for (const kind of ['leather', 'fur', 'plate']) {
+  def('foot.' + kind, (b) => b.within(FOOT_ON, () => {
+    const bc = bootColour(kind), fc = kind === 'plate' ? { c: K.steel, m: 'plate' } : bc;   // (a sabaton is plate over the foot)
+    b.dirt = mud(-0.5, -0.3);
+    b.ell([0, -0.448, 0.008], [0.042, 0.04, 0.048], { ...bc, a: [0.85, 0.95] });   // the ankle, so the joint never opens
+    const foot = [[-0.085, 0.006, 0.006, 0.474], [-0.078, 0.03, 0.026, 0.472], [-0.05, 0.041, 0.04, 0.466], [-0.01, 0.045, 0.048, 0.458], [0.04, 0.047, 0.038, 0.468],
+      [0.09, 0.048, 0.03, 0.477], [0.14, 0.046, 0.024, 0.483], [0.18, 0.039, 0.019, 0.488], [0.207, 0.024, 0.013, 0.492], [0.218, 0.006, 0.006, 0.494]];
+    b.within(ALONG_Z, () => b.loft(foot, { ...fc, a: [0.8, 1], seg: b.pick(16, 8, 6), sq: 2.4 }));
+    if (b.level < 2) {
+      // the sole and the heel, darker and worn
+      b.within(ALONG_Z, () => b.loft([[-0.082, 0.026, 0.006, 0.503], [-0.07, 0.04, 0.008, 0.503], [0.0, 0.046, 0.007, 0.504], [0.1, 0.05, 0.007, 0.504], [0.18, 0.042, 0.006, 0.503], [0.215, 0.022, 0.006, 0.501], [0.222, 0.004, 0.004, 0.5]], { c: K.sole, m: 'rubber', seg: b.pick(10, 6, 4), sq: 3, smooth: false }));
+      b.rbox([0, -0.493, -0.055], [0.068, 0.022, 0.05], { c: K.sole, m: 'rubber', e: 0.3 });
+      if (kind === 'leather') {
+        b.band([[-0.046, -0.452, 0.025], [0, -0.438, 0.06], [0.046, -0.452, 0.025]], 0.016, 0.004, { ...leatherDk, out: from([0, -0.5, 0.0]), segs: b.pick(8, 4, 2) });   // the instep strap
+        buckle(b, [0.044, -0.452, 0.034], [0.8, 0, 0.6], 0.8);
+      }
+    }
+    if (kind === 'plate' && b.level < 1) {
+      // the sabaton's lames: the edge of each across the instep
+      for (const [z, y] of [[0.035, -0.428], [0.085, -0.444], [0.135, -0.457]]) b.band([[-0.048, y - 0.03, z], [0, y, z], [0.048, y - 0.03, z]], 0.006, 0.003, { c: K.steelLt, m: 'plate', out: from([0, -0.5, z]), segs: 6 });
+    }
+    b.dirt = null;
+  }));
+}
+// the foot a leg style wears
+export const footOf = (leg) => (leg === 'skin' ? 'foot.fur' : leg === 'plate' ? 'foot.plate' : 'foot.leather');
 for (const st of Object.keys(LEG)) {
   def('thigh.' + st, (b) => {
     // (the joints are balls a little inside the limb, so a straight leg shows no knob and a bent one no gap; they are shaded flat, like
