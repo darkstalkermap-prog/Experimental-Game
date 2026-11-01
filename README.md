@@ -1191,6 +1191,34 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   faster pace brings the early war forward but not the end of it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
   The Hero Game Mode (its own timed match) and the practice courtyard keep their own pace.
 
+## How the figures move
+
+Soldiers and heroes share one rig and one pose function (`poseSoldier` in `src/models.js`), worked out afresh every frame from what the
+man is doing, with a little kept on the rig between frames so that nothing snaps, slides or floats:
+
+- **Planted feet.** Each foot stays where it was put down, in the world, until a gait clock lifts it for the next step. The cadence and the
+  stride come from how fast the body really travels (its own movement, not the speed it was told), so a guest's view of another hero, a
+  soldier shoved by the crowd or carried on an engine steps as he goes, a walk turns into a run with flight in it, and stopping brings the
+  feet together in a last step or two. The legs reach the feet with two-bone IK (softened near full stretch so a knee never flicks
+  straight); the hips come down where a stride is long; the heel lifts as the leg goes behind. Standing, a foot steps only when the body has
+  turned or been pushed off it. On a slope each foot finds its own ground. Going sideways or backwards at speed the hips turn part way into
+  the stride. Past a sprint (a Shield Bash's run) the steps stay a sprint's.
+- **Blends, not snaps.** The guard, a stagger, a climb, a jump ease in and out by weights; anything abrupt (a blow cut short, a blow seen
+  late on a guest, the bow taken out, mounting, landing, a burst of speed, death) is carried as an offset from the last pose drawn that
+  fades out in a fraction of a second, so the new pose plays at once and only the difference eases away. A hero hops into and out of the
+  saddle.
+- **Weight.** A blow settles into its wind-up, is driven through the moment it lands and follows through before it comes back; the body
+  goes back onto the rear foot and then in behind it. Men lean into a start and back from a stop and bank into turns; a hit throws the body
+  the way it came. The arms' swing, the cape (swung by starts, stops and turns), its billow and the plume lag and settle.
+- **Cost.** With the IK and the springs the pose costs about twice the old one (about 4 µs a man on a busy 4-core test machine, 1.2 ms a
+  frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed. It is worked out in four steps whose
+  numbers pass through typed arrays (one big function ran past what the engine inlines, and boxed the numbers of every call it did not), so
+  it makes little garbage: a 1600-soldier War Mode battle makes about 9% more than before.
+- **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Bash's push and a blow cut short ease in
+  and out; the wind-up and the strike leave their rest at a speed instead of jumping to it.
+
+The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/giantmodel.js`).
+
 ## Code layout
 
 | File | Purpose |

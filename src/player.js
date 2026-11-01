@@ -215,6 +215,24 @@ export class Player {
     this.walkPhase += dt * sp * 2.1;
     b.root.position.set(this.pos.x, this.pos.y + (this.mounted ? SADDLE_Y : 0), this.pos.z);
     b.root.rotation.y = this.mounted ? this.heading : this.yaw;
+    // getting up into the saddle or down from it: the body goes from where it was to where it now is in a short hop, not in one frame
+    const mb = this.mountBlend || (this.mountBlend = { on: this.mounted, t: 1, x: 0, y: 0, z: 0, yaw: 0, px: 0, py: 0, pz: 0, pyaw: 0 });
+    if (mb.on !== this.mounted) {
+      mb.on = this.mounted; mb.t = 0;
+      mb.x = mb.px - b.root.position.x; mb.y = mb.py - b.root.position.y; mb.z = mb.pz - b.root.position.z;
+      let dy = mb.pyaw - b.root.rotation.y;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      mb.yaw = dy;
+      if (mb.x * mb.x + mb.z * mb.z > 25) mb.t = 1;   // (a respawn, not a mount)
+    }
+    if (mb.t < 1) {
+      mb.t = Math.min(1, mb.t + dt / 0.38);
+      const k = 1 - mb.t * mb.t * (3 - 2 * mb.t);
+      b.root.position.x += mb.x * k; b.root.position.y += mb.y * k + Math.sin(mb.t * Math.PI) * 0.22; b.root.position.z += mb.z * k;
+      b.root.rotation.y += mb.yaw * k;
+    }
+    mb.px = b.root.position.x; mb.py = b.root.position.y; mb.pz = b.root.position.z; mb.pyaw = b.root.rotation.y;
     rigSetBow(b, this.weapon === 'bow');
     // the bow's clock (models.js drawPose): the string comes back as the hero draws; let go well drawn, the loose plays out
     const draw = this.weapon !== 'bow' ? 0 : this.drawT > 0 ? Math.min(1, this.drawT / this.drawTime) : this.netDraw;
@@ -224,7 +242,16 @@ export class Player {
       else if ((this.bowT += dt) > 0.9) this.bowT = -1;
     }
     if (this.weapon !== 'bow') this.bowT = -1;
-    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.weapon === 'bow' && this.bowT >= 0 ? this.bowT : this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0 });
+    // a blow that takes health makes the body flinch away (models.js: the hit reaction), as a soldier's does
+    if (this.hp < (this.shownHp ?? this.hp) - 0.5) this.hurtT = 1;
+    this.shownHp = this.hp;
+    this.hurtT = Math.max(0, (this.hurtT || 0) - dt * 4);
+    // (in the air: a bot here knows; anyone else's hero is seen off the ground. The slope: each foot finds its own ground, models.js)
+    const ph = this.game.physics, x = this.pos.x, z = this.pos.z, h0 = ph.terrainHeight(x, z);
+    const air = !this.mounted && !this.climbing && (this.isBot && this.game.simulating ? !this.onGround : this.pos.y - ph.groundHeight(x, z, this.pos.y + 0.1, this.team) > 0.15);
+    const flat = this.mounted || this.pos.y - h0 > 0.3;
+    poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.weapon === 'bow' && this.bowT >= 0 ? this.bowT : this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0,
+      hurt: this.hurtT, dt, air, gx: flat ? 0 : (ph.terrainHeight(x + 0.4, z) - h0) * 2.5, gz: flat ? 0 : (ph.terrainHeight(x, z + 0.4) - h0) * 2.5 });
     this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4 - 0.7 * this.duck), this.pos.z);
   }
 

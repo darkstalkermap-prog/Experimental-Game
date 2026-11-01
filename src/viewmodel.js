@@ -17,6 +17,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (k) => 1 - (1 - k) * (1 - k);
 const easeInOut = (k) => k * k * (3 - 2 * k);
 const smooth = (v, target, rate, dt) => v + (target - v) * (1 - Math.exp(-rate * dt));
+const launch = (k, m0) => k * k * (3 - 2 * k) + (k * k * k - 2 * k * k + k) * m0;   // 0 -> 1 leaving at speed m0 (smoothstep is 0, easeOut 2), arriving at rest
 
 // a damped spring on one number (underdamped: a little overshoot)
 class Spring {
@@ -198,6 +199,10 @@ export class ViewModel {
     this.swap = 0; this.shown = 'sword';
     this.prev = { yaw: 0, pitch: 0, hp: 1, arrows: 0, potions: 0, onGround: true, vy: 0, draw: 0, mounted: false, init: false };
     this.recoil = 0; this.landDip = 0; this.hurtT = 0; this.wallT = 0;
+    // (what keeps the sword hand from snapping: the guard's offset and the stagger eased in and out, the Whirlwind's spin run on to a whole turn,
+    // the Shield Bash's push eased off, and a blow cut short faded out from where the hand was)
+    this.guardAmt = 0; this.stagAmt = 0; this.whirlAmt = 0; this.whirlA = 0; this.bashAmt = 0;
+    this.atkOff = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 }; this.atkFade = 0; this.atkLive = false;
     this.spread = 1;
     this.castCol = new THREE.Color();
     this.elbow = new THREE.Vector3(); this.shoulder = new THREE.Vector3();
@@ -480,11 +485,15 @@ export class ViewModel {
     if (swordMode) {
       let ax = 0, ay = 0, az = 0, arx = 0, ary = 0, arz = 0;
       const atk = p.atk;
+      if (!atk && this.atkLive) this.atkFade = 1;   // (the blow ended or was cut short: what is left of it fades from where the hand was)
+      this.atkLive = !!atk;
       if (atk) {
         const W = WIND[atk.dir], E = END[atk.dir];
         let from = ZERO, to = W, k;
-        if (atk.phase === 'wind') k = easeOut(Math.min(1, atk.t / 0.09));
-        else if (atk.phase === 'strike') { from = W; to = E; const u = Math.min(1, atk.t / 0.09); k = easeOut(u) + 0.07 * Math.sin(u * Math.PI) * (atk.phase === 'strike' ? 1 : 0); }
+        // (each phase leaves its rest at a speed, not from a standstill to full speed in one frame: the wind-up and the strike still snap, but
+        // the hand does not jump; the strike runs on a little past its end, the blow's weight)
+        if (atk.phase === 'wind') k = launch(Math.min(1, atk.t / 0.09), 0.7);
+        else if (atk.phase === 'strike') { from = W; to = E; const u = Math.min(1, atk.t / 0.09); k = launch(u, 0.9) + 0.07 * Math.sin(u * Math.PI); }
         else { from = E; to = ZERO; k = easeInOut(Math.min(1, atk.t / 0.2)); }
         ax = from.x + (to.x - from.x) * k; ay = from.y + (to.y - from.y) * k; az = from.z + (to.z - from.z) * k;
         arx = from.rx + (to.rx - from.rx) * k; ary = from.ry + (to.ry - from.ry) * k; arz = from.rz + (to.rz - from.rz) * k;
@@ -493,15 +502,32 @@ export class ViewModel {
           const jab = atk.phase === 'wind' ? 0.1 * k : atk.phase === 'strike' ? 0.1 - 0.34 * k : -0.24 * (1 - k);
           ax *= 0.5; ay *= 0.5; az = jab; arx *= 0.12; ary *= 0.12; arz *= 0.12;
         }
-      } else if (p.blocking) { ax += 0.08; ay -= 0.06; arz -= 0.3; }
-      if (p.buffs.has('whirl')) { const w = t * 24; ax -= 0.22 + Math.cos(w) * 0.19; ay += 0.08 + Math.sin(w) * 0.08; arz += w; trailing = true; }
+        const o = this.atkOff;
+        o.x = ax; o.y = ay; o.z = az; o.rx = arx; o.ry = ary; o.rz = arz;
+      } else if (this.atkFade > 0) {
+        this.atkFade = Math.max(0, this.atkFade - dt * 7);
+        const o = this.atkOff, k = easeInOut(this.atkFade);
+        ax += o.x * k; ay += o.y * k; az += o.z * k; arx += o.rx * k; ary += o.ry * k; arz += o.rz * k;
+      }
+      this.guardAmt = smooth(this.guardAmt, p.blocking && !atk ? 1 : 0, 16, dt);
+      ax += 0.08 * this.guardAmt; ay -= 0.06 * this.guardAmt; arz -= 0.3 * this.guardAmt;
+      // the Whirlwind: the blade spun round the body; when it ends the spin runs on to a whole turn and the hand comes back in
+      const whirl = p.buffs.has('whirl');
+      this.whirlAmt = smooth(this.whirlAmt, whirl ? 1 : 0, whirl ? 18 : 10, dt);
+      if (whirl) this.whirlA += dt * 24;
+      else if (this.whirlA > 0) { const rest = Math.ceil(this.whirlA / (Math.PI * 2) - 1e-3) * Math.PI * 2; this.whirlA = Math.min(rest, this.whirlA + dt * 24); if (this.whirlA >= rest) this.whirlA = 0; }
+      if (this.whirlAmt > 0.001 || this.whirlA > 0) {
+        const w = this.whirlA, k = this.whirlAmt;
+        ax -= (0.22 + Math.cos(w) * 0.19) * k; ay += (0.08 + Math.sin(w) * 0.08) * k; arz += w; trailing = trailing || whirl;
+      }
       if (p.leap) {   // the Leap: the blade goes up over the head on the way up and is driven down into the ground as he lands
         const k = clamp(p.leap.t / p.leap.dur, 0, 1), up = easeOut(clamp(k / 0.25, 0, 1)), down = easeInOut(clamp((k - 0.72) / 0.28, 0, 1));
         ax -= 0.08 * up * (1 - down); ay += 0.16 * up - 0.28 * down; az += 0.06 * up - 0.12 * down;
         arx -= 1.15 * up - 2.1 * down; arz += 0.2 * up * (1 - down);
         trailing = down > 0.05;
       }
-      if (p.staggerT > 0) { const k = Math.min(1, p.staggerT * 3); ay -= 0.1 * k; arx -= 0.4 * k; }
+      this.stagAmt = smooth(this.stagAmt, p.staggerT > 0 ? Math.min(1, p.staggerT * 3) : 0, 26, dt);
+      if (this.stagAmt > 0.001) { const k = this.stagAmt; ay -= 0.1 * k; arx -= 0.4 * k; }
       // sprinting carries the blade low across the body
       ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt;
       const la = this.lanceAmt, base = REST;
@@ -546,7 +572,10 @@ export class ViewModel {
         // (no room to run) drives it out and back
         if (p.dash.rush) { this.rushT = (this.rushT || 0) + dt; bashZ = -0.2 * Math.min(1, this.rushT * 5); } else bashZ = -0.22 * Math.min(1, (0.25 - p.dash.t) * 12) * Math.min(1, p.dash.t * 8);
       } else this.rushT = 0;
-      const shove = p.blocking ? clamp(1 - (t - p.blockStart) / 0.35, 0, 1) : 0;   // a fresh guard thrusts out a little: the parry window
+      this.bashAmt = bashZ < this.bashAmt ? bashZ : smooth(this.bashAmt, bashZ, 12, dt);   // (out at once, back eased: the run's end does not snap it home)
+      bashZ = this.bashAmt;
+      const sinceGuard = t - p.blockStart;   // a fresh guard thrusts out a little (the parry window): out over a few frames, back over a third of a second
+      const shove = p.blocking ? clamp(sinceGuard / 0.06, 0, 1) * clamp(1 - sinceGuard / 0.35, 0, 1) : 0;
       this.place(L.grp, sp, ox + S.sx.step(0, dt) + 0.1 * bashZ, oy + S.sy.step(0, dt) - swapDip + this.landDip * 0.02 + 0.5 * bashZ * 0.1, oz + S.sz.step(0, dt) - 0.05 * shove + bashZ, S.srx.step(0, dt), S.sry.step(0, dt) + lx * 0.5, 0);
       // the left hand hauling up a wall
       if (climbW > 0.02) {
