@@ -34,6 +34,17 @@ const DEATH_POSED = 2.6;   // s after a death by which every fall has come to re
 // (with War Mode's thousands that was a large share of the frame's garbage); poseSoldier reads it at once and keeps nothing of it
 // (its numbers start as -0, a fraction to the engine: see Z in the constructor)
 const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0 };
+// A step that came out as no number is a bug (a way worked out from a distance of 0, a goal that is no number). A soldier at a NaN place is never drawn,
+// hit or killed, his house's middle in War Mode's picture goes NaN with him, and a battle could not end: he stays where he stood, at rest (or at his
+// last good place, when that was no number either), and it is said once, so that a test sees it and the cause is found (Unit.applyMovement).
+let nanTold = false;
+function stepNotANumber(u, ox, oz) {
+  if (!nanTold) { nanTold = true; console.warn(`Castle Wars: a soldier's step was not a number (${u.type} ${u.id}, order ${u.order}); he stays where he stood`); }
+  u.vel.set(0, 0, 0);
+  const ok = (v) => v && Number.isFinite(v.x) && Number.isFinite(v.z);
+  const b = Number.isFinite(ox) && Number.isFinite(oz) ? { x: ox, z: oz } : [u.lastPos, u.orderData && u.orderData.pos, u.goal].find(ok) || { x: 0, z: 0 };
+  u.pos.x = b.x; u.pos.z = b.z;
+}
 
 export class Unit {
   constructor(game, type, team, pos, stats = {}) {
@@ -694,7 +705,10 @@ export class Unit {
   moveToward(p, dt, stopDist) {
     const dx = p.x - this.pos.x, dz = p.z - this.pos.z;
     const d = Math.hypot(dx, dz);
-    if (d < stopDist) return false;
+    // (d 0: he stands on the very spot, and there is no way to it to take. A stop distance of 0, an archer's walk or a rider riding through his man, let
+    // that through to 0 / 0 below: a War Mode archer set down on his place and shot from beyond his reach before his next look still had his place as
+    // his waypoint, and his velocity, then his place, became NaN for good)
+    if (d < stopDist || d === 0) return false;
     const fac = this.game.factions[this.team];
     if (marchVer !== mods.version) { marchVer = mods.version; marchMul = mods.mul('speed'); }
     let sp = this.speed * marchMul * (this.order === 'hold' && d < 3 ? 0.6 : 1);
@@ -739,6 +753,7 @@ export class Unit {
     const P = g.physics, ox = this.pos.x, oz = this.pos.z;
     this.pos.x += (this.vel.x + px * sep) * dt;
     this.pos.z += (this.vel.z + pz * sep) * dt;
+    if (!(Number.isFinite(this.pos.x) && Number.isFinite(this.pos.z))) stepNotANumber(this, ox, oz);
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);

@@ -218,6 +218,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   beside it (`src/nav.js`).
 - **Slopes**: soldiers and riders do not walk up ground steeper than 45 degrees (the hills that ring the map; every battlefield
   stays under about 35), and they stay on the ground coming down any slope (`SLOPE_MAX` in `src/units.js`).
+  A soldier's place is always a number: a step that would come out as NaN (a bug) leaves him where he stood, and the
+  game says so once in the console ("a soldier's step was not a number").
 - **Gold** comes from kills, a wage with every wave, a small steady trickle, breaking gates and destroying keeps.
   Spend it in the shop (**B**):
   - **Army**: your soldier roster (above), and swordsmen, spearmen, archers, knights, cavalry and lancers to
