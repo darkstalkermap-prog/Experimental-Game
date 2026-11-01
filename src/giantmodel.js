@@ -316,8 +316,8 @@ const eyeUV = (s) => (x, y) => [0.5 + s * 0.18 + (x - s * 0.034) * 5, 0.555 + (y
 function oneHead(b) {
   const lv = b.level;
   if (lv >= 3) {
-    sculpt(b, HEAD, { ...skin, sq: 2.15, seg: 8, rows: 7, cav: 0, a: [0.7, 1] });
-    sculpt(b, BEARD, { ...hair, seg: 6, rows: 5, arc: [-2.1, 4.2], cav: 0 });
+    sculpt(b, HEAD, { ...skin, sq: 2.15, seg: 7, rows: 5, cav: 0, a: [0.7, 1] });
+    sculpt(b, BEARD, { ...hair, seg: 5, rows: 3, arc: [-2.1, 4.2], cav: 0 });
     return;
   }
   const ys = lv < 1 ? [-0.1, -0.04, 0.02, 0.055, ...Array.from({ length: 19 }, (_, i) => 0.072 + i * 0.0088), 0.242, 0.26, 0.276, 0.29, 0.3, 0.306]
@@ -335,16 +335,17 @@ function oneHead(b) {
     } }, lv < 2 ? BEARD_B : []);
   for (const s of [-1, 1]) {
     // sideburns, from the temples down the cheeks into the beard
-    b.sweep([[s * 0.085, 0.2, 0.025], [s * 0.088, 0.16, 0.04], [s * 0.085, 0.12, 0.05], [s * 0.078, 0.08, 0.06]], 0.016, 0.022, { ...hair, seg: b.pick(6, 5, 4), segs: b.pick(6, 4, 3), a: [0.6, 0.9] });
+    if (lv < 2) b.sweep([[s * 0.083, 0.195, 0.03], [s * 0.087, 0.16, 0.045], [s * 0.084, 0.12, 0.055], [s * 0.078, 0.08, 0.062]], 0.01, 0.018, { ...hair, seg: b.pick(6, 5, 4), segs: b.pick(6, 4, 3), a: [0.6, 0.9] });
     // the ears: thick and battered
-    b.ell([s * 0.088, 0.168, -0.004], [0.016, 0.03, 0.022], { ...skinDk, rot: [0, s * 0.25, s * -0.1], seg: [b.pick(8, 6, 4), b.pick(6, 4, 3)] });
+    b.ell([s * 0.086, 0.166, -0.006], [0.013, 0.026, 0.019], { ...skin, a: [0.72, 0.95], rot: [0, s * 0.3, s * -0.1], seg: [b.pick(8, 6, 4), b.pick(6, 4, 3)] });
   }
   if (lv >= 2) return;
   for (const s of [-1, 1]) {
     // deep-set eyes under heavy lids, and bushy brows knotted down in the middle
-    b.ell([s * 0.034, 0.17, 0.08], [0.018, 0.011, 0.011], { ...skin, p: PAT.face, uv: eyeUV(s), seg: [b.pick(10, 8, 6), b.pick(8, 6, 4)] });
-    b.ell([s * 0.034, 0.1775, 0.0855], [0.021, 0.0075, 0.0115], { ...skin, a: [0.85, 1], rot: [0.15, 0, s * -0.22], seg: [b.pick(9, 7, 5), 5] });
-    b.ell([s * 0.036, 0.2015, 0.094], [0.03, 0.0085, 0.012], { ...hair, a: [0.7, 1], rot: [0.25, 0, s * -0.33], seg: [b.pick(8, 6, 5), 4] });
+    b.ell([s * 0.034, 0.169, 0.08], [0.017, 0.0095, 0.011], { ...skin, p: PAT.face, uv: eyeUV(s), seg: [b.pick(10, 8, 6), b.pick(8, 6, 4)] });
+    b.ell([s * 0.034, 0.1755, 0.0858], [0.022, 0.0085, 0.0125], { ...skin, a: [0.78, 0.95], rot: [0.2, 0, s * -0.3], seg: [b.pick(9, 7, 5), 5] });   // the upper lid, half shut
+    b.ell([s * 0.034, 0.1625, 0.086], [0.018, 0.004, 0.009], { ...skin, a: [0.8, 0.95], rot: [-0.2, 0, s * 0.1], seg: [b.pick(8, 6, 5), 4] });
+    b.ell([s * 0.037, 0.1975, 0.1015], [0.031, 0.0095, 0.012], { ...hair, a: [0.55, 0.85], rot: [0.3, 0, s * -0.42], seg: [b.pick(8, 6, 5), 4] });
     // the moustache, drooping past the corners of the mouth into the beard
     b.sweep([[s * 0.008, 0.124, 0.118], [s * 0.035, 0.118, 0.11], [s * 0.055, 0.095, 0.098], [s * 0.056, 0.06, 0.097]], 0.013, 0.007, { ...hair, seg: b.pick(6, 5, 4), segs: b.pick(8, 5, 4), a: [0.6, 1] });
   }
@@ -356,7 +357,8 @@ function oneHead(b) {
     const y = 0.06 - Math.abs(ang) * 0.03 - hash3(k, 2, 1) * 0.06;
     const a = surf(BEARD, 2, [], y, ang, -0.004), len = 0.1 + hash3(k, 3, 3) * 0.12 - Math.abs(ang) * 0.025;
     const curl = (hash3(k, 4, 1) - 0.5) * 0.04;
-    lock(b, a, [a[0] * 0.95 + curl, a[1] - len * 0.55, a[2] + 0.012], [a[0] * 0.85 - curl, a[1] - len, a[2] + 0.004], 0.019 + hash3(k, 5, 2) * 0.01, { ...hair, a: [0.5 + hash3(k, 6, 1) * 0.15, 0.95], seg: 4, segs: b.pick(5, 4, 3) });
+    b.sweep([a, [a[0] * 0.97 + curl, a[1] - len * 0.35, a[2] + 0.01], [a[0] * 0.92 - curl * 0.5, a[1] - len * 0.7, a[2] + 0.008], [a[0] * 0.86 + curl, a[1] - len, a[2] + 0.002]],
+      0.017 + hash3(k, 5, 2) * 0.009, 0.002, { ...hair, a: [0.45 + hash3(k, 6, 1) * 0.2, 0.92], seg: b.pick(5, 4, 3), segs: b.pick(6, 4, 3) });
   }
 }
 def('giant.head', (b) => oneHead(b), true);
@@ -369,10 +371,10 @@ const KILT = [[0.06, 0.232, 0.184, 0.014], [-0.04, 0.244, 0.194, 0.016], [-0.16,
 def('giant.pelvis', (b) => {
   const lv = b.level, lo = lv >= 2;
   // the hips and the small of the back above the belt (the trunk's lower edge disappears into them however he leans)
-  sculpt(b, SEAT, { ...skin, sq: 2.3, a: [0.7, 0.95], seg: b.pick(32, 22, 12), rows: b.pick(6, 5, 3), cav: 0 });
+  sculpt(b, SEAT, { ...skin, sq: 2.3, a: [0.7, 0.95], seg: b.pick(32, 22, 12), rows: b.pick(6, 5, 2), cav: 0 });
   // the belt, thick, with a rolled top edge, and a cord wound above it
   sculpt(b, [[0.112, 0.222, 0.177, 0.016], [0.105, 0.228, 0.183, 0.016], [0.07, 0.232, 0.186, 0.016], [0.035, 0.231, 0.185, 0.015], [0.028, 0.224, 0.179, 0.015]],
-    { c: K.belt, m: 'leather', p: PAT.leather, sq: 2.3, a: [0.75, 1], seg: b.pick(40, 28, 14), rows: 5, cav: 0 });
+    { c: K.belt, m: 'leather', p: PAT.leather, sq: 2.3, a: [0.75, 1], seg: b.pick(40, 28, 14), rows: lo ? 3 : 5, cav: 0 });
   if (!lo) b.torus([0, 0.12, 0.016], 0.214, 0.007, { rot: [PI / 2, 0, 0], sc: [1, 0.8, 1], ...cord, sides: 4, seg: b.pick(36, 24, 12) });
   // the kilt: hides, each flaring from the belt to a ragged hem, longer at the front and back; tufts along the hems
   const n = b.pick(9, 7, 4), span = TAU / n;
@@ -392,10 +394,10 @@ def('giant.pelvis', (b) => {
       } });
     if (lv < 2) {
       for (let k = 0; k < (lv < 1 ? 4 : 2); k++) {
-        const a = a0 + ((k + 0.5) / (lv < 1 ? 4 : 2)) * span, len = 0.07 + hash3(i, k, 9) * 0.06;
+        const a = a0 + ((k + 0.5 + (hash3(k, i, 2) - 0.5) * 0.5) / (lv < 1 ? 4 : 2)) * span, len = 0.08 + hash3(i, k, 9) * 0.09;
         const hem = keys[keys.length - 1][0] + 0.03;
         const p = surf(keys, 2.2, [], hem, a, 0.004);
-        lock(b, p, [p[0] * 1.03, hem - len * 0.5, p[2] * 1.03], [p[0] * 1.02, hem - len, p[2] * 1.02], 0.024, { ...o, w: [SKIRT + 0.95, SKIRT + 0.8], seg: 4, segs: lv < 1 ? 4 : 3 });
+        lock(b, p, [p[0] * 1.04, hem - len * 0.5, p[2] * 1.04], [p[0] * 1.03, hem - len, p[2] * 1.03], 0.03, { ...o, w: [SKIRT + 0.95, SKIRT + 0.8], seg: 4, segs: lv < 1 ? 4 : 3 });
       }
       if (lv < 1) for (let k = 0; k < 2; k++) {
         // (and shaggy clumps over the hide itself)
@@ -410,7 +412,7 @@ def('giant.pelvis', (b) => {
     { ...team, p: PAT.emblem, uv: [0, -0.15, 0.17, 0.24], arc: [-0.3, 0.6], sq: 2.2, seg: b.pick(8, 6, 3), rows: b.pick(8, 5, 3), a: [0.75, 1], w: [SKIRT + 0.9, SKIRT], cav: 0,
       post: (pos, rows, cols) => { for (let c = 0; c < cols; c++) pos[((rows - 1) * cols + c) * 3 + 1] -= 0.03 * hash3(c, 2, 8) + (c % 2) * 0.01; } });
   // the iron boss on the belt: a dented dome in a rim, riveted
-  b.lathe([[0.0, 0.03], [0.035, 0.027], [0.065, 0.017], [0.086, 0.004], [0.094, -0.008], [0.09, -0.016]], [0, 0.07, 0.19], { rot: [PI / 2 - 0.12, 0, 0], c: K.iron, m: 'iron', a: [0.75, 1], seg: b.pick(24, 16, 8) });
+  b.lathe([[0.0, 0.03], [0.035, 0.027], [0.065, 0.017], [0.086, 0.004], [0.094, -0.008], [0.09, -0.016]], [0, 0.07, 0.19], { rot: [PI / 2 - 0.12, 0, 0], c: K.iron, m: 'iron', a: [0.75, 1], seg: b.pick(24, 16, 6) });
   if (!lo) {
     b.torus([0, 0.07, 0.19], 0.092, 0.011, { rot: [-0.12, 0, 0], c: K.ironLt, m: 'iron', sides: 5, seg: b.pick(24, 16, 9) });
     b.ell([0, 0.073, 0.221], [0.022, 0.022, 0.012], { c: K.ironLt, m: 'iron', rot: [-0.12, 0, 0], seg: [8, 5] });
@@ -441,7 +443,7 @@ const THIGH_B = [
 const THIGH_DETAIL = [C([0.06, -0.06, 0.1], [0.02, -0.26, 0.118], 0.007, 0.0025, 0.9), C([-0.09, -0.15, 0.06], [-0.04, -0.3, 0.08], 0.006, 0.003, 1.18)];
 def('giant.thigh', (b) => {
   const lv = b.level;
-  sculpt(b, THIGH, { ...skin, a: [0.84, 0.98], seg: b.pick(26, 18, 9), rows: b.pick(19, 12, 5), cav: lv < 2 ? 34 : 0 }, lv < 1 ? THIGH_B.concat(THIGH_DETAIL) : lv < 3 ? THIGH_B : []);
+  sculpt(b, THIGH, { ...skin, a: [0.82, 0.98], seg: b.pick(26, 18, 9), rows: b.pick(19, 12, 5), cav: lv < 2 ? 44 : 0 }, lv < 1 ? THIGH_B.concat(THIGH_DETAIL) : lv < 3 ? THIGH_B : []);
   b.ell([0, 0.03, 0], [0.106, 0.075, 0.11], { ...skin, a: [0.95, 0.97], seg: b.ellSeg(0.11) });
   if (lv < 2) b.ell([0, -0.42, 0.004], [0.066, 0.068, 0.068], { ...skin, a: [0.9, 0.9], seg: [b.pick(12, 9, 6), b.pick(9, 7, 4)] });   // the knee
 });
@@ -505,31 +507,36 @@ def('giant.shin', (b) => {
   b.ell([0, 0, 0.004], [0.066, 0.068, 0.068], { ...skin, a: [0.9, 0.9], seg: [b.pick(12, 9, 5), b.pick(9, 7, 4)] });
   sculpt(b, CALF, { ...skin, a: [0.86, 0.94], seg: b.pick(22, 16, 8), rows: b.pick(13, 9, 4), cav: lv < 2 ? 24 : 0 }, lv < 3 ? CALF_B : []);
   wraps(b, CALF, -0.13, -0.425, 0.006, [-0.16, -0.25, -0.33, -0.41], 3);
-  foot(b);
+  b.ell([0, -0.43, -0.004], [0.054, 0.046, 0.056], { ...skin, a: [0.85, 0.9], seg: [b.pick(10, 8, 5), b.pick(7, 5, 4)] });   // (the ankle, for the foot to turn in)
 });
+// the foot, on its own joint at the ankle so it can lie flat whatever the shin does (built in the knee's frame, moved up to the ankle)
+def('giant.foot', (b) => b.within(frame([0, 0.43, 0], [0, 0, 0]), () => foot(b)));
 
 // ---------------------------------------------------------------- arms (shoulder frame, elbow frame): the top of the arm is a ball round
 // the shoulder joint (so the arm turns in it without a gap) swelling into the deltoid, bulging biceps and triceps; forearms like hams,
 // rag-bound from the middle to the wrist; a fist clenched round the haft's line (the weapon frame's), its other hand the same
-const UPPER = [[0.125, 0.012, 0.012, 0], [0.098, 0.078, 0.08, 0.0], [0.046, 0.122, 0.125, 0.0], [-0.02, 0.129, 0.129, 0.0], [-0.08, 0.119, 0.121, 0.004],
+const UPPER = [[0.112, 0.012, 0.012, 0], [0.09, 0.072, 0.066, 0.0], [0.04, 0.12, 0.108, 0.0], [-0.02, 0.13, 0.114, 0.0], [-0.08, 0.12, 0.112, 0.004],
   [-0.15, 0.106, 0.112, 0.008], [-0.22, 0.093, 0.098, 0.006], [-0.28, 0.078, 0.082, 0.002], [-0.33, 0.067, 0.069, 0], [-0.37, 0.061, 0.063, 0]];
 const UPPER_B = [
   ...mirror((s) => C([s * 0.095, -0.03, 0], [s * 0.065, -0.17, 0.006], 0.045, 0.016)),            // the deltoid's point
+  E([0, -0.02, 0.07], [0.08, 0.09, 0.05], 0.02), E([0, -0.03, -0.07], [0.08, 0.09, 0.05], 0.018),   // its front and rear heads
+  ...mirror((s) => C([s * 0.12, 0.02, 0.0], [s * 0.1, -0.12, 0.0], 0.012, -0.005)),
   E([0, -0.135, 0.09], [0.07, 0.022, 0.04], -0.008),
-  E([0, -0.205, 0.075], [0.058, 0.09, 0.05], 0.03),                                                // biceps
-  E([0, -0.17, -0.075], [0.065, 0.11, 0.05], 0.028),                                               // triceps
+  E([0, -0.205, 0.075], [0.058, 0.09, 0.05], 0.04),                                                // biceps
+  ...mirror((s) => E([s * 0.075, -0.24, 0.02], [0.03, 0.07, 0.04], 0.012)),                        // (brachialis, between them)
+  E([0, -0.17, -0.075], [0.065, 0.11, 0.05], 0.034),                                               // triceps
   ...mirror((s) => E([s * 0.05, -0.15, -0.058], [0.035, 0.07, 0.04], 0.01)),
   E([0, -0.335, -0.06], [0.03, 0.03, 0.02], 0.008),                                                // the point of the elbow
 ];
 const UPPER_DETAIL = [C([0.03, -0.12, 0.1], [0.014, -0.3, 0.085], 0.009, 0.0035, 0.9), C([-0.02, -0.2, 0.11], [-0.04, -0.31, 0.08], 0.008, 0.003, 0.9)];
 def('giant.arm', (b) => {
   const lv = b.level;
-  sculpt(b, UPPER, { ...skin, a: [0.82, 1], seg: b.pick(26, 18, 9), rows: b.pick(19, 12, 6), cav: lv < 2 ? 34 : 0 }, lv < 1 ? UPPER_B.concat(UPPER_DETAIL) : lv < 3 ? UPPER_B : []);
+  sculpt(b, UPPER, { ...skin, a: [0.8, 1], seg: b.pick(26, 18, 9), rows: b.pick(19, 12, 6), cav: lv < 2 ? 46 : 0 }, lv < 1 ? UPPER_B.concat(UPPER_DETAIL) : lv < 3 ? UPPER_B : []);
   if (lv < 3) b.ell([0, -0.33, 0], [0.066, 0.068, 0.068], { ...skin, a: [0.88, 0.9], seg: [b.pick(12, 9, 6), b.pick(9, 7, 4)] });   // the elbow
 });
 const FORE = [[0.03, 0.06, 0.06, 0], [0.0, 0.077, 0.075, 0.004], [-0.05, 0.087, 0.078, 0.008], [-0.1, 0.083, 0.074, 0.006], [-0.15, 0.074, 0.065, 0.004],
   [-0.2, 0.065, 0.056, 0.002], [-0.26, 0.056, 0.049, 0], [-0.31, 0.052, 0.046, 0]];
-const FORE_B = [E([0, -0.06, 0.042], [0.06, 0.07, 0.04], 0.02), E([0, -0.07, -0.04], [0.055, 0.08, 0.04], 0.014)];
+const FORE_B = [E([0, -0.055, 0.045], [0.06, 0.07, 0.04], 0.026), E([0, -0.07, -0.04], [0.055, 0.08, 0.04], 0.018), ...mirror((s) => E([s * 0.06, -0.03, 0.01], [0.03, 0.06, 0.04], 0.012))];
 const FORE_DETAIL = [C([0.02, -0.01, 0.072], [0.035, -0.11, 0.07], 0.009, 0.003, 0.9), C([-0.03, -0.02, 0.07], [-0.045, -0.1, 0.06], 0.008, 0.0025, 0.9)];
 // the fist, built round the haft (its frame's y): the fingers wound round it, knuckles out, the thumb across, the heel of the hand on
 // the wrist's side; the hole is filled (the empty hand clenches on nothing)
@@ -602,6 +609,7 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
   const pelvis = joint(body, 0, 0.93, 0);
   const hipL = joint(pelvis, HIP_X, -0.03, 0), hipR = joint(pelvis, -HIP_X, -0.03, 0);
   const kneeL = joint(hipL, 0, -0.42, 0), kneeR = joint(hipR, 0, -0.42, 0);
+  const ankleL = joint(kneeL, 0, -0.43, 0), ankleR = joint(kneeR, 0, -0.43, 0);
   const torso = joint(pelvis, 0, 0.1, 0);
   const head = joint(torso, HEAD_X, 0.415, 0.07), head2 = joint(torso, -HEAD_X, 0.415, 0.07);
   head.scale.setScalar(1.08); head2.scale.setScalar(1.08);
@@ -612,16 +620,16 @@ export function buildGiant(type, teamId, variant, cloth, desc) {
   const parts = [];
   const add = (node, name) => { const p = { node, shape: getShape(name), on: true }; parts.push(p); return p; };
   add(pelvis, 'giant.pelvis'); add(torso, 'giant.chest'); add(head, 'giant.head'); add(head2, 'giant.head');
-  add(hipL, 'giant.thigh'); add(hipR, 'giant.thigh'); add(kneeL, 'giant.shin'); add(kneeR, 'giant.shin');
+  add(hipL, 'giant.thigh'); add(hipR, 'giant.thigh'); add(kneeL, 'giant.shin'); add(kneeR, 'giant.shin'); add(ankleL, 'giant.foot'); add(ankleR, 'giant.foot');
   add(shL, 'giant.arm'); add(shR, 'giant.arm'); add(elL, 'giant.fore'); add(elR, 'giant.fore');
   const weaponPart = add(weapon, 'giant.hammer');
   const v = variant % 4;
   const m = {
-    kind: 'soldier', type, team: teamId, variant, desc: { ...desc, shield: null }, raider: false, root, body, pelvis, torso, head, head2, hipL, hipR, kneeL, kneeR,
+    kind: 'soldier', type, team: teamId, variant, desc: { ...desc, shield: null }, raider: false, root, body, pelvis, torso, head, head2, hipL, hipR, kneeL, kneeR, ankleL, ankleR,
     shL, shR, elL, elR, weapon, cape: null, weaponTilt: GIANT_TILT, weaponRoll: 0, ranged: false, lance: false, mounted: false, parts, kit: off(), plumeC: off(), plumeG: off(),
     weaponPart, bowPart: null, kitArms: [], kitShield: null, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: null, giant: true, farKey: type,
-    // (what the motion remembers between frames: its clock, how far into a walk it is, the rock of the last hit, each shin's slant)
-    gs: { idle: -1, walk: 0, hurt: 0, rx: 0, rv: 0, zx: 0, zv: 0, side: 1, thL: 0, thR: 0, tilt: GIANT_TILT, seed: (variant * 1.37) % 7 },
+    // (what the motion remembers between frames: its clock, how far into a walk it is, the rock of the last hit, the hammer's rest)
+    gs: { idle: -1, walk: 0, hurt: 0, rx: 0, rv: 0, zx: 0, zv: 0, side: 1, tilt: GIANT_TILT, seed: (variant * 1.37) % 7 },
   };
   setColor(m.inst, 0, cloth);
   setColor(m.inst, 4, SKIN[v]);
@@ -644,8 +652,11 @@ export const GIANT_GAIT = 0.75;
 export const giantStep = (ph) => Math.floor((ph * GIANT_GAIT) / PI);
 // how long into each death (poseDeath's kinds) the body hits the ground (units.js throws up the dust then)
 export const GIANT_FALL = [1.12, 1.45, 1.18];
-const STANCE = 0.54, STEP = PI / (2.1 * GIANT_GAIT) / GIANT_SCALE, HS = STANCE * STEP;   // (body units)
-const LT = 0.42, LS = 0.43, ANK = 0.066, HEEL = -0.075, TOE = 0.215, FOOT_X = 0.138;
+const STANCE = 0.58, STEP = PI / (2.1 * GIANT_GAIT) / GIANT_SCALE, HS = STANCE * STEP;   // (body units)
+const LT = 0.42, LS = 0.43, ANK = 0.066, HEEL = -0.075, TOE = 0.245, FOOT_X = 0.138;
+const LEG = Math.sqrt(LT * LT + LS * LS + 2 * LT * LS * Math.cos(0.3));   // (hip to ankle, the knee soft but nearly straight)
+// the lower of two heights, rounded where they cross (the hips pass from one leg to the other without a kink)
+const smin = (a, b) => (Math.abs(a - b) > 0.2 ? Math.min(a, b) : -0.02 * Math.log(Math.exp(-a / 0.02) + Math.exp(-b / 0.02)));
 const _v = new THREE.Vector3(), _qp = new THREE.Quaternion(), _ep = new THREE.Euler();
 
 // Hip and knee of one leg so that its ankle reaches (tx, ty, tz) in the body's frame (unscaled). Returns the shin's slant.
@@ -674,19 +685,27 @@ function planted(mark, th, out) {
   return out;
 }
 const _a = [0, 0], _fL = [0, 0, 0], _fR = [0, 0, 0];
-// One foot's target at leg phase q (0 its heel strike): planted and moving back while 0..STANCE, then swung forward and over
-function footAt(q, th, out) {
+// One foot through a stride, at leg phase q (0 its heel strike): its pitch (the ankle turns it: < 0 toes up), and where its ankle goes:
+// planted and moving back under him while 0..STANCE (landing on the heel, rolling flat, then up onto the toes as it leaves), then swung
+// forward and over, the toes coming up to clear the ground. The sole rolls about the point it rests on, so it does not slide.
+const PITCH_IN = -0.26, PITCH_OUT = 0.4;
+function footPitch(q) {
+  if (q < STANCE) return q < 0.12 ? PITCH_IN * (1 - smooth(q / 0.12)) : q < 0.32 ? 0 : PITCH_OUT * ((q - 0.32) / (STANCE - 0.32)) ** 2;
+  return PITCH_OUT + (PITCH_IN - PITCH_OUT) * smooth(Math.min(1, ((q - STANCE) / (1 - STANCE)) * 1.6));
+}
+function footAt(q, out) {
+  out[0] = footPitch(q);
   if (q < STANCE) {
-    planted(HS * (1 - (2 * q) / STANCE), th, _a);
+    planted(HS * (1 - (2 * q) / STANCE), out[0], _a);
     out[1] = _a[1]; out[2] = _a[0];
   } else {
-    // (from where it left the ground to where it will land, both as the shin now slants: so the sole never dips into the ground)
+    // (from where it left the ground to where it will land)
     const s = (q - STANCE) / (1 - STANCE), e = s * s * s * (s * (s * 6 - 15) + 10);
-    planted(-HS, th, _a);
+    planted(-HS, PITCH_OUT, _a);
     const z0 = _a[0], y0 = _a[1];
-    planted(HS, th, _a);
+    planted(HS, PITCH_IN, _a);
     out[2] = z0 + (_a[0] - z0) * e;
-    out[1] = y0 + (_a[1] - y0) * s + 0.08 * Math.pow(Math.sin(PI * Math.pow(s, 0.8)), 1.2);
+    out[1] = y0 + (_a[1] - y0) * s + 0.075 * Math.pow(Math.sin(PI * Math.pow(s, 0.8)), 1.2);
   }
   return out;
 }
@@ -696,7 +715,7 @@ function footAt(q, th, out) {
 // right foot forward, free shoulder x, free shoulder z, free elbow, heads' pitch] (body units for the drop, forward and feet)
 const BLOW = {
   over: { A: [-2.75, -0.32, -1.6, 0.25, -0.24, -0.32, 0.06, -0.12, 0.012, -0.02, 0.1, -0.06, -0.95, 0.5, -0.55, 0.1],
-    B: [-0.68, -0.06, -0.42, 0.05, 0.46, 0.2, -0.04, 0.1, -0.075, 0.05, 0.16, -0.06, 0.6, 0.55, -0.4, -0.16] },
+    B: [-0.35, -0.06, -0.42, 0.05, 0.46, 0.2, -0.04, 0.1, -0.075, 0.05, 0.16, -0.06, 0.6, 0.55, -0.4, -0.16] },
   right: { A: [-0.55, -1.35, -0.95, 0.15, 0.0, -0.62, 0.12, -0.2, -0.01, 0.0, 0.05, -0.12, -0.75, 0.3, -0.9, 0.0],
     B: [-0.7, 0.4, -0.5, 0.05, 0.44, 0.52, -0.08, 0.18, -0.065, 0.04, 0.14, -0.05, 0.5, 0.6, -0.35, -0.12] },
 };
@@ -753,9 +772,9 @@ export function poseGiant(m, st) {
   const u = (p / PI) % 1, uu = u < 0 ? u + 1 : u;
   const thud = uu < 0.3 ? _sin((PI * uu) / 0.3) ** 2 : 0;
   const breath = _sin(idle * 1.25);
-  let hipY = 0.86 - 0.012 * (1 - w) + w * (-0.017 * _cos(TAU * uu) - 0.028 * thud) + 0.003 * breath * (1 - w);
+  let drop = 0;   // (the body lowered from where the legs would hold it: into a blow, under a hit)
   const sway = _cos(p - PI * STANCE);   // (+1 over the left foot)
-  let bodyX = 0.022 * w * sway, bodyZ = 0;
+  let bodyX = 0.03 * w * sway, bodyZ = 0;
   let tx = 0.42 + 0.04 * w + 0.012 * breath * (1 - w) + 0.03 * w * thud, ty = 0.15 * w * cw, tz = -0.07 * w * sway;
   let py = -0.11 * w * cw, pz = 0.055 * w * sway, px = 0.1 + 0.03 * w;
   // arms at rest: wide of the lats, hanging; swinging against the legs (the hammer arm less, it is heavy) and lagging
@@ -765,6 +784,9 @@ export function poseGiant(m, st) {
   let hx = 0, stepL = 0, stepR = 0;
   // the hammer while walking: carried a little up off the ground, its head swinging behind the arm
   shRx -= 0.18 * w; elR -= 0.18 * w; wpn += 0.08 * w * _sin(lag - 0.8);
+  // (the shoulders' pitch is against the stoop: the arms hang down, not forward; a blow's poses are the arms' own)
+  const hang = (px + tx) * 0.75;
+  shLx -= hang; shRx -= hang;
   // ---- a blow
   let impact = 0;
   if (swinging) {
@@ -774,15 +796,41 @@ export function poseGiant(m, st) {
     const b = _blow;
     shRx = b[0]; shRz = b[1]; elR = b[2]; wpn = b[3];
     tx += b[4] + 0.07 * impact; ty += b[5]; tz += b[6]; py += b[7];
-    hipY += b[8] - 0.03 * impact; bodyZ += b[9];
+    drop += b[8] - 0.03 * impact; bodyZ += b[9];
     stepL = b[10]; stepR = b[11];
     shLx = b[12]; shLz = b[13]; elL = b[14]; hx = b[15] - 0.1 * impact;
   }
   // ---- the hit's rock, and the plain flinch (heads back)
   tx += rock * 0.9; px += rock * 0.25; tz += roll * 0.8; pz += roll * 0.2;
-  hipY -= 0.03 * Math.min(1, Math.abs(rock) + Math.abs(roll)) + 0.01 * hurt;
+  drop -= 0.03 * Math.min(1, Math.abs(rock) + Math.abs(roll)) + 0.01 * hurt;
   shLz += Math.abs(rock) * 0.8; shRz -= Math.abs(rock) * 0.5;
   hx -= rock * 0.6 + 0.22 * hurt;
+  // ---- where the feet go: walking, each on its own phase (planted and moving back under him, then swung forward); standing, a wide
+  // stance, the knees soft (a step in for a blow)
+  const qL = ((p / TAU) % 1 + 1) % 1, qR = (qL + 0.5) % 1;
+  const hipStand = 0.885 + 0.003 * breath;
+  // the hips ride on the planted legs, all but straight (an inverted pendulum: highest over the foot, lowest as the other lands),
+  // sinking a little more as each foot takes the weight
+  let hipWalk = 9;
+  for (let side = 0; side < 2; side++) {
+    const L = side === 0, q = L ? qL : qR, f = L ? _fL : _fR;
+    footAt(q, f);
+    // (a leg gives up the weight over the end of its step, and the hips start down onto the next before its heel lands: no jolt as one
+    // leg hands over to the other)
+    const dx = (L ? FOOT_X - HIP_X : HIP_X - FOOT_X) - bodyX;
+    if (q < STANCE) {
+      const hold = smooth(clamp01((STANCE - q) / 0.06));
+      hipWalk = smin(hipWalk, f[1] + Math.sqrt(Math.max(0.3, LEG * LEG - f[2] * f[2] - dx * dx)) + 0.25 * (1 - hold));
+    } else {
+      const s = (q - STANCE) / (1 - STANCE);
+      if (s > 0.55) {
+        planted(HS, PITCH_IN, _a);
+        hipWalk = smin(hipWalk, _a[1] + Math.sqrt(Math.max(0.3, LEG * LEG - _a[0] * _a[0] - dx * dx)) + 0.25 * (1 - smooth((s - 0.55) / 0.45)));
+      }
+    }
+  }
+  if (hipWalk > 2) hipWalk = hipStand;
+  const hipY = hipStand + (hipWalk - hipStand) * w - 0.024 * w * thud + drop;
   // ---- set the trunk
   m.body.rotation.set(0, 0, 0);
   m.body.position.set(bodyX * GIANT_SCALE, 0, bodyZ * GIANT_SCALE);
@@ -791,18 +839,15 @@ export function poseGiant(m, st) {
   P0.rotation.set(px, py, pz);
   m.hipL.position.z = m.hipR.position.z = 0;
   m.torso.rotation.set(tx, ty, tz);
-  // ---- the legs reach for the feet: walking, each foot on its own phase; standing, a wide stance (a step in for a blow)
-  const qL = ((p / TAU) % 1 + 1) % 1, qR = (qL + 0.5) % 1;
+  // ---- the legs reach for the feet
   for (let side = 0; side < 2; side++) {
     const L = side === 0, hip = L ? m.hipL : m.hipR, knee = L ? m.kneeL : m.kneeR, f = L ? _fL : _fR;
-    let th = L ? g.thL : g.thR;
-    for (let it = 0; it < 2; it++) {
-      footAt(L ? qL : qR, th, f);
-      planted((L ? stepL : stepR) + 0.012, th, _a);
-      const y = _a[1] + (f[1] - _a[1]) * w, z = _a[0] + (f[2] - _a[0]) * w;
-      th = legIK(m, hip, knee, (L ? FOOT_X : -FOOT_X) - bodyX, y, z - bodyZ);
-    }
-    if (L) g.thL = th; else g.thR = th;
+    footAt(L ? qL : qR, f);
+    const ph = f[0] * w;
+    planted((L ? stepL : stepR) + 0.01, 0, _a);
+    const y = _a[1] + (f[1] - _a[1]) * w, z = _a[0] + (f[2] - _a[0]) * w;
+    const shin = legIK(m, hip, knee, (L ? FOOT_X : -FOOT_X) - bodyX, y, z - bodyZ);
+    (L ? m.ankleL : m.ankleR).rotation.set(ph - shin, 0, 0);
   }
   // ---- heads: they look ahead whatever the stoop, nod as each foot comes down, glance about (each its own way), and turn to a foe
   const lean = px + tx;
@@ -812,12 +857,11 @@ export function poseGiant(m, st) {
   const yawL = 0.16 + look * 0.75 + (0.32 * wander(t, 0.0) - 0.05) * watch, yawR = -0.16 + look * 0.65 + (0.3 * wander(t, 2.4) + 0.06) * watch;
   m.head.rotation.set(-lean * 0.82 + hx + nod + 0.05 * wander(t, 1.1) * watch, yawL - ty * 0.6, 0.07 + 0.04 * wander(t, 4.2) * watch - tz * 0.5);
   m.head2.rotation.set(-lean * 0.82 + hx + nod * 0.8 + 0.05 * wander(t, 5.0) * watch, yawR - ty * 0.6, -0.07 + 0.04 * wander(t, 3.3) * watch - tz * 0.5);
-  // ---- arms (the shoulders' pitch is against the stoop: the arms hang down, not forward)
-  const hang = lean * 0.75;
+  // ---- arms
   m.shL.position.y = m.shR.position.y = SHOULDER[1] + 0.004 * breath * (1 - w);
-  m.shL.rotation.set(shLx - (swinging ? 0 : hang), 0, shLz + 0.04 * w * sway);
+  m.shL.rotation.set(shLx, 0, shLz + 0.04 * w * sway);
   m.elL.rotation.set(elL, 0, 0);
-  m.shR.rotation.set(shRx - (swinging ? hang * (1 - clamp01(swingT / 0.19)) * (swingT > 0.45 ? 0 : 1) + (swingT > 0.45 ? hang * smooth(clamp01((swingT - 0.45) / 0.17)) : 0) : hang), 0, shRz + 0.04 * w * sway);
+  m.shR.rotation.set(shRx, 0, shRz + 0.04 * w * sway);
   m.elR.rotation.set(elR, 0, 0);
   // ---- the hammer: at rest its head lies on the ground by his feet (carried higher as he walks, swinging behind the arm); through a
   // blow the wind-up's tilt is the pose's, then the head is brought to the ground where it lands and kept there, kicking up once, and
@@ -827,12 +871,13 @@ export function poseGiant(m, st) {
   if (!swinging) tilt = g.tilt = haftTo(m, restH, GIANT_TILT) + wpn;
   else {
     const T = swingT;
-    if (T < 0.27) tilt = GIANT_TILT + wpn;
+    if (T < 0.215) tilt = GIANT_TILT + wpn;
     else if (T < 0.45) {
+      // (coming down the pose's way until the head meets the ground, then held on it)
       const kick = T > 0.315 && T < 0.37 ? 0.22 * _sin((PI * (T - 0.315)) / 0.055) : 0;
-      m.weapon.rotation.x = GIANT_TILT + wpn;
       const ground = haftTo(m, 0.06 + kick, GIANT_TILT + wpn);
-      tilt = T < 0.31 ? GIANT_TILT + wpn + (ground - GIANT_TILT - wpn) * smooth((T - 0.27) / 0.04) : ground;
+      const kf = GIANT_TILT + wpn;
+      tilt = T < 0.315 && headLow(kf) > 0.06 ? kf : ground;
     } else {
       const k = smooth(clamp01((T - 0.45) / 0.17));
       tilt = haftTo(m, 0.06 + (restH - 0.06) * k + 0.5 * _sin(PI * k), GIANT_TILT);
@@ -885,9 +930,8 @@ function haftTo(m, h, near) {
 const fallK = (t, t0, t1) => { const k = clamp01((t - t0) / (t1 - t0)); return k * k * (1.2 - 0.2 * k); };   // (gathering speed, like a fall)
 // the bounce after hitting the ground at t0: up a little and back
 const bounce = (t, t0) => (t < t0 ? 0 : Math.exp(-(t - t0) * 7) * _sin(Math.min(PI, (t - t0) * 11)));
-export function poseGiantDead(m, t, kind) {
+function fallPose(m, t, kind, side) {
   const S = GIANT_SCALE, J = (j, x, y, z) => j.rotation.set(x, y, z);
-  const side = m.variant & 1 ? 1 : -1;
   const A = PI / 2 - 0.06;
   m.pelvis.position.set(0, 0.93, 0); m.pelvis.rotation.set(0, 0, 0);
   m.hipL.position.z = m.hipR.position.z = 0;
@@ -895,6 +939,9 @@ export function poseGiantDead(m, t, kind) {
   m.shL.position.y = m.shR.position.y = SHOULDER[1];
   const reel = smooth(clamp01(t / 0.35)), T0 = GIANT_FALL[kind] ?? GIANT_FALL[0];
   const bo = bounce(t, T0), settle = smooth(clamp01((t - T0) / 0.6));
+  // (the feet go slack: on his back the toes fall out, on his face the soles turn up)
+  const slack = smooth(clamp01((t - 0.2) / 0.8)) * (kind === 1 ? 0.75 : 0.35);
+  m.ankleL.rotation.set(slack, 0, 0); m.ankleR.rotation.set(slack * 0.8, 0, 0);
   if (kind === 0) {
     // reels back, a step back with the right foot, then topples onto its back
     const f = fallK(t, 0.35, T0);
@@ -930,19 +977,26 @@ export function poseGiantDead(m, t, kind) {
     J(m.shL, -0.6 * reel - 0.6 * f + 0.4 * settle, 0, -0.3 * f); J(m.elL, -0.8 * reel + 0.3 * settle, 0, 0);
     J(m.shR, -0.6 * reel - 0.3 * f + 0.3 * settle, 0, 0.4 * f); J(m.elR, -0.7 * reel + 0.3 * settle, 0, 0);
   }
-  // the hammer: out of the grip as he goes down, swung round in the fist until the haft lies level (in the rig's own frame: the root
-  // only turns about y, so its up is the world's)
-  const w = m.weapon;
-  w.rotation.set(GIANT_TILT - 0.3 * reel, 0, 0);
-  const k = clamp01((t - 0.3) / 0.9);
-  if (k <= 0) return;
+}
+// the hammer's tilt in the fist once it lies level on the ground, for each fall (kind, side): found once, on the pose the fall ends in
+const FALLEN = [null, null, null, null, null, null];
+function fallenTilt(m, kind, side) {
+  fallPose(m, 2.6, kind, side);
+  m.weapon.rotation.set(GIANT_TILT - 0.3, 0, 0);
   m.elR.updateWorldMatrix(true, false);
   _w.multiplyMatrices(_inv.copy(m.root.matrixWorld).invert(), m.elR.matrixWorld);
   const e = _w.elements, a = e[5], b = e[9];   // (the up of the elbow frame's y axis, and of its z axis)
   // the haft points along (0, -cos x, -sin x) in the elbow frame: level when a cos x + b sin x = 0; of the two, the one nearer the grip
   let x = Math.atan2(-a, b);
-  const cur = w.rotation.x;
+  const cur = GIANT_TILT - 0.3;
   if (Math.cos(x - cur) < 0) x += PI;
-  const dx = Math.atan2(Math.sin(x - cur), Math.cos(x - cur));
-  w.rotation.x = cur + dx * k * k * (3 - 2 * k);
+  return cur + Math.atan2(Math.sin(x - cur), Math.cos(x - cur));
+}
+export function poseGiantDead(m, t, kind) {
+  const side = m.variant & 1 ? 1 : -1, key = (kind % 3) * 2 + (side > 0 ? 1 : 0);
+  if (FALLEN[key] === null) FALLEN[key] = fallenTilt(m, kind, side);
+  fallPose(m, t, kind, side);
+  // the hammer: out of the grip as he goes down, swung round in the fist until the haft lies level
+  const reel = smooth(clamp01(t / 0.35)), start = GIANT_TILT - 0.3 * reel, k = smooth(clamp01((t - 0.3) / 0.9));
+  m.weapon.rotation.set(start + (FALLEN[key] - start) * k, 0, 0);
 }
