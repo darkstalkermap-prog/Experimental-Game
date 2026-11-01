@@ -1280,7 +1280,10 @@ mock room API; testing the claude.ai integration itself requires an authenticate
   model far away), so 150 of them cost about a hundred draw calls; castles are merged by material, the land is culled
   in chunks, and trees, rocks, arrows and grass are instanced. Crowds, engines and the first-person kit cast shadows
   into the near shadow map only, drawn there as their plainest model. The profiler overlay (backquote) shows where a
-  frame goes.
+  frame goes. Only the richest level (High and Ultra, the nearest `crowdRich` within `crowdNear`) carries the sculpted heads,
+  rivets, buckles and straps: a hero is about 18 to 29 thousand triangles there, 5 to 7.5 thousand at Medium's near level,
+  1.5 to 1.7 thousand at the mid level and under a thousand far away. The faces, hair cuts and beards are made as small jobs
+  of their own at the start of the warm-up (one a frame), ahead of the heads that wear them.
 - War Mode's biggest battles (two armies of 500, four of 500: `WAR.totalCap`) were timed in a headless browser on a busy 4-core machine: the
   simulation of 1000 soldiers in melee takes about 7 ms a frame and of 1600 about 12 ms (8 µs a soldier, less than the 10 to 12 of the old 200-soldier
   armies): long looks for a foe go through a coarse second grid (16 m cells), a soldier looks round himself before he looks across the field (and
