@@ -8,6 +8,7 @@ import { attackDirsFor } from './combat.js';
 import { allied } from './teams.js';
 import { mods } from './mods.js';
 import { groundMul } from './biometwist.js';
+import { giantStep, GIANT_FALL, giantHammerHead } from './giantmodel.js';
 
 const tmp = new THREE.Vector3();
 // how far a War Mode soldier on Charge looks round himself for a foe before he marches on the army his group was sent at (an archer looks as far as he
@@ -33,7 +34,9 @@ const DEATH_POSED = 2.6;   // s after a death by which every fall has come to re
 // the pose a soldier is drawn in this frame (Unit.animate): one object filled in for each soldier, not a new one for each of them every frame
 // (with War Mode's thousands that was a large share of the frame's garbage); poseSoldier reads it at once and keeps nothing of it
 // (its numbers start as -0, a fraction to the engine: see Z in the constructor)
-const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0 };
+// (dt, the place and the facing let models.js plant the feet and blend; gx, gz: the ground's slope under a near soldier; air: a lord's leap)
+const POSE = { phase: -0, speed: -0, moving: false, swingT: -0, attackDir: 'over', stagger: -0, hurt: -0, blocking: false, mounted: false, idle: -0, look: -0,
+  dt: -0, x: -0, y: -0, z: -0, yaw: -0, gx: -0, gz: -0, air: false };
 // A step that came out as no number is a bug (a way worked out from a distance of 0, a goal that is no number). A soldier at a NaN place is never drawn,
 // hit or killed, his house's middle in War Mode's picture goes NaN with him, and a battle could not end: he stays where he stood, at rest (or at his
 // last good place, when that was no number either), and it is said once, so that a test sees it and the cause is found (Unit.applyMovement).
@@ -209,8 +212,10 @@ export class Unit {
     const g = this.game;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const c = new THREE.Vector3(this.pos.x + fx * 2.6, this.pos.y + 0.3, this.pos.z + fz * 2.6);
-    g.fx.dust(c, 24, 3);
-    g.audio.play('boom', c);
+    // (the dust flies where the hammer's head comes down, when the model is posed: well ahead of the feet)
+    const at = this.lod <= 1 && this.model ? giantHammerHead(this.model, tmp).setY(this.pos.y + 0.3) : c;
+    g.fx.dust(at, 24, 3);
+    g.audio.play('boom', at);
     g.grid.query(c.x, c.z, 5, (u) => {
       if (!u.alive || allied(u.team, this.team) || u === t) return;
       const d = Math.hypot(u.pos.x - c.x, u.pos.z - c.z);
@@ -601,7 +606,7 @@ export class Unit {
     this.idleT += dt;
     if (this.lod < 2) {
       if (sp > 0.2) this.walkPhase += dt * sp * 2.1;
-      poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT });
+      poseSoldier(this.model, { phase: this.walkPhase, speed: sp, moving: sp > 0.2, swingT: -1, attackDir: 'over', stagger: 0, blocking: false, mounted: false, idle: this.idleT, dt, x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yaw });
       const c = this.model;
       c.shL.rotation.set(-1.35, 0, -0.2); c.shR.rotation.set(-1.35, 0, 0.2);   // hands on the frame
       c.elL.rotation.x = c.elR.rotation.x = -0.3;
@@ -873,7 +878,7 @@ export class Unit {
     const stag = this.staggerT > 0 ? Math.min(1, this.staggerT / Math.max(0.2, (this.staggerMax || 0.5) * 0.5)) : 0;
     if (this.isGiant && moving) {
       // the ground shakes under each step
-      const step = Math.floor(this.walkPhase / Math.PI);
+      const step = giantStep(this.walkPhase);   // (a heel strike: giantmodel.js plants the feet on its own, longer stride)
       if (step !== this.lastStep) {
         this.lastStep = step;
         this.game.fx.stomp(this.pos.clone().setY(this.pos.y + 0.2));
@@ -894,6 +899,16 @@ export class Unit {
     const st = POSE;
     st.phase = this.walkPhase; st.speed = sp; st.moving = moving; st.swingT = this.swingT; st.attackDir = this.attackDir;
     st.stagger = stag; st.hurt = this.hurtT; st.blocking = this.blockFlash > 0 || this.braced; st.mounted = this.mounted; st.idle = this.idleT; st.look = this.lookS;
+    st.dt = dt; st.x = this.pos.x; st.y = this.pos.y; st.z = this.pos.z; st.yaw = this.yaw;
+    // the slope under a near soldier's feet (each foot finds its own ground: models.js), not on a wall walk; a lord in the air (his leap; a guest
+    // sees it in his height)
+    const P = this.game.physics;
+    st.gx = 0; st.gz = 0;
+    if (this.lod === 0 && !this.mounted) {
+      const x = this.pos.x, z = this.pos.z, h0 = P.terrainHeight(x, z);
+      if (this.pos.y - h0 < 0.3) { st.gx = (P.terrainHeight(x + 0.4, z) - h0) * 2.5; st.gz = (P.terrainHeight(x, z + 0.4) - h0) * 2.5; }
+    }
+    st.air = !!this.kit && (!!this.leap || (!this.game.simulating && this.pos.y - P.groundHeight(this.pos.x, this.pos.z, this.pos.y + 0.1) > 0.45));
     poseSoldier(m, st);
   }
 
@@ -916,7 +931,7 @@ export class Unit {
       this.vel.set(Math.sin(this.yaw) * t.extra, 0, Math.cos(this.yaw) * t.extra);
     }
     if (!this.alive) { this.animateDeath(dt); return; }
-    if (this.swingT >= 0) { this.swingT += dt; if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }
+    if (this.swingT >= 0) { this.swingT += dt * (this.isGiant ? 0.45 : 1); if (this.swingT > (this.ranged ? 0.9 : 0.62)) this.swingT = -1; }   // (a giant's blow takes as long as on the host)
     if (this.staggerT > 0) this.staggerT -= dt;
     if (this.blockFlash > 0) this.blockFlash -= dt;
     if (this.kit) this.kit.netUpdate();
@@ -927,6 +942,7 @@ export class Unit {
 
   // Falls (backwards, to the knees and forward, or to the side: the same on every screen), lies there a while, then sinks and fades.
   animateDeath(dt) {
+    const was = this.deathT;
     this.deathT += dt;
     const m = this.model;
     const t = Math.min(1, this.deathT / 0.55);
@@ -937,6 +953,7 @@ export class Unit {
         poseDeath(m, this.deathT, this.mounted ? 2 : this.id % 3, this.id & 2 ? 1 : -1);
         if (this.horse) poseHorseDead(this.horse, this.deathT);
         if (this.deathT >= DEATH_POSED) this.deadPosed = true;
+        if (this.isGiant && was < GIANT_FALL[this.id % 3] && this.deathT >= GIANT_FALL[this.id % 3]) this.giantFell(m);
       }
       const fade = Math.max(0, Math.min(1, (this.deathT - 8) / 3.2));
       m.inst[14] = 0; m.inst[15] = fade;
@@ -945,6 +962,17 @@ export class Unit {
     if (this.mounted) this.mesh.rotation.z = t * t * Math.PI / 2 * 0.95;
     this.mesh.position.y = this.pos.y + 0.02 * t;
     if (this.deathT > 9) this.mesh.position.y = this.pos.y - (this.deathT - 9) * 0.4;
+  }
+
+  // A falling giant's body hits the ground: dust where its chest lands, a boom, and the ground shakes under whoever stands near.
+  giantFell(m) {
+    m.torso.updateWorldMatrix(true, false);
+    const c = m.torso.getWorldPosition(tmp);
+    c.y = this.pos.y + 0.3;
+    this.game.fx.dust(c, 28, 4);
+    this.game.audio.play('boom', c);
+    const p = this.game.player, d = Math.hypot(p.pos.x - c.x, p.pos.z - c.z);
+    if (d < 35) p.shake = Math.max(p.shake, 0.45 * (1 - d / 35));
   }
 }
 

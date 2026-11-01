@@ -405,8 +405,9 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
 - **Giants**: once you've saved 1,600 gold, your castle can **summon a giant** (shop, Siege tab). The
   6-metre giant, a hunched two-headed ettin in a fur kilt with a stone hammer (its house shows in the sash, the banner on
   its kilt and the rag on the hammer), marches on your target castle, smashing gates and keeps. Its hammer flattens and staggers
-  everyone around the blow, and the ground shakes as it walks. You can have one at a time. Rich AI lords
-  summon giants too.
+  everyone around the blow, and the ground shakes as it walks. It moves like the weight it is: long planted strides that land
+  hard, a blow wound up over its heads and slammed into the ground, heads that look about, a stagger when struck and a fall that
+  shakes the ground. You can have one at a time. Rich AI lords summon giants too.
 - **Commanding your army**: while your army has soldiers, the orders bar at the bottom of the screen shows your orders and their keys.
   **5**, **6** and **7** (a key in each enemy house's colour on the bar, and a button each in the Orders menu) send the army, or the
   chosen group, at that house: it marches on its castle and fights whoever stands in its way, but leaves a fight with another house.
@@ -1199,6 +1200,34 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
   faster pace brings the early war forward but not the end of it, so only a clock guarantees an end. Standard has no clock: it is the war as it always was.
   The Hero Game Mode (its own timed match) and the practice courtyard keep their own pace.
 
+## How the figures move
+
+Soldiers and heroes share one rig and one pose function (`poseSoldier` in `src/models.js`), worked out afresh every frame from what the
+man is doing, with a little kept on the rig between frames so that nothing snaps, slides or floats:
+
+- **Planted feet.** Each foot stays where it was put down, in the world, until a gait clock lifts it for the next step. The cadence and the
+  stride come from how fast the body really travels (its own movement, not the speed it was told), so a guest's view of another hero, a
+  soldier shoved by the crowd or carried on an engine steps as he goes, a walk turns into a run with flight in it, and stopping brings the
+  feet together in a last step or two. The legs reach the feet with two-bone IK (softened near full stretch so a knee never flicks
+  straight); the hips come down where a stride is long; the heel lifts as the leg goes behind. Standing, a foot steps only when the body has
+  turned or been pushed off it. On a slope each foot finds its own ground. Going sideways or backwards at speed the hips turn part way into
+  the stride. Past a sprint (a Shield Bash's run) the steps stay a sprint's.
+- **Blends, not snaps.** The guard, a stagger, a climb, a jump ease in and out by weights; anything abrupt (a blow cut short, a blow seen
+  late on a guest, the bow taken out, mounting, landing, a burst of speed, death) is carried as an offset from the last pose drawn that
+  fades out in a fraction of a second, so the new pose plays at once and only the difference eases away. A hero hops into and out of the
+  saddle.
+- **Weight.** A blow settles into its wind-up, is driven through the moment it lands and follows through before it comes back; the body
+  goes back onto the rear foot and then in behind it. Men lean into a start and back from a stop and bank into turns; a hit throws the body
+  the way it came. The arms' swing, the cape (swung by starts, stops and turns), its billow and the plume lag and settle.
+- **Cost.** With the IK and the springs the pose costs about twice the old one (about 4 µs a man on a busy 4-core test machine, 1.2 ms a
+  frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed. It is worked out in four steps whose
+  numbers pass through typed arrays (one big function ran past what the engine inlines, and boxed the numbers of every call it did not), so
+  it makes little garbage: a 1600-soldier War Mode battle makes about 9% more than before.
+- **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Bash's push and a blow cut short ease in
+  and out; the wind-up and the strike leave their rest at a speed instead of jumping to it.
+
+The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/giantmodel.js`).
+
 ## Code layout
 
 | File | Purpose |
@@ -1217,7 +1246,7 @@ The gap between two matches is as short as it can be: nothing reloads, and what 
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
 | `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, a shot with the bow (side-on, the bow arm at the mark, the string drawn to the jaw on a bent bow, the loose), three deaths; a cape hangs toward the ground and lies along the back of a man fallen on his face), and the catalogue of parts they wear, in layers as they are worn (a body of lofted rings that swells at the muscles and tapers at the joints; cloth, mail or leather over it; plates with rolled edges and rivets held on by straps and buckles; a surcoat, tabard or robe on top; helmets fitted to the skull; weapons, shields, heraldry; cloaks that wrap the shoulders and fall in folds) built from primitives with baked shading, small things only at the richest level |
 | `src/heads.js` | Heads with a shape: the skull, brow, cheekbones, nose, lips and jaw as one smooth surface (ellipsoids blended in a distance field, found along the rays of a sphere and lit by its gradient), and the hair cuts and beards grown out from it |
-| `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints (so it takes the same poses and is drawn by the same crowd batches), its own shapes (bald scowling heads with long beards, a bare muscled trunk, fur kilt with an iron boss and the house banner, rag-bound shins and forearms, bare feet, a stone hammer) and a hunched, heavy layer over the soldier's walk, swing and deaths |
+| `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints, a second head and two ankles (drawn by the same crowd batches: both heads are one shape, the feet one more), its own sculpted shapes (smooth lofts swelled by muscles, the grooves shaded: bald scowling heads with deep-set eyes and long shaggy beards, a bare muscled trunk with scars and veins, a kilt of ragged hides with tufts, the iron boss and the house banner, layered rag wrappings tied with cord, bare feet with toes that turn at the ankle, a chipped stone hammer lashed to a knotted haft) and its own motion, which sets every joint: a gait whose feet stay planted (two-bone leg IK, the hips riding the planted legs, each foot landing on its heel and leaving on its toes), a body that sinks as each foot lands, heads that glance about, blows with a wind-up, an impact held with the hammer on the ground and a recovery, a spring that rocks it when hit, and falls that are set down on the ground, bounce once and settle; its LODs are a rich near model, a plain mid one and a baked far one |
 | `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn and scratched steel, leather with pores, creases and oiled patches, cloth with uneven dye and fading, fur and hair in strands, mud and dust climbing from the feet (baked per vertex); cloth that sways, capes that stream behind a runner, skirts and tassets that ride up onto the thighs in a crouch) and its face and emblem atlases |
 | `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
