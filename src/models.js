@@ -330,9 +330,10 @@ const CROUCH = { hip: -1.45, knee: 2.0, drop: 0.47, back: 0.3, lean: 0.5, hipFwd
 //   hurt, mounted, blocking, crouch (0..1), climb, air, time, idle, look (head turn, rad), gx, gz }. Without dt the pose is a still one
 //   (a far model, a preview).
 // A giant keeps his own heavy layer over the old cycle (poseGiantBase, below; giantmodel.js).
-const LT = 0.44, LS = 0.45;                       // thigh, and shin to the ankle (body units: the joints of buildSoldier)
+// (the legs are measured off each rig when its motion state is made: A.lt, the thigh, from the knee joint; A.ls, the shin to the ankle, in the
+// boot's proportion to it; A.hipY, the hip joints over the soles; A.hipX, their spread. A man of buildSoldier: 0.44, 0.45, 0.95, 0.09)
+const SHIN = 0.45 / 0.44;
 const ANK = 0.063, HEEL = 0.07, TOE = 0.2175;     // the ankle over the sole, the heel behind it and the toe in front (the boot, shapes.js)
-const HIP_Y = 0.95;                               // the hip joints over the soles, standing
 const VSPRINT = 8.6;                              // the fastest a man's steps keep up with the ground (a hero's sprint is 8.4 m/s)
 const TAU = Math.PI * 2;
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _qI = new THREE.Quaternion();
@@ -358,8 +359,9 @@ function animOf(m) {
   if (m.anim) return m.anim;
   const nodes = [m.body, m.pelvis, m.torso, m.head, m.hipL, m.hipR, m.kneeL, m.kneeR, m.shL, m.shR, m.elL, m.elR];
   if (m.weapon) nodes.push(m.weapon);
+  const lt = -m.kneeL.position.y, hipY = m.pelvis.position.y + m.hipL.position.y;
   return (m.anim = {
-    init: false, nodes, prevQ: new Float32Array(nodes.length * 4), offQ: new Float32Array(nodes.length * 4), prevP: new Float32Array(3), offP: new Float32Array(3),
+    init: false, nodes, lt, ls: lt * SHIN, hipY, hipX: m.hipL.position.x, prevQ: new Float32Array(nodes.length * 4), offQ: new Float32Array(nodes.length * 4), prevP: new Float32Array(3), offP: new Float32Array(3),
     inT: 1, inDur: 1, inCap: false,
     x: 0, y: 0, z: 0, yaw: 0, vx: 0, vz: 0, vy: 0, acc: 0, accS: 0, turn: 0, jolt: false,
     ph: 0, gaitOn: false, gait: 0, drop: 0, hipTurn: 0, replant: true, feet: [newFoot(0), newFoot(0.5)],
@@ -375,10 +377,11 @@ function animOf(m) {
 // toes along it; the shin's direction is left in _f
 // (soft near full stretch: the last few centimetres of reach are eased out, so a knee does not flick straight and back as a foot passes the
 // edge of its reach; the foot falls a little short instead)
-const SOFT = 0.018, LMAX = LT + LS;
-function reachLeg(hip, kn, H, tgt, fwd) {
+const SOFT = 0.018;
+function reachLeg(hip, kn, H, tgt, fwd, A) {
+  const LT = A.lt, LS = A.ls;
   _d.subVectors(tgt, H);
-  const len = _d.length(), d0 = LMAX - SOFT;
+  const len = _d.length(), d0 = LT + LS - SOFT;
   const D = Math.max(len, 0.08) > d0 ? d0 + SOFT * (1 - Math.exp(-(len - d0) / SOFT)) * 0.999 : Math.max(len, 0.08);
   _d.multiplyScalar(1 / Math.max(len, 1e-5));
   const a = (LT * LT - LS * LS + D * D) / (2 * D), h = Math.sqrt(Math.max(LT * LT - a * a, 0));
@@ -678,7 +681,7 @@ export function poseSoldier(m, st) {
   m.hipL.position.z = m.hipR.position.z = CROUCH.hipFwd * cr;
   if (!legsDone) {
     // the hips come down where a planted foot would be out of reach
-    const reach = (LT + LS) * 0.985 * sc;
+    const reach = (A.lt + A.ls) * 0.985 * sc;
     // (a foot in the air counts as it nears the ground again, so the hips are already low when it lands; the drop eases back up once a foot
     // has left the ground, so they do not jump as it lifts)
     let drop = 0;
@@ -686,7 +689,7 @@ export function poseSoldier(m, st) {
       const F = A.feet[i], k = F.up ? smooth(0.5, 1, F.w) : 1;
       if (k <= 0) continue;
       const wx = F.cx - X, wz = F.cz - Z, lx2 = wx * cy - wz * sy, lz2 = wx * sy + wz * cy;
-      const hx = shiftX + (i ? -0.09 : 0.09) * sc - lx2, hz = bodyZ - lz2, hy = HIP_Y * sc + bodyY - (F.cy - Y) - ankleH(F.tilt) * sc;
+      const hx = shiftX + (i ? -A.hipX : A.hipX) * sc - lx2, hz = bodyZ - lz2, hy = A.hipY * sc + bodyY - (F.cy - Y) - ankleH(F.tilt) * sc;
       const hz2 = hx * hx + hz * hz;
       if (hz2 + hy * hy > reach * reach) drop = Math.max(drop, k * Math.min(0.22 * sc, hy - Math.sqrt(Math.max(reach * reach - hz2, (0.6 * sc) ** 2))));
     }
@@ -708,13 +711,13 @@ export function poseSoldier(m, st) {
       const slope = Math.atan(gx * Math.sin(F.cyaw) + gz * Math.cos(F.cyaw));
       // how far the shin leans over the foot: mostly the lean of the leg (from the hip to the foot), a little of last frame's real lean (the
       // knee's bend): all of it would feed back (the ankle raised, the knee bent further, the shin leaning more) and put him on tiptoe
-      const fo = (lx2 - shiftX - (i ? -0.09 : 0.09) * sc) * fsx + (lz2 - bodyZ) * fsz, fv = HIP_Y * sc + bodyY - wy;
+      const fo = (lx2 - shiftX - (i ? -A.hipX : A.hipX) * sc) * fsx + (lz2 - bodyZ) * fsz, fv = A.hipY * sc + bodyY - wy;
       const lean = Math.atan2(-fo, Math.max(0.2, fv));
       // (a foot in the air takes more of it, most at the top of its swing, so its toes stay clear of the ground)
       F.tilt = F.up ? Math.max(-0.6, Math.min(0.6, lean + (F.psi - lean) * (F.psi > lean ? 0.3 + 0.35 * Math.sin(Math.PI * F.w) : 0.3))) : Math.max(-0.85, Math.min(0.85, lean + 0.3 * (F.psi - lean)));
       _a.set(lx2, wy + ankleH(F.tilt + slope) * sc, lz2).sub(B.position).multiplyScalar(1 / sc).sub(P.position).applyQuaternion(_qi);
       _fw.set(fsx, 0, fsz).applyQuaternion(_qi);
-      reachLeg(hip, kn, hip.position, _a, _fw);
+      reachLeg(hip, kn, hip.position, _a, _fw, A);
       // the shin's tilt over the foot (the ankle's height next frame): the shin in the root's frame
       _sh.copy(_f).applyQuaternion(P.quaternion);
       F.psi = Math.max(-0.9, Math.min(0.9, Math.atan2(-(_sh.x * fsx + _sh.z * fsz), -_sh.y)));
