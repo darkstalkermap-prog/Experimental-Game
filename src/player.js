@@ -242,12 +242,16 @@ export class Player {
       else if ((this.bowT += dt) > 0.9) this.bowT = -1;
     }
     if (this.weapon !== 'bow') this.bowT = -1;
+    // a blow that takes health makes the body flinch away (models.js: the hit reaction), as a soldier's does
+    if (this.hp < (this.shownHp ?? this.hp) - 0.5) this.hurtT = 1;
+    this.shownHp = this.hp;
+    this.hurtT = Math.max(0, (this.hurtT || 0) - dt * 4);
     // (in the air: a bot here knows; anyone else's hero is seen off the ground. The slope: each foot finds its own ground, models.js)
     const ph = this.game.physics, x = this.pos.x, z = this.pos.z, h0 = ph.terrainHeight(x, z);
     const air = !this.mounted && !this.climbing && (this.isBot && this.game.simulating ? !this.onGround : this.pos.y - ph.groundHeight(x, z, this.pos.y + 0.1, this.team) > 0.15);
     const flat = this.mounted || this.pos.y - h0 > 0.3;
     poseSoldier(b, { phase: this.mounted && this.horse ? this.horse.phase : this.walkPhase, speed: sp, moving: sp > 0.3, swingT: this.weapon === 'bow' && this.bowT >= 0 ? this.bowT : this.swingT, attackDir: this.attackDir, stagger: this.staggerT > 0 ? 1 : 0, mounted: this.mounted, blocking: this.blocking, crouch: this.duck, climb: this.climbing, time: this.game.time, idle: this.game.time + this.team * 1.7, look: 0,
-      dt, air, gx: flat ? 0 : (ph.terrainHeight(x + 0.4, z) - h0) * 2.5, gz: flat ? 0 : (ph.terrainHeight(x, z + 0.4) - h0) * 2.5 });
+      hurt: this.hurtT, dt, air, gx: flat ? 0 : (ph.terrainHeight(x + 0.4, z) - h0) * 2.5, gz: flat ? 0 : (ph.terrainHeight(x, z + 0.4) - h0) * 2.5 });
     this.tag.position.set(this.pos.x, this.pos.y + (this.mounted ? 3.6 : 2.4 - 0.7 * this.duck), this.pos.z);
   }
 

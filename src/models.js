@@ -337,17 +337,18 @@ const VSPRINT = 8.6;                              // the fastest a man's steps k
 const TAU = Math.PI * 2;
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qi = new THREE.Quaternion(), _qI = new THREE.Quaternion();
 const _a = new THREE.Vector3(), _fw = new THREE.Vector3(), _sh = new THREE.Vector3();
-const ex = (dt, tau) => 1 - Math.exp(-dt / tau);
+// (an easing factor, 1 - exp(-dt / tau), is written out where it is used: a helper that returns a number makes a boxed number at every call
+// the engine does not inline, garbage for every soldier in every frame)
 const smooth = (a, b, x) => ease(clamp01((x - a) / (b - a)));
 const wrap = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
 const clampA = (x, a) => (x < -a ? -a : x > a ? a : x);
 // a damped spring on one number, stepped semi-implicitly (sub-steps keep it stable at any frame time): returns the new velocity, the new
-// value is left in _sx
-let _sx = 0;
+// value is left in SX[0] (a typed array: a number kept in a module variable is boxed afresh at every write, garbage for every soldier)
+const SX = new Float64Array(1);
 function spring(x, v, target, w, zeta, dt) {
   const n = dt > 0.034 ? Math.ceil(dt / 0.034) : 1, h = dt / n;
   for (let i = 0; i < n; i++) { v += (w * w * (target - x) - 2 * zeta * w * v) * h; x += v * h; }
-  _sx = x;
+  SX[0] = x;
   return v;
 }
 // the ankle's height over the ground for a shin tilted psi over the foot (+ toes down): onto the toe behind, the heel in front
@@ -403,15 +404,15 @@ function track(A, X, Y, Z, yaw, dt) {
     A.x = X; A.y = Y; A.z = Z; A.yaw = yaw; A.vx = A.vz = A.vy = A.acc = A.accS = A.turn = 0; A.replant = true;
     return;
   }
-  const ovx = A.vx, ovz = A.vz, k = ex(dt, 0.08);
+  const ovx = A.vx, ovz = A.vz, k = 1 - Math.exp(-dt / 0.08);
   A.vx += (clampA(dx / dt, 25) - A.vx) * k;
   A.vz += (clampA(dz / dt, 25) - A.vz) * k;
-  A.vy += ((Y - A.y) / dt - A.vy) * ex(dt, 0.04);
-  A.turn += (clampA(wrap(yaw - A.yaw) / dt, 12) - A.turn) * ex(dt, 0.1);
+  A.vy += ((Y - A.y) / dt - A.vy) * (1 - Math.exp(-dt / 0.04));
+  A.turn += (clampA(wrap(yaw - A.yaw) / dt, 12) - A.turn) * (1 - Math.exp(-dt / 0.1));
   const ax = (A.vx - ovx) / dt, az = (A.vz - ovz) / dt, c = Math.cos(yaw), s = Math.sin(yaw);
   A.jolt = ax * ax + az * az > 70 * 70;   // (a burst: a dash starting or stopping dead, a knock: see the blends in poseSoldier)
-  A.acc += (clampA(ax * s + az * c, 40) - A.acc) * ex(dt, 0.1);
-  A.accS += (clampA(ax * c - az * s, 40) - A.accS) * ex(dt, 0.1);
+  A.acc += (clampA(ax * s + az * c, 40) - A.acc) * (1 - Math.exp(-dt / 0.1));
+  A.accS += (clampA(ax * c - az * s, 40) - A.accS) * (1 - Math.exp(-dt / 0.1));
   A.x = X; A.y = Y; A.z = Z; A.yaw = yaw;
 }
 
@@ -452,17 +453,17 @@ export function poseSoldier(m, st) {
   // along their own line rather than shuffle; the stride is shorter the more sideways it still is
   const travel = v > 0.3 ? Math.atan2(lvx, lvz) : 0;
   const turnTo = clampA(Math.abs(travel) <= Math.PI / 2 ? travel : travel - Math.sign(travel) * Math.PI, 0.6) * smooth(0.3, 1.5, v);
-  A.hipTurn += (turnTo - A.hipTurn) * (live ? ex(dt, 0.15) : 1);
+  A.hipTurn += (turnTo - A.hipTurn) * (live ? (1 - Math.exp(-dt / 0.15)) : 1);
   const rel0 = travel - A.hipTurn, fwdK = v > 0.05 ? Math.cos(rel0) : 1, latK = v > 0.05 ? Math.abs(Math.sin(rel0)) : 0;
   const gx = st.gx || 0, gz = st.gz || 0;
   // ---- weights that ease toward what he is doing, and the abrupt changes, blended by an offset that fades (see inertia below)
   const t = st.swingT;
   if (live) {
-    A.block += ((st.blocking ? 1 : 0) - A.block) * ex(dt, st.blocking ? 0.06 : 0.13);
+    A.block += ((st.blocking ? 1 : 0) - A.block) * (1 - Math.exp(-dt / (st.blocking ? 0.06 : 0.13)));
     const sT = st.stagger || 0;
-    A.stag += (sT - A.stag) * ex(dt, sT > A.stag ? 0.05 : 0.16);
-    A.climb += ((climbing ? 1 : 0) - A.climb) * ex(dt, 0.1);
-    A.air += ((inAir ? 1 : 0) - A.air) * ex(dt, inAir ? 0.11 : 0.04);
+    A.stag += (sT - A.stag) * (1 - Math.exp(-dt / (sT > A.stag ? 0.05 : 0.16)));
+    A.climb += ((climbing ? 1 : 0) - A.climb) * (1 - Math.exp(-dt / 0.1));
+    A.air += ((inAir ? 1 : 0) - A.air) * (1 - Math.exp(-dt / (inAir ? 0.11 : 0.04)));
     let ev = 0;
     const sw = t >= 0 ? t : -1, ranged = !!m.ranged;
     if (!ranged && A.swing >= 0 && (sw < 0 ? A.swing < 0.6 : sw < A.swing - 0.02 || sw > A.swing + 0.12)) ev = 0.16;   // a blow cut short, its clock jumped
@@ -476,8 +477,8 @@ export function poseSoldier(m, st) {
     const hurt = st.hurt || 0;
     if (hurt > A.hurt + 0.25 || (st.stagger || 0) > A.stagIn + 0.3) { const la = st.look || 0; A.hitX = -Math.sin(la); A.hitZ = -Math.cos(la); A.hitV += hurt > A.hurt + 0.25 ? 7 : 4; }
     A.hurt = hurt; A.stagIn = st.stagger || 0;
-    A.hitV = spring(A.hit, A.hitV, 0, 15, 0.85, dt); A.hit = _sx;
-    A.landV = spring(A.land, A.landV, 0, 11, 0.8, dt); A.land = _sx;
+    A.hitV = spring(A.hit, A.hitV, 0, 15, 0.85, dt); A.hit = SX[0];
+    A.landV = spring(A.land, A.landV, 0, 11, 0.8, dt); A.land = SX[0];
   } else {
     A.block = st.blocking ? 1 : 0; A.stag = st.stagger || 0; A.climb = climbing ? 1 : 0; A.air = inAir ? 1 : 0; A.hit = A.land = 0;
     A.swing = t >= 0 ? t : -1; A.wasClimb = climbing; A.wasRide = mounted; A.wasRanged = !!m.ranged; A.wasAir = inAir;
@@ -494,7 +495,7 @@ export function poseSoldier(m, st) {
   const S = vg * D / f;
   const onFeet = !mounted && A.climb < 0.5 && !inAir;
   const moving = onFeet && v > 0.15;
-  A.gait += ((moving ? Math.min(1, v / 0.9) : 0) - A.gait) * (live ? ex(dt, 0.14) : 1);
+  A.gait += ((moving ? Math.min(1, v / 0.9) : 0) - A.gait) * (live ? (1 - Math.exp(-dt / 0.14)) : 1);
   if (live && v > vg) for (const F of A.feet) if (!F.up) { F.x += (vx - gvx) * dt; F.z += (vz - gvz) * dt; }
   const gw = A.gait;
   // where each foot stands at rest (the root's frame): apart, the left a little ahead, toes out; narrower at a run and set back under him
@@ -553,7 +554,7 @@ export function poseSoldier(m, st) {
       const tl = (landing ? 0 : F.up ? 1 - u : 1 - Dn) / Math.max(fc, 0.7) + (moving ? D / (2 * f) : 0);
       let tx = X + F.rx * cy + F.rz * sy + gvx * tl, tz = Z - F.rx * sy + F.rz * cy + gvz * tl;
       // (the mark is followed, not jumped to: it moves when he slows, stops or turns, and a foot in the air must not jump with it)
-      if (landing) { tx = F.tx; tz = F.tz; } else if (F.up) { const k = ex(dt, 0.05); F.tx += (tx - F.tx) * k; F.tz += (tz - F.tz) * k; tx = F.tx; tz = F.tz; }
+      if (landing) { tx = F.tx; tz = F.tz; } else if (F.up) { const k = 1 - Math.exp(-dt / 0.05); F.tx += (tx - F.tx) * k; F.tz += (tz - F.tz) * k; tx = F.tx; tz = F.tz; }
       const ty = Y + gx * (tx - X) + gz * (tz - Z), tyaw = yaw + F.toe;
       if (landing) {
         F.up = false; F.x = tx; F.y = ty; F.z = tz; F.yaw = tyaw;   // down
@@ -603,7 +604,7 @@ export function poseSoldier(m, st) {
   }
   // the arms swing against the legs, a little behind them, and settle when he stops
   const armT = -Math.cos(TAU * (A.ph + 0.07)) * Math.min(0.55, v * 0.1 + 0.05) * gw;
-  if (live) { A.armV = spring(A.arm, A.armV, armT, 20, 0.6, dt); A.arm = _sx; } else A.arm = armT;
+  if (live) { A.armV = spring(A.arm, A.armV, armT, 20, 0.6, dt); A.arm = SX[0]; } else A.arm = armT;
   const swing = A.arm;
   // ---- arms: the shield (or bow) arm and the weapon arm
   let lx, ly = 0, lz, le;
@@ -681,7 +682,7 @@ export function poseSoldier(m, st) {
       const hz2 = hx * hx + hz * hz;
       if (hz2 + hy * hy > reach * reach) drop = Math.max(drop, k * Math.min(0.22 * sc, hy - Math.sqrt(Math.max(reach * reach - hz2, (0.6 * sc) ** 2))));
     }
-    A.drop = live ? A.drop + (drop - A.drop) * ex(dt, drop > A.drop ? 0.025 : 0.09) : drop;
+    A.drop = live ? A.drop + (drop - A.drop) * (1 - Math.exp(-dt / (drop > A.drop ? 0.025 : 0.09))) : drop;
     bodyY -= A.drop;
     B.position.set(0, bodyY, bodyZ);
     // two-bone IK: each ankle onto its foot (in the air, the feet drawn up under him)
@@ -719,7 +720,7 @@ export function poseSoldier(m, st) {
       m.kneeR.rotation.x += (CROUCH.knee - m.kneeR.rotation.x) * cr;
     }
   } else B.position.set(0, bodyY, bodyZ);
-  B.rotation.set(0, 0, 0);
+  if (B.rotation.x !== 0 || B.rotation.z !== 0) B.rotation.set(0, 0, 0);   // (only a death turns the body)
   // ---- the trunk, the head and the arms
   const look = Math.max(-1.1, Math.min(1.1, st.look || 0));
   T.rotation.set(tx, ty + twist + look * 0.12 + turnLook * 0.4, tz);
@@ -743,13 +744,13 @@ export function poseSoldier(m, st) {
   if (live) inertia(A, dt); else holdPose(A);
   // ---- what hangs off him
   if (live) {
-    A.capeXV = spring(A.capeX, A.capeXV, clampA(A.acc * 0.05, 0.55), 8.5, 0.3, dt); A.capeX = _sx;
-    A.capeZV = spring(A.capeZ, A.capeZV, clampA(-A.accS * 0.045, 0.4), 7.5, 0.3, dt); A.capeZ = _sx;
-    A.bilV = spring(A.bil, A.bilV, Math.min(1, v / 7), 5.5, 0.45, dt); A.bil = _sx;
+    A.capeXV = spring(A.capeX, A.capeXV, clampA(A.acc * 0.05, 0.55), 8.5, 0.3, dt); A.capeX = SX[0];
+    A.capeZV = spring(A.capeZ, A.capeZV, clampA(-A.accS * 0.045, 0.4), 7.5, 0.3, dt); A.capeZ = SX[0];
+    A.bilV = spring(A.bil, A.bilV, Math.min(1, v / 7), 5.5, 0.45, dt); A.bil = SX[0];
     const plume = m.plumeC.on || m.plumeG.on;
     if (plume) {
-      A.plXV = spring(A.plX, A.plXV, clampA(-A.acc * 0.04 - (bodyY / sc) * 2, 0.5), 11, 0.25, dt); A.plX = _sx;
-      A.plZV = spring(A.plZ, A.plZV, clampA(A.accS * 0.04 + A.turn * v * 0.02, 0.5), 10, 0.25, dt); A.plZ = _sx;
+      A.plXV = spring(A.plX, A.plXV, clampA(-A.acc * 0.04 - (bodyY / sc) * 2, 0.5), 11, 0.25, dt); A.plX = SX[0];
+      A.plZV = spring(A.plZ, A.plZV, clampA(A.accS * 0.04 + A.turn * v * 0.02, 0.5), 10, 0.25, dt); A.plZ = SX[0];
       m.plumeC.node.rotation.set(A.plX, 0, A.plZ);
     }
   } else { A.capeX = A.capeZ = 0; A.bil = Math.min(1, v / 7); }
