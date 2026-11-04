@@ -5,6 +5,19 @@
 
 export const UPDATES = [
   {
+    id: 21,
+    title: 'Balance pass',
+    items: [
+      'Every class was measured against every other in hundreds of duels, in five-minute battles and in War Mode, and tuned so that each has fights it wins and fights it loses.',
+      'Knight: 15% more sword damage, a Shield Throw that hits harder, a fuller shockwave from Wrath, and his shield now softens a Fireball, a Whirlwind or an Explosive Arrow from in front. Challenge holds a rival hero in place (25% slower), so a Ranger or a Mage can no longer simply back away from him. The Knight bots block a hero\'s blows far more surely and run down whoever they Challenge.',
+      'Cavalier: a blow from the saddle hits a rival hero at most 1.6 times a standing one, and the Lance Charge rides a hero down for about half what it does to a soldier: a charge and the blow after it no longer kill a Ranger in an instant. Against soldiers the gallop counts as before.',
+      'Meteor and Rain of Fire: in a packed host the blow and the fire are shared out, so one cast breaks open a War Mode block instead of wiping it out. A Conquest wave feels them as before. The Whirlwind is shared out the same way in a press of more than 12 soldiers.',
+      'Every class now fills its Ultimate in about 80 seconds of fighting (the Ranger, Cavalier and Cleric filled theirs much faster, the Knight slower).',
+      'Ranger and Berserker: a little more health; Ranger bots send the hawk at a hero who has caught them, to slow him and get away. Mage: Fireball 95 damage (was 105). Cleric bots call their Sanctuary when their heroes are in a thick fight, not only when someone is about to die.',
+      'The aim hint for the Lance Charge now says R (it said Q).',
+    ],
+  },
+  {
     id: 20,
     title: 'Armour and arms of each race',
     items: [

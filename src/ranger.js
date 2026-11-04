@@ -571,7 +571,7 @@ export function hawkSpot(g, me, foes, dist, need, out) {
     const o = foes[i], d = dist[i];
     if (o.isSiege || d > H.range - 3) continue;
     const hero = isHero(o);
-    if (d < (hero ? 6 : 15)) continue;
+    if (!hero && d < 15) continue;   // (a rival hero at any range: on one who has caught her, the dive's slow lets her get away)
     let s = hero ? 6 : 0;
     for (const f of foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < H.radius * 0.85) s += isHero(f) && f !== o ? 3 : 1;
     if (s > bs && (hero || s >= need)) { bs = s; best = o; }

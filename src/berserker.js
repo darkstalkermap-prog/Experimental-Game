@@ -31,10 +31,11 @@ import { ULT_SHOW, ULT_AI } from './ultimate.js';
 // then ebbs `ebb` a second. The Whirlwind needs `start` to begin and drains `drain` a second; it cuts every `every` s for `dmg` of his
 // melee damage within `radius` m (soldiers staggered `stagger` s, a hero only by the first cut), and each foe a cut reaches gives back
 // `gain` Rage (at most `cap` a cut: a crowd keeps him spinning longer, never for ever). He walks at 70% of his pace while spinning
-// (Player.speedMult; the Dervish talent takes that away).
+// (Player.speedMult; the Dervish talent takes that away). In a press of more than `crowd` soldiers a cut is shared out among them (each
+// takes that share; heroes take it in full): the axe goes round through a Conquest wave, not through a whole block of War Mode's hundreds.
 export const RAGE = {
   max: 100, hit: 9, hero: 13, ability: 5, ranged: 2, taken: 55, hold: 3, ebb: 12,
-  spin: { start: 20, drain: 22, every: 0.3, dmg: 0.5, radius: 4.2, stagger: 0.35, gain: 1, cap: 2 },
+  spin: { start: 20, drain: 22, every: 0.3, dmg: 0.5, radius: 4.2, stagger: 0.35, gain: 1, cap: 2, crowd: 12 },
 };
 // Execute: the chop lands `delay` s after the key (the axe goes up first) on the foes within `reach` m in front (the cone's cosine:
 // `cone`), at most `targets` of them: the first for `dmg` of his melee damage, the others half. A foe left below `below` of his health
@@ -159,12 +160,15 @@ export const BERSERKER_METHODS = {
   spinTick(p) {
     const g = this.g, S = RAGE.spin;
     const reach = talentFx(p, 'whirlRadius', 1), dmg = p.meleeDmg * S.dmg, first = !(p.spinN > 0);
-    let foes = 0;
-    this.eachFoe(p.team, p.pos.x, p.pos.z, S.radius * reach * (1 + 0.5 * (p.bigK || 0)), (o) => {
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5, ability: 'Whirlwind' });
+    const R = S.radius * reach * (1 + 0.5 * (p.bigK || 0)), up = 2.8 + (p.bigK || 0);
+    let foes = 0, men = 0;
+    this.eachFoe(p.team, p.pos.x, p.pos.z, R, (o) => { if (!o.isSiege && !o.isPlayer && !o.kit) men++; }, p.pos.y, up);
+    const share = men > S.crowd ? S.crowd / men : 1;   // (a press of soldiers shares the cut: RAGE.spin.crowd)
+    this.eachFoe(p.team, p.pos.x, p.pos.z, R, (o) => {
+      g.damage(o, o.isPlayer || o.kit || o.isSiege ? dmg : dmg * share, p, { melee: true, splash: true, charge: 0.5, ability: 'Whirlwind' });
       if (o.alive && o.stagger && (first || !(o.isPlayer || o.kit))) o.stagger(S.stagger, p);
       if (!o.isSiege) foes++;
-    }, p.pos.y, 2.8 + (p.bigK || 0));
+    }, p.pos.y, up);
     p.spinN = (p.spinN || 0) + 1;
     if (foes) gainRage(p, Math.min(S.cap, foes * S.gain));
     const reaper = talentFx(p, 'reaper', null);   // Reaper (Berserker talent): the blade drinks

@@ -89,8 +89,9 @@ const M = ULT.meteor, SANCT = ULT.sanctuary;
 // The Ranger's Rain of Fire (its card's text reads these too): aimed as far as `range` m, a circle of `radius` m. `arrows` burning arrows,
 // each `dmg` of her bow's damage, come down from `delay` s after the cast over `span` s, `aimed` of them each on a foe in the circle (at
 // most `cap` on any one), the rest at random. From `burnAt` s the ground burns for `burn` s in `burnR` m: `burnDps` of her bow's damage a
-// second to every foe in it, `siege` of that to engines.
-export const RAIN = { range: 85, radius: 12, arrows: 72, dmg: 0.9, delay: 0.7, span: 2.6, aimed: 0.75, cap: 5, burnAt: 1.1, burn: 5, burnR: 11, burnDps: 0.6, siege: 0.5 };
+// second to every foe in it, `siege` of that to engines; with more than `crowd` soldiers in the fire each burns for his share of it (as
+// in the Meteor's crater: a War Mode block is scorched, not burnt down; the fire was most of the 9000 damage a cast did there).
+export const RAIN = { range: 85, radius: 12, arrows: 72, dmg: 0.9, delay: 0.7, span: 2.6, aimed: 0.75, cap: 5, burnAt: 1.1, burn: 5, burnR: 11, burnDps: 0.6, siege: 0.5, crowd: 14 };
 
 export const ULT_METHODS = {
   // the pooled looks the Ultimates need, made once with the world (so their shaders are compiled before the battle: Game.warmup)
@@ -152,7 +153,7 @@ export const ULT_METHODS = {
     const shots = [];
     for (let i = 0; i < R.arrows; i++) shots.push(R.delay + (i + Math.random()) * R.span / R.arrows);
     this.active.push({ kind: 'rain', p, t: 0, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * R.dmg, radius: R.radius, aimed: R.aimed, cap: R.cap, fire: true, ability: 'Rain of Fire' });
-    burnGround(this, { c, team: p.team, p, r: R.burnR, dps: p.bowDmg * R.burnDps, time: R.burn, delay: R.burnAt, ability: 'Rain of Fire', siege: R.siege });
+    burnGround(this, { c, team: p.team, p, r: R.burnR, dps: p.bowDmg * R.burnDps, time: R.burn, delay: R.burnAt, ability: 'Rain of Fire', siege: R.siege, crowd: R.crowd });
     p.swingT = 0.6; p.attackDir = 'over';
     this.emit('rainfire', cam, f, [c]);
   },
@@ -496,15 +497,18 @@ export const ULT_AI = {
     return { at: new THREE.Vector3(x, p.game.physics.groundHeight(x, z, best.pos.y + 3), z) };
   },
 
-  // Sanctuary when lives are at stake: allies inside the circle low on health (a hero counts three), or the Cleric herself nearly
-  // down with foes on her, and a fight going on round her
+  // Sanctuary when lives are at stake: allies inside the circle low on health (a hero counts three), or the Cleric herself hard
+  // pressed with foes on her, and a fight going on round her; or her heroes in a thick fight beside her. (It waited for near-deaths
+  // before: in 5-minute bot battles she let it go less than once while her bar stood full for minutes.)
   sanctuary(b, p) {
     if (b.n.c12 < 2) return null;
-    let need = b.hpf < 0.35 && b.n.c8 >= 1 ? 4 : 0;
+    let need = b.hpf < 0.5 && b.n.c8 >= 1 ? 4 : 0, heroes = 0;
     for (const f of b.friends) {
       if (f === p || !f.alive || Math.hypot(f.pos.x - p.pos.x, f.pos.z - p.pos.z) > SANCT.radius - 1.5) continue;
-      if (f.hp < f.maxHp * 0.45) need += isHero(f) ? 3 : 1;
+      if (isHero(f)) heroes++;
+      if (f.hp < f.maxHp * 0.55) need += isHero(f) ? 3 : 1;
     }
+    if (heroes >= 2 && b.n.c8 >= 4) need += 2;
     return need >= 4 ? {} : null;
   },
 

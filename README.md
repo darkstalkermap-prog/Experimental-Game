@@ -282,20 +282,22 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** mostly a defence (the Berserker's Leap, the Knight's Challenge and the Ranger's Hunting Hawk are not). The numbers are in `src/classes.js`.
-  - **Knight** (130% health, +5 armour, slower). He carries a tall kite shield (so do knight soldiers and the AI lords), painted
+  - **Knight** (130% health, +5 armour, 115% sword damage, slower). He carries a tall kite shield (so do knight soldiers and the AI lords), painted
     with your arms; in first person it is carried low and turned aside, and on guard its top sits just under your eyes. It blocks
-    exactly as any shield does, and blocking is how he builds his big hit (`src/knight.js`):
-    **Retribution** (passive): every blow your raised shield takes fills the **Wrath** bar under your stamina (5 blocked blows fill
-    it; a parry counts 1.7x, an arrow or a spell on the shield, or a blow the shield only softened, a little). It fades slowly after
+    as any shield does, and more: a blast or a sweeping blow from in front (a Fireball, a Whirlwind, an Explosive Arrow), which goes
+    round anyone else's shield, his softens (60% of what it takes off an arrow). Blocking is how he builds his big hit (`src/knight.js`):
+    **Retribution** (passive): every blow your raised shield takes fills the **Wrath** bar under your stamina (4 blocked blows fill
+    it; a parry counts 1.6x, an arrow or a spell on the shield, or a blow the shield only softened, a little). It fades slowly after
     12 s without a block. Full, it glows and your shield glints with a ring of steel (everyone sees and hears it), and your **next
-    swing releases a shockwave**: a cone 9 m long in front of you (60 degrees either side) that deals 2.2x your sword damage (55% at
+    swing releases a shockwave**: a cone 9 m long in front of you (60 degrees either side) that deals 2.6x your sword damage (55% at
     the far end), staggers everyone in it (heroes briefly) and throws soldiers back. **Q Shield Throw** (10 s): the shield flies where
     you aim (as far as a Mage's Fireball flies, 120 m) at 55 m/s, spinning flat with a gleam behind it. It bounces between up to 3
-    enemies (each next one the nearest within 10 m, with nothing in the way), dealing 1.3x your sword damage and stunning each
+    enemies (each next one the nearest within 10 m, with nothing in the way), dealing 1.5x your sword damage and stunning each
     (1.1 s, a hero 0.8 s; a hero who meets it with his own raised shield keeps his feet), then flies back to your hand. A wall, the
     ground or the end of its reach sends it back early. While it is away you cannot block: in first person your arm follows
     through and hangs empty until you catch it. **R Challenge** (16 s): every enemy within 12 m, heroes too, has to attack you for
-    3 s, and you take 50% less damage. Soldiers and the computer's lords turn on you, hero bots too; a person you challenge sees
+    3 s, and you take 50% less damage; a hero it binds is held, 25% slower (a Ranger or a Mage cannot simply walk backwards out of
+    your reach). Soldiers and the computer's lords turn on you, hero bots too (a bot that shoots stands its ground); a person you challenge sees
     a red warning ("Challenged!", with an arrow toward you) and a red tether to you, and everyone sees the tethers. Keep your shield
     up: the blows it draws fill your Wrath. (The old Q, Shield Bash, and R, Bulwark, are gone: the throw is his reach, Challenge his
     defence; Avenging Wall and Bastion Strike now work under Challenge.)
@@ -306,7 +308,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     Rage or more the button spins you with the axe out instead of raising your guard. You keep walking (at 70% pace) and cut
     everyone within 4.2 m about three times a second (half your sword damage a cut; soldiers stagger, a hero only at the first cut)
     for as long as you hold it and Rage lasts: it drains 22 a second, and each foe a cut reaches gives 1 back (2 a cut at most), so
-    full Rage spins about 4.5 s alone and 6 to 7 s in a crowd. Let go and it stops; with too little Rage the right button blocks as
+    full Rage spins about 4.5 s alone and 6 to 7 s in a crowd. In a press of more than 12 soldiers a cut is shared out among them
+    (heroes take it in full): it goes round through a Conquest wave, not through a whole block of War Mode's hundreds. Let go and it stops; with too little Rage the right button blocks as
     always. Others see the whole body turning. **Q Execute** (8 s): the axe goes up over your shoulder and comes down a quarter of
     a second later, a heavy overhead chop (1.7x sword damage) at whoever is in front of you, up to three (the others for half).
     Anyone it leaves below 25% health dies on the spot, heroes too (a Frost Ward or a Cleric's Sanctuary still saves a man), and a
@@ -343,7 +346,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     through a line of men, and the Explosive Arrow breaks a rank better than a flat heavy arrow could.
   - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
     flies where you aim and explodes on impact, burning gates and engines too. Stone walls shelter anyone behind
-    them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
+    them (95 damage at the heart of the blast, half at its edge). **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
     enemies close to you.
   - **Cleric** (some armour, 110% spell damage, heals 2.5 times faster out of combat). **Q Smite**: a bolt of
     holy lightning out of your open hand (first person: the mace goes down and the hand is thrust out) to the first thing along your
@@ -364,13 +367,17 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     (100° either side, 3.2 m) in front of you. **R Lance Charge** (14 s): hold R for where the charge ends, up to 120 m away (as far
     as a Fireball flies), let go and gallop there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in
     your path and going on through them; its blows carry Momentum (it builds during the gallop). Q during the charge sweeps as you go.
+    Against rival heroes the gallop is held in check (`CAV.hero`): a sword blow from the saddle hits a hero at most 1.6x a standing
+    one, however fast you ride and however high Momentum stands (soldiers feel all of it), and the charge rides a hero down for 55% of
+    what it does to a soldier. (A charge and the blow after it used to take a Ranger from full health to nothing in a twentieth of a second.)
     Walls, gates, trunks and steep rises stop it short; R again reins in. Numbers: `RUSH` in `src/classes.js`, `CAV` in
     `src/cavalier.js`.
 
   **The Ultimate (Z)**: every class has a third ability, its one huge moment. It does not come round on a timer: a ring round its
   icon (the round tile beside R) fills as you fight, from the damage you deal (rival heroes count most, castle stone least), the
-  damage you take and the health your abilities restore in you and your allies; a level-1 hero in a Conquest battle fills it in
-  roughly a minute to a minute and a half of steady fighting. When it is full the icon glows, a chime sounds and a line says
+  damage you take and the health your abilities restore in you and your allies; each class at its own pace (`ULT.rate`), so that
+  every class fills it in about 80 s of steady fighting (measured in 5-minute bot battles: 70 to 85 s for each class; before, a
+  Ranger, a Cavalier or a Cleric filled theirs in under a minute, a Knight in a minute and a half). When it is full the icon glows, a chime sounds and a line says
   "Ultimate ready"; press Z (aimed ones: hold Z to place the circle, let go to cast). The charge is kept when you fall and lost
   when you change class. Online the host checks the charge and runs it; hero bots and the lords the computer plays as heroes
   (rival lords, War Mode's generals) use theirs too, when it counts. Numbers: `ULT` in `src/config.js`; the code, and how a class
@@ -379,7 +386,10 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     huge burning rock comes down on it out of the sky, a streak of fire and smoke with its shadow growing on the ground. 260 spell
     damage (times the Mage's spell bonus) in 9 m, 35% of it at the rim; soldiers knocked flat and thrown out, heroes staggered;
     castle walls, gates, keeps and engines take 380 (a catapult stone is 140, a gate has 1400). The impact shakes the view nearby
-    and leaves a scorched crater, and the ground burns for 6 s: 22 damage a second to every foe in 6.5 m of it.
+    and leaves a scorched crater, and the ground burns for 6 s: 22 damage a second to every foe in 6.5 m of it. In a packed host the
+    rock and the fire are shared out: with more than 18 soldiers under the rock (10 in the fire), each takes his share (heroes always
+    take it all). A Conquest wave feels all of it; one of War Mode's great blocks is broken open, not wiped out (a Meteor there did
+    some 13 000 damage, more than any other general did in a whole battle; now about 2 000).
   - **Cleric: Sanctuary**: a dome and circle of golden light 10 m round you for 5 s, with a soft hum: no one of your side inside it,
     hero or soldier (co-op allies too), can be brought below 1 health. A chime when it ends.
   - **Knight: Banner of the Realm**: you plant your house's banner where you stand (a pole with a gold finial and your arms on a
@@ -390,7 +400,8 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     bow; from 0.7 s they come down on the circle for 2.6 s, 72 of them, each 0.9 of her arrow's damage, most of them each on a foe
     inside it (the one picked least so far, and no more than five on any one: a lone hero is scorched, not shot to pieces). They trail
     fire and flare where they land, and from 1.1 s the ground catches: 11 m of it burns for 5 s, 0.6 of her arrow's damage a second to
-    every foe in it, half that to engines (`RAIN` in `src/ultimate.js`).
+    every foe in it, half that to engines; with more than 14 soldiers in the fire each burns for his share (in a War Mode block the
+    fire did most of the 9 000 damage a cast did there) (`RAIN` in `src/ultimate.js`).
   - **Berserker: Unstoppable**: a roar that hurts everyone within 4.5 m and throws the soldiers among them through the air, and for
     8 s you are twice your size (everyone sees it; your eyes rise 30%, your body is 0.25 m wider and 65% taller to hit and to walk,
     still well under a gate's 6 m arch). Nothing can slow, stagger or knock you back, your reach is 45% longer, Rage does not ebb,
@@ -1436,7 +1447,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | --- | --- |
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
-| `src/ultimate.js` | The Ultimate (Z): the charge, the Mage's Meteor, the Cleric's Sanctuary, the stand-ins, their looks and sounds, when the bots use them, and (at the top) how a class adds its own |
+| `src/ultimate.js` | The Ultimate (Z): the charge (each class's pace: `ULT.rate` in config.js), the Mage's Meteor, the Cleric's Sanctuary, the Ranger's Rain of Fire, their looks and sounds, when the bots use them, and (at the top) how a class adds its own |
 | `src/aimring.js` | The circle on the ground that shows where an aimed ability will land (the hawk, the Leap, the aimed Ultimates; it stays marked while a rain comes down) |
 | `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
 | `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |

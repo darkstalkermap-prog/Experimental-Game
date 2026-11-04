@@ -25,20 +25,20 @@ import { isCustom } from './heraldry.js';
 export const KNIGHT = {
   // Wrath, 0..1: what a blow on the shield adds (a full block, a parry, a blow the shield only softened: an arrow, a spell, a blow with too
   // little stamina left; `lord`: a lord's shield turning a blow aside), and how it fades: after `idle` s without a blocked blow, `fade` a second
-  wrath: { block: 0.2, parry: 0.34, soft: 0.08, lord: 0.2, idle: 12, fade: 0.04 },
+  wrath: { block: 0.25, parry: 0.4, soft: 0.08, lord: 0.2, idle: 12, fade: 0.04 },
   // his raised shield softens a blast or a sweeping blow from in front (a Fireball, a Whirlwind, an Explosive Arrow) by `blast` of what
   // it takes off an arrow (Game.damage): anyone else's shield is no help against those
   blast: 0.6,
   // the shockwave: a cone `reach` m long and as wide as cos `cos` either side of his facing; `dmg` of his melee damage (`edge` of it at the
   // far end), soldiers thrown back `knock` m/s and staggered `stagger` s, heroes `hero` s
-  wave: { reach: 9, cos: 0.5, dmg: 2.2, edge: 0.55, knock: 12, stagger: 1, hero: 0.5 },
+  wave: { reach: 9, cos: 0.5, dmg: 2.6, edge: 0.55, knock: 12, stagger: 1, hero: 0.5 },
   // Shield Throw: out at `speed` m/s up to `range` m, a bounce to the nearest foe within `bounce` m of the last, `hits` foes in all, each
   // taking `dmg` of his melee damage and stunned `stun` s (a hero `hero` s, nothing if his own shield is up facing it); back at `back` m/s.
   // A foe within `hitR` m of its path is struck; after `maxT` s it is back in his hand whatever happened
   toss: { range: FIREBALL_RANGE, speed: 55, back: 60, bounce: 10, hits: 3, dmg: 1.5, stun: 1.1, hero: 0.8, hitR: 0.8, maxT: 8 },
   // Challenge: every foe within `radius` m for `time` s; he takes `cut` of the damage, and a rival hero it binds is held: `hold` slower
   // (he has to face the Knight: without it a Ranger or a Mage walked backwards out of his reach for the whole duel)
-  dare: { radius: 12, time: 3, cut: 0.5, hold: 0.4 },
+  dare: { radius: 12, time: 3, cut: 0.5, hold: 0.25 },
   // the Banner: `radius` m for `time` s; every `every` s heroes of his side near it heal `heal` of their health a second, soldiers
   // `healMen`; foes near it move at `slow` of their speed
   banner: { radius: 10, time: 12, heal: 0.025, healMen: 0.04, slow: 0.6, every: 0.5 },

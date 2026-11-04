@@ -294,7 +294,7 @@ export const ULT = {
   healed: 1 / 680, healCap: 0.25,   // (healCap: the most one heal of others can add, whatever the crowd it reaches)
   lasts: 1,   // (seconds after a cast before the charge starts to fill again, unless the class's `u` says how long it goes on working)
   // how fast each class's bar fills, of the rates above: about 80 s of fighting for a full bar whatever the class (measured in 5-minute bot
-  // battles: a Ranger's or Cavalier's damage and a Cleric's healing filled theirs in under a minute, a Knight's blocks in an hour and a half)
+  // battles: a Ranger's or Cavalier's damage and a Cleric's healing filled theirs in under a minute, a Knight's blocks in a minute and a half)
   rate: { knight: 1.1, berserker: 1, mage: 0.92, cleric: 0.72, cavalier: 0.75, ranger: 0.72 },
   // the Mage's Meteor: aimed as the volley is (a circle on the ground) up to `range` m; the rock comes down `fall` s after the cast. It deals
   // `dmg` of spell damage (times the Mage's spell bonus) to everyone within `radius` m, `edge` of it at the rim; soldiers are knocked down
