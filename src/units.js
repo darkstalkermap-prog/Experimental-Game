@@ -154,7 +154,7 @@ export class Unit {
       this.horse = buildHorse(team, this.variant, team !== RAIDER_TEAM);
       this.mesh = new THREE.Group();
       this.mesh.add(this.horse.root);
-      m.root.position.set(0, SADDLE_Y, -0.05);
+      m.root.position.set(0, SADDLE_Y + (m.seatLift || 0), -0.05);   // (a dwarf, drawn shorter, sits up to the saddle: models.js)
       this.mesh.add(m.root);
     } else {
       this.mesh = m.root;

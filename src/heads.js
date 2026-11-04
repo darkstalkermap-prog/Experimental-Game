@@ -24,16 +24,26 @@ const sat = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const sstep = (a, b, v) => { const t = sat((v - a) / (b - a)); return t * t * (3 - 2 * t); };
 
 // The face of a man: `f` tunes it (brow: how heavy the brow ridge; jaw: how broad; nose: how big; cheek: cheekbones; age: hollower
-// cheeks and a longer face). Returns the signed distance at (x, y, z).
+// cheeks and a longer face; long: a longer, narrower face and chin (an elf's); skull: the bare skull of the undead, the nose a hole, the
+// eyes deep pits, the teeth bared). Returns the signed distance at (x, y, z).
 export function faceField(f = {}) {
-  const brow = f.brow || 1, jaw = f.jaw || 1, nose = f.nose || 1, cheek = f.cheek || 1, age = f.age || 0;
+  const brow = f.brow || 1, jaw = f.jaw || 1, nose = f.nose || 1, cheek = f.cheek || 1, age = f.age || 0, long = f.long || 0, skull = f.skull || 0;
   return (x, y, z) => {
     const ax = Math.abs(x);
     let d = sdEll(ax, y, z, [0, 0.205, -0.008], [0.077, 0.097, 0.097]);                                    // the skull
-    d = smin(d, sdEll(ax, y, z, [0, 0.152 - age * 0.004, 0.022], [0.064, 0.08 + age * 0.004, 0.071]), 0.03);   // the face
-    d = smin(d, sdEll(ax, y, z, [0, 0.106, 0.027], [0.055 * jaw, 0.048, 0.062]), 0.026);                        // the jaw
-    d = smin(d, sdEll(ax, y, z, [0, 0.074, 0.064], [0.024 * jaw, 0.02, 0.019]), 0.016);                         // the chin
+    d = smin(d, sdEll(ax, y, z, [0, 0.152 - age * 0.004 - long * 0.01, 0.022], [0.064 - long * 0.004, 0.08 + age * 0.004 + long * 0.012, 0.071]), 0.03);   // the face
+    d = smin(d, sdEll(ax, y, z, [0, 0.106 - long * 0.018, 0.027], [0.055 * jaw, 0.048, 0.062]), 0.026);                        // the jaw
+    d = smin(d, sdEll(ax, y, z, [0, 0.074 - long * 0.024, 0.064 + long * 0.004], [0.024 * jaw, 0.02, 0.019]), 0.016);          // the chin
     if (d > 0.045 || z < 0.0) return d;   // (the features below are all on the front of the face, none stands 4 cm off it)
+    if (skull) {
+      d = smin(d, sdEll(ax, y, z, [0.047, 0.166, 0.054], [0.03, 0.017, 0.026]), 0.01);                         // a cheekbone, standing out
+      d = smin(d, sdEll(ax, y, z, [0, 0.204, 0.079], [0.066, 0.015, 0.024]), 0.01);                            // the brow ridge
+      d = smax(d, -sdEll(ax, y, z, [0.032, 0.178, 0.092], [0.025, 0.021, 0.03]), 0.006);                       // an eye's pit
+      d = smax(d, -sdEll(ax, y, z, [0, 0.142, 0.101], [0.011, 0.017, 0.03]), 0.004);                           // the nose's hole
+      d = smax(d, -sdEll(ax, y, z, [0.05, 0.122, 0.072], [0.021, 0.03, 0.02]), 0.012);                         // the hollow cheeks
+      d = smin(d, sdEll(ax, y, z, [0, 0.108, 0.079], [0.03, 0.016, 0.014]), 0.006);                            // the teeth
+      return d;
+    }
     d = smin(d, sdEll(ax, y, z, [0.043, 0.162, 0.058], [0.025 * cheek, 0.016, 0.024]), 0.014);                 // a cheekbone
     d = smin(d, sdEll(ax, y, z, [0, 0.202, 0.081], [0.064, 0.015 * brow, 0.022 * brow]), 0.012);                 // the brow ridge
     d = smin(d, sdRod(ax, y, z, [0, 0.19, 0.089], [0, 0.141, 0.111 + 0.004 * nose], 0.007, 0.0105 * nose), 0.009);   // the nose

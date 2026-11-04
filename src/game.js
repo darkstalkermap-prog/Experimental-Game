@@ -30,6 +30,7 @@ import { Hill } from './hill.js';
 import { Pings } from './pings.js';
 import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
+import { setRaces, currentRaces } from './races.js';
 import { disposeWorld } from './resources.js';
 import { allied, setSides, colorName } from './teams.js';
 import { applyQuality, Q } from './quality.js';
@@ -276,6 +277,8 @@ export class Game {
       this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
     }
 
+    setRaces(setup.races);   // (each house's army's look, before any soldier is made: races.js; only the look, never a number of the battle)
+    this.races = currentRaces();
     assignArms(this);   // (a lord's arms on their castle, their soldiers and their hero; AI houses keep theirs: heraldry.js)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;

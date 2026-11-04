@@ -2,8 +2,8 @@
 // geometry that carries, per vertex:
 //   position, normal
 //   color   the colour itself, or a grey shade when the part takes a per-soldier colour (house cloth, skin, hair)
-//   aSurf   roughness, metalness, colour slot (SLOT), feature gate (0 always shown; n shown while bit n of the soldier's flags is set;
-//           -n shown while it is clear)
+//   aSurf   roughness (+ EXACT on a part whose colours are its race's own: the race tint passes it by, unitmat.js), metalness, colour
+//           slot (SLOT), feature gate (0 always shown; n shown while bit n of the soldier's flags is set; -n shown while it is clear)
 //   aFx     cloth sway weight (0..0.99 hanging cloth, 1..2 capes; + SKIRT on a skirt), pattern (PAT) + 0.4 x dirt (0..1: mud and dust, thickest
 //           at the feet; the shader reads the fraction), u, v (for the face and emblem atlases)
 // unitmat.js reads them in the shader. Ambient occlusion is baked into `color` (darker under things, lighter on top).
@@ -13,6 +13,9 @@ import * as THREE from 'three';
 export const SLOT = { fixed: 0, cloth: 1, skin: 2, hair: 3, clothDark: 4, clothLight: 5, skinDark: 6, glow: 7 };
 // added to the sway weight of the parts of a skirt (hanging from the pelvis): they follow the thighs up in a crouch (unitmat.js)
 export const SKIRT = 2;
+// added to the roughness of a part built for one race (raceshapes.js): its colours are already that race's, so the shader's race tint
+// (which turns the plain kit of the human shapes bronze, rusty or tarnished) leaves it alone
+export const EXACT = 2;
 // surface patterns drawn in the fragment shader
 export const PAT = { none: 0, weave: 1, quilt: 2, mail: 3, leather: 4, grain: 5, fur: 6, face: 7, emblem: 8, scale: 9, glow: 10, skin: 11, badge: 12, hair: 13 };
 // [roughness, metalness]
@@ -53,6 +56,7 @@ export class Builder {
     this.count = 0;
     this.xf = null;   // a matrix applied to everything placed while it is set (see within)
     this.dirt = null; // (x, y, z) in the shape's frame -> 0..1: how muddy what is placed while it is set gets (a primitive's own `d` wins)
+    this.exact = false; // a race's own shape: its colours are not tinted (EXACT)
   }
 
   // build part of a shape through matrix M (a helmet scaled to the head, a torso piece moved)
@@ -100,7 +104,7 @@ export class Builder {
       this.P.push(_tp.x, _tp.y, _tp.z);
       this.N.push(_tn.x, _tn.y, _tn.z);
       if (slot) this.C.push(shade, shade, shade); else this.C.push(col.r * shade, col.g * shade, col.b * shade);
-      this.S.push(mat[0], mat[1], slot, o.g || 0);
+      this.S.push(this.exact ? mat[0] + EXACT : mat[0], mat[1], slot, o.g || 0);
       let u = 0, v = 0;
       if (uv) {
         const q = M0 === M ? _tp : _tu.fromBufferAttribute(pa, i).applyMatrix4(M0);

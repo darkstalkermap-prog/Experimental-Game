@@ -9,6 +9,7 @@ import { lookText } from './unlocks.js';
 import { armsChip, armsTitle } from './heraldry.js';
 import { lobbyRivalName } from './rivalsui.js';
 import { WAR_DESC } from './warui.js';
+import { RACES, raceName, isRaceId } from './races.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -55,6 +56,10 @@ function style() {
 #lobbyDiff .qlabel { font-family: Cinzel, serif; font-size: 14px; margin-right: 4px; }
 #lobbyDiff button { padding: 6px 14px; font-size: 13px; }
 #lobbyDiff button:disabled.active { opacity: 1; }   /* (a guest sees the host's choice clearly, only without the click) */
+#menu .setup #soloRace { order: 5; }   /* (your army's race: after the Mode row, before Difficulty; the other armies' row is in More options) */
+#menu .seatrow.races button, #lobby #lobbyRace button { font-size: 14px; padding: 5px 11px; }
+#lobbyRace { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+#lobbyRace button.active { background: var(--wine, #5a1d12); color: #f8ebc8; }
 `;
   document.head.appendChild(s);
 }
@@ -68,6 +73,9 @@ function swatches(el, mine, taken, onPick) {
   }).join('');
   for (const b of el.querySelectorAll('button')) b.onclick = () => onPick(b.dataset.c);
 }
+
+// the five races as buttons (races.js): only the look of the army, so the tip says so
+const raceItems = (mine) => RACES.map((r) => ({ v: r.id, html: esc(r.name), active: r.id === mine, title: `${r.name}: ${r.blurb} Only the look: every soldier fights the same.` }));
 
 // a row of buttons under a label, made once in `parent` before `before` (or at the end)
 function row(id, label, parent, before = null) {
@@ -143,7 +151,7 @@ export function drawLobby(v, on) {
   // the list: one line per castle, or per hero seat
   const lines = [];
   // (the chip of the player's arms, in the colour of the house they hold: heraldry.js)
-  const holder = (p, house, t) => `<img class="arms" src="${armsChip(p.cos, (PALETTE[house] || PALETTE.blue).hex, t)}" alt="" title="${esc(armsTitle(p.cos))}">${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
+  const holder = (p, house, t) => `<img class="arms" src="${armsChip(p.cos, (PALETTE[house] || PALETTE.blue).hex, t)}" alt="" title="${esc(armsTitle(p.cos))}">${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${isRaceId(p.rc) && !hero ? ` · ${esc(raceName(p.rc))}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
   const tag = (state) => (state === 'open' ? '<em class="st open" title="A player who joins can sit here; an AI lord holds it if nobody does">open seat</em>' : '<em class="st">closed</em>');
   const acts = (n, p, state, free) => {
     const a = [];
@@ -197,6 +205,19 @@ export function drawLobby(v, on) {
   }
   const taken = new Map(players.filter((p) => p !== mine && p.col).map((p) => [p.col, p.name]));
   swatches(sw, mine && mine.col, taken, (id) => on.color(id));
+  // your army's race (races.js): each player picks their own house's; in Hero Mode a side's armies take its first player's, as the colour
+  let rr = $('lobbyRace');
+  if (!rr) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = '<h3 class="section">Your army</h3><div id="lobbyRace" role="group" aria-label="Your army: race"></div><div class="note" id="lobbyRaceNote"></div>';
+    sw.parentNode.after(wrap);
+    rr = $('lobbyRace');
+  }
+  const myRace = mine && isRaceId(mine.rc) ? mine.rc : 'human';
+  rr.innerHTML = raceItems(myRace).map((it) => `<button data-v="${it.v}"${it.active ? ' class="active"' : ''} title="${esc(it.title)}">${it.html}</button>`).join('');
+  for (const b of rr.querySelectorAll('button')) b.onclick = () => on.race && on.race(b.dataset.v);
+  const rn = $('lobbyRaceNote');
+  if (rn) rn.textContent = hero ? "In Hero Mode the heroes are men; each side's armies take the race of its first player." : 'Only the look of your soldiers: every race fights the same.';
   const note = $('lobbyColorNote');
   if (note) {
     const lead = hero && mine && mine.hs >= 0 ? players.filter((p) => p.hs >= 0 && sideOfSeat(p.hs) === sideOfSeat(mine.hs)).sort((a, b) => a.hs - b.hs)[0] : null;
@@ -209,8 +230,9 @@ export function drawLobby(v, on) {
 }
 
 // ---------------- the main menu (one player) ----------------
-// v: { hero (bool), war (bool: War Mode, the castles are armies), slot (your castle in a war), side (your side in a hero match), slots (the war's castles: 'open' | 'ai' | 'empty'), size, color }
-// on: { slot(t), side(s), state(t), size(n), color(id) }
+// v: { hero (bool), war (bool: War Mode, the castles are armies), slot (your castle in a war), side (your side in a hero match), slots (the war's castles: 'open' | 'ai' | 'empty'), size, color,
+//      race (your army's race), others (the other armies': 'random' | 'same' | 'human') }
+// on: { slot(t), side(s), state(t), size(n), color(id), race(id), others(v) }
 export function drawSolo(v, on) {
   style();
   const anchor = $('difficulty');
@@ -220,6 +242,14 @@ export function drawSolo(v, on) {
   const rivals = row('soloRivals', 'Others', parent, anchor);
   const size = row('soloSize', 'Teams', parent, anchor);
   const col = row('soloColor', 'Colour', parent, anchor);
+  const race = row('soloRace', 'Your army', parent, anchor), others = row('soloOthersRace', 'Other armies', parent, anchor);
+  race.classList.add('races'); others.classList.add('races');
+  buttons(race, 'Your army', raceItems(v.race), (id) => on.race(id));
+  buttons(others, 'Other armies', [
+    { v: 'random', html: 'Random', active: v.others === 'random', title: 'Each other house fields a race of its own, rolled for every battle' },
+    { v: 'same', html: 'Same as mine', active: v.others === 'same', title: 'Every house fields your race' },
+    { v: 'human', html: 'Human', active: v.others === 'human', title: 'The other houses are men' },
+  ], (o) => on.others(o));
   const wants = [null, null, null, null];
   wants[v.hero ? v.side : v.slot] = v.color;
   const house = assignColors(wants);
