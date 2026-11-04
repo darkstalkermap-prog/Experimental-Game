@@ -356,7 +356,7 @@ function meteorLookStep(A, e, dt) {
 // afar), their glow on everything near, and a crackle.
 export function burnLook(A, at, r, time, silent = false) {
   A.gfx.glyph('rune', at.x, at.y, at.z, r, 0xff3a10, time, { arms: r > 5 ? 9 : 6, strength: 1.6 });
-  A.ultFx.push({ t: 0, at: at.clone(), r, time, acc: 0, crackle: 0, silent, every: Math.max(0.004, Math.min(0.025, 1 / (0.6 * Math.PI * r * r))), big: Math.min(1, (r / M.burnR) ** 0.25), step: burnLookStep });
+  A.ultFx.push({ t: 0, at: at.clone(), r, time, acc: 0, crackle: 0, silent, every: Math.max(0.004, Math.min(0.016, 1 / (0.6 * Math.PI * r * r))), step: burnLookStep });
 }
 
 function burnLookStep(A, e, dt) {
@@ -371,7 +371,7 @@ function burnLookStep(A, e, dt) {
     const a = Math.random() * Math.PI * 2, r = e.r * Math.sqrt(Math.random()) * 0.95;
     const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
     V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.1, z);
-    fx.blaze(V1, (1.1 + Math.random() * 1.1) * (0.45 + 0.55 * left) * e.big);
+    fx.blaze(V1, (1.1 + Math.random() * 1.1) * (0.45 + 0.55 * left));
     if (Math.random() < 0.04) fx.smoke(V1);
   }
   if (Math.random() < 0.25) fx.flash(V1.set(at.x, at.y + 1.2, at.z), A.col.set(0xff7a30), e.r * 1.6 * (0.4 + 0.6 * left), 0.3, 0.5);   // (the glow of it on everything near)
