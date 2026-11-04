@@ -64,3 +64,8 @@ export const currentRaces = () => current.slice();
 export const raceOf = (team) => (Number.isInteger(team) && team >= 0 && team < 4 ? current[team] : 'human');
 // the races in the field, each once
 export const racesInPlay = () => [...new Set(current)];
+// How tall each race stands, on a man's 1 (raceshapes.js draws them so, models.js RACE_LOOK): the height the game measures a soldier by (what an
+// arrow can hit, his head, where he is aimed at), so a shot at the drawn head counts and a shot over a dwarf misses. Only the height: his reach,
+// radius, speed and every other number are a man's. (The men are 1, so a battle of men plays exactly as it always did.)
+export const RACE_HEIGHT = { human: 1, elf: 1.1, dwarf: 0.76, orc: 1.08, undead: 1 };
+export const raceHeight = (team) => RACE_HEIGHT[raceOf(team)] || 1;

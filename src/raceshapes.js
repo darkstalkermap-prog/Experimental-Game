@@ -29,31 +29,32 @@ const def = (name, make, open = false) => KIT.def(name, (b) => { b.exact = true;
 
 // ---------------------------------------------------------------- the looks
 // scale: the build [width, height, depth] on the man's; head: the head's own scale on that (a dwarf keeps a man's head); neck: where the head
-// joint sits on the torso (a man's is [0, 0.435, -0.012]). (The game's body is a man's whatever is drawn: a hero's arrow in the top 17% of it
-// is a headshot, classes.js headZone. So the dwarf is drawn no shorter than 0.88 with his head set high on his shoulders, its upper half in
-// that zone, and the elf no taller than 1.05, his eyes still under the top of the body); skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js);
-// coats, manes: their horses'; plume: how high a veteran's plume stands on each helm
+// joint sits on the torso (a man's is [0, 0.435, -0.012]). The height drawn matches the height the game measures (races.js RACE_HEIGHT: what an
+// arrow hits, and the top 17% of it the head, classes.js headZone): the dwarf about three quarters of a man and stocky, the elf a tenth taller
+// and slender, the orc bulky and hunched (taller drawn, but his head carried low and forward, so the top of him is lower), the undead gaunt.
+// skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js); coats, manes: their horses'; mount: the horse's build
+// [width, height, length] (an elf's finer and taller, a dwarf's a stout pony, an orc's heavier); plume: how high a veteran's plume stands on each helm
 export const RACE_LOOK = {
   elf: {
-    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.93, 1.05, 0.93], head: [0.98, 1.0, 0.98],
+    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.9, 1.1, 0.9], head: [0.96, 1.0, 0.96],
     skins: [0xe6cdb2, 0xdcbf9e, 0xeed8c2, 0xcfb08e], hair: [0xe6dfca, 0xd6b45e, 0x1a1612, 0x6a3a1c, 0xcabf98], faces: [8, 8, 0, 4],
-    coats: [0xd8d2c8, 0xb8b0a4, 0x9a8a78, 0xe8e2d8], manes: [0xe8e4dc, 0xcfc8b8],
+    coats: [0xd8d2c8, 0xb8b0a4, 0x9a8a78, 0xe8e2d8], manes: [0xe8e4dc, 0xcfc8b8], mount: [0.92, 1.08, 1.04],
     plume: { 'head.kettle': 0.4, 'head.nasal': 0.31, 'head.great': 0.4, 'head.crown': 0.32, 'head.hood': 0.32 },
   },
   dwarf: {
-    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.2, 0.88, 1.16], head: [0.92, 1.1, 0.93], neck: [0, 0.47, -0.01],
+    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.3, 0.76, 1.24], head: [0.84, 1.24, 0.86], neck: [0, 0.455, -0.01],
     skins: [0xd29c7a, 0xc28462, 0xb87a58, 0xdcaa88], hair: [0x8a3a1a, 0x5a3420, 0x1c1814, 0x8a8478, 0xa87a3a, 0x6a2a16], faces: [9, 9, 1, 5],
-    coats: [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x8a5a30], manes: [0x1e1814, 0x3a2a1a],
+    coats: [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x8a5a30], manes: [0x1e1814, 0x3a2a1a], mount: [1.08, 0.8, 0.86],
     plume: { 'head.kettle': 0.33, 'head.nasal': 0.35, 'head.great': 0.33, 'head.crown': 0.33, 'head.hood': 0.3 },
   },
   orc: {
-    id: 'orc', idx: 3, prefix: 'orc:', scale: [1.13, 1.03, 1.1], head: [1.04, 1.0, 1.04], neck: [0, 0.405, 0.045],
+    id: 'orc', idx: 3, prefix: 'orc:', scale: [1.2, 1.13, 1.16], head: [0.98, 0.9, 0.98], neck: [0, 0.385, 0.065],
     skins: [0x6a8a46, 0x5e7e3e, 0x7a8c4e, 0x6c7e52, 0x52703a], hair: [0x141210, 0x2a2018, 0x3a3028], faces: [10, 10, 6, 7],
-    coats: [0x2a221c, 0x3a2a1e, 0x4a3a2a, 0x1c1814], manes: [0x141210, 0x2a2018],
+    coats: [0x2a221c, 0x3a2a1e, 0x4a3a2a, 0x1c1814], manes: [0x141210, 0x2a2018], mount: [1.16, 1.02, 1.06],
     plume: { 'head.kettle': 0.36, 'head.nasal': 0.34, 'head.great': 0.35, 'head.crown': 0.36, 'head.hood': 0.32 },
   },
   undead: {
-    id: 'undead', idx: 4, prefix: 'undead:', scale: [0.9, 1.0, 0.88], head: [0.96, 1.0, 0.96],
+    id: 'undead', idx: 4, prefix: 'undead:', scale: [0.84, 1.0, 0.82], head: [1.0, 1.0, 1.0],
     skins: [0xcfc6aa, 0xbdb69c, 0xaeaa98, 0xc4bca2], hair: [0x8a8a84, 0xb8b4a8, 0x4a4844], faces: [11],
     coats: [0x6e6c66, 0x4a4844, 0x8a8478, 0x3a3834], manes: [0x2a2826, 0x8a8a84],
     plume: { 'head.kettle': 0.37, 'head.nasal': 0.36, 'head.great': 0.34, 'head.crown': 0.32, 'head.hood': 0.33 },
