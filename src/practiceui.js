@@ -8,6 +8,7 @@ import { CLASSES, CLASS_IDS } from './classes.js';
 import { UNIT_TYPES, PRACTICE } from './config.js';
 import { MAX_LEVEL } from './heroes.js';
 import { STAND_NAMES, STAND_HINTS } from './practice.js';
+import { RACES } from './races.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -24,7 +25,7 @@ const STANDS = Object.keys(STAND_NAMES);
 export function buildPracticePanel(ui) {
   const g = ui.game, root = document.querySelector('#practice .pbody');
   root.innerHTML = '';
-  const R = ui.pr = { cls: {}, lvl: [], type: {}, rank: [], tier: [], count: [], armor: [], stand: {} };
+  const R = ui.pr = { cls: {}, lvl: [], type: {}, rank: [], tier: [], count: [], armor: [], stand: {}, race: {} };
   const el = (tag, cls, html = '', parent = root) => { const e = document.createElement(tag); if (cls) e.className = cls; e.innerHTML = html; parent.appendChild(e); return e; };
   const chip = (parent, html, title, fn) => {
     const b = el('button', '', html, parent);
@@ -64,6 +65,9 @@ export function buildPracticePanel(ui) {
   el('h5', '', 'Training tier');
   const tiers = el('div', 'chips');
   for (let t = 0; t <= 5; t++) R.tier[t] = chip(tiers, `${t}`, `Tier ${t}: +${15 * t}% health and damage, and a better kit`, () => { g.court.pick.tier = t; });
+  el('h5', '', 'Race');   // (only the look: those already in the yard keep theirs, so races can stand side by side)
+  const races = el('div', 'chips');
+  for (const r of RACES) R.race[r.id] = chip(races, esc(r.name), `${r.blurb} Only the look: the same numbers as any other race. Soldiers already sent keep theirs.`, () => g.court.setRace(r.id));
   el('h5', '', 'How many');
   const counts = el('div', 'chips');
   for (const c of [1, 5, 10, 20]) R.count[c] = chip(counts, `${c}`, '', () => { g.court.pick.count = c; });
@@ -102,6 +106,7 @@ export function refreshPractice(ui, force = false) {
   for (let r = 1; r <= 5; r++) { R.rank[r].classList.toggle('active', r === (pv.ranked ? c.pick.rank : 1)); R.rank[r].disabled = !pv.ranked; }
   for (let t = 0; t <= 5; t++) { R.tier[t].classList.toggle('active', t === (pv.tiered ? c.pick.tier : 0)); R.tier[t].disabled = !pv.tiered; }
   for (const k in R.count) R.count[k].classList.toggle('active', Number(k) === c.pick.count);
+  for (const id in R.race) R.race[id].classList.toggle('active', id === c.pick.race);
   PRACTICE.dummies.forEach((_, i) => R.armor[i].classList.toggle('active', i === c.armor));
   for (const s in R.stand) R.stand[s].classList.toggle('active', !!c.stands[s]);
 

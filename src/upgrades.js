@@ -7,6 +7,7 @@ import { mergeGeometries } from '../vendor/BufferGeometryUtils.js';
 import { CASTLE, TEAM_COLORS } from './config.js';
 import { box } from './materials.js';
 import { buildSoldier, poseSoldier, bakedMesh, unitMaterial } from './models.js';
+import { raceOf } from './races.js';
 import { ARCHER_SPOTS, archersOf } from './towerarchers.js';
 
 const { H, wallH, wallT: T, gateW, gateH, towerH, towerR, towerOff } = CASTLE;
@@ -313,7 +314,7 @@ export class Upgrades {
   // one archer drawing his bow, baked into a single static geometry (shared by every tower of the house)
   archerGeo() {
     const c = this.c;
-    const key = `towerArcher:${c.team}:${TEAM_COLORS[c.team]}`;   // (the house colour is baked in: a match may paint the house another one, teams.js)
+    const key = `towerArcher:${c.team}:${TEAM_COLORS[c.team]}:${raceOf(c.team)}`;   // (the house colour is baked in: a match may paint the house another one, teams.js; and its race's look, races.js)
     let geo = ARCHER_GEO.get(key);
     if (!geo) {
       const m = buildSoldier('archer', c.team, 1);

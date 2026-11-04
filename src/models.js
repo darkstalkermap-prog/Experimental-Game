@@ -12,6 +12,8 @@ import { unitMaterial, unitMaterials } from './unitmat.js';
 import { unitTextures, emblemCell, setRigEmblem } from './unittex.js';
 import { SKIRT, quietly } from './modelkit.js';
 import { buildGiant, poseGiant, poseGiantDead } from './giantmodel.js';
+import { RACE_LOOK, raceHeadJobs } from './raceshapes.js';
+import { raceOf } from './races.js';
 
 export { unitMaterial };
 
@@ -73,33 +75,46 @@ function tierBits(t) {
 const _col = new THREE.Color();
 function setColor(arr, i, hex) { _col.set(hex); arr[i] = _col.r; arr[i + 1] = _col.g; arr[i + 2] = _col.b; }
 
-// (a giant is not a man scaled up: he is broader and deeper for his height, or he looks a beanpole)
-function bodyScale(body, desc, tier) {
+// (a giant is not a man scaled up: he is broader and deeper for his height, or he looks a beanpole; a race has its own build, R.scale:
+// the elf taller and slighter, the dwarf short and broad. Only the drawing: the game's body is the same for all, see races.js)
+function bodyScale(body, desc, tier, R = null) {
   const s = desc.scale * (desc.giant ? 1 : TIER_SCALE(tier)), w = desc.giant ? 1.22 : 1;
-  body.scale.set(s * w, s, s * w);
+  if (R) body.scale.set(s * w * R.scale[0], s * R.scale[1], s * w * R.scale[2]);
+  else body.scale.set(s * w, s, s * w);
 }
+// the look of a soldier's race (raceshapes.js RACE_LOOK; null: the human one). opts.race names it outright (a far model baked for a race);
+// otherwise it is his house's (races.js). The raiders and the heroes are men.
+function raceLookOf(team, opts) {
+  if (opts && opts.race) return RACE_LOOK[opts.race] || null;
+  if (team === RAIDER_TEAM || (opts && opts.hero)) return null;
+  return RACE_LOOK[raceOf(team)] || null;
+}
+// a race wears its own make of a shape where it has one ('elf:head.kettle'), the human one elsewhere (tinted to it in the shader: unitmat.js)
+const raceShape = (R, name) => (R && SHAPES.has(R.prefix + name) ? getShape(R.prefix + name) : getShape(name));
 // Build a posable soldier (the rig only: the crowd draws it). opts.hero: a hero class instead of a unit type's look.
 export function buildSoldier(type, team, variant, tier = 0, opts = null) { return quietly(makeSoldier, type, team, variant, tier, opts); }
 function makeSoldier(type, team, variant = Math.floor(Math.random() * 6), tier = 0, opts = null) {
   let desc = opts && opts.hero ? HERO_DESC[opts.hero] || HERO_DESC.knight : descFor(type);
   if (opts && opts.cape && SHAPES.has(opts.cape)) desc = { ...desc, cape: opts.cape };   // a cloak the lord has earned (progress.js)
   const raider = team === RAIDER_TEAM;
+  const R = desc.giant ? null : raceLookOf(team, opts);
   if (desc.giant && !(opts && opts.hero)) return buildGiant(type, team, variant, raider ? RAIDER_CLOTH[variant % 3] : TEAM_COLORS[team] ?? 0xffffff, desc);   // (an ettin of its own: giantmodel.js)
   const arm = raider && !desc.plate ? 'skin' : desc.arm;
   const root = new THREE.Group();
   const body = joint(root, 0, 0, 0);
-  bodyScale(body, desc, tier);
+  bodyScale(body, desc, tier, R);
   // (a man of 1.8 m: hip joints at 0.95, knees at 0.51, the waist at 1.07, shoulder joints at 1.43, elbows at 1.12, the neck at 1.5)
   const pelvis = joint(body, 0, 0.97, 0);
   const hipL = joint(pelvis, 0.09, -0.02, 0), hipR = joint(pelvis, -0.09, -0.02, 0);
   const kneeL = joint(hipL, 0, -0.44, 0), kneeR = joint(hipR, 0, -0.44, 0);
   const ankleL = joint(kneeL, 0, -ANKLE_Y, 0), ankleR = joint(kneeR, 0, -ANKLE_Y, 0);   // (the feet turn there: they lie on the ground as the shin leans)
   const torso = joint(pelvis, 0, 0.1, 0);
-  const head = joint(torso, 0, 0.435, -0.012);
+  const head = R && R.neck ? joint(torso, R.neck[0], R.neck[1], R.neck[2]) : joint(torso, 0, 0.435, -0.012);   // (an orc's head hangs lower and forward)
+  if (R && R.head) head.scale.set(R.head[0], R.head[1], R.head[2]);   // (a dwarf's head keeps a man's size on his squat body)
   const shL = joint(torso, 0.195, 0.36, -0.01), shR = joint(torso, -0.195, 0.36, -0.01);
   const elL = joint(shL, 0, -0.31, 0), elR = joint(shR, 0, -0.31, 0);
   const parts = [];
-  const add = (node, name, on = true) => { const p = { node, shape: getShape(name), on }; parts.push(p); return p; };
+  const add = (node, name, on = true) => { const p = { node, shape: raceShape(R, name), on }; parts.push(p); return p; };
   add(pelvis, desc.pelvis); add(torso, desc.chest); add(head, desc.head);
   add(hipL, 'thigh.' + desc.leg); add(hipR, 'thigh.' + desc.leg); add(kneeL, 'shin.' + desc.leg); add(kneeR, 'shin.' + desc.leg);
   add(ankleL, footOf(desc.leg)).near = add(ankleR, footOf(desc.leg)).near = true;   // (near only: further off the shin wears the foot)
@@ -121,25 +136,30 @@ function makeSoldier(type, team, variant = Math.floor(Math.random() * 6), tier =
   const kit = add(torso, 'kit.torso', false);
   const kitArms = [add(shL, 'kit.arm', false), add(shR, 'kit.arm', false)];
   const kitShield = desc.shield ? add(elL, 'kit.shield.' + desc.shield, false) : null;
-  const mount = joint(head, 0, PLUME_Y[desc.head] || 0.3, -0.02);
+  const mount = joint(head, 0, (R && R.plume[desc.head]) || PLUME_Y[desc.head] || 0.3, -0.02);   // (on top of the race's own helm)
   const plumeC = add(mount, 'plume.cloth', false), plumeG = add(mount, 'plume.gold', false);
   const ranged = desc.weapon === 'bow';
   const look = lookFor(variant + 1);
+  if (R) {   // (the race's skin and hair; its heads carry their own hair and beards, so no cut or beard is gated)
+    look.skin = R.skins[(variant * 7 + 3) % R.skins.length]; look.hair = R.hair[(variant * 5 + 1) % R.hair.length];
+    look.face = R.faces[variant % R.faces.length];
+  }
   const m = {
     kind: 'soldier', type, team, variant, desc, raider, root, body, pelvis, torso, head, hipL, hipR, kneeL, kneeR, ankleL, ankleR, shL, shR, elL, elR, weapon, cape,
     weaponTilt: WEAPON_TILT[wk] ?? -1, weaponRoll: WEAPON_ROLL[wk] || 0, ranged, lance: desc.weapon === 'lance', mounted: !!desc.mounted, parts, kit, plumeC, plumeG, weaponPart, bowPart, bowDrawn, bowBack,
     kitArms, kitShield, tier: 0, rank: 1, inst: new Float32Array(16), headYaw: 0, hero: opts && opts.hero ? opts.hero : null,
+    race: R ? R.id : null, raceLook: R, seatLift: R ? 0.97 * desc.scale * (1 - R.scale[1]) : 0,   // (seatLift: how much higher a rider of the race sits to meet the saddle: units.js)
   };
-  m.farKey = `${m.hero || type}${raider && !desc.plate ? ':r' : ''}${m.mounted ? ':m' : ''}`;
+  m.farKey = `${m.hero || type}${raider && !desc.plate ? ':r' : ''}${m.mounted ? ':m' : ''}${R ? ':' + R.id : ''}`;
   const face = raider ? 6 + (variant & 1) : look.face;
   setColor(m.inst, 0, raider ? (type === 'warlord' ? 0x5c1a14 : RAIDER_CLOTH[variant % 3]) : TEAM_COLORS[team] ?? 0xffffff);
   setColor(m.inst, 4, look.skin);
   setColor(m.inst, 8, look.hair);
-  m.baseBits = (look.beard ? bitOf(6) : 0) | bitOf(7 + look.style);
+  m.baseBits = R ? 0 : (look.beard ? bitOf(6) : 0) | bitOf(7 + look.style);
   m.inst[3] = m.baseBits;
   m.faceIdx = face;
   setRigEmblem(m, opts && opts.cell >= 0 ? opts.cell : emblemCell(team));   // (the house's emblem, or its lord's arms: heraldry.js)
-  m.inst[12] = (variant * 0.37 + team * 0.11) % 1;
+  m.inst[12] = (variant * 0.37 + team * 0.11) % 1 + (R ? R.idx : 0);   // (the race in the whole part: the shader tints the kit for it, unitmat.js)
   root.userData.rig = m;
   if (tier) rigSetTier(m, tier);
   if (m.hero) warmRig(m);   // (a hero's body: a player's, a bot's or a lord's)
@@ -169,7 +189,7 @@ export function rigSetTier(m, tier) {
   m.kit.on = tier > 0;
   for (const p of m.kitArms) p.on = tier > 0;
   if (m.kitShield) m.kitShield.on = tier >= 3;
-  bodyScale(m.body, m.desc, tier);
+  bodyScale(m.body, m.desc, tier, m.raceLook);
 }
 // veterans wear a plume: team colour from rank 3, gold at rank 5
 export function rigSetRank(m, rank) {
@@ -205,12 +225,13 @@ function makeHorse(team, variant = Math.floor(Math.random() * 6), barded = true)
     add(up, 'horse.up.' + kind); add(low, 'horse.low.' + kind);
     legs.push({ up, low, kind });
   }
-  const coat = COATS[variant % COATS.length];
+  const R = team === RAIDER_TEAM ? null : RACE_LOOK[raceOf(team)] || null;
+  const coat = R && R.coats ? R.coats[variant % R.coats.length] : COATS[variant % COATS.length];
   const h = { kind: 'horse', root, body, neck, tail, legs, parts, inst: new Float32Array(16), phase: Math.random() * 6, farKey: `horse:${barded ? 1 : 0}`, barded, headNod: 0 };
   setColor(h.inst, 0, team === RAIDER_TEAM ? 0x4d3a28 : TEAM_COLORS[team] ?? 0xffffff);
   setColor(h.inst, 4, coat);
-  setColor(h.inst, 8, variant % COATS.length === 4 ? 0xb8b0a4 : 0x1e1814);
-  h.inst[12] = (variant * 0.21) % 1;
+  setColor(h.inst, 8, R && R.manes ? R.manes[variant % R.manes.length] : variant % COATS.length === 4 ? 0xb8b0a4 : 0x1e1814);
+  h.inst[12] = (variant * 0.21) % 1 + (R ? R.idx : 0);   // (the barding's metal in the race's tint, as the rider's)
   root.userData.rig = h;
   return h;
 }
@@ -795,7 +816,7 @@ function bodyPose(A, m, st) {
       const lean = Math.atan2(-fo, Math.max(0.2, fv));
       // (a foot in the air takes more of it, most at the top of its swing, so its toes stay clear of the ground)
       F.tilt = F.up ? Math.max(-0.6, Math.min(0.6, lean + (F.psi - lean) * (F.psi > lean ? 0.3 + 0.35 * Math.sin(Math.PI * F.w) : 0.3))) : Math.max(-0.85, Math.min(0.85, lean + 0.3 * (F.psi - lean)));
-      _a.set(lx2, wy + ankleH(F.tilt + slope) * sc, lz2).sub(B.position).multiplyScalar(1 / sc).sub(P.position).applyQuaternion(_qi);
+      _a.set(lx2, wy + ankleH(F.tilt + slope) * sc, lz2).sub(B.position).divide(B.scale).sub(P.position).applyQuaternion(_qi);   // (per axis: a race's build is not the same scale every way)
       _fw.set(fsx, 0, fsz).applyQuaternion(_qi);
       reachLeg(hip, kn, hip.position, _a, _fw, A);
       // the shin's tilt over the foot (the ankle's height next frame): the shin in the root's frame
@@ -1062,10 +1083,10 @@ function bakePart(geo, M, bits, inst) {
   for (let i = 0; i < sg.count; i++) sg.setW(i, 0);   // (what is left is always shown)
   for (let i = 0; i < fx.count; i++) if (fx.getX(i) >= SKIRT) fx.setX(i, fx.getX(i) - SKIRT);   // (moved out of the pelvis frame: a skirt stays as baked)
   if (inst) {
-    const col = g.attributes.color, sf = g.attributes.aSurf;
+    const col = g.attributes.color, sf = g.attributes.aSurf, race = Math.floor(inst[12] + 0.001);
     for (let i = 0; i < col.count; i++) {
       const slot = Math.round(sf.getZ(i));
-      if (!slot) continue;
+      if (!slot) { if (race > 0 && sf.getX(i) < 1.5) raceTint(col, i, race, sf.getY(i) > 0.5); continue; }
       const s = col.getX(i);
       const o = slot === 1 ? 0 : slot === 2 || slot === 6 ? 4 : slot === 3 ? 8 : 0;
       _tint.setRGB(inst[o], inst[o + 1], inst[o + 2]);
@@ -1075,6 +1096,17 @@ function bakePart(geo, M, bits, inst) {
     }
   }
   return g;
+}
+// the shader's race tint (unitmat.js RACE_TINT) on vertex i of a baked mesh, which is drawn without the instance that carries the race
+function raceTint(col, i, race, metal) {
+  const r = col.getX(i), g = col.getY(i), b = col.getZ(i), L = 0.3 * r + 0.59 * g + 0.11 * b;
+  const mix = (x, y, k) => x + (y - x) * k;
+  let o;
+  if (metal) o = race === 1 ? [mix(r, L * 1.04, 0.6), mix(g, L * 1.06, 0.6), mix(b, L * 1.1, 0.6)] : race === 2 ? [L * 1.34, L * 0.98, L * 0.6]
+    : race === 3 ? [L * 0.6, L * 0.47, L * 0.38] : [mix(r, L * 0.62, 0.65), mix(g, L * 0.98, 0.65), mix(b, L * 0.84, 0.65)];
+  else o = race === 1 ? [mix(r, L * 0.86, 0.5), mix(g, L * 1.08, 0.5), mix(b, L * 0.84, 0.5)] : race === 2 ? [r * 1.06, g * 0.9, b * 0.8]
+    : race === 3 ? [r * 0.72, g * 0.66, b * 0.6] : [mix(r, L * 0.84, 0.7) * 0.85, mix(g, L * 0.9, 0.7) * 0.85, mix(b, L * 0.95, 0.7) * 0.85];
+  col.setXYZ(i, o[0], o[1], o[2]);
 }
 function bakeRig(m, level, resolve, keepPose) {
   if (!keepPose) { if (m.kind === 'horse') poseHorse(m, 0, 0); else poseSoldier(m, { phase: 0, speed: 0, moving: false, swingT: -1, mounted: m.mounted }); }
@@ -1099,7 +1131,7 @@ export function farShapeOf(m) { return farCache.get(m.farKey) || quietly(bakeFar
 function bakeFar(m) {
   // (baked from a rig of its own: the one asked about may be mid-stride, or lying dead)
   baking = true;   // (the rig made to be baked queues nothing of its own)
-  const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : null);
+  const t = m.kind === 'horse' ? buildHorse(0, 0, m.barded) : buildSoldier(m.type, m.raider ? RAIDER_TEAM : 0, 0, 0, m.hero ? { hero: m.hero } : m.race ? { race: m.race } : null);
   baking = false;
   const f = { name: 'far:' + m.farKey, open: true, geo: [null, null, null, bakeRig(t, 3, false)] };
   farCache.set(m.farKey, f);
@@ -1132,7 +1164,12 @@ export const geoLevel = (lod) => (lod === 0 ? Math.max(0, 2 - Q.detail) : 2);
 export function prewarmSoldier(type, team, variant, tier = 0) { quietly(warmSoldier, type, team, variant, tier); }
 function warmSoldier(type, team, variant, tier) {
   warmHeads();
-  const key = type + ':' + (team === RAIDER_TEAM ? 'r' : '');
+  const race = team === RAIDER_TEAM || !UNIT_TYPES[type] || UNIT_TYPES[type].giant ? 'human' : raceOf(team);
+  if (race !== 'human' && !warmed.has('heads:' + race)) {   // (a race's sculpted heads, a job a frame, as the men's)
+    warmed.add('heads:' + race);
+    for (const l of new Set([geoLevel(0), geoLevel(1)])) for (const j of raceHeadJobs(race, l)) warmTasks.push(j);
+  }
+  const key = type + ':' + (team === RAIDER_TEAM ? 'r' : '') + (race !== 'human' ? ':' + race : '');
   if (!warmed.has(key) && UNIT_TYPES[type]) {
     warmed.add(key);
     const m = buildSoldier(type, team, variant, tier);

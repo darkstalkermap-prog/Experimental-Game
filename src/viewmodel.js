@@ -78,18 +78,23 @@ const GUARD = { x: -0.2, y: -0.24, z: -0.52, rx: -0.05, ry: 0.3, rz: 0.06 };   /
 const KITE_REST = { x: -0.45, y: -0.43, z: -0.6, rx: -0.2, ry: 0.76, rz: 0.14 };
 const KITE_GUARD = { x: -0.19, y: -0.36, z: -0.55, rx: -0.08, ry: 0.3, rz: 0.06 };
 // The bow. At rest it is held low across the front, an arrow on the string. Drawing, the bow arm comes up straight at the mark and the
-// string hand pulls the nock back along the arrow's line to the anchor under the jaw (BOW_ANCHOR, the nock's place at full draw; the eye
-// looks down the arrow from just above it, so the arrow points where the cross does); the draw elbow goes up and back behind, in line.
-// The arrow lies on the shelf on the left of the riser, over the bow hand; the bow is canted a little, its top to the right.
+// string hand pulls the nock back along the arrow's line to the anchor under the jaw (BOW_ANCHOR, the nock's place at full draw).
+// It is held the way a thumb-draw (horse) archer holds it: the arrow on the right of the riser, on the thumb of the bow hand, and the bow
+// canted with its top to the left, which lays the arrow against the riser. The whole draw sits low and to the left of the eye and the arrow
+// runs parallel to the line of sight (BOW_ALIGN), so it points where the cross does while the bow, the bow hand and both arms stay off the
+// cross: above it (where a moving target is led) and under it (where a far one sits when the shot is held high for the drop) the view is clear.
+// The draw starts low and comes up to the anchor as the string comes back, so the drawing forearm passes under the cross, not across it.
 const BOW_REST = { x: -0.13, y: -0.29, z: -0.5, rx: -0.3, ry: 0.35, rz: 0.55 };
-const BOW_AIM = { rx: 0, ry: 0, rz: -0.17 };
-const BOW_ANCHOR = new THREE.Vector3(0.012, -0.095, -0.025);
-const NOCK_Y = 0.068, ARROW_REST = new THREE.Vector3(-0.025, NOCK_Y, -0.016), DRAW_Z = 0.685;   // (bow frame: the nocking point's height, where the arrow lies on the shelf, the nock's z at full draw)
-const SH_BOW_L = new THREE.Vector3(-0.07, -0.21, 0.0), SH_BOW_R = new THREE.Vector3(0.17, -0.2, 0.26);   // the shoulders, side-on to the mark
+const BOW_AIM = { rx: 0, ry: 0, rz: 0.36 };
+const BOW_ANCHOR = new THREE.Vector3(-0.09, -0.12, -0.025);
+const NOCK_Y = 0.068, ARROW_REST = new THREE.Vector3(0.024, NOCK_Y, -0.016), DRAW_Z = 0.685;   // (bow frame: the nocking point's height, where the arrow lies on the shelf, the nock's z at full draw)
+const BOW_ALIGN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(ARROW_REST.x, 0, ARROW_REST.z - DRAW_Z).normalize(), new THREE.Vector3(0, 0, -1));   // (the bow turned so a fully drawn arrow lies along -z)
+const DRAW_LOW = 0.075;   // how much lower the bow is held while the draw begins
+const SH_BOW_L = new THREE.Vector3(-0.1, -0.21, 0.0), SH_BOW_R = new THREE.Vector3(0.17, -0.2, 0.26);   // the shoulders, side-on to the mark
 const POLE_BOW_L = new THREE.Vector3(-1, -0.3, 0).normalize(), POLE_BOW_R = new THREE.Vector3(0.5, 0.6, 0.4).normalize();
 const VOLLEY_PIVOT = new THREE.Vector3(0.02, -0.45, 0.12);   // (where the lean back for a high shot turns: low in the chest)
 const AXIS_X = new THREE.Vector3(1, 0, 0), AXIS_Z = new THREE.Vector3(0, 0, 1), ARROW_FWD = new THREE.Vector3(0, 0, -1);
-const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new THREE.Quaternion(), BOW_P = new THREE.Vector3(), SH_A = new THREE.Vector3(), SH_B = new THREE.Vector3(), POLE_A = new THREE.Vector3(), POLE_B = new THREE.Vector3();
+const BOW_E = new THREE.Euler(), BOW_Q = new THREE.Quaternion(), BOW_Q2 = new THREE.Quaternion(), BOW_Q3 = new THREE.Quaternion(), BOW_P = new THREE.Vector3(), SH_A = new THREE.Vector3(), SH_B = new THREE.Vector3(), POLE_A = new THREE.Vector3(), POLE_B = new THREE.Vector3();
 // a caster's weapon raised for a spell, the flask at the lips, and the two hands hauling up a wall
 const CAST_STAFF = { x: 0.15, y: -0.15, z: -0.42, rx: -1.36, ry: 0.1, rz: -0.18 };
 const CAST_MACE = { x: 0.12, y: -0.05, z: -0.5, rx: -0.35, ry: 0.1, rz: -0.1 };
@@ -194,7 +199,7 @@ export class ViewModel {
     this.spring = {};
     for (const n of ['kx', 'ky', 'kz', 'krx', 'kry', 'krz', 'sx', 'sy', 'sz', 'srx', 'sry', 'wx', 'wy', 'wz', 'wrx', 'wrz']) this.spring[n] = new Spring(n[0] === 's' ? 300 : 240, n[0] === 's' ? 22 : 19);
     this.lookX = new Spring(90, 13); this.lookY = new Spring(90, 13);
-    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.raiseAmt = 0; this.looseZ = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0; this.powerAmt = 0; this.scopeAmt = 0; this.scopeHid = false;
+    this.bobT = 0; this.bobAmt = 0; this.sprintAmt = 0; this.drawAmt = 0; this.raiseAmt = 0; this.looseZ = 0; this.castAmt = 0; this.zoomAmt = 0; this.wallAmt = 0; this.drinkT = -1; this.lanceAmt = 0; this.powerAmt = 0; this.scopeAmt = 0; this.scopeHid = false; this.volleyAmt = 0; this.volleySlot = null; this.volleyCd = 0;
     this.shieldPose = { ...SHIELD_REST };
     this.swap = 0; this.shown = 'sword';
     this.prev = { yaw: 0, pitch: 0, hp: 1, arrows: 0, potions: 0, onGround: true, vy: 0, draw: 0, mounted: false, init: false };
@@ -431,6 +436,10 @@ export class ViewModel {
     pv.hp = p.hp; pv.onGround = p.onGround; pv.vy = p.vy; pv.potions = p.potions; pv.mounted = p.mounted;
     const drawNow = p.drawT > 0 ? Math.min(1, p.drawT / p.drawTime) : 0;
     if (pv.draw > 0.3 && p.drawT === 0 && p.arrows < pv.arrows) this.recoil = 1;   // the string was let go
+    // a volley is loosed when its circle is let go (its cooldown starts; a volley called off just lets the string down)
+    const volleyNow = !!p.aiming && !!p.aiming.volley;
+    if (this.volleySlot && !volleyNow && (p.abilCd[this.volleySlot] || 0) > this.volleyCd + 0.5) this.recoil = 1;
+    this.volleySlot = volleyNow ? p.aiming.slot : null; this.volleyCd = volleyNow ? (p.abilCd[p.aiming.slot] || 0) : 0;
     pv.draw = drawNow; pv.arrows = p.arrows;
     if (p.weapon !== this.shown && this.swap <= 0) this.swap = 1;
     if (this.swap > 0) {
@@ -587,7 +596,8 @@ export class ViewModel {
       if (climbW > 0.5) this.wristL.copy(L.climbWrist).applyMatrix4(L.climbGrp.matrix); else this.wristL.copy(L.wrist).applyMatrix4(L.grp.matrix);
     } else {
       // the bow: left hand at the grip, right hand on the string
-      const volley = !!p.aiming && !!p.aiming.volley;   // (holding the Volley's circle: the bow is drawn and lifted to loose high)
+      const volley = volleyNow;   // (holding the Volley's circle: the bow is drawn and lifted to loose high)
+      this.volleyAmt = smooth(this.volleyAmt, volley ? 1 : 0, volley ? 9 : 5, dt);
       const draw = volley ? Math.min(1, p.aiming.t / 0.4) : drawNow;
       // after a loose (recoil runs 1 -> 0 over half a second): the string snaps home at once; the hand flies on back along the jaw and
       // opens (ft), the bow hand lets the top of the bow fall forward; then the hand comes forward to the string with the next arrow (rt)
@@ -597,31 +607,34 @@ export class ViewModel {
       const pw = easeInOut(clamp(this.powerAmt, 0, 1)), sc = easeInOut(clamp(this.scopeAmt, 0, 1));
       if (rec > 0.95) { this.looseZ = lerp(info0(this.bowInfo), DRAW_Z, easeInOut(this.drawAmt)) + 0.04 * pw; this.drawAmt = 0; }
       const ft = rec > 0 ? easeInOut(clamp(u / 0.25, 0, 1)) : 0, rt = rec > 0 ? easeInOut(clamp((u - 0.55) / 0.45, 0, 1)) : 1, fol = ft * (1 - rt);
-      this.drawAmt = smooth(this.drawAmt, draw, draw > this.drawAmt ? 14 : 30, dt);
-      const up = draw > 0 || p.zoomed || p.scope || volley || rec > 0.3 ? 1 : 0;
+      this.drawAmt = draw > this.drawAmt ? smooth(this.drawAmt, draw, 14, dt) : Math.max(smooth(this.drawAmt, draw, 12, dt), this.drawAmt - 2.6 * dt);   // (a draw called off is let down, not dropped)
+      const up = draw > 0 || p.zoomed || p.scope || volley || rec > 0.3 || this.volleyAmt > 0.3 ? 1 : 0;
       this.raiseAmt = smooth(this.raiseAmt, up, up ? 11 : 4, dt);
       const dr = easeInOut(this.drawAmt), ra = easeInOut(clamp(this.raiseAmt, 0, 1)), zoom = this.zoomAmt;
-      // the bow's turn: rest -> aim (steadier and more upright zoomed in); after a loose the bow hand lets the top of the bow fall forward
-      BOW_E.set(lerp(BOW_REST.rx, BOW_AIM.rx, ra) - 0.22 * fol * ra + rx, lerp(BOW_REST.ry, BOW_AIM.ry, ra) + ry, lerp(BOW_REST.rz, BOW_AIM.rz + 0.07 * zoom, ra) + rz, 'XYZ');
-      BOW_Q.setFromEuler(BOW_E);
+      // the bow's turn: rest -> aim; after a loose the bow hand lets the top of the bow fall forward
+      BOW_E.set(lerp(BOW_REST.rx, BOW_AIM.rx, ra) - 0.22 * fol * ra + rx, lerp(BOW_REST.ry, BOW_AIM.ry, ra) + ry, lerp(BOW_REST.rz, BOW_AIM.rz, ra) + rz, 'XYZ');
+      BOW_Q.setFromEuler(BOW_E).multiply(BOW_Q3.identity().slerp(BOW_ALIGN, ra));
       // where the grip is: at aim, so that the nock sits at the anchor when fully drawn
       const nockZ = lerp(info0(this.bowInfo), DRAW_Z, dr) + 0.04 * pw * dr;
       BOW_P.set(0, NOCK_Y, DRAW_Z).applyQuaternion(BOW_Q);
       V4.copy(BOW_ANCHOR).sub(BOW_P);
       V4.z -= 0.012 * fol;   // (the bow arm keeps pushing at the mark through the loose)
       BOW_P.set(BOW_REST.x, BOW_REST.y, BOW_REST.z).lerp(V4, ra);
-      if (volley) {   // the volley: the whole draw is lifted to loose high, the archer leaning back from the waist (so the nock drops from the eye)
-        BOW_Q2.setFromAxisAngle(AXIS_X, 0.42 * ra);
+      const va = easeInOut(clamp(this.volleyAmt, 0, 1)) * ra;
+      BOW_P.y -= DRAW_LOW * (1 - dr) * ra * rt * (1 - va);   // (the draw starts low: the string hand comes back under the cross; not after a loose)
+      if (va > 0) {   // the volley: the whole draw is lifted to loose high, the archer leaning back from the waist (so the nock drops from the eye)
+        BOW_Q2.setFromAxisAngle(AXIS_X, 0.42 * va);
         BOW_P.sub(VOLLEY_PIVOT).applyQuaternion(BOW_Q2).add(VOLLEY_PIVOT);
         BOW_Q.premultiply(BOW_Q2);
+        BOW_P.x -= 0.1 * va;   // (and out to the left, so the bow does not stand over the circle the cross is placing on the ground)
       }
-      if (sc > 0) { BOW_P.x -= 0.05 * sc; BOW_P.y += 0.05 * sc; BOW_P.z += 0.06 * sc; }   // (the Sniper Shot: in to the eye, along the arrow)
+      if (sc > 0) { BOW_P.x += 0.05 * sc; BOW_P.y += 0.06 * sc; BOW_P.z += 0.06 * sc; }   // (the Sniper Shot: in to the eye, along the arrow)
       const still = 1 - 0.7 * zoom;
       BOW_P.x += ox * still; BOW_P.y += oy * still - swapDip; BOW_P.z += oz;
       if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * (0.0008 + 0.0022 * pw);   // (a long hold at full draw trembles; a Power Shot's more)
       if (pw > 0) {   // (and canted over, round the nock at the anchor, as an archer lays a heavy bow over for a long hold)
         BOW_P.y += Math.sin(t * 53) * 0.0012 * pw; BOW_P.z += 0.012 * pw;
-        BOW_Q2.setFromAxisAngle(AXIS_Z, -0.32 * pw);
+        BOW_Q2.setFromAxisAngle(AXIS_Z, 0.3 * pw);
         BOW_P.sub(BOW_ANCHOR).applyQuaternion(BOW_Q2).add(BOW_ANCHOR);
         BOW_Q.premultiply(BOW_Q2);
       }
@@ -637,7 +650,7 @@ export class ViewModel {
       // the arrow: from the nock to the shelf; gone after a loose until the hand has come back with the next one
       R.arrowGrp.position.copy(V3);
       R.arrowGrp.quaternion.setFromUnitVectors(ARROW_FWD, V4.subVectors(ARROW_REST, V3).normalize());
-      R.arrowGrp.visible = (p.arrows > 0 || drawNow > 0) && rec < 0.25;
+      R.arrowGrp.visible = (p.arrows > 0 || drawNow > 0 || volley) && rec < 0.25;
       R.arrowGrp.updateMatrix();
       this.strand(L.strTop, V1, V3, L.bowGrp.matrix);
       this.strand(L.strBot, V3, V2, L.bowGrp.matrix);

@@ -7,7 +7,7 @@
 // shader. Without instancing (a baked static mesh) the vertex colours are used as they are.
 import * as THREE from 'three';
 import { patchMaterial } from './shaderhook.js';
-import { faceAtlas, emblemAtlas, armsUniforms, LORDS } from './unittex.js';
+import { faceAtlas, emblemAtlas, armsUniforms, LORDS, FACE_CELLS } from './unittex.js';
 
 export const crowdUniforms = { uTime: { value: 0 }, uWind: { value: 1 }, uFace: { value: null }, uEmblem: { value: null }, uArmsTint: { value: armsUniforms.tint }, uArmsInk: { value: armsUniforms.ink } };
 
@@ -151,7 +151,7 @@ if (pat > 0.5) {
     pRough += 0.1 * (0.5 - n);
   } else if (pat < 7.5) {
     vec2 fuv = clamp(vFx.xy, 0.0, 1.0);
-    vec4 f = texture2D(uFace, vec2((fuv.x + vSurf.w) * 0.125, fuv.y));
+    vec4 f = texture2D(uFace, vec2((fuv.x + vSurf.w) / ${FACE_CELLS}.0, fuv.y));
     vec3 c = diffuseColor.rgb * f.r;
     c = mix(c, vHair * 0.85, f.g);
     c = mix(c, vec3(0.7, 0.66, 0.6), f.b);
@@ -218,6 +218,30 @@ const FRAG_RIM = `
 }
 `;
 
+// The race's look on the plain kit of the human shapes that every race wears (legs, arms, boots): models.js puts the race in the whole
+// part of iD.x (0 human, 1 elves, 2 dwarves, 3 orcs, 4 undead; its fraction is the soldier's phase). Bare metal turns bright silver,
+// bronze, rusty black iron or verdigris, and leather, wood and linen are dyed to match. A race's own shapes (raceshapes.js) carry their
+// colours as they are (EXACT added to the roughness, taken off here), and the house colour (a slot) is never touched.
+// (models.js raceTintJS does the same for a mesh baked with its colours resolved)
+const RACE_TINT = `
+float cExact = step(1.5, aSurf.x);
+vSurf.x -= 2.0 * cExact;
+float cRace = floor(cD.x + 0.001);
+if (cRace > 0.5 && cExact < 0.5 && cSlot < 0.5) {
+  vec3 c0 = vColor;
+  float cL = dot(c0, vec3(0.3, 0.59, 0.11));
+  if (aSurf.y > 0.5) {
+    if (cRace < 1.5) vColor = mix(c0, vec3(cL) * vec3(1.04, 1.06, 1.1), 0.6);
+    else if (cRace < 2.5) vColor = cL * vec3(1.34, 0.98, 0.6);
+    else if (cRace < 3.5) { vColor = cL * vec3(0.6, 0.47, 0.38); vSurf.x = min(1.0, vSurf.x + 0.3); vSurf.y *= 0.6; }
+    else { vColor = mix(c0, cL * vec3(0.62, 0.98, 0.84), 0.65); vSurf.x = min(1.0, vSurf.x + 0.25); vSurf.y *= 0.55; }
+  } else if (cRace < 1.5) vColor = mix(c0, cL * vec3(0.86, 1.08, 0.84), 0.5);
+  else if (cRace < 2.5) vColor = c0 * vec3(1.06, 0.9, 0.8);
+  else if (cRace < 3.5) vColor = c0 * vec3(0.72, 0.66, 0.6);
+  else vColor = mix(c0, cL * vec3(0.84, 0.9, 0.95), 0.7) * 0.85;
+}
+`;
+
 function mainShader(shader) {
   Object.assign(shader.uniforms, crowdUniforms);
   shader.vertexShader = shader.vertexShader
@@ -245,7 +269,7 @@ vSurf = vec4(aSurf.x, aSurf.y, cPat, cPat > 7.5 ? mod(cB.w, 16.0) : floor(cB.w /
 vFx = vec4(aFx.zw, cD.z, cD.w);
 vHair = cC.rgb;
 vSeed = fract(cD.x * 7.31);
-vObj = position;`)
+vObj = position;${RACE_TINT}`)
     .replace('#include <begin_vertex>', `#include <begin_vertex>${poseCloth('normalize(objectNormal)', true)}`);
   shader.fragmentShader = shader.fragmentShader
     .replace('#include <common>', `#include <common>${FRAG_PARS}`)

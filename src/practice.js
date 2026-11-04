@@ -12,6 +12,7 @@ import { Unit } from './units.js';
 import { CLASSES } from './classes.js';
 import { talentsOf } from './talents.js';
 import { XP_FOR_LEVEL, MAX_LEVEL } from './heroes.js';
+import { raceOf, currentRaces, setRaces, isRaceId } from './races.js';
 
 const STANDS = ['ladder', 'row', 'crowd', 'far', 'wall'];
 // where the dummies stand, in metres from the hero's start line (x across the yard, z along it)
@@ -207,7 +208,7 @@ export class PracticeCourt {
     this.dummies = [];
     this.stands = Object.fromEntries(STANDS.map((s) => [s, false]));
     this.armor = 2;                    // the armour tier the row, the crowd and the far targets get (0 to 4)
-    this.pick = { type: 'swordsman', rank: 1, tier: 0, count: 5 };   // what the next "send in" brings
+    this.pick = { type: 'swordsman', rank: 1, tier: 0, count: 5, race: 'human' };   // what the next "send in" brings
     this.groups = new Map();           // key -> { label, type, rank, tier, total, hits, peak, recent: [] }
     this.hero = { total: 0, hits: 0, last: 0, best: 0, peak: 0, recent: [] };
     this.allTalents = false;
@@ -302,6 +303,7 @@ export class PracticeCourt {
   // ------------------------------------------------------------ the match
   // a practice match begins: the hero stands at the start line, the stands get their first dummies
   begin() {
+    this.pick.race = raceOf(this.g.localTeam);   // (the match's race for the yard's house: races.js)
     const g = this.g, p = g.player, s = this.startPoint;
     p.spawn(s, 0);
     p.classAt = -99;
@@ -461,6 +463,15 @@ export class PracticeCourt {
   }
 
   groupKey(type, rank, tier) { return `${type}|${rank}|${tier}`; }
+
+  // the race of the soldiers sent from now on (races.js: only their look). Those already in the yard keep theirs, so races stand side by side.
+  setRace(id) {
+    if (!isRaceId(id)) return;
+    const r = currentRaces();
+    r[this.g.localTeam] = id;
+    setRaces(r);
+    this.pick.race = id;
+  }
 
   // Send soldiers in: they stand behind the hero's start line and charge the nearest dummy.
   send(type = this.pick.type, count = this.pick.count, rank = this.pick.rank, tier = this.pick.tier) {

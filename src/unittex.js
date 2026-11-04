@@ -1,10 +1,12 @@
-// Procedural textures for the characters: a strip of eight faces and a strip of eight heraldic emblems. Both are masks read by the
+// Procedural textures for the characters: a strip of twelve faces (eight of men, then one each for elves, dwarves, orcs and the undead)
+// and a strip of heraldic emblems. Both are masks read by the
 // unit shader (unitmat.js): the colours come from the soldier (skin, hair, house), so one texture serves everyone.
 //   faces    R skin shading (1 none)   G hair mask (brows, stubble)   B eye whites   A dark details (pupils, mouth, paint, scars)
 //   emblems  R the charge   G a dark outline around it
 import * as THREE from 'three';
 
 const CELL = 64, CELLS = 8;
+export const FACE_CELLS = 12;   // (the faces: models.js picks a race's from its own; unitmat.js reads the strip)
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 const cov = (d, w = 0.013) => clamp01(0.5 - d / w);                       // pixel coverage from a signed distance (negative inside)
@@ -22,7 +24,7 @@ const sdEll = (u, v, cx, cy, rx, ry) => (Math.hypot((u - cx) / rx, (v - cy) / ry
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
 
 function makeTexture(data, cell = CELL) {
-  const t = new THREE.DataTexture(data, cell * CELLS, cell, THREE.RGBAFormat);
+  const t = new THREE.DataTexture(data, cell * FACE_CELLS, cell, THREE.RGBAFormat);
   t.generateMipmaps = true;
   t.minFilter = THREE.LinearMipmapLinearFilter;
   t.magFilter = THREE.LinearFilter;
@@ -42,6 +44,12 @@ const FACES = [
   { brow: 0.04, by: 0.65, tilt: -0.04, eye: 0.85, mw: 0.14, mc: -0.014, stub: 0.35, scar: 0, paint: 0, age: 1 },
   { brow: 0.05, by: 0.655, tilt: -0.07, eye: 0.9, mw: 0.16, mc: -0.01, stub: 0.3, scar: 0, paint: 1, age: 0.5 },
   { brow: 0.045, by: 0.66, tilt: -0.05, eye: 0.95, mw: 0.15, mc: -0.008, stub: 0.2, scar: 1, paint: 2, age: 0.6 },
+  // the races' (races.js): an elf's fine high brows over wide almond eyes; a dwarf's heavy brow and weathered lines (the beard is grown on the head);
+  // an orc's small dull eyes under a heavy brow, a wide mouth and its tusks' roots, a scar; the undead's skull: black sockets, a nose hole and teeth
+  { brow: 0.02, by: 0.69, tilt: 0.05, eye: 1.08, mw: 0.12, mc: 0.004, stub: 0.0, scar: 0, paint: 0, age: 0, kind: 'elf' },
+  { brow: 0.062, by: 0.645, tilt: -0.05, eye: 0.82, mw: 0.15, mc: -0.01, stub: 0.6, scar: 0, paint: 0, age: 0.8 },
+  { brow: 0.066, by: 0.635, tilt: -0.1, eye: 0.74, mw: 0.22, mc: -0.022, stub: 0.0, scar: 1, paint: 0, age: 0.4, kind: 'orc' },
+  { brow: 0.0, by: 0.66, tilt: 0, eye: 1, mw: 0.16, mc: 0, stub: 0, scar: 0, paint: 0, age: 0, kind: 'skull' },
 ];
 
 // (the faces are painted at twice the emblems' resolution: a hero's face is looked at from a couple of metres)
@@ -49,8 +57,8 @@ const FCELL = 128;
 let faceTex = null;
 export function faceAtlas() {
   if (faceTex) return faceTex;
-  const W = FCELL * CELLS, data = new Uint8Array(W * FCELL * 4);
-  for (let c = 0; c < CELLS; c++) {
+  const W = FCELL * FACE_CELLS, data = new Uint8Array(W * FCELL * 4);
+  for (let c = 0; c < FACE_CELLS; c++) {
     const f = FACES[c];
     for (let y = 0; y < FCELL; y++) {
       for (let x = 0; x < FCELL; x++) {
@@ -104,6 +112,33 @@ export function faceAtlas() {
         if (f.scar) { a = Math.max(a, 0.5 * cov(sdSeg(u, v, 0.67, 0.72, 0.56, 0.42, 0.006), 0.008)); r -= 0.08 * cov(sdSeg(u, v, 0.67, 0.72, 0.56, 0.42, 0.014), 0.01); }
         if (f.paint === 1) for (const s of [-1, 1]) for (let k = 0; k < 3; k++) a = Math.max(a, 0.78 * cov(sdSeg(u, v, 0.5 + s * (0.16 + k * 0.05), 0.47, 0.5 + s * (0.2 + k * 0.05), 0.26, 0.012), 0.01));
         if (f.paint === 2) { a = Math.max(a, 0.78 * cov(Math.abs(v - 0.555) - 0.06, 0.01)); a = Math.max(a, 0.6 * cov(sdSeg(u, v, 0.5, 0.5, 0.5, 0.88, 0.02), 0.01)); }
+        if (f.kind === 'orc') {
+          // dull eyes (little white), deep lines from the nose, the lower fangs' tips standing over the lip
+          b *= 0.35;
+          for (const s of [-1, 1]) {
+            a = Math.max(a, 0.5 * cov(sdSeg(u, v, 0.5 + s * 0.07, 0.44, 0.5 + s * 0.2, 0.25, 0.008), 0.02));
+            b = Math.max(b, 0.9 * cov(sdEll(u, v, 0.5 + s * 0.14, 0.255, 0.018, 0.035), 0.01));
+          }
+        }
+        if (f.kind === 'skull') {
+          // bone: no brows, no whites, no lips. The sockets are black pits (the cold light in them is on the head: shapes), the nose a hole, the
+          // teeth bared in two rows with dark gaps, the cheeks hollow and the temples sunk
+          g = 0; b = 0; a = 0;
+          r = 1 - 0.28 * clamp01((su - 0.3) / 0.2) - 0.22 * clamp01((0.18 - v) / 0.18);
+          for (const s of [-1, 1]) {
+            const sk = sdEll(u, v, 0.5 + s * 0.17, 0.56, 0.1, 0.085);
+            a = Math.max(a, 0.92 * cov(sk, 0.03));
+            r -= 0.25 * cov(sdEll(u, v, 0.5 + s * 0.2, 0.36, 0.09, 0.07), 0.08);   // the hollow under the cheekbone
+          }
+          const nose = Math.max(Math.abs(u - 0.5) * 1.6 - (0.47 - v) * 0.9, Math.abs(v - 0.4) - 0.07);
+          a = Math.max(a, 0.9 * cov(nose, 0.015));
+          if (Math.abs(v - 0.24) < 0.06 && su < 0.15) {
+            const tooth = Math.abs(((u - 0.5) / 0.032 % 1 + 1) % 1 - 0.5);
+            b = 0.85 * cov(Math.abs(v - 0.24) - 0.05, 0.01);
+            a = Math.max(a, 0.75 * cov(0.06 - tooth, 0.05) * b, 0.8 * cov(Math.abs(v - 0.24) - 0.006, 0.006));
+          }
+        }
+        if (f.kind === 'elf') b *= 0.85;   // (a wide iris, little white)
         const i = (y * W + c * FCELL + x) * 4;
         data[i] = Math.round(clamp01(r) * 255); data[i + 1] = Math.round(clamp01(g) * 255); data[i + 2] = Math.round(clamp01(b) * 255); data[i + 3] = Math.round(clamp01(a) * 255);
       }

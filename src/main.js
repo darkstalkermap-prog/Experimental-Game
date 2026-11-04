@@ -28,6 +28,7 @@ import { setPalette, sanitizeColors, assignColors, paletteKey, isColorId, COLOR_
 import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, nextState, canTakeSlot, canTakeSeat, firstFreeSlot, firstFreeSeat,
   warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
+import { isRaceId, isOtherRaces, assignRaces, raceWants, sanitizeRaces } from './races.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
 import { sanitizeWar, warHills, menuPlan, planOf } from './warmode.js';
 import { SPECIALTY, isSpecialty, setSpecialWorld } from './specialty.js';
@@ -75,6 +76,11 @@ const stored = (key, fallback) => { try { const v = localStorage.getItem(key); r
 const store = (key, v) => { try { localStorage.setItem(key, String(v)); } catch (e) { /* ignore */ } };
 let myColor = stored('cw-color', 'blue');
 if (!isColorId(myColor)) myColor = 'blue';
+// your army's race and the other armies' (races.js: only the look of the soldiers)
+let myRace = stored('cw-race', 'human');
+if (!isRaceId(myRace)) myRace = 'human';
+let otherRaces = stored('cw-races', 'random');
+if (!isOtherRaces(otherRaces)) otherRaces = 'random';
 let soloSlot = Number(stored('cw-slot', 0));
 if (!(soloSlot >= 0 && soloSlot < 4)) soloSlot = 0;
 let soloSlots = cleanSlots(String(stored('cw-slots', '')).split(','));
@@ -282,6 +288,10 @@ initLandMenu({
 
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
+  // each house's army's race (a match online brings the host's; otherwise your army is yours, the others as the menu says: races.js)
+  const qsRaces = new URLSearchParams(location.search).get('races');   // (?races=elf,dwarf,orc,undead: every house's race, for tests and to show them off)
+  if (setup && qsRaces && setup.mode === 'single') setup.races = sanitizeRaces(qsRaces.split(','));
+  if (setup && !setup.races) setup.races = assignRaces(raceWants((setup.players || []).map((p) => (p.me && !p.rc ? { ...p, rc: myRace } : p)), !!setup.hero), otherRaces, myRace);
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
   ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false, setup && setup.special);   // (War Mode: a hill for each side; a Specialty Battle: its own world)
   if (net) game.net = net;
@@ -345,7 +355,7 @@ renderClassPicker($('classPick'), $('classInfo'), heroClass, rememberClass);
 // the menu's Castle, Others, Teams and Colour rows: one player's seat (lobbyui.js draws them, seats.js says what may be)
 heroOnSolo = () => heroOn;
 function showSolo() {
-  drawSolo({ hero: heroOn, war: warOn, slot: soloSlot, side: soloSide, slots: soloSlots, size: heroCount, color: myColor }, {
+  drawSolo({ hero: heroOn, war: warOn, slot: soloSlot, side: soloSide, slots: soloSlots, size: heroCount, color: myColor, race: myRace, others: otherRaces }, {
     slot(t) { soloSlot = t; soloSlots[t] = 'open'; store('cw-slot', t); store('cw-slots', soloSlots.join()); afterSolo(); },
     side(s) { soloSide = s ? 1 : 0; store('cw-side', soloSide); afterSolo(); },
     state(t) {   // an AI lord or nobody (a war needs two houses: the last AI lord stays)
@@ -356,6 +366,8 @@ function showSolo() {
     },
     size(n) { heroCount = heroSize(n); store('cw-herosize', heroCount); if (heroOn) $('objDesc').textContent = heroDesc(); afterSolo(); },
     color(id) { if (!isColorId(id)) return; myColor = id; store('cw-color', id); afterSolo(); },
+    race(id) { if (!isRaceId(id)) return; myRace = id; store('cw-race', id); showSolo(); },   // (the soldiers are made when the battle starts: no world to rebuild)
+    others(o) { if (!isOtherRaces(o)) return; otherRaces = o; store('cw-races', o); showSolo(); },
   });
   foldMoreOptions();
 }
@@ -363,7 +375,7 @@ function showSolo() {
 // decrees.js build theirs beside the Difficulty row and find them again by id, so moving them once is enough.
 function foldMoreOptions() {
   const body = document.querySelector('#moreOpts .more-body');
-  const ids = ['soloSeat', 'soloRivals', 'soloSize', 'soloColor'].filter((id) => $(id) && $(id).parentNode !== body);
+  const ids = ['soloSeat', 'soloRivals', 'soloSize', 'soloColor', 'soloOthersRace'].filter((id) => $(id) && $(id).parentNode !== body);
   body.prepend(...ids.map($));
   const decree = $('decreeRow');
   if (decree && decree.parentNode !== body) body.append(decree);
@@ -645,6 +657,7 @@ const hostActions = {
     lobbyBroadcast();
   },
   color(id) { const me = lobby.find((p) => p.netId === null); if (hostColor(me, id)) { myColor = id; store('cw-color', id); lobbyBroadcast(); } },
+  race(id) { const me = lobby.find((p) => p.netId === null); if (me && isRaceId(id)) { me.rc = myRace = id; store('cw-race', id); lobbyBroadcast(); } },
   size(n) { if (!HERO_SIZES.includes(n) || seated().length > 2 * n) return; room.size = n; heroCount = n; store('cw-herosize', n); reseat(seated(), room.slots, room.seats, room.size); lobbyBroadcast(); },
   win(id) { if (HERO.modes[id]) { showHeroWin(id); try { localStorage.setItem('cw-herowin', id); } catch (e) { /* ignore */ } lobbyBroadcast(); } },
   mode(o) { selectObjective(o); reseat(seated(), room.slots, room.seats, room.size); lobbyBroadcast(); },
@@ -655,6 +668,7 @@ const hostActions = {
 const guestActions = {
   take(n) { net.toHost({ k: guestView && guestView.hero ? 'hseat' : 'seat', n }); },
   color(id) { if (isColorId(id)) { myColor = id; store('cw-color', id); net.toHost({ k: 'col', col: id }); } },
+  race(id) { if (isRaceId(id)) { myRace = id; store('cw-race', id); net.toHost({ k: 'race', rc: id }); } },
   watch(on) { net.toHost({ k: 'watch', on: !!on }); },
   state() {}, move() {}, size() {}, win() {}, mode() {}, diff() {},
 };
@@ -665,7 +679,7 @@ function showRoom(v, isHost) {
 
 // What a guest says in the room (in the lobby, and on the end screen before a rematch): its class, what it wears, its castle or seat, its colour.
 // `looks`: what guests said they wear and which colour they want before the host had seated them.
-const looks = new Map(), wishes = new Map();
+const looks = new Map(), wishes = new Map(), raceWishes = new Map();
 function hostHears({ from, d }) {
   if (!d) return;
   const p = lobby.find((x) => x.netId === from);
@@ -678,6 +692,12 @@ function hostHears({ from, d }) {
   if (d.k === 'col') {
     if (isColorId(d.col)) wishes.set(from, d.col);
     if (hostColor(p, d.col)) lobbyBroadcast();
+    return;
+  }
+  if (d.k === 'race') {   // a guest's army's race (races.js; anything else is ignored)
+    if (!isRaceId(d.rc)) return;
+    raceWishes.set(from, d.rc);
+    if (p && p.rc !== d.rc) { p.rc = d.rc; lobbyBroadcast(); }
     return;
   }
   if (d.k === 'watch') { if (hostWatch(p, !!d.on)) lobbyBroadcast(); return; }   // (to watch instead of play, or back)
@@ -696,7 +716,7 @@ $('hostBtn').addEventListener('click', async () => {
   ui.lobbyError('');
   try { if (!(await connect())) return; } catch (e) { asking = null; ui.lobbyError(e.message); return; }
   room.size = heroCount;
-  lobby = [{ team: 0, hs: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout(), col: myColor }];
+  lobby = [{ team: 0, hs: 0, name: playerName(), netId: null, cls: heroClass, cos: progress.loadout(), col: myColor, rc: myRace }];
   reseat(seated(), room.slots, room.seats, room.size);
   lobbyBroadcast = () => { const v = roomView(); showRoom(v, true); net.toAll({ k: 'lobby', ...v }); };
   net.on('data', hostHears);
@@ -711,7 +731,7 @@ $('hostBtn').addEventListener('click', async () => {
     if (lobby.some((p) => p.netId === m.id)) return;
     const team = firstFreeSlot(room.slots, seated()), hs = firstFreeSeat(room.seats, room.size, seated());
     const watch = heroOn ? hs < 0 : team < 0;   // (the host has closed every free place: the newcomer can still watch, spectate.js)
-    lobby.push({ team: watch ? -1 : team, hs: watch ? -1 : hs, watch, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null), col: freeColor(wishes.get(m.id)) });
+    lobby.push({ team: watch ? -1 : team, hs: watch ? -1 : hs, watch, name: m.name, netId: m.id, cls: 'knight', cos: looks.get(m.id) || sanitizeLoadout(null), col: freeColor(wishes.get(m.id)), rc: raceWishes.get(m.id) || 'human' });
     lobbyBroadcast();
   });
   net.on('leave', (id) => { lobby = lobby.filter((p) => p.netId !== id); lobbyBroadcast(); });
@@ -726,12 +746,13 @@ $('startOnline').addEventListener('click', () => {
   const players = seated().map((p) => ({ ...p, team: hero ? sideOfSeat(p.hs) : p.team }));   // (in a hero match a player's house is their side's)
   const watchers = lobby.filter((p) => p.watch).map((p) => ({ netId: p.netId, name: p.name }));   // (they get the battle's snapshots and news: spectate.js)
   const colors = assignColors(colorWants(players, !!hero));
+  const races = assignRaces(raceWants(players, !!hero), otherRaces, myRace);   // (each house's army's race: the guests build the same looks)
   const empty = hero ? [] : emptyTeams(room.slots, players);
   const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
-  net.toAll({ k: 'start', diff: roomDiff, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors });
+  net.toAll({ k: 'start', diff: roomDiff, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors, races });
   const me = players.find((p) => p.netId === null);   // (none: the host watches, and simulates the battle without a hero of its own)
   begin(roomDiff, { mode: 'host', spectator: !me, localTeam: me ? me.team : 0, players: players.map((p) => ({ ...p, me: p === me })), watchers: watchers.filter((w) => w.netId !== null),
-    coop: !hero && coop, objective, hero, war, empty, colors, options: opts });
+    coop: !hero && coop, objective, hero, war, empty, colors, races, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -742,7 +763,7 @@ $('joinBtn').addEventListener('click', async () => {
   if (asking === code) return;
   asking = code;
   try { if (!(await connect())) return; } catch (e) { asking = null; ui.lobbyError(e.message); return; }
-  net.on('joined', (m) => { asking = null; ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); net.toHost({ k: 'col', col: myColor }); });
+  net.on('joined', (m) => { asking = null; ui.showLobby(m.code, false); showLobbyClassPicker(); showLobbyLand(false, { biome: 'meadow', seed: 0 }); net.toHost({ k: 'cos', cos: progress.loadout() }); net.toHost({ k: 'col', col: myColor }); net.toHost({ k: 'race', rc: myRace }); });
   guestData = ({ d }) => {
     if (!d) return;
     if (d.k === 'rematch') guestRematch();
@@ -768,7 +789,7 @@ $('joinBtn').addEventListener('click', async () => {
       const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
       const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
       const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
-      begin(isDiff(d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(isDiff(d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), races: sanitizeRaces(d.races), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);

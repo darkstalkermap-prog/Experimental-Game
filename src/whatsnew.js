@@ -5,11 +5,28 @@
 
 export const UPDATES = [
   {
+    id: 13,
+    title: 'Armies of five races',
+    items: [
+      'Pick the race of your army on the main menu: Human, Elves, Dwarves, Orcs or Undead. Only the look changes: every race fights exactly the same.',
+      'Elves stand tall in silver and green with leaf blades and long bows; Dwarves are short, broad and bearded, with axes and heavy plate; Orcs are hunched and tusked in crude spiked iron; the Undead are skeletons in rotted mail with a cold light in their eyes.',
+      'The other armies are a random race each, the same as yours or human (More options). Online, every player picks their own army in the lobby; the practice courtyard has a Race row for its soldiers.',
+    ],
+  },
+  {
     id: 12,
     title: 'Specialty Battles: Stonecleft Hold',
     items: [
       'A new section on the main menu, Specialty Battles: set pieces with a map and rules of their own. Click one and it starts with the hero and the difficulty you chose; Quick Play and Play Again repeat it.',
       'Stonecleft Hold: your fortress seals a mountain gorge, one long wall from cliff to cliff with four towers and a single gate, the keep on a rock shelf behind it. Three allied lords march on it together. Break all three of their keeps, or hold your keep until the clock runs out (the HUD counts it down). Single player.',
+    ],
+  },
+  {
+    id: 11,
+    title: 'A clear shot with the bow',
+    items: [
+      'The bow no longer hides what you aim at: it is held low and to the left, canted over the way horse archers hold it, with the arrow running in at the crosshair. The bow hand, the arms and the limbs stay clear of the crosshair at full draw, zoomed in, in a Power Shot and in a volley.',
+      'Smoother bow handling: no jolt when an arrow or a volley is loosed, and a draw you call off is let down gently.',
     ],
   },
   {

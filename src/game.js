@@ -30,6 +30,7 @@ import { Hill } from './hill.js';
 import { Pings } from './pings.js';
 import { PracticeCourt } from './practice.js';
 import { prewarmSoldier, sharedModelResources } from './models.js';
+import { setRaces, currentRaces } from './races.js';
 import { disposeWorld } from './resources.js';
 import { allied, setSides, colorName } from './teams.js';
 import { applyQuality, Q } from './quality.js';
@@ -284,6 +285,8 @@ export class Game {
       this.humans.push(new Player(this, null, { remote: true, team: p.team, name: p.name, netId: p.netId, cls: p.cls, cos: p.cos }));
     }
 
+    setRaces(setup.races);   // (each house's army's look, before any soldier is made: races.js; only the look, never a number of the battle)
+    this.races = currentRaces();
     assignArms(this);   // (a lord's arms on their castle, their soldiers and their hero; AI houses keep theirs: heraldry.js)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
@@ -1377,6 +1380,7 @@ export class Game {
 
   localSwitchClass(id) {
     const p = this.player;
+    if (this.practice && this.court) { if (id === p.classId) return false; this.court.setHeroClass(id); this.ui.toast(`You are now a ${p.cls.name}.`); return true; }   // (full health and ready abilities, like the practice panel)
     if (this.mode !== 'client') return this.switchClass(p, id);
     const why = this.hero ? 'Heroes keep their class in the Hero Game Mode' : p.classBlock(id);
     if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }

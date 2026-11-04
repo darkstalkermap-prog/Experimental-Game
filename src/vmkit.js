@@ -274,7 +274,7 @@ export function bowGeometry(o) {
     // riser and wrapped grip, arrow shelf
     m.tube([[0, -0.09, -0.012], [0, 0, -0.016], [0, 0.09, -0.012]], [0.0165, 0.0215, 0.0165], sides + 2, { mat: wood, cap: 'round', up: [1, 0, 0], scale: [1.1, 0.85] });
     m.tube([[0, -0.05, -0.016], [0, 0.05, -0.016]], 0.0245, sides + 2, { mat: PAINT.leather, cap: 'flat', up: [1, 0, 0], scale: [1.0, 0.9] });
-    m.at(-0.02, 0.058, -0.016); m.chamfer(0.014, 0.012, 0.03, 0.003, PAINT.leatherLight); m.pop();
+    m.at(0.02, 0.058, -0.016); m.chamfer(0.014, 0.012, 0.03, 0.003, PAINT.leatherLight); m.pop();   // (the shelf on the right: the arrow goes on the thumb side)
     return m;
   };
   const base = build(false);
