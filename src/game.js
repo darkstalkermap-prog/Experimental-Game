@@ -25,6 +25,7 @@ import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
 import { ultGain, dealtWeight } from './ultimate.js';
+import { rageHit } from './berserker.js';
 import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
@@ -885,7 +886,7 @@ export class Game {
       case 'hit': this.ui.hitMarker(!!ev.head); if (ev.head) this.audio.play('headshot'); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); if (this.player.vm) this.player.vm.feedback(ev.text); break;
       case 'stagger': this.player.stagger(ev.t); break;
-      case 'cd': if (ev.s === 'q' || ev.s === 'r') this.player.abilCd[ev.s] = Math.min(this.player.abilCd[ev.s], +ev.v || 0); break;   // (a cooldown cut short by the host: the Cavalier's Rider's Rhythm)
+      case 'cd': if (ev.s === 'q' || ev.s === 'r') this.player.abilCd[ev.s] = Math.min(this.player.abilCd[ev.s], +ev.v || 0); break;   // (a cooldown the host cut short: an Execute that killed, berserker.js; the Cavalier's Rider's Rhythm)
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || '', { hl: Array.isArray(ev.hl) ? ev.hl : null }); break;
@@ -977,6 +978,7 @@ export class Game {
     const lost = hp0 - Math.max(0, target.hp);   // the Ultimates of both (heroes, and lords who fight as heroes) charge by what came off
     if (attacker && attacker !== target) ultGain(attacker, lost, dealtWeight(target));
     ultGain(target, lost, ULT.taken);
+    if ((attacker && attacker.classId === 'berserker') || target.classId === 'berserker') rageHit(this, attacker, target, lost, info);   // (Rage, and Unstoppable's blows: berserker.js)
     if (attacker && attacker.st) stats.dealt(attacker, hp0 > 0 ? Math.min(dmg, hp0) : dmg);   // (the end screen's damage dealt)
     if (attacker && attacker.gainXp && !attacker.isPlayer) attacker.gainXp(Math.min(dmg, 60) * 0.05);
     if (attacker && attacker.isPlayer && !info.ranged) {

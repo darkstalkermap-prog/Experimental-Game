@@ -81,7 +81,7 @@ export const TIPS = [
   { id: 'mapping', team: true, learn: 'marker', text: 'Press [M] and click the big map to mark a spot for your team; right click removes your nearest marker.' },
   { id: 'arrows', text: 'Arrows run out. Each wave brings five more, so save them for archers and siege crews.' },
   { id: 'knight', cls: 'knight', text: 'Knight: hold [Q] to aim a Shield Bash run (as far as a Fireball flies): you charge behind the shield and bash the first enemy you meet. [R] Bulwark cuts the damage you take by 70% for five seconds.' },
-  { id: 'berserker', cls: 'berserker', text: 'Berserker: hold [R] to mark a spot as far as a Fireball flies, let go and Leap there over the soldiers, slamming the ground where you land. [Q] Whirlwind finishes what the slam began.' },
+  { id: 'berserker', cls: 'berserker', text: 'Berserker: every blow fills your Rage. With Rage, hold right click to Whirlwind through them; [Q] Execute kills anyone below a quarter of their health and comes straight back after a kill. Hold [R] to Leap into the fight.' },
   { id: 'ranger', cls: 'ranger', text: 'Ranger: aim for the head (double damage) and draw fully to shoot through a line of men. [Q] Explosive Arrow bursts where it strikes and sets the ground alight. Hold [R] to send your Hunting Hawk: everyone it marks shows through walls and takes 25% more damage, and it dives on the nearest enemy hero.' },
   { id: 'mage', cls: 'mage', text: 'Mage: Fireball ([Q]) burns gates and siege engines as well as men; Frost Ward ([R]) soaks up the next blows.' },
   { id: 'cleric', cls: 'cleric', text: 'Cleric: Healing Light ([R]) heals you and every ally within 14 m. Smite ([Q]) throws lightning from your hand as far as a Fireball flies.' },

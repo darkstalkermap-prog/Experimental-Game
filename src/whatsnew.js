@@ -37,6 +37,17 @@ export const UPDATES = [
     ],
   },
   {
+    id: 17,
+    title: 'The Berserker reborn',
+    items: [
+      'Rage: a red bar under your stamina. Every blow you land fills it, and so does every blow you take; a few seconds after the fighting stops it ebbs away.',
+      'Whirlwind is held now: with Rage to spend, hold the right mouse button and you spin with your axe out, walking through them and cutting everyone around you about three times a second for as long as your Rage lasts. A crowd around you keeps you spinning longer. With too little Rage, right click still blocks.',
+      'New Q, Execute: a heavy overhead chop. Anyone it leaves below a quarter of their health dies on the spot, heroes too, and a kill gives it straight back, so you can chain it through a wounded crowd. EXECUTE shows under your crosshair when the foe in front would die of it.',
+      'New Ultimate, Unstoppable: a roar that throws back the soldiers near you, and for 8 seconds you are twice your size. Nothing can slow, stagger or knock you back, and every soldier you hit goes flying. Everyone sees you grow.',
+      'Leap stays on R. The talent tree has new Execute and Rage talents; bots and the computer\'s Berserker lords use all of it.',
+    ],
+  },
+  {
     id: 15,
     title: 'Better-looking weapons',
     items: [

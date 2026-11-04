@@ -12,6 +12,7 @@ import { groundMul } from './biometwist.js';
 import { giantStep, GIANT_FALL, giantHammerHead } from './giantmodel.js';
 import { quietly } from './modelkit.js';
 import { raceHeight } from './races.js';
+import { flingTick } from './berserker.js';
 
 const tmp = new THREE.Vector3();
 // how far a War Mode soldier on Charge looks round himself for a foe before he marches on the army his group was sent at (an archer looks as far as he
@@ -151,6 +152,7 @@ export class Unit {
     this.hillDuty = false;                  // (King of the Hill: hill.js)
     this.bought = -0;                       // (War Mode: when it was bought, warmode.js)
     this.interp = null; this.kitNet = 0;    // (a guest's copy: netsync.js)
+    this.fling = null;                      // (flung by an Unstoppable Berserker: berserker.js)
     this.fixedTier = false; this.noXp = false; this.practiceKey = null;   // (the practice yard: practice.js)
     this.summon = null;     // (a knight the Cavalier's horn called: his ride and his charge, cavalier.js; no part of the army)
 
@@ -627,6 +629,7 @@ export class Unit {
   }
 
   update(dt) {
+    if (this.fling && flingTick(this, dt)) return;   // (thrown through the air by an Unstoppable Berserker: berserker.js)
     if (!this.alive) { this.animateDeath(dt); return; }
     const g = this.game;
     if (this.guardT > 0) this.guardT -= dt;
@@ -964,6 +967,7 @@ export class Unit {
       if (this.horse) this.horse.inst[15] = fade;
     }
     if (this.mounted) this.mesh.rotation.z = t * t * Math.PI / 2 * 0.95;
+    this.mesh.position.x = this.pos.x; this.mesh.position.z = this.pos.z;   // (a body thrown as it fell lies where it lands: berserker.js fling)
     this.mesh.position.y = this.pos.y + 0.02 * t;
     if (this.deathT > 9) this.mesh.position.y = this.pos.y - (this.deathT - 9) * 0.4;
   }

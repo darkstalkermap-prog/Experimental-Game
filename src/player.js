@@ -21,6 +21,7 @@ import { matchlog } from './matchlog.js';
 import { blankStats } from './stats.js';
 import { sanitizeLoadout, noLoadout } from './progress.js';
 import { CLOAKS } from './unlocks.js';
+import { rageTick, UNSTOP } from './berserker.js';
 
 // the rule modifier `heroSpeed` (a Battle Decree), read from the rules only when they change
 let walkVer = -1, walkM = 1;
@@ -78,6 +79,7 @@ export class Player {
     this.scope = null;         // the Ranger's Sniper Shot (a talent): the bow at the eye while the right button is held, { t } (tickScope)
     this.swayX = 0; this.swayY = 0;   // ... and how far the scope has swayed off where the hero looks (radians: yaw, pitch)
     this.leap = null;          // the Berserker in the air: the plan of his Leap (Abilities.leapPlan) and its clock t
+    this.rage = 0; this.rageAt = -99; this.spinHeld = false; this.bigK = 0;   // the Berserker's Rage, his Whirlwind held, his Unstoppable size (berserker.js)
     this.arrowT = 0;           // the Ranger's quiver filling again (RANGER.arrowEvery)
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
@@ -316,6 +318,7 @@ export class Player {
       vx: r2(this.vel.x), vz: r2(this.vel.z), b: this.blocking ? 1 : 0, w: this.weapon === 'bow' ? 1 : 0,
       ba: r2(Math.max(0, this.game.time - this.blockStart)),
       m: this.mounted ? 1 : 0, h: r2(this.heading), rs: r2(this.rideSpeed), dk: this.ducking ? 1 : 0, cl: this.climb ? 1 : 0 };
+    if (this.spinHeld) m.ww = 1;   // (the Berserker holds his Whirlwind: the host spins him while his Rage lasts)
     if (this.weapon === 'bow' && this.drawT > 0) m.dr = r2(Math.min(1, this.drawT / this.drawTime));   // (so the others see the bow drawn)
     if (this.hasHorse && !this.mounted) { m.hx = r2(this.horsePos.x); m.hy = r2(this.horsePos.y); m.hz = r2(this.horsePos.z); m.hyaw = r2(this.horseYaw); }
     return m;
@@ -665,6 +668,7 @@ export class Player {
     this.yaw -= m.dx * look;
     this.pitch = clamp(this.pitch - m.dy * look, -1.45, 1.45);
 
+    this.spinHeld = !!m.right && this.classId === 'berserker' && this.weapon === 'sword';   // (the Berserker's Whirlwind: berserker.js)
     this.tickAbilities(dt);
     // steering a siege engine: the engine moves, the hero only looks around and gives orders
     if (this.drive) { this.updateDrive(dt, input); return; }
@@ -961,8 +965,9 @@ export class Player {
     const want = on ? 1 : 0;
     this.duck += (want - this.duck) * Math.min(1, dt * 12);
     if (Math.abs(this.duck - want) < 0.01) this.duck = want;
-    this.height = BODY.height - (BODY.height - BODY.duckHeight) * this.duck;
-    this.eye = BODY.eye - (BODY.eye - BODY.duckEye) * this.duck;
+    const big = this.bigK;   // (an Unstoppable Berserker is taller to hit and sees from higher: berserker.js)
+    this.height = (BODY.height - (BODY.height - BODY.duckHeight) * this.duck) * (big ? 1 + (UNSTOP.tall - 1) * big : 1);
+    this.eye = (BODY.eye - (BODY.eye - BODY.duckEye) * this.duck) * (big ? 1 + (UNSTOP.eye - 1) * big : 1);
   }
 
   climbCost(l) { return Math.round(BODY.climbStamina * (l.low ? BODY.mantleShare : 1)); }
@@ -1216,6 +1221,7 @@ export class Player {
     this.abilCd.r = Math.max(0, this.abilCd.r - dt);
     this.abilCd.s = Math.max(0, (this.abilCd.s || 0) - dt);
     this.buffs.update(dt);
+    rageTick(this, dt);   // (the Berserker's Rage and Whirlwind: berserker.js)
     // the Ranger's quiver fills again, an arrow at a time (where the battle is run: a guest's count comes with the snapshot)
     if (this.mods.marksman && this.game.mode !== 'client' && this.alive) {
       if (this.arrows >= PLAYER.maxArrows) this.arrowT = 0;
@@ -1291,6 +1297,7 @@ export class Player {
         at = plan.to;
         break;
       }
+      case 'execute': this.execAt = g.time; break;   // (the overhead chop in the first-person arms: viewmodel.js)
       case 'fireball': this.castFlash = 1; this.castColor = 0xff8a2a; break;
       case 'smite': this.castFlash = 1; this.castColor = 0xe8f0ff; break;   // (the open hand: viewmodel.js, castKind)
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
@@ -1408,7 +1415,7 @@ export class Player {
     if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg(), d: DIR_IDX[dir] }); return; }
     const S = SWING;
     this.attackDir = DIRS.includes(dir) ? dir : 'right';
-    const reach = this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach;
+    const reach = (this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach) * (this.bigK ? 1 + (UNSTOP.reach - 1) * this.bigK : 1);   // (an Unstoppable Berserker reaches further)
     const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
     const dmg = this.sword.dmg * this.dmgMult * charge * momentumMul(this) * S.mult * (0.9 + Math.random() * 0.2);   // (the Cavalier's Momentum: cavalier.js)
     const info = { melee: true, charge: charge > 1.6 ? 1 : 0, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };   // (a blow at the gallop counts as heavy)

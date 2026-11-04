@@ -291,8 +291,20 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     trunks, steep rises and an enemy castle's stone; Q again bashes where you are, and with a wall at your nose it is the old short
     lunge. **R Bulwark**: for 5 s
     you take 70% less damage and can't be staggered; allies beside you take 40% less.
-  - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
-    spin for a second and cut everyone around you three times. **R Leap** (11 s): hold R and a circle on the ground shows
+  - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health), built on momentum
+    (`src/berserker.js`). **Rage** (the red bar under stamina): every blow you land fills it (9 a sword blow on a soldier, 13 on a
+    hero, 5 for each foe a Leap or an Execute hits), and so does every blow you take (55 for a blow worth all your health, less in
+    proportion); 3 s after the last blow either way it ebbs at 12 a second. **Whirlwind** (hold the right mouse button): with 20
+    Rage or more the button spins you with the axe out instead of raising your guard. You keep walking (at 70% pace) and cut
+    everyone within 4.2 m about three times a second (half your sword damage a cut; soldiers stagger, a hero only at the first cut)
+    for as long as you hold it and Rage lasts: it drains 22 a second, and each foe a cut reaches gives 1 back (2 a cut at most), so
+    full Rage spins about 4.5 s alone and 6 to 7 s in a crowd. Let go and it stops; with too little Rage the right button blocks as
+    always. Others see the whole body turning. **Q Execute** (8 s): the axe goes up over your shoulder and comes down a quarter of
+    a second later, a heavy overhead chop (1.7x sword damage) at whoever is in front of you, up to three (the others for half).
+    Anyone it leaves below 25% health dies on the spot, heroes too (a Frost Ward or a Cleric's Sanctuary still saves a man), and a
+    kill gives Execute back at once (0.35 s for the axe to come up), so a wounded crowd falls one chop after the other. EXECUTE
+    shows under the crosshair when the foe in front would die of it. In the practice yard a dummy counts as below a quarter once it
+    has taken three quarters of a knight's health (180) in the last 5 s. **R Leap** (11 s): hold R and a circle on the ground shows
     where you will land, up to 120 m away (as far as a Mage's Fireball flies: `FIREBALL_RANGE` in `src/config.js`); let go and you
     leap there in a high arc over the soldiers (longer leaps go higher, up to 7 m over the line, and take up to 2.3 s; nothing staggers
     you in the air). Walls, towers and hills in the way cut the leap short in front of them (the circle turns to the warning colour), and
@@ -367,6 +379,11 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     inside it (the one picked least so far, and no more than five on any one: a lone hero is scorched, not shot to pieces). They trail
     fire and flare where they land, and from 1.1 s the ground catches: 11 m of it burns for 5 s, 0.6 of her arrow's damage a second to
     every foe in it, half that to engines (`RAIN` in `src/ultimate.js`).
+  - **Berserker: Unstoppable**: a roar that hurts everyone within 4.5 m and throws the soldiers among them through the air, and for
+    8 s you are twice your size (everyone sees it; your eyes rise 30%, your body is 0.25 m wider and 65% taller to hit and to walk,
+    still well under a gate's 6 m arch). Nothing can slow, stagger or knock you back, your reach is 45% longer, Rage does not ebb,
+    and every soldier you hit, with the axe, the Whirlwind or Execute, is sent flying in an arc (alive or dead; heroes, riders,
+    giants, engine crews and men on the walls stand). Embers rise off you while it lasts.
   - **Cavalier: Call the Charge**: hold Z to point at a spot up to 60 m away, let go and blow the horn (a brass call, then the
     thunder of hooves). The old Rally Cry goes out with it: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
     (you take 40% less). Six armoured lancers of your house and race ride out in a wedge behind you (two by two, each pair further back
@@ -376,8 +393,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     (the fallen stay where they lie). They are no part of your army: they count to no garrison, army or War Mode limit, take no
     orders and are worth no gold to whoever kills them. On foot the horn calls them all the same. Online the host runs them; every
     screen has them as soldiers and plays the horn, the cry and the dust.
-  - **Knight, Berserker**: for now a simple stand-in (Earthbreaker, Rampage: a slam all round the hero), to be replaced by each
-    class's own.
+  - **Knight**: for now a simple stand-in (Earthbreaker: a slam all round the hero), to be replaced by the class's own.
 
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
   The Knight wears full plate (layered pauldrons, couters, cuisses, greaves, sabatons) under the house's surcoat, with a great helm and
@@ -401,8 +417,9 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
-  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's Sweeping Strike reaches further and his charge goes faster (Wide Sweep, Thundering Hooves), the Berserker's Whirlwind strikes
-  once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
+  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's Sweeping Strike reaches further and his charge goes faster (Wide Sweep, Thundering Hooves), the Berserker's Execute finishes
+  foes below 32% (Headsman), his Rage fills faster and lasts longer (Seething Blood), his Whirlwind costs less and reaches further
+  (Dervish), and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
   hit harder, her Explosive Arrow bursts wider and burns longer (Wildfire) and her hawk marks wider and longer and strikes harder
   (Keen Eyes, Raking Talons); her capstone, **Sniper Shot**, is a third shot on the right mouse button: with it ready, holding the
   right button with the bow out raises the bow to your eye (an 8 degree view behind a spyglass ring; the aim sways and settles in
@@ -712,7 +729,8 @@ lords.
 
 **Lords fight as heroes.** Every lord the computer plays (a rival lord, a plain lord, the lord who takes over a house whose player left, and War Mode's
 AI generals) is a hero of a class: he wears its look under a lord's long cape and uses its **Q** and **R** as a hero bot does (`src/lordkit.js`). The
-Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a knot of foes or at a rival hero), the Patient and the Ironclad Knights
+Reckless and the Giantsworn are Berserkers (Whirlwind held in a crowd while his Rage lasts, Execute on a man low enough to die of it
+and again at once after a kill, Leap into a knot of foes or at a rival hero, Unstoppable in a crowd or at a rival hero), the Patient and the Ironclad Knights
 (Shield Bash at hand or a run of up to 40 m at a knot or a hero, Bulwark when pressed), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
 Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
 fights with the bow from 34 m, never from a wall post; Hunting Hawk on a hero or a knot of five, Explosive Arrow at a hero, an engine or a knot, Rain
@@ -889,7 +907,9 @@ alone, melee classes close in, the Ranger and the casters keep their distance, t
 rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
 sends her hawk at a rival hero or a knot of foes first, so that what follows hurts more, then an Explosive Arrow at a hero, an engine
 or a knot 8.5 m and more off (at a lone foe once Q has waited ready a few seconds), and with the capstone a Sniper Shot at a far
-rival hero, giant or siege crew when nobody is close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
+rival hero, giant or siege crew when nobody is
+close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall, holds the Whirlwind in a knot of foes
+or on a rival hero while his Rage lasts, and Executes a foe in reach who is low enough to die of it, chaining kills), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
 fight (to a sword, foes in an enemy courtyard behind a gate that will not open for them, with no breach, are out of reach), and spend
 their talents from a list for each class. Their stamina drains and returns as a person's does. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
@@ -1144,8 +1164,8 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` and its numbers, in `src/talents.js`).
   Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
   the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
-  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
-  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Sniper Shot): zoomed in, the bow draws
+  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): every foe an Execute kills heals 8% of your health (Reaper gives 0.6% for each
+  foe each cut of a Whirlwind, up to 4). Ranger, *Steady Aim* (instead of Sniper Shot): zoomed in, the bow draws
   25% faster and the arrow flies 25% faster, and the right button stays the plain zoom. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
   harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
   Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
@@ -1257,7 +1277,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
-| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow (a Ranger with the Sniper Shot talent, when it is ready: the scope; click to loose) |
+| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow (a Ranger with the Sniper Shot talent, when it is ready: the scope; click to loose). Berserker: with 20 Rage or more, hold to Whirlwind instead (spin and cut all round you while Rage lasts) |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
 | Q | Class ability: attack (the Ranger's Explosive Arrow draws and looses itself) |
 | R | Class ability: mostly a defence (the Berserker's Leap, the Ranger's Hunting Hawk and the Cavalier's Lance Charge are attacks on R: hold to aim, let go; R again reins the Cavalier in) |

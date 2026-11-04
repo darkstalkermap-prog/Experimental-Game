@@ -14,6 +14,7 @@ import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
+import { botSpin, execTarget } from './berserker.js';
 import { XARROW, xarrowAim, xarrowMark, hawkSpot } from './ranger.js';
 import { sweepNow } from './cavalier.js';
 
@@ -21,7 +22,7 @@ import { sweepNow } from './cavalier.js';
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
   knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
-  berserker: ['bz_quake', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_meteor', 'bz_dervish', 'bz_reaper'],
+  berserker: ['bz_headsman', 'bz_quake', 'bz_seethe', 'bz_scars', 'bz_dervish', 'bz_meteor', 'bz_reaper'],
   ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_keen', 'rg_wildfire', 'rg_talons', 'rg_sniper'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
@@ -506,10 +507,16 @@ export class HeroBot {
           this.aimAtFoe(foe, 1e3); this.cast('q', foe.pos.clone());
         } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
         break;
-      case 'berserker':
-        if (r && hpf > 0.4 && this.leapIn(4 + need)) break;
-        if (q && hpf > 0.2 && (n.c3 >= 2 + need || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
+      case 'berserker': {
+        if (r && hpf > 0.4 && !p.buffs.has('whirl') && this.leapIn(4 + need)) break;
+        // Execute: a foe in reach low enough to die of it (a kill gives it back: look again soon, for the next), else a rival hero at hand
+        const o = q && execTarget(this, p);
+        if (o) {
+          this.aimAtFoe(o, 1e3, 0.3);
+          if (this.cast('q')) this.castOk = Math.min(this.castOk, now + 0.3);
+        }
         break;
+      }
       case 'ranger': {
         // the hawk first (on a rival hero, or a knot of foes: they are marked, and the arrows that follow hurt more), then the
         // Explosive Arrow at a hero, an engine or a knot (at hand too: a blast at her feet throws back a foe who has caught her)
@@ -882,6 +889,7 @@ export class HeroBot {
     }
 
     // fight
+    if (p.classId === 'berserker') p.spinHeld = p.weapon === 'sword' && botSpin(this, p);   // (the Whirlwind: held while foes are close and Rage lasts)
     if (p.staggerT > 0) { p.atk = null; p.blocking = false; p.drawT = 0; }
     else if (p.weapon === 'sword') {
       m.left = m.right = m.rightPressed = false;
