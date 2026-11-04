@@ -152,6 +152,7 @@ export class Unit {
     this.bought = -0;                       // (War Mode: when it was bought, warmode.js)
     this.interp = null; this.kitNet = 0;    // (a guest's copy: netsync.js)
     this.fixedTier = false; this.noXp = false; this.practiceKey = null;   // (the practice yard: practice.js)
+    this.summon = null;     // (a knight the Cavalier's horn called: his ride and his charge, cavalier.js; no part of the army)
 
     const m = buildSoldier(type, team, this.variant, 0, stats.hero ? { hero: stats.hero, cape: 'cape.long' } : null);
     this.model = m;
@@ -632,6 +633,7 @@ export class Unit {
     if (this.hasteT > 0) this.hasteT -= dt;
     if (this.crewOf) { this.updateCrew(dt); return; }
     if (this.kit && this.kit.update(dt)) return;   // (a lord's run, leap or bow draw carries him this frame: lordkit.js)
+    if (this.summon && this.summon.ride && this.summon.ride(this, dt)) return;   // (a called knight's charge: cavalier.js)
     this.thinkTimer -= dt;
     if (this.thinkTimer <= 0) { this.thinkTimer = 0.28 + Math.random() * 0.12; this.think(); }
     this.attackTimer -= dt;

@@ -450,7 +450,7 @@ export class Game {
     const f = this.factions[team];
     if (!f || !['garrison', 'army', 'lane'].includes(d.role)) return 0;
     const ids = Array.isArray(d.ids) ? new Set(d.ids) : null;
-    let list = this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf
+    let list = this.units.filter((u) => u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf && !u.summon
       && roleOf(u) !== d.role && (ids ? ids.has(u.id) : d.type ? u.type === d.type : true));
     // the garrison and the army each have a limit: only as many as there is room for go over
     const room = this.roleRoom(f, d.role), asked = list.length;
@@ -486,7 +486,7 @@ export class Game {
       let room = this.roleRoom(this.localFaction, d.role);   // (as many as the host will let over; it has the last word)
       if (!room) { this.audio.play('deny'); this.ui.toast(`${d.role === 'army' ? 'Army' : 'Garrison'} full (${this.roleCap(this.localFaction, d.role)}/${this.roleCap(this.localFaction, d.role)})`); return; }
       for (const u of this.units) {
-        if (!u.alive || u.team !== this.localTeam || u.isHero || u.isGiant || u.isCrew) continue;
+        if (!u.alive || u.team !== this.localTeam || u.isHero || u.isGiant || u.isCrew || u.summon) continue;
         if (d.ids ? !d.ids.includes(u.id) : d.type ? u.type !== d.type : false) continue;
         if (roleOf(u) === d.role) continue;
         if (room-- <= 0) break;
@@ -516,7 +516,7 @@ export class Game {
 
   troopCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.summon) n++;   // (the Cavalier's called knights count to no limit)
     return n;
   }
   // soldiers marching out with the waves, and bought troops staying home
@@ -528,13 +528,13 @@ export class Game {
   // bought troops staying home (what the barracks limit, f.troopCap, counts)
   garrisonCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane && !u.army) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.summon && !u.lane && !u.army) n++;
     return n;
   }
   // bought troops who follow their lord (what the army limit counts)
   armyCount(team) {
     let n = 0;
-    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.lane && u.army) n++;
+    for (const u of this.units) if (u.alive && u.team === team && !u.isHero && !u.isGiant && !u.isCrew && !u.summon && !u.lane && u.army) n++;
     return n;
   }
   // The most soldiers a house may have in the garrison or in the army (TROOP_CAP); the lane has no limit of its own.
@@ -555,7 +555,7 @@ export class Game {
   roleCounts(team) {
     const c = { garrison: 0, army: 0, lane: 0 };
     for (const u of this.units) {
-      if (!u.alive || u.team !== team || u.isHero || u.isGiant || u.isCrew) continue;
+      if (!u.alive || u.team !== team || u.isHero || u.isGiant || u.isCrew || u.summon) continue;
       c[u.lane ? 'lane' : u.army ? 'army' : 'garrison']++;
     }
     return c;
@@ -885,6 +885,7 @@ export class Game {
       case 'hit': this.ui.hitMarker(!!ev.head); if (ev.head) this.audio.play('headshot'); this.player.onHitLanded(!!ev.heavy); break;
       case 'fb': this.ui.feedback(ev.text, !!ev.good); if (this.player.vm) this.player.vm.feedback(ev.text); break;
       case 'stagger': this.player.stagger(ev.t); break;
+      case 'cd': if (ev.s === 'q' || ev.s === 'r') this.player.abilCd[ev.s] = Math.min(this.player.abilCd[ev.s], +ev.v || 0); break;   // (a cooldown cut short by the host: the Cavalier's Rider's Rhythm)
       case 'shake': this.player.shake = Math.max(this.player.shake, ev.a); break;
       case 'snd': this.audio.play(ev.n, ev.p ? new THREE.Vector3(...ev.p) : null); break;
       case 'end': this.finish(ev.winner, ev.reason || '', { hl: Array.isArray(ev.hl) ? ev.hl : null }); break;
@@ -998,7 +999,7 @@ export class Game {
 
   onUnitKilled(u, attacker) {
     const by = attacker && attacker.team !== undefined ? attacker.team : -1;
-    const base = u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);
+    const base = u.summon ? 0 : u.isHero && u.type === 'lord' ? BOUNTY.lord : (BOUNTY[u.type] || 10);   // (a knight the Cavalier called is worth no gold)
     const bounty = base * mods.mul('bounty');   // (the gold decrees change the gold, not how fast soldiers rank up: experience reads the base)
     if (by >= 0 && !allied(by, u.team)) this.credit(by, bounty, u.chest(new THREE.Vector3()));
     if (attacker) attacker.kills = (attacker.kills || 0) + 1;

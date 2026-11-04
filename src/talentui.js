@@ -34,7 +34,7 @@ export function buildTalentTab(ui, grid) {
   for (const br of ['q', 'r']) {
     const d = cls[br], col = document.createElement('div');
     col.className = 'tal-col';
-    col.innerHTML = `<span>${esc(d.icon)} ${esc(d.name)}</span><small>${br === 'q' ? 'Q · attack' : 'R · defence'}</small>`;
+    col.innerHTML = `<span>${esc(d.icon)} ${esc(d.name)}</span><small>${br.toUpperCase()} · ${(d.kind || (br === 'q' ? 'Attack' : 'Defence')).toLowerCase()}</small>`;
     put(col, 1, BRANCH_COL[br]);
   }
   for (let tier = 1; tier <= 4; tier++) {

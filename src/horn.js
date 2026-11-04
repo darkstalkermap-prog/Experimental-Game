@@ -142,6 +142,20 @@ SOUNDS.dirge = (a) => {
   drum(a, 5.2, hz(D2 + 7), 0.2, 0.9, 0.3);
 };
 
+// the Cavalier's Call the Charge (cavalier.js): three quick notes climbing a major chord, then a long high call over a low one, the
+// first beats of the drums under it (the knights' hooves come after, 'hooves')
+SOUNDS.chargehorn = (a, k = 1) => {
+  const g = 0.17 * k;
+  drum(a, 0, hz(D3), 0.5 * k, 0.4);
+  note(a, hz(A3), 0.0, 0.2, g * 0.8, { release: 0.08 });
+  note(a, hz(D4), 0.18, 0.2, g * 0.85, { release: 0.08 });
+  note(a, hz(Fs4), 0.36, 0.2, g * 0.9, { release: 0.08 });
+  note(a, hz(A4), 0.56, 1.5, g, { attack: 0.08, swellGain: 1.2, release: 0.6 });
+  note(a, hz(D4), 0.56, 1.5, g * 0.6, { attack: 0.1, release: 0.6, spread: 12 });
+  drum(a, 0.56, hz(D3), 0.7 * k, 0.6);
+  drum(a, 0.9, hz(D3), 0.45 * k, 0.4);
+};
+
 // the horn that opens a battle and sounds every tenth wave: the same two calls it always was (a low note with its fifth, then the low note again), in brass
 Audio.prototype.hornCall = function hornCall(k = 1) {
   note(this, hz(D3), 0, 1.6, 0.17 * k, { attack: 0.12, swellGain: 1.12, release: 0.5 });
