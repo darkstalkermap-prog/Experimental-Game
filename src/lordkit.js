@@ -49,7 +49,7 @@ const SCAN = 50;        // how far he looks around him (metres)
 const RANGER_LORD = { range: 34, cd: 1.5 };   // a Ranger lord's ordinary shots: reach and seconds between two (a lord's damage each)
 const LIFT_MAX = 12;    // (metres above the ground the snapshot can tell: a leap's arc)
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
-const AIM = { yaw: 0, pitch: 0 }, SLOTS = ['q', 'r', 's'];   // (an Explosive Arrow's aim, worked out in place; the slots whose recharge runs down)
+const AIM = { yaw: 0, pitch: 0 }, HAWK_AT = new THREE.Vector3(), SLOTS = ['q', 'r', 's'];   // (an Explosive Arrow's aim and the hawk's spot, worked out in place; the slots whose recharge runs down)
 const lerp = (a, b, t) => a + (b - a) * t;
 const by3 = (v, t) => (t < 0.5 ? lerp(v[0], v[1], t * 2) : lerp(v[1], v[2], t * 2 - 1));   // (easy, normal, hard at skill 0, 0.5, 1)
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
@@ -539,7 +539,7 @@ export class LordKit {
 
   // Hunting Hawk: on a rival hero or a knot of foes (hawkSpot: ranger.js)
   hawk(need) {
-    const u = this.u, at = hawkSpot(this.g, u.pos, this.foes, this.dist, need, new THREE.Vector3());
+    const u = this.u, at = hawkSpot(this.g, u.pos, this.foes, this.dist, need, HAWK_AT);   // (a shared point: Abilities.hawk keeps its own copy)
     if (!at) return false;
     u.yaw = Math.atan2(at.x - u.pos.x, at.z - u.pos.z);
     return this.cast('r', this.look(), at);

@@ -920,12 +920,13 @@ export class UI {
     this.updateUlt(p);
     // the hint under the crosshair: which key lets it go (the hawk's R, the Leap's R, the Sniper Shot's click, the Ultimate's Z) and how to call it off
     const aimId = p.aiming ? abilityOf(p, p.aiming.slot).id : '';
-    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'hawk' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
+    const snipeWait = !p.aiming && !p.scope && p.zoomed && p.abilCd.s > 0 && abilityOf(p, 's') ? Math.ceil(p.abilCd.s) : 0;   // (the Ranger's Sniper Shot recharging: the right button only zooms)
+    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'hawk' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : snipeWait ? 'snipe' + snipeWait : '';
     if (aim !== this.aimShown) {
       this.aimShown = aim;
       const el = $('aimhint');
       el.classList.toggle('hidden', !aim);
-      if (aim) el.textContent = AIM_HINTS[aim];
+      if (aim) el.textContent = AIM_HINTS[aim] || `Sniper Shot ready in ${snipeWait} s`;
     }
     this.buffT = (this.buffT || 0) - dt;
     if (this.buffT <= 0) {

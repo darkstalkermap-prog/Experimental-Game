@@ -63,7 +63,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
-const AIM = { yaw: 0, pitch: 0 };
+const AIM = { yaw: 0, pitch: 0 }, HAWK_AT = new THREE.Vector3();   // (an Explosive Arrow's aim and the hawk's spot, worked out in place)
 
 // The keys and mouse a bot "presses" for Player.move, useAbility and swordInput.
 class BotKeys {
@@ -626,7 +626,7 @@ export class HeroBot {
   hawk(need) {
     const p = this.p;
     if (p.power || p.scope || p.mounted) return false;
-    const at = hawkSpot(this.g, p.pos, this.foes, this.dist, need, new THREE.Vector3());
+    const at = hawkSpot(this.g, p.pos, this.foes, this.dist, need, HAWK_AT);   // (a shared point: Abilities.hawk keeps its own copy)
     if (!at) return false;
     this.faceYaw = p.yaw = Math.atan2(at.x - p.pos.x, at.z - p.pos.z);
     return this.cast('r', at);
