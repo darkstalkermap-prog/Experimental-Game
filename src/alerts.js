@@ -289,7 +289,7 @@ export class Alerts {
     if (i.down('ShiftLeft')) this.learn('sprinted');
     if (i.down('Tab')) this.learn('tab');
     if (i.hit('KeyY')) this.learn('hillorder');
-    if (i.hit('F1') || i.hit('F2') || i.hit('F3') || i.hit('F4') || i.hit('KeyZ') || i.hit('KeyX') || i.hit('KeyV') || i.hit('KeyT')) this.learn('order');
+    if (i.hit('F1') || i.hit('F2') || i.hit('F3') || i.hit('F4') || i.hit('KeyX') || i.hit('KeyV') || i.hit('KeyT')) this.learn('order');
     if (ui.mapOpen) this.learn('map');
     if (ui.shopOpen) {
       this.learn('shop');

@@ -1,6 +1,6 @@
 // The hero: first-person movement, sword & shield, bow, class abilities, potions, and the view-model.
 import * as THREE from 'three';
-import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY } from './config.js';
+import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY, ULT } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y } from './models.js';
@@ -11,6 +11,7 @@ import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, RUSH, abilityOf } from '
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
+import { ultReady, spared } from './ultimate.js';
 import { mods as rules } from './mods.js';
 import { rules as biomeRules } from './biometwist.js';
 import { ViewModel } from './viewmodel.js';
@@ -92,6 +93,8 @@ export class Player {
     this.talentRev = 0;        // bumped whenever the talents change, so the cached mods are rebuilt
     this.buffs = new Buffs();
     this.abilCd = { q: 0, r: 0 };
+    this.ult = 0;              // the Ultimate's charge, 0..1 (ultimate.js): kept through a fall, lost with a change of class
+    this.ultSentAt = -99;      // (a guest: when it last sent its Ultimate, so the snapshot's old charge does not light the icon again)
     this.classAt = -99;        // when this hero last changed class
     this.dash = null;          // { x, z, v, t }: a lunge, roll or charge that carries the hero along
     this.ghostT = 0;           // (a bot wedged against a trunk slips past trunks while this runs)
@@ -344,6 +347,8 @@ export class Player {
   get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = abilityOf(this, slot); return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
+  // is the ability in this slot not ready yet (Q and R: the cooldown; the Ultimate: the charge)?
+  slotWaits(slot) { return slot === 'u' ? !ultReady(this) : this.abilCd[slot] > 0; }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
 
   heal(n) { this.hp = Math.min(this.maxHp, this.hp + n); }
@@ -355,6 +360,7 @@ export class Player {
     this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp = this.maxHp;
     this.abilCd = { q: 0, r: 0 };
+    this.ult = 0;
     this.buffs.clear();
     if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
   }
@@ -392,6 +398,7 @@ export class Player {
     this.bwave = null;
     this.clearTalents();
     this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
+    this.ult = 0;   // (a new class starts its Ultimate from nothing)
     this.dash = null; this.leap = null;
     this.castFlash = 0;
     this.cancelAim(); this.endScope();
@@ -679,6 +686,15 @@ export class Player {
       const r = abilityOf(this, 'r');
       this.cancelAim();
       if (r.aimed) this.beginAim('r'); else if (r.id === 'snipe') this.beginScope(); else this.useAbility('r', input);
+    }
+    // Z: the Ultimate (ultimate.js), once it is charged; an aimed one is placed with a circle as the volley is
+    if (input.hit(ULT.key)) {
+      const u = abilityOf(this, 'u');
+      if (this.aiming && this.aiming.slot === 'u') this.cancelAim();
+      else if (u) {
+        this.cancelAim(); this.endScope();
+        if (u.aimed) this.beginAim('u'); else this.useAbility('u', input);
+      }
     }
 
     if (input.hit('KeyE')) {
@@ -1033,14 +1049,14 @@ export class Player {
   beginAim(slot) {
     const g = this.game, def = abilityOf(this, slot);
     if (!this.alive || this.drive || this.climb || this.aiming || this.leap) return;
-    if (this.staggerT > 0 || this.abilCd[slot] > 0 || (def.id === 'leap' && this.mounted)) { g.audio.play('deny'); return; }
+    if (this.staggerT > 0 || this.slotWaits(slot) || (def.id === 'leap' && this.mounted)) { g.audio.play('deny'); if (slot === 'u' && this.isLocal) this.notify('Your Ultimate is still charging: fight to fill it.'); return; }
     this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0, volley: def.id === 'volley' };
     if (def.id === 'volley') this.setWeapon('bow');
   }
 
   updateAim(dt, input) {
     const g = this.game, a = this.aiming, def = abilityOf(this, a.slot);
-    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.abilCd[a.slot] > 0 || !def.aimed || this.leap) { this.cancelAim(); return; }
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.slotWaits(a.slot) || !def.aimed || this.leap) { this.cancelAim(); return; }
     a.t += dt;
     const eyePos = new THREE.Vector3(this.pos.x, this.pos.y + this.eye, this.pos.z);
     if (def.rush) {   // the long charges: the end of the run, short of whatever is in the way
@@ -1060,12 +1076,17 @@ export class Player {
       }
       if (a.plan) g.aimRing.show(a.at, LEAP.radius * talentFx(this, 'leapRadius', 1), a.far, a.t); else g.aimRing.hide();
     } else {
-      const r = g.abilities.aimPoint(eyePos, this.lookDir(), VOLLEY.range, this.team);
-      a.at.copy(r.pos);
-      a.far = r.far;
-      g.aimRing.show(a.at, VOLLEY.radius, a.far, a.t);
+      // the volley and the aimed Ultimates (their own reach and circle: def.range, def.radius); a long reach is looked along 20 times a
+      // second, not every frame
+      if ((a.re -= dt) <= 0) {
+        a.re = def.range > 80 ? 0.05 : 0;
+        const r = g.abilities.aimPoint(eyePos, this.lookDir(), def.range || VOLLEY.range, this.team);
+        a.at.copy(r.pos);
+        a.far = r.far;
+      }
+      g.aimRing.show(a.at, def.radius || VOLLEY.radius, a.far, a.t);
     }
-    const key = a.slot === 'q' ? 'KeyQ' : 'KeyR';
+    const key = a.slot === 'q' ? 'KeyQ' : a.slot === 'u' ? ULT.key : 'KeyR';
     if (input.release(key)) {
       const at = (def.id === 'leap' || def.rush) && !a.plan ? null : a.at.clone();
       this.cancelAim();
@@ -1220,7 +1241,7 @@ export class Player {
     const def = abilityOf(this, slot);
     if (!def || !this.alive || this.drive) return;
     if (this.staggerT > 0) { g.audio.play('deny'); return; }
-    if (this.abilCd[slot] > 0 || (this.power && slot === 'q')) { g.audio.play('deny'); return; }
+    if (this.slotWaits(slot) || (this.power && slot === 'q')) { g.audio.play('deny'); if (slot === 'u' && this.isLocal) this.notify('Your Ultimate is still charging: fight to fill it.'); return; }
     const dir = this.lookDir();
     const fl = Math.hypot(dir.x, dir.z) || 1;
     const fx = dir.x / fl, fz = dir.z / fl;
@@ -1267,7 +1288,7 @@ export class Player {
       case 'smite': this.castFlash = 1; this.castColor = 0xe8f0ff; break;   // (the open hand: viewmodel.js, castKind)
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
       case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
-      default: break;
+      default: if (def.cast) { this.castFlash = 1; this.castColor = def.cast; } break;   // (an Ultimate's spell hand: ultimate.js)
     }
     this.castKind = def.id;
     this.castAbility(slot, dir, at);
@@ -1278,7 +1299,7 @@ export class Player {
     const g = this.game;
     const cam = this.camera ? this.camera.position.clone() : this.eyePos();
     if (this.netClient) {
-      this.abilCd[slot] = this.abilityCd(slot);
+      if (slot === 'u') { this.ult = 0; this.ultSentAt = g.time; } else this.abilCd[slot] = this.abilityCd(slot);
       const msg = { a: 'abil', s: slot, f: [cam.x, cam.y, cam.z].map(r2), d: [dir.x, dir.y, dir.z].map((x) => Math.round(x * 1e4) / 1e4), m: this.mounted ? 1 : 0 };
       if (at) msg.at = [at.x, at.y, at.z].map(r2);
       g.net.toHost(msg);
@@ -1492,6 +1513,7 @@ export class Player {
       amount *= 0.5 * (this.mods.rider || 1);
       if (this.horseHp <= 0) this.loseHorse();
     }
+    if (this.sanctUntil) amount = spared(this, amount);   // (inside a Cleric's Sanctuary nobody of her side falls: ultimate.js)
     this.hp -= amount;
     this.lastHurt = this.game.time;
     if (this.isLocal) {

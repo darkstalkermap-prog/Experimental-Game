@@ -1,14 +1,17 @@
 // Hero classes. Every hero picks one of six classes before the battle; each has its own strengths and two abilities:
-// Q is an attack, R a second ability (mostly a defence; the Berserker's Leap and the Ranger's Sniper Shot are not). The abilities are simulated where the world is (single player or host);
+// Q is an attack, R a second ability (mostly a defence; the Berserker's Leap and the Ranger's Sniper Shot are not), and u the Ultimate (Z),
+// which charges from fighting instead of a timer (how a class adds one: the comment at the top of ultimate.js). The abilities are simulated where the world is (single player or host);
 // their look and sound is replayed on every screen.
 import * as THREE from 'three';
-import { SPELLS, VOLLEY, TEAM_COLORS, FIREBALL_RANGE, WORLD } from './config.js';
+import { SPELLS, VOLLEY, TEAM_COLORS, FIREBALL_RANGE, WORLD, ULT } from './config.js';
 import { GroundFX } from './groundfx.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
 import { talentFx } from './talents.js';
 import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
+import { ULT_METHODS, ULT_SHOW, ultReady, ultGain } from './ultimate.js';
+import { quietly } from './modelkit.js';
 
 const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
 
@@ -23,6 +26,7 @@ export const CLASSES = {
     passive: 'Your shield blocks 10% more of the damage from the front.',
     q: { id: 'bash', icon: '💥', name: 'Shield Bash', cd: 12, aimed: true, rush: true, desc: `Hold Q to see where your charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and run at it behind your shield. The first enemy you meet takes the bash: heavy damage, knocked back and stunned, and everyone beside him too. Walls, gates and steep ground stop you; Q again bashes where you are.` },
     r: { id: 'bulwark', icon: '🛡', name: 'Bulwark', cd: 18, desc: 'Plant your shield. For 5 s you take 70% less damage and cannot be staggered; allies beside you take 40% less.' },
+    u: { id: 'burst', icon: '⚒️', name: 'Earthbreaker', kind: 'Ultimate', placeholder: true, burst: { radius: 7, dmg: 3, edge: 0.5, stun: 1.8, knock: 12 }, desc: 'Drive your shield into the ground: a shock all around you hurts, stuns and throws back everyone within 7 m.' },
   },
   berserker: {
     name: 'Berserker', icon: '🪓', color: '#e0705a', role: 'Duelist',
@@ -31,6 +35,7 @@ export const CLASSES = {
     passive: 'Below half health you hit 15% harder.',
     q: { id: 'whirl', icon: '🌀', name: 'Whirlwind', cd: 9, desc: 'Spin with your blade for a second, cutting everyone around you three times.' },
     r: { id: 'leap', icon: '⤴', name: 'Leap', cd: 11, aimed: true, kind: 'Attack', desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
+    u: { id: 'burst', icon: '💢', name: 'Rampage', kind: 'Ultimate', placeholder: true, burst: { radius: 7.5, dmg: 3.4, edge: 0.5, stun: 1.2, knock: 6 }, desc: 'A furious blow on the ground that cuts down and throws back everyone within 7.5 m.' },
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
@@ -39,6 +44,7 @@ export const CLASSES = {
     passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
     q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
     r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, kind: 'Attack', desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
+    u: { id: 'arrowstorm', icon: '🌧', name: 'Arrow Storm', kind: 'Ultimate', placeholder: true, aimed: true, range: 70, radius: 9, storm: { arrows: 45, dmg: 0.75, radius: 9, span: 1.6 }, lasts: 3.5, desc: 'Hold Z to put a wide circle on the ground (up to 70 m), let go and 45 arrows rain down on it.' },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -47,6 +53,7 @@ export const CLASSES = {
     passive: 'Both abilities recharge 15% faster.',
     q: { id: 'fireball', icon: '🔥', name: 'Fireball', cd: 7, desc: 'Hurl a fireball that explodes on impact, scorching everything around it and burning gates and engines.' },
     r: { id: 'ward', icon: '❄', name: 'Frost Ward', cd: 16, desc: 'A shell of ice soaks up the next 170 damage for 8 s, and chills and staggers enemies close to you.' },
+    u: { id: 'meteor', icon: '☄️', name: 'Meteor', kind: 'Ultimate', aimed: true, range: ULT.meteor.range, radius: ULT.meteor.radius, cast: 0xff7a2a, lasts: ULT.meteor.fall + ULT.meteor.burn, desc: `Hold Z to mark a spot on the ground (up to ${ULT.meteor.range} m, further than a Fireball flies), let go and a huge burning rock falls on it out of the sky a moment later: ${ULT.meteor.dmg} damage in ${ULT.meteor.radius} m (less toward the rim), soldiers knocked flat, walls, gates and engines broken as by a siege stone. The ground burns for ${ULT.meteor.burn} s.` },
   },
   cleric: {
     name: 'Cleric', icon: '✚', color: '#f2e08c', role: 'Support',
@@ -55,6 +62,7 @@ export const CLASSES = {
     passive: 'Health regenerates two and a half times faster out of combat.',
     q: { id: 'smite', icon: '⚡', name: 'Smite', cd: 8, desc: `Hurl a bolt of holy lightning from your open hand at whatever you are aiming at, as far as a Mage's Fireball flies (${FIREBALL_RANGE} m), blasting everyone near where it strikes.` },
     r: { id: 'heal', icon: '✚', name: 'Healing Light', cd: 14, desc: 'Heal yourself for 45% of your health and every ally within 14 m for 40% of theirs.' },
+    u: { id: 'sanctuary', icon: '🔆', name: 'Sanctuary', kind: 'Ultimate', cast: 0xffe9a0, lasts: ULT.sanctuary.time, desc: `A circle of golden light ${ULT.sanctuary.radius} m round you for ${ULT.sanctuary.time} s: no ally inside it, hero or soldier, can be brought below 1 health.` },
   },
   cavalier: {
     name: 'Cavalier', icon: '🐎', color: '#e8b84a', role: 'Shock cavalry',
@@ -63,6 +71,7 @@ export const CLASSES = {
     passive: 'Mounted, the horse shields you (30% less damage) and tramples 25% harder.',
     q: { id: 'lancecharge', icon: '🐎', name: 'Lance Charge', cd: 14, aimed: true, rush: true, desc: `Hold Q to see where the charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and gallop there with the lance couched (on foot, a rush), flattening everyone in your path. Walls, gates and steep ground stop you; Q again reins in.` },
     r: { id: 'rally', icon: '📯', name: 'Rally Cry', cd: 20, desc: 'A war cry for every ally within 28 m: 30% less damage taken and 25% faster for 8 s (you take 40% less).' },
+    u: { id: 'burst', icon: '🌪', name: 'Stampede', kind: 'Ultimate', placeholder: true, burst: { radius: 7, dmg: 3, edge: 0.5, stun: 1.4, knock: 16 }, desc: 'Rear up and crash down: everyone within 7 m is hurt, staggered and thrown back.' },
   },
 };
 
@@ -226,19 +235,27 @@ export class Abilities {
     this.gfx = new GroundFX(game);   // the glyphs, shells and columns of light the abilities draw (see groundfx.js)
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
+    this.ultInit();   // (the Ultimates' pooled looks and their list: ultimate.js)
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
   // Ranger's volley). Returns false when it is refused.
   use(p, slot, cam, dir, at = null) {
     const def = abilityOf(p, slot);
-    if (!def || !p.alive || p.drive) return false;
-    if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
-    p.abilCd[slot] = p.abilityCd(slot);
+    if (!def || !p.alive || p.drive || typeof this[def.id] !== 'function') return false;
+    const ult = slot === 'u';
+    if (ult) {   // the Ultimate: no cooldown, the charge must be full (ultimate.js), and it is spent
+      if (!ultReady(p)) return false;
+      p.ult = 0;
+      p.ultHold = this.g.time + (def.lasts ?? ULT.lasts);   // (no charge from its own blows while it is still at work: ultimate.js)
+    } else {
+      if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
+      p.abilCd[slot] = p.abilityCd(slot);
+    }
     // (a guest says where its eyes are: never more than a step from where the host has its hero)
     const eye = p.eyePos(this.tmpv);
     if (cam.distanceToSquared(eye) > 9) cam = eye.clone();
-    if (this[def.id](p, cam, dir.clone().normalize(), at) === false) { p.abilCd[slot] = 0; return false; }   // (a leap with nowhere to go)
+    if (this[def.id](p, cam, dir.clone().normalize(), at, def) === false) { if (ult) { p.ult = 1; p.ultHold = 0; } else p.abilCd[slot] = 0; return false; }   // (a leap with nowhere to go)
     return true;
   }
 
@@ -247,6 +264,10 @@ export class Abilities {
       const e = this.active[i];
       const p = e.p;
       e.t += dt;
+      if (e.kind === 'ult') {   // an Ultimate that plays out over time runs its own course (ultimate.js), even after its caster falls
+        if (e.tick(this, e, dt) === false) this.active.splice(i, 1);
+        continue;
+      }
       if (e.kind === 'rain') {   // already loosed: it comes down even if the Ranger has fallen since
         this.rain(e);
         if (e.n >= e.shots.length) this.active.splice(i, 1);
@@ -279,6 +300,7 @@ export class Abilities {
   // Looks that run on every screen: the glyphs on the ground, shells and columns of light, the dust behind a charging hero.
   updateFx(dt) {
     this.gfx.update(dt);
+    if (this.ultFx.length) quietly(stepUltFx, this, dt);   // (the Ultimates' looks that play out over time, with the looks' own dice)
     for (let i = this.rising.length - 1; i >= 0; i--) { this.rising[i].t += dt; if (this.rising[i].t > 0.9) this.rising.splice(i, 1); }
     for (let i = this.trails.length - 1; i >= 0; i--) {
       const e = this.trails[i];
@@ -830,7 +852,9 @@ export class Abilities {
     const aegis = talentFx(p, 'aegis', null);   // Divine Aegis (Cleric talent): the healed take less damage for a while
     const mercy = talentFx(p, 'mercy', null);   // Mercy (alternative to Second Dawn): the ones in most need are healed more
     const lift = (o) => (mercy && o.hp < o.maxHp * mercy.below ? 1 + mercy.more : 1);
+    const hp0 = p.hp;
     p.heal(p.maxHp * 0.45 * mul * lift(p));
+    ultGain(p, p.hp - hp0, ULT.healed);   // (health restored charges the Ultimate: ultimate.js)
     if (aegis) p.buffs.add('guard', aegis.time, 1 - aegis.cut);
     const healed = [];
     let mended = 0;   // what the light really restored in others: it earns the Cleric experience
@@ -842,6 +866,7 @@ export class Abilities {
       if (aegis) this.guard(o, aegis.time, 1 - aegis.cut);
       if (healed.length < 14) healed.push(o.chest(new THREE.Vector3()));
     });
+    ultGain(p, Math.min(mended, ULT.healCap / ULT.healed), ULT.healed);   // (a light over a whole army: at most a quarter of the charge)
     this.emit('heal', p.pos, ZERO, healed, reach / 14);
     p.gainXp(Math.min(SUPPORT_XP.healCap, mended * SUPPORT_XP.heal), 'support');
   }
@@ -1122,7 +1147,16 @@ export class Abilities {
         snd('horn');
         break;
       }
-      default: break;
+      default:
+        if (ULT_SHOW[id]) ULT_SHOW[id]({ A: this, g, at, dir: flat(dir), targets, sz, who, house, silent, snd });   // (the Ultimates' looks: ultimate.js)
+        break;
     }
   }
+}
+
+// the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js
+Object.assign(Abilities.prototype, ULT_METHODS);
+
+function stepUltFx(A, dt) {
+  for (let i = A.ultFx.length - 1; i >= 0; i--) if (A.ultFx[i].step(A, A.ultFx[i], dt) === false) A.ultFx.splice(i, 1);
 }

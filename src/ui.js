@@ -1,6 +1,6 @@
 // HUD, shop, minimap, menus and notifications (plain DOM).
 import * as THREE from 'three';
-import { TEAM_CSS, TEAM_COLORS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, clock } from './config.js';
+import { TEAM_CSS, TEAM_COLORS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, ULT, clock } from './config.js';
 import { armsChip } from './heraldry.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
 import { allied, colorName } from './teams.js';
@@ -85,6 +85,7 @@ const AIM_HINTS = {
   charge: 'Release Q to charge · R or Esc: cancel',
   leap: 'Release R to leap · Q or Esc: cancel',
   scope: 'Let go of R or click to loose · let go early to lower the bow',
+  ult: `Release ${ULT.keyName} to cast your Ultimate · Q or Esc: cancel`,
 };
 
 export class UI {
@@ -887,6 +888,8 @@ export class UI {
     if (!this.abilEls) {
       const mk = (id) => { const r = $(id); return { r, ic: r.querySelector('.ic'), nm: r.querySelector('.nm'), kind: r.querySelector('.kind'), cd: r.querySelector('.cd'), sec: r.querySelector('.sec') }; };
       this.abilEls = { q: mk('abilQ'), r: mk('abilR') };
+      const u = $('abilU');
+      this.ultEl = { r: u, ic: u.querySelector('.ic'), pct: u.querySelector('.pct'), k: -1, full: null };
     }
     if (this.abilClass !== p.classId || this.abilRev !== p.talentRev) {   // (a talent can put another ability in a slot)
       this.abilClass = p.classId; this.abilRev = p.talentRev;
@@ -897,6 +900,9 @@ export class UI {
         if (e.kind) e.kind.textContent = d.kind || (slot === 'q' ? 'Attack' : 'Defence');   // (the Berserker's Leap and the Ranger's Sniper Shot are R, but attacks)
         e.r.title = `${d.name} (${d.cd} s): ${d.desc}`;
       }
+      const u = abilityOf(p, 'u');
+      this.ultEl.ic.textContent = u ? u.icon : '';
+      this.ultEl.r.title = u ? `Ultimate: ${u.name} (${ULT.keyName}). Charges as you fight: damage dealt and taken, health restored. ${u.desc}` : '';
     }
     for (const slot of ['q', 'r']) {
       const e = this.abilEls[slot], d = abilityOf(p, slot), cd = p.abilCd[slot];
@@ -908,9 +914,10 @@ export class UI {
       e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
       e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power) || (slot === 'r' && !!p.scope));   // (a circle being placed, Power Shot being drawn, the scope up)
     }
-    // the hint under the crosshair: which key lets it go (the volley's Q, the Leap's R, the Sniper Shot's R) and how to call it off
+    this.updateUlt(p);
+    // the hint under the crosshair: which key lets it go (the volley's Q, the Leap's R, the Sniper Shot's R, the Ultimate's Z) and how to call it off
     const aimId = p.aiming ? abilityOf(p, p.aiming.slot).id : '';
-    const aim = p.aiming ? (aimId === 'leap' || aimId === 'volley' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
+    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'volley' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
     if (aim !== this.aimShown) {
       this.aimShown = aim;
       const el = $('aimhint');
@@ -923,6 +930,25 @@ export class UI {
       const html = p.buffs.list().filter(([id]) => BUFF_NAMES[id]).map(([id, t, v]) => `<span>${esc(BUFF_NAMES[id])} ${id === 'ward' ? Math.ceil(v) + ' left' : t.toFixed(1) + 's'}</span>`).join('');
       if (html !== this.buffHtml) { this.buffHtml = html; $('buffs').innerHTML = html; }
     }
+  }
+
+  // The Ultimate's tile: a ring that fills with the charge (a CSS variable, written only when the whole percent changes) and, when it is
+  // full, a glow (a CSS animation of opacity only), with a chime and a line the moment it fills. (A guest's charge comes in its snapshot.)
+  updateUlt(p) {
+    const e = this.ultEl, k = Math.max(0, Math.min(100, Math.floor((p.ult || 0) * 100)));
+    if (k !== e.k) { e.k = k; e.r.style.setProperty('--ult', String(k / 100)); e.pct.textContent = k >= 100 ? '' : k + '%'; }
+    const full = k >= 100 && p.alive;
+    if (full !== e.full) {
+      const was = e.full;
+      e.full = full;
+      e.r.classList.toggle('full', full);
+      if (full && was === false && this.game.state === 'playing') {
+        const u = abilityOf(p, 'u');
+        this.toast(`Ultimate ready: ${u ? u.name : ''} (${ULT.keyName})`, -1, true);
+        this.game.audio.play('ultready');
+      }
+    }
+    e.r.classList.toggle('aiming', !!p.aiming && p.aiming.slot === 'u');
   }
 
   renderFactions() {

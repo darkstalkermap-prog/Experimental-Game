@@ -289,6 +289,26 @@ export const SPELLS = {
   fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, life: 3, color: 0xff7a1a },   // (life: seconds before it fizzles out)
   smite: { name: 'Smite', dmg: 95, radius: 3.8, range: 60, color: 0xffe9a0 },
 };
+// The Ultimate (the third ability, on Z: src/ultimate.js). It does not come round on a timer: it charges from fighting, 0 to 1 (full),
+// by the health that really changes hands: `dealt` per point of damage a hero deals (by what it hits), `taken` per point taken, `healed`
+// per point of health an ability restores (in yourself or an ally). Tuned so that a level-1 hero in a Conquest battle fills it in
+// roughly 60 to 90 s of steady fighting (the bot battle in the round-13 tests). It is kept through a fall and lost with a change of class.
+export const ULT = {
+  key: 'KeyZ', keyName: 'Z',
+  dealt: { hero: 1 / 740, soldier: 1 / 1350, siege: 1 / 2700, structure: 1 / 4500 },
+  taken: 1 / 950,
+  healed: 1 / 680, healCap: 0.25,   // (healCap: the most one heal of others can add, whatever the crowd it reaches)
+  lasts: 1,   // (seconds after a cast before the charge starts to fill again, unless the class's `u` says how long it goes on working)
+  // the Mage's Meteor: aimed as the volley is (a circle on the ground) up to `range` m; the rock comes down `fall` s after the cast. It deals
+  // `dmg` of spell damage (times the Mage's spell bonus) to everyone within `radius` m, `edge` of it at the rim; soldiers are knocked down
+  // (`stagger` s, `knock` m/s outward), heroes staggered `hero` s. Castle stone, gates and engines take `structure` (a catapult stone is
+  // 140: a gate of 1400 takes about a quarter). Then the ground burns for `burn` s in `burnR` m: `burnDps` a second to the foes in it.
+  meteor: { range: 135, fall: 1.25, dmg: 260, radius: 9, edge: 0.35, stagger: 1.6, hero: 0.9, knock: 13, structure: 380, burn: 6, burnR: 6.5, burnDps: 22, tick: 0.5 },
+  // the Cleric's Sanctuary: a circle of light `radius` m round where she stands, for `time` s: allies inside (heroes and soldiers of her side,
+  // co-op allies too) cannot be brought below 1 health
+  sanctuary: { radius: 10, time: 5 },
+};
+
 // How far a Fireball flies (it goes straight until it meets something or its time is up): the reach of the Berserker's Leap and the
 // Ranger's Sniper Shot is measured against it (classes.js)
 export const FIREBALL_RANGE = SPELLS.fireball.speed * SPELLS.fireball.life;

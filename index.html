@@ -233,6 +233,21 @@
   .abil .sec { position: absolute; right: 6px; top: 4px; font-family: Cinzel, serif; font-size: 17px; color: #fff; text-shadow: 0 1px 3px #000; }
   .abil.ready { border-color: var(--gold); box-shadow: 0 0 8px rgba(224,180,76,0.35); }
   .abil.aiming { border-color: #8fe88a; box-shadow: 0 0 12px rgba(143,232,138,0.7); }
+  /* the Ultimate (Z): a round tile beside R, bigger than the two, its ring filling with the charge (--ult, ui.js updateUlt); full, it glows.
+     (It hangs out to the right of the dock's column, so Q and R keep their width; the glow animates opacity only, which costs no layout) */
+  .ult { position: absolute; left: calc(100% + 10px); bottom: -5px; width: 64px; height: 64px; border-radius: 50%; background: var(--panel); border: 1px solid var(--edge); --ult: 0; }
+  .ult .ring { position: absolute; inset: 3px; border-radius: 50%; background: conic-gradient(#d9a640 calc(var(--ult) * 1turn), rgba(255,255,255,0.1) 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px)); }
+  .ult .ic { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 27px; line-height: 1; filter: grayscale(0.75) brightness(0.8); opacity: 0.8; }
+  .ult .pct { position: absolute; left: 0; right: 0; bottom: 9px; text-align: center; font-size: 10.5px; font-weight: normal; color: #e9dcc0; text-shadow: 0 1px 2px #000; }
+  .ult kbd { position: absolute; left: -4px; bottom: -3px; margin: 0; min-width: 0; padding: 0 5px; }
+  .ult::after { content: ''; position: absolute; inset: -7px; border-radius: 50%; box-shadow: 0 0 16px 5px rgba(255,196,80,0.75), inset 0 0 12px 3px rgba(255,210,110,0.55); opacity: 0; pointer-events: none; }
+  .ult.full { border-color: #ffd47a; }
+  .ult.full .ring { background: #f2c55c; }
+  .ult.full .ic { filter: none; opacity: 1; font-size: 31px; text-shadow: 0 0 10px rgba(255,200,90,0.9); }
+  .ult.full::after { animation: ultglow 1.1s ease-in-out infinite alternate; }
+  .ult.aiming { border-color: #8fe88a; }
+  @keyframes ultglow { from { opacity: 0.35; } to { opacity: 1; } }
   #aimhint { position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%); padding: 5px 14px; background: var(--panel); border: 1px solid #8fe88a; border-radius: 4px; font-family: Cinzel, serif; font-size: 14px; letter-spacing: 0.03em; color: #d8ffd4; pointer-events: none; }
   /* the buffs: a row of labels over the abilities, inside the dock's column (beside them they stood in the gap where the orders bars are) */
   #buffs { display: flex; flex-wrap: wrap; gap: 2px 4px; max-width: 100%; font-size: 14px; }
@@ -629,6 +644,7 @@
     .scroll h1 { font-size: 38px; }
     .classes { grid-template-columns: repeat(3, 1fr); }
     .abil { width: 101px; padding-left: 34px; }
+    .ult { width: 54px; height: 54px; bottom: 0; }
     .abil .kind { display: none; }
   }
 
@@ -850,7 +866,7 @@
   <div id="pracStats" class="panel"></div>
   <div id="dmgpops"></div>
   <div id="aimhint" class="hidden">Release Q to loose the volley · R or Esc: cancel</div>
-  <div id="hint">Esc: menu · B: shop · N: talents · M: map · Q / R: abilities · C:&nbsp;duck · O: orders · Tab: scores</div>
+  <div id="hint">Esc: menu · B: shop · N: talents · M: map · Q / R: abilities · Z: Ultimate · C:&nbsp;duck · O: orders · Tab: scores</div>
   <div id="keysNote"><kbd>I</kbd> keys</div>
   <div id="target" class="hidden"><div id="targetName"></div><div class="bar"><div id="targetFill"></div></div></div>
   <div id="killfeed"></div>
@@ -874,6 +890,7 @@
   <div id="abilities">
     <div class="abil" id="abilQ"><span class="ic"></span><kbd>Q</kbd><span class="nm"></span><span class="kind">Attack</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
     <div class="abil" id="abilR"><span class="ic"></span><kbd>R</kbd><span class="nm"></span><span class="kind">Defence</span><span class="tpips"></span><i class="cd"></i><b class="sec"></b></div>
+    <div class="ult" id="abilU"><i class="ring"></i><span class="ic"></span><b class="pct"></b><kbd>Z</kbd></div>
   </div>
   <div id="status" class="panel">
     <div class="bar"><div class="fill" id="hpFill"></div><div id="hpText"></div></div>
@@ -1014,6 +1031,7 @@
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
       <b>Q</b><span>Class ability: attack (Ranger: hold to aim the circle, let go to fire)</span>
       <b>R</b><span>Class ability: defence</span>
+      <b>Z</b><span>Ultimate: your class's great ability, once its ring is full. It charges as you fight (damage dealt and taken, health restored), not on a timer, and is kept when you fall. Aimed ones (the Mage's Meteor): hold to place the circle, let go to cast</span>
       <b>H</b><span>Healing draught</span>
       <b>E</b><span>Gate lever · take over an empty siege engine · mount / call your horse</span>
       <b>Engine</b><span>W/S roll · A/D turn · left click batters or fires · E climbs out</span>
@@ -1024,7 +1042,7 @@
       <b>B → Class</b><span>Switch your hero class (at your own castle)</span>
       <b>B → Army</b><span>Choose who garrisons the castle and who is in your army</span>
       <b>O</b><span>Orders menu (click to command troops)</span>
-      <b>F1 / Z</b><span>Your army: follow me</span>
+      <b>F1</b><span>Your army: follow me</span>
       <b>F2 / X</b><span>Your army: hold here</span>
       <b>F3</b><span>Your army: charge</span>
       <b>F4 / V</b><span>Your army: defend castle</span>

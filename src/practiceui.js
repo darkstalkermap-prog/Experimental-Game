@@ -49,7 +49,7 @@ export function buildPracticePanel(ui) {
   R.allTalents = chip(acts, 'All talents', 'Every talent of this class at once, whatever the level', () => g.court.setAllTalents(!g.court.allTalents));
   chip(acts, 'No talents', 'Forget every talent', () => g.court.setAllTalents(false));
   chip(acts, 'Talent tree (N)', 'Pick talents with the points your level gives', () => { ui.togglePractice(false); ui.openTalents(); });
-  chip(acts, 'Heal and refill', 'Full health, stamina, arrows and potions, abilities ready', () => g.court.heal());
+  chip(acts, 'Heal and refill', 'Full health, stamina, arrows and potions, abilities and the Ultimate ready', () => g.court.heal());
   R.hero = el('p', 'note nums');
 
   // ---------------- the soldiers ----------------
