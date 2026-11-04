@@ -5,6 +5,16 @@
 
 export const UPDATES = [
   {
+    id: 20,
+    title: 'Armour and arms of each race',
+    items: [
+      'Every race now has armour of its own build, not only its own colours: Elves in leaf-shaped lamellar with pauldrons swept up in curves and slim gilt greaves; Dwarves in massive banded pauldrons, chain skirts to the knee and heavy bronze-bound boots; Orcs in scavenged plates and spikes strapped over war-painted skin, hung with tusks and bone; the Undead bare bone under corroded plate, with shrouds in strips and a cold light set in the iron.',
+      'Each race has six sigils of its own, painted in its own hand: daubed and dripping for the Orcs, engraved and gilt for the Elves and Dwarves, faded and flaking for the Undead. Choose one under Renown, Your arms: your army\'s race comes first, the common sigils are still there.',
+      'Banners in the cut of their race: the Elves\' long swallow-tailed silk, the Dwarves\' iron-framed squares, the Orcs\' ragged hides and war rags, the Undead\' tattered shrouds and palls. Two to choose from for each race (or the classic swallowtail), on your castle, your levy standards with their own pole-tops, and your chip in the lobby.',
+      'AI lords of a race bear one of its sigils, drawn at random each match; online every player sees the same arms.',
+    ],
+  },
+  {
     id: 13,
     title: 'Armies of five races',
     items: [
