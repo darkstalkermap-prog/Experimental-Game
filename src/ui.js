@@ -87,8 +87,7 @@ export function renderClassPicker(root, info, selected, onPick) {
 
 const AIM_HINTS = {
   hawk: 'Release R to send the hawk · Q or Esc: cancel',
-  bash: 'Release Q to charge behind the shield · R or Esc: cancel',
-  charge: 'Release Q to charge · R or Esc: cancel',
+  charge: 'Release R to charge · Q or Esc: cancel',
   leap: 'Release R to leap · Q or Esc: cancel',
   scope: 'Click to loose · let go to lower the bow',
   ult: `Release ${ULT.keyName} to cast your Ultimate · Q or Esc: cancel`,
@@ -927,7 +926,7 @@ export class UI {
     // the hint under the crosshair: which key lets it go (the hawk's R, the Leap's R, the Sniper Shot's click, the Ultimate's Z) and how to call it off
     const aimId = p.aiming ? abilityOf(p, p.aiming.slot).id : '';
     const snipeWait = !p.aiming && !p.scope && p.zoomed && p.abilCd.s > 0 && abilityOf(p, 's') ? Math.ceil(p.abilCd.s) : 0;   // (the Ranger's Sniper Shot recharging: the right button only zooms)
-    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'hawk' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : snipeWait ? 'snipe' + snipeWait : '';
+    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'hawk' ? aimId : 'charge') : p.scope ? 'scope' : snipeWait ? 'snipe' + snipeWait : '';
     if (aim !== this.aimShown) {
       this.aimShown = aim;
       const el = $('aimhint');

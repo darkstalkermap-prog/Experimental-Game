@@ -184,7 +184,7 @@ export class FX {
     o = G.spawn(F.STAR, R.FLASH, p.x, p.y, p.z, 0, 0, 0, 0.1, 0.3 + n * 0.012, 0.55 + n * 0.025);
     G.tint(o, 2.0, 1.7, 1.0, 1);
     G.spin(o, rr(0, TAU), 0);
-    if (big) {   // a parry or a shield bash: a ring of light as well
+    if (big) {   // a parry: a ring of light as well
       o = G.spawn(F.RING, R.FLASH, p.x, p.y, p.z, 0, 0, 0, 0.2, 0.2, 1.7);
       G.tint(o, 1.6, 1.2, 0.7, 0.8);
       G.motion(o, 0, 0, 0, -1.5);

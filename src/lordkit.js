@@ -235,14 +235,12 @@ export class LordKit {
     this.body(dt, s < 1);
   }
 
-  // Shield Bash's run and the Lance Charge: along the ground at the run's speed (Player.move with a dash), the shield up for the bash; the
-  // run is over when its time is up or a foe stands at the shield (Abilities then bashes, or ends the charge where it stopped).
+  // The Lance Charge: along the ground at the run's speed (Player.move with a dash), on through the foes; the run is over when its time
+  // is up (Abilities ends the charge where it stopped).
   run(dt) {
     const u = this.u, g = this.g, d = u.dash, phys = g.physics;
     u.yaw = Math.atan2(d.x, d.z);
-    if (d.rush === 'bash') u.blockFlash = 0.2;
-    if (d.rush === 'bash' && this.foeAhead(d)) u.dash = null;
-    else if ((d.t -= dt) <= 0) u.dash = null;
+    if ((d.t -= dt) <= 0) u.dash = null;
     else {
       u.vel.set(d.x * d.v, 0, d.z * d.v);
       const L = WORLD.playHalf;
@@ -256,16 +254,6 @@ export class LordKit {
     this.body(dt, !!u.dash);
   }
 
-  // a foe right in front of the shield (Player.foeAhead)
-  foeAhead(f) {
-    const u = this.u, x = u.pos.x + f.x * 1.2, z = u.pos.z + f.z * 1.2, y = u.pos.y;
-    let hit = false;
-    this.g.grid.query(x, z, RUSH.reach + 2, (o) => {
-      if (hit || !o.alive || o === u || allied(o.team, u.team) || o.drive || Math.abs(o.pos.y - y) > 2.5) return;
-      if (Math.hypot(o.pos.x - x, o.pos.z - z) - (o.radius || 0.4) <= RUSH.reach) hit = true;
-    });
-    return hit;
-  }
 
   // The Ranger's draw: the bow comes up and the string back, held on the mark, then loosed (the Explosive Arrow by itself when drawn, the
   // Sniper Shot once the aim has settled).
@@ -453,9 +441,9 @@ export class LordKit {
         if (q) this.bolt('q', 2, 90, 1e3);
         break;
       }
-      case 'cavalier':
-        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need)) break;
-        if (r && ((this.friends.length >= 3 && n.c12 >= 2) || (hpf < 0.55 && n.c8 >= 1))) this.cast('r', this.look());
+      case 'cavalier':   // (no lord rides as one, LORD_CLASSES; kept in step with the hero's kit: Lance Charge on R, Sweeping Strike on Q)
+        if (r && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need, 'r')) break;
+        if (q && (n.c3 >= 2 || n.heroNear < 3)) this.cast('q', this.look());
         break;
       default: break;
     }
@@ -480,8 +468,8 @@ export class LordKit {
     return this.cast(slot, this.aimAt(best, speed, 1, V2));
   }
 
-  // the long runs (Shield Bash, Lance Charge) at a rival hero or the densest knot of foes lo..hi m off, with nothing in the way
-  runAt(id, lo, hi, need) {
+  // the long run (the Lance Charge) at a rival hero or the densest knot of foes lo..hi m off, with nothing in the way
+  runAt(id, lo, hi, need, slot = 'q') {
     const u = this.u, A = this.g.abilities;
     let best = null, bs = 0;
     for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
@@ -495,7 +483,7 @@ export class LordKit {
     const plan = A.rushPlan(u, u.pos, V3.set(best.pos.x + (dx / l) * over, best.pos.y, best.pos.z + (dz / l) * over));
     if (!plan || plan.d < l - 2) return false;   // (something in the way: he walks round)
     u.yaw = Math.atan2(dx, dz);
-    return this.cast('q', V2.set(dx / l, 0, dz / l), plan.to.clone());
+    return this.cast(slot, V2.set(dx / l, 0, dz / l), plan.to.clone());
   }
 
   // Leap into a rival hero or a knot of foes 9..45 m off (where they will be when he comes down); not when foes are at hand already
@@ -577,14 +565,12 @@ export class LordKit {
   cast(slot, dir, at = null) {
     const u = this.u, A = this.g.abilities, def = abilityOf(u, slot);
     if (u.abilCd[slot] > 0 || u.staggerT > 0) return false;
-    if (def.id === 'bash' || def.id === 'lancecharge') {
+    if (def.id === 'lancecharge') {
       const plan = at ? A.rushPlan(u, u.pos, at) : null;
-      if (plan && !(def.id === 'bash' && this.foeAhead(plan.f))) {
-        const v = A.rushSpeed(u, def.id);
-        u.dash = { x: plan.f.x, z: plan.f.z, v, t: plan.d / v, rush: def.id, plan, fresh: true };
-        at = plan.to;
-      } else if (def.id === 'lancecharge') return false;
-      else at = null;   // (no room to run, or a foe already at the shield: the bash where he stands)
+      if (!plan) return false;
+      const v = A.rushSpeed(u);
+      u.dash = { x: plan.f.x, z: plan.f.z, v, t: plan.d / v, rush: def.id, plan, fresh: true };
+      at = plan.to;
     } else if (def.id === 'leap') {
       const plan = at ? A.leapPlan(u, u.pos, at) : null;
       if (!plan) return false;

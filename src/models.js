@@ -582,7 +582,7 @@ function stepFeet(A, m, st) {
   const X = A.x, Y = A.y, Z = A.z, yaw = A.yaw, cy = Math.cos(yaw), sy = Math.sin(yaw);
   const vx = A.vx, vz = A.vz, v = Math.sqrt(vx * vx + vz * vz), fwdK = A.fwdK, latK = A.latK;
   const gx = st.gx || 0, gz = st.gz || 0;
-  // ---- the gait: how long a stride, how quick, how much of it each foot is down. (Past a sprint, a Shield Bash's run or a shove, no man's
+  // ---- the gait: how long a stride, how quick, how much of it each foot is down. (Past a sprint, a Lance Charge on foot or a shove, no man's
   // legs keep up: the steps are a sprint's and the planted feet are carried along by the rest of the speed, unseen at that pace.)
   const vg = Math.min(v, VSPRINT), kv = v > 0 ? vg / v : 0, gvx = vx * kv, gvz = vz * kv;
   const run = smooth(1.6, 3.0, vg);

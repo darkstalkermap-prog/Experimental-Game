@@ -411,7 +411,9 @@ export class HeroBot {
       }
     }
     // a shield up while walking into arrow fire from the front: it stops most of the damage
-    if (this.n.shooters >= 2 && !this.retreat && p.weapon === 'sword' && !p.atk && (this.style.kind === 'melee' || this.n.c3 > 0) && Math.random() < 0.6 + 0.3 * this.skill) {
+    // (one is enough for a Knight: his shield turns most of an arrow or a spell, and every one it takes fills his Wrath, knight.js)
+    const chasing = p.classId === 'knight' && p.chalUntil > this.g.time && this.heroGap < 12;   // (a Knight running down a hero he has Challenged: no time for the shield)
+    if (this.n.shooters >= (p.classId === 'knight' ? 1 : 2) && !chasing && !this.retreat && p.weapon === 'sword' && !p.atk && (this.style.kind === 'melee' || this.n.c3 > 0) && Math.random() < 0.6 + 0.3 * this.skill) {
       const hold = this.wantHit ? this.gapUntil - now : 0.5;   // in contact only between two swings
       if (hold > 0.05) {
         if (this.guardUntil <= now) this.guardAt = now;
@@ -506,7 +508,8 @@ export class HeroBot {
       case 'knight': {
         // Challenge: on a knot of foes at hand, a rival hero close, or when pressed (it halves the damage, and the blows it draws onto the
         // raised shield fill his Wrath: knightGuard keeps the shield up); not with the shield away
-        if (r && !p.shieldOut && hpf > 0.25 && (n.c8 >= 3 + need || (n.heroes8 && this.heroGap < 6) || (heavy && n.c5 >= 2))) { this.cast('r'); break; }
+        // (a rival hero anywhere in its reach: a Ranger or a Mage keeping her distance is held, slowed, while he closes)
+        if (r && !p.shieldOut && hpf > 0.25 && (n.c8 >= 3 + need || this.heroGap < KNIGHT.dare.radius - 1.5 || (heavy && n.c5 >= 2))) { this.cast('r'); break; }
         // Shield Throw: at a rival hero or a knot of foes within 45 m it can bounce through, with a clear line (knight.js)
         const o = q ? knightTossPick(this, p, need) : null;
         if (o) { this.aimAtFoe(o, KNIGHT.toss.speed, 0.5); this.cast('q'); }   // (a spinning shield is wide: a steadier aim than an arrow's)
@@ -565,8 +568,8 @@ export class HeroBot {
     this.cast(slot);
   }
 
-  // The long charges: a run (Shield Bash) or a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or
-  // the densest knot of foes lo..hi m off, with nothing in the way of the run.
+  // The long charge: a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or the densest knot of foes
+  // lo..hi m off, with nothing in the way of the run.
   runAt(id, lo, hi, need, slot = 'q') {
     const p = this.p, A = this.g.abilities;
     if (p.climb || p.leap || p.dash) return false;
@@ -700,11 +703,12 @@ export class HeroBot {
       else if (gap > 2.1) {
         const close = gap < 8 && this.g.castleAt(t.pos) === this.g.castleAt(p.pos);
         this.goTo(t.pos.x, t.pos.z, close);
-        this.sprint = gap > 9;
+        // (a rival hero who shoots, keeping his distance, is run down: at a walk she backs away as fast as he comes)
+        this.sprint = gap > 9 || (t.isPlayer && gap > 3 && (t.weapon === 'bow' || t.classId === 'mage' || t.classId === 'cleric'));
       } else if (this.planted && gap > 1.2) this.hold = true;
       else this.stepAround(t, gap < 1.2 ? 0.5 : 0, this.side);
     } else {
-      if (gap < st.lo - 1) {
+      if (gap < st.lo - 1 && !(p.chalBy === t && p.chalUntil > this.g.time)) {   // (Challenged by him: it must stand and face him, knight.js)
         this.backT += this.sk.think;
         if (this.backT > 2.5 && this.n.c3 >= 1) { this.meleeUntil = now + 3; this.backT = 0; }   // cornered: fight it out
         this.stepAround(t, 1, this.side * 0.4);

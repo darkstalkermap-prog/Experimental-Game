@@ -210,8 +210,8 @@ export class ViewModel {
     this.prev = { yaw: 0, pitch: 0, hp: 1, arrows: 0, potions: 0, onGround: true, vy: 0, draw: 0, mounted: false, init: false };
     this.recoil = 0; this.landDip = 0; this.hurtT = 0; this.wallT = 0;
     // (what keeps the sword hand from snapping: the guard's offset and the stagger eased in and out, the Whirlwind's spin run on to a whole turn,
-    // the Shield Bash's push eased off, and a blow cut short faded out from where the hand was)
-    this.guardAmt = 0; this.stagAmt = 0; this.whirlAmt = 0; this.whirlA = 0; this.bashAmt = 0;
+    // and a blow cut short faded out from where the hand was)
+    this.guardAmt = 0; this.stagAmt = 0; this.whirlAmt = 0; this.whirlA = 0;
     this.atkOff = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 }; this.atkFade = 0; this.atkLive = false;
     this.spread = 1;
     this.castCol = new THREE.Color();
@@ -591,17 +591,9 @@ export class ViewModel {
       const kite = cls === 'knight', sp = this.shieldPose, target = p.blocking ? (kite ? KITE_GUARD : GUARD) : kite ? KITE_REST : SHIELD_REST, kk = Math.min(1, dt * 15);
       sp.x += (target.x - sp.x) * kk; sp.y += (target.y - sp.y) * kk; sp.z += (target.z - sp.z) * kk;
       sp.rx += (target.rx - sp.rx) * kk; sp.ry += (target.ry - sp.ry) * kk; sp.rz += (target.rz - sp.rz) * kk;
-      let bashZ = 0;
-      if (p.dash && cls === 'knight') {
-        // a Shield Bash run: the shield is carried out in front all the way (eased in over the first fifth of a second); the old short lunge
-        // (no room to run) drives it out and back
-        if (p.dash.rush) { this.rushT = (this.rushT || 0) + dt; bashZ = -0.2 * Math.min(1, this.rushT * 5); } else bashZ = -0.22 * Math.min(1, (0.25 - p.dash.t) * 12) * Math.min(1, p.dash.t * 8);
-      } else this.rushT = 0;
-      this.bashAmt = bashZ < this.bashAmt ? bashZ : smooth(this.bashAmt, bashZ, 12, dt);   // (out at once, back eased: the run's end does not snap it home)
-      bashZ = this.bashAmt;
       const sinceGuard = t - p.blockStart;   // a fresh guard thrusts out a little (the parry window): out over a few frames, back over a third of a second
       const shove = p.blocking ? clamp(sinceGuard / 0.06, 0, 1) * clamp(1 - sinceGuard / 0.35, 0, 1) : 0;
-      this.place(L.grp, sp, ox + S.sx.step(0, dt) + 0.1 * bashZ, oy + S.sy.step(0, dt) - swapDip + this.landDip * 0.02 + 0.5 * bashZ * 0.1, oz + S.sz.step(0, dt) - 0.05 * shove + bashZ, S.srx.step(0, dt), S.sry.step(0, dt) + lx * 0.5, 0);
+      this.place(L.grp, sp, ox + S.sx.step(0, dt), oy + S.sy.step(0, dt) - swapDip + this.landDip * 0.02, oz + S.sz.step(0, dt) - 0.05 * shove, S.srx.step(0, dt), S.sry.step(0, dt) + lx * 0.5, 0);
       if (kite && knightArm(this, p, t, L)) L.grp.updateMatrix();   // (Shield Throw: the arm flings the shield, hangs empty, catches it: knight.js)
       // the left hand hauling up a wall
       if (climbW > 0.02) {

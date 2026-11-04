@@ -25,7 +25,7 @@ import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
 import { ultGain, dealtWeight } from './ultimate.js';
-import { wrathGain } from './knight.js';
+import { KNIGHT, wrathGain } from './knight.js';
 import { rageHit } from './berserker.js';
 import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
@@ -933,14 +933,15 @@ export class Game {
       return;
     }
     // heroes guard with their shield: a blow from in front is stopped (raising the guard just as it lands parries, and the
-    // attacker reels), while it costs stamina; with too little left, or against arrows and spells, the shield only softens it
-    if (target.isPlayer && target.blocking && !target.shieldOut && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {   // (a Knight whose shield is in the air has none: knight.js)
+    // attacker reels), while it costs stamina; with too little left, or against arrows and spells, the shield only softens it. The Knight's
+    // great shield also softens a blast or a sweeping blow from in front (KNIGHT.blast of it: knight.js), which goes round anyone else's
+    if (target.isPlayer && target.blocking && !target.shieldOut && target.weapon === 'sword' && attacker && attacker.pos && (!info.splash || target.classId === 'knight')) {   // (a Knight whose shield is in the air has none: knight.js)
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
       if ((dx * fx + dz * fz) / d > 0.35) {
         const at = target.chest(new THREE.Vector3()).addScaledVector(new THREE.Vector3(fx, 0, fz), 0.6);
-        if (info.melee && target.stamina >= BLOCK_STAMINA) {
+        if (info.melee && !info.splash && target.stamina >= BLOCK_STAMINA) {
           target.stamina = Math.max(0, target.stamina - BLOCK_STAMINA);
           if (this.time - target.blockStart < PARRY_WINDOW && attacker.stagger) {
             attacker.stagger(0.9, target);
@@ -957,7 +958,7 @@ export class Game {
           return;
         }
         wrathGain(target, 'soft');
-        dmg *= 1 - target.blockPower;
+        dmg *= 1 - target.blockPower * (info.splash ? KNIGHT.blast : 1);
         target.stamina = Math.max(0, target.stamina - 8);
         this.fx.sparks(at, 8);
         this.audio.play('block', target.pos);

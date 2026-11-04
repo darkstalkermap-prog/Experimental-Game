@@ -26,15 +26,19 @@ export const KNIGHT = {
   // Wrath, 0..1: what a blow on the shield adds (a full block, a parry, a blow the shield only softened: an arrow, a spell, a blow with too
   // little stamina left; `lord`: a lord's shield turning a blow aside), and how it fades: after `idle` s without a blocked blow, `fade` a second
   wrath: { block: 0.2, parry: 0.34, soft: 0.08, lord: 0.2, idle: 12, fade: 0.04 },
+  // his raised shield softens a blast or a sweeping blow from in front (a Fireball, a Whirlwind, an Explosive Arrow) by `blast` of what
+  // it takes off an arrow (Game.damage): anyone else's shield is no help against those
+  blast: 0.6,
   // the shockwave: a cone `reach` m long and as wide as cos `cos` either side of his facing; `dmg` of his melee damage (`edge` of it at the
   // far end), soldiers thrown back `knock` m/s and staggered `stagger` s, heroes `hero` s
   wave: { reach: 9, cos: 0.5, dmg: 2.2, edge: 0.55, knock: 12, stagger: 1, hero: 0.5 },
   // Shield Throw: out at `speed` m/s up to `range` m, a bounce to the nearest foe within `bounce` m of the last, `hits` foes in all, each
   // taking `dmg` of his melee damage and stunned `stun` s (a hero `hero` s, nothing if his own shield is up facing it); back at `back` m/s.
   // A foe within `hitR` m of its path is struck; after `maxT` s it is back in his hand whatever happened
-  toss: { range: FIREBALL_RANGE, speed: 55, back: 60, bounce: 10, hits: 3, dmg: 1.3, stun: 1.1, hero: 0.8, hitR: 0.8, maxT: 8 },
-  // Challenge: every foe within `radius` m for `time` s; he takes `cut` of the damage
-  dare: { radius: 12, time: 3, cut: 0.5 },
+  toss: { range: FIREBALL_RANGE, speed: 55, back: 60, bounce: 10, hits: 3, dmg: 1.5, stun: 1.1, hero: 0.8, hitR: 0.8, maxT: 8 },
+  // Challenge: every foe within `radius` m for `time` s; he takes `cut` of the damage, and a rival hero it binds is held: `hold` slower
+  // (he has to face the Knight: without it a Ranger or a Mage walked backwards out of his reach for the whole duel)
+  dare: { radius: 12, time: 3, cut: 0.5, hold: 0.4 },
   // the Banner: `radius` m for `time` s; every `every` s heroes of his side near it heal `heal` of their health a second, soldiers
   // `healMen`; foes near it move at `slow` of their speed
   banner: { radius: 10, time: 12, heal: 0.025, healMen: 0.04, slow: 0.6, every: 0.5 },
@@ -162,7 +166,7 @@ export const KNIGHT_METHODS = {
     const heroes = [], men = [];
     this.eachFoe(p.team, p.pos.x, p.pos.z, r, (o) => {
       if (o.isSiege || o.isTowerArcher || o.isStructure) return;
-      if (o.isPlayer) { o.chalBy = p; o.chalUntil = g.time + t; o.buffs.add('challenged', t); }
+      if (o.isPlayer) { o.chalBy = p; o.chalUntil = g.time + t; o.buffs.add('challenged', t); o.buffs.add('slow', t, D.hold); }
       else { o.taunt = p; o.tauntUntil = g.time + t; o.target = p; }   // (Unit.think holds him to it)
       (isHero(o) ? heroes : men).push(o);
     }, p.pos.y, 4);
@@ -724,9 +728,28 @@ export function knightGuard(b, now) {
     if (b.n.c5 >= 1) { b.guardUntil = Math.min(b.guardUntil, now); b.gapUntil = Math.min(b.gapUntil, now); }
     return;
   }
-  if (p.atk || b.n.c3 === 0) return;
+  if (p.atk) return;
+  // a rival hero at sword's reach: reading a hero's blow is his whole craft, so he sees each one coming far more surely than the general
+  // reaction (HeroBot.planGuard) and takes it on the shield, then answers in the gap after it (HeroBot.canStrike, the gap between swings)
+  for (let i = 0; i < b.foes.length; i++) {
+    const o = b.foes[i];
+    if (!o.isPlayer || b.dist[i] > 3.6 || !o.alive) continue;
+    const winding = o.atk ? o.atk.phase !== 'recover' : o.swingT >= 0 && o.swingT < 0.3;
+    if (winding && now >= b.guardUntil && Math.random() < 0.5 + 0.4 * b.skill) {
+      b.guardAt = now + 0.04;
+      b.guardUntil = now + 0.5;
+      return;
+    }
+  }
+  if (b.n.c3 === 0) return;
+  // (only foes who fight back press him: a practice dummy or a man still turning to face him is no reason to stop swinging)
+  let pressing = 0;
+  for (let i = 0; i < b.foes.length && pressing < 2; i++) {
+    const o = b.foes[i];
+    if (b.dist[i] < 3 && !o.isDummy && !o.isSiege && (o.isPlayer || o.swingT >= 0 || o.attackTimer < 0.6)) pressing++;
+  }
   const dare = p.chalUntil > p.game.time;
-  const chance = dare ? 0.6 + 0.35 * b.skill : b.n.c3 >= 2 ? 0.25 + 0.3 * b.skill : 0;
+  const chance = dare ? 0.6 + 0.35 * b.skill : pressing >= 2 ? 0.25 + 0.3 * b.skill : 0;
   if (Math.random() < chance) {
     if (b.guardUntil <= now) b.guardAt = now;
     b.guardUntil = Math.max(b.guardUntil, now + (dare ? 0.6 : 0.4));

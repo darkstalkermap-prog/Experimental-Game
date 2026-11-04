@@ -3,8 +3,9 @@
 // (damage dealt, damage taken, health restored), 0 to 1, and when it is full the icon in the dock glows and one press lets it go.
 // The charge is kept through a fall and lost with a change of class. Its numbers are in config.js (ULT).
 //
-// HOW A CLASS ADDS ITS ULTIMATE (the Knight, Cavalier and Ranger have simple stand-ins below, `placeholder: true`, to be replaced the
-// same way the Mage's Meteor and the Cleric's Sanctuary are made; the Berserker's Unstoppable lives in berserker.js with the rest of him):
+// The six: the Mage's Meteor, the Cleric's Sanctuary and the Ranger's Rain of Fire are here; the Knight's Banner of the Realm (knight.js),
+// the Berserker's Unstoppable (berserker.js) and the Cavalier's Call the Charge (cavalier.js) live with the rest of their classes.
+// HOW A CLASS ADDS (OR REPLACES) ITS ULTIMATE:
 //
 // 1. The definition: classes.js, CLASSES.<class>.u, next to q and r:
 //      u: { id, icon, name, desc, kind: 'Ultimate', aimed?, range?, radius?, cast?, ...your numbers }
@@ -15,7 +16,7 @@
 //    cast    the colour of the raised spell hand in the first-person view as it is cast (Player.useAbility: castFlash); omit for none.
 //    lasts   seconds the Ultimate goes on working after the cast (the Meteor's fall and burning ground); the charge does not fill again
 //            until then, so an Ultimate never pays for the next one with its own damage (default ULT.lasts).
-//    The definition is passed to the method as its fifth argument, so its numbers can live on it (see the stand-ins' `burst`).
+//    The definition is passed to the method as its fifth argument, so its numbers can live on it.
 // 2. The method: `name(p, cam, dir, at, def)` in your class's section of ULT_METHODS below. It runs only where the battle is
 //    simulated (single player, or the host), mixed into Abilities (classes.js), so `this` is Abilities: this.g (the game),
 //    this.eachFoe / this.eachFriend, this.aimPoint, this.emit, this.gfx, this.active. Abilities.use has already checked and spent the
@@ -69,7 +70,7 @@ export function ultGain(o, amount, w) {
   if (!o || o.ult === undefined || !o.alive || !(amount > 0) || !(w > 0)) return;
   const g = o.game;
   if (!g || !g.simulating || o.ultHold > g.time) return;   // (an Ultimate still at work charges nothing: Abilities.use sets ultHold)
-  o.ult = Math.min(1, o.ult + amount * w);
+  o.ult = Math.min(1, o.ult + amount * w * (ULT.rate[o.classId] || 1));   // (each class at its own pace: ULT.rate)
 }
 
 // The Cleric's Sanctuary: a blow that would bring someone inside the light below 1 health leaves him on 1 (Player.takeDamage and
@@ -133,30 +134,11 @@ export const ULT_METHODS = {
     this.emit('sanctuary', c, ZERO);
   },
 
-  // ---------------------------------------------------------------- Knight, Cavalier: a stand-in
-  // (placeholder) a slam all around the hero: def.burst { radius, dmg (of his melee damage), edge, stun, knock }. Each of these
-  // classes' own Ultimate takes its place.
-  burst(p, cam, dir, at, def) {
-    const g = this.g, B = def.burst, at0 = p.pos.clone();
-    const dmg = p.meleeDmg * B.dmg;
-    this.eachFoe(p.team, at0.x, at0.z, B.radius, (o, d) => {
-      g.damage(o, dmg * (1 - (1 - B.edge) * Math.min(1, d / B.radius)), p, { melee: true, splash: true, charge: 1, ability: def.name });
-      if (!o.alive) return;
-      if (o.stagger) o.stagger(B.stun, { pos: at0 });
-      if (o.vel && !o.isPlayer && !o.isGiant && !o.isSiege) {
-        const l = d || 1;
-        o.vel.x += ((o.pos.x - at0.x) / l) * B.knock; o.vel.z += ((o.pos.z - at0.z) / l) * B.knock;
-      }
-    }, at0.y, 3);
-    p.swingT = 0.3; p.attackDir = 'over';
-    this.emit('burst', at0, ZERO, null, B.radius / 5);
-  },
-
   // ---------------------------------------------------------------- Ranger: Rain of Fire
   // A wide circle on the ground (aimed, as far as RAIN.range): a flight of burning arrows goes up from the bow, and from RAIN.delay s
   // they come down on the circle for RAIN.span s, most of them each on a foe inside it (the one picked least so far, and no more than
   // RAIN.cap on any one: a lone hero is scorched, not shot to pieces); where they land the ground catches and burns (burnGround), wooden
-  // engines too. The old Arrow Volley's machinery (Abilities.rain, classes.js), far bigger and on fire.
+  // engines too. The arrows fall through Abilities.rain (classes.js), the machinery of arrows coming down on a circle.
   rainfire(p, cam, dir, at) {
     const g = this.g, R = RAIN;
     const c = at ? at.clone() : this.aimPoint(cam, dir, R.range, p.team).pos;
@@ -180,7 +162,7 @@ export const ULT_METHODS = {
 function meteorTick(A, e) {
   if (e.t < M.fall) return true;
   meteorImpact(A, e);
-  burnGround(A, { c: e.c, team: e.team, p: e.p, r: M.burnR, dps: M.burnDps * (e.dmg / M.dmg), time: M.burn, ability: 'Meteor' });
+  burnGround(A, { c: e.c, team: e.team, p: e.p, r: M.burnR, dps: M.burnDps * (e.dmg / M.dmg), time: M.burn, ability: 'Meteor', crowd: M.burnCrowd });
   return false;
 }
 
@@ -188,8 +170,8 @@ function meteorTick(A, e) {
 // Ground set on fire (the Meteor's crater; the Ranger's Explosive Arrow and Rain of Fire: ranger.js and below): for `time` s from
 // `delay`, every foe standing within `r` m of c takes `dps` a second (in ticks of ULT.meteor.tick s); engines `siege` of it (0: none,
 // they are too big to catch from a patch of flames). Where the battle is run; the look is burnLook below.
-export function burnGround(A, { c, team, p, r, dps, time, delay = 0, ability, siege = 0 }) {
-  A.active.push({ kind: 'ult', p, team, t: 0, c, r, dps, time, delay, ability, siege, every: 0, tick: burnTick });
+export function burnGround(A, { c, team, p, r, dps, time, delay = 0, ability, siege = 0, crowd = 0 }) {
+  A.active.push({ kind: 'ult', p, team, t: 0, c, r, dps, time, delay, ability, siege, crowd, every: 0, tick: burnTick });
 }
 
 function burnTick(A, e, dt) {
@@ -198,8 +180,15 @@ function burnTick(A, e, dt) {
   if ((e.every -= dt) > 0) return true;
   e.every += M.tick;
   const g = A.g, c = e.c, n = e.dps * M.tick;
+  // (the Meteor's crater: with more soldiers in the fire than its `crowd`, each burns for his share of it)
+  let share = 1;
+  if (e.crowd) {
+    let men = 0;
+    A.eachFoe(e.team, c.x, c.z, e.r, (o) => { if (!o.isSiege && !isHero(o)) men++; }, c.y, 2.5);
+    if (men > e.crowd) share = e.crowd / men;
+  }
   A.eachFoe(e.team, c.x, c.z, e.r, (o) => {
-    if (!o.isSiege) g.damage(o, n, e.p, { magic: true, splash: true, ability: e.ability });
+    if (!o.isSiege) g.damage(o, isHero(o) ? n : n * share, e.p, { magic: true, splash: true, ability: e.ability });
     else if (e.siege) g.damage(o, n * e.siege, e.p, { magic: true, ability: e.ability });
   }, c.y, 2.5);
   return true;
@@ -207,12 +196,16 @@ function burnTick(A, e, dt) {
 
 function meteorImpact(A, e) {
   const g = A.g, c = e.c, R = M.radius;
+  // (in a packed host the blow is shared out: with more soldiers under it than M.crowd, each takes his share; heroes take it in full)
+  let men = 0;
+  A.eachFoe(e.team, c.x, c.z, R, (o) => { if (!o.isSiege && !isHero(o)) men++; }, c.y, 6);
+  const share = men > M.crowd ? M.crowd / men : 1;
   A.eachFoe(e.team, c.x, c.z, R, (o, d) => {
     const k = 1 - (1 - M.edge) * Math.min(1, d / R);
     if (o.isSiege) { g.damage(o, M.structure * k, e.p, { magic: true, ability: 'Meteor' }); return; }
-    g.damage(o, e.dmg * k, e.p, { magic: true, splash: true, ability: 'Meteor' });
+    const hero = isHero(o);
+    g.damage(o, e.dmg * k * (hero ? 1 : share), e.p, { magic: true, splash: true, ability: 'Meteor' });
     if (!o.alive) return;
-    const hero = o.isPlayer || o.kit;
     if (o.stagger) o.stagger(hero ? M.hero : M.stagger * (0.6 + 0.4 * k), { pos: c });
     if (o.vel && !o.isPlayer && !o.isGiant) {
       const l = d || 1;
@@ -286,18 +279,6 @@ export const ULT_SHOW = {
     A.gfx.glyph('rune', c.x, c.y, c.z, R.radius, 0xff6a28, T, { arms: 8, team: house, strength: 1.5 });
     A.gfx.glyph('pulse', c.x, c.y, c.z, R.radius * 0.7, 0xff8a40, R.delay + 0.3, { strength: 1.2 });
     A.ultFx.push({ t: 0, c: c.clone(), silent: ctx.silent, step: rainLookStep });
-  },
-
-  burst(ctx) {   // (the stand-in: a slam all around)
-    const { A, g, at, house, sz } = ctx, gf = A.gfx, fx = g.fx, r = 5 * sz;
-    gf.glyph('shock', at.x, at.y, at.z, r * 1.25, 0xffe0b0, 0.7, { team: house, strength: 2 });
-    gf.glyph('pulse', at.x, at.y, at.z, r, 0xffa040, 0.8, { strength: 1.8 });
-    gf.pillar(at.x, at.y, at.z, 0xffd0a0, 0.6, 1.2, 10, 1.5);
-    fx._dust(V1.copy(at).setY(at.y + 0.2), 30, r * 0.7, '');
-    fx.ring(at, r * 0.45, A.col.set(0xffb070), 32, { up: 1.0, size: 0.42, speed: 9 });
-    fx.crater(at, 2.2 * sz);
-    if (g.camfx) g.camfx.boom(at, 0.9);
-    ctx.snd('slam');
   },
 };
 
@@ -525,12 +506,6 @@ export const ULT_AI = {
       if (f.hp < f.maxHp * 0.45) need += isHero(f) ? 3 : 1;
     }
     return need >= 4 ? {} : null;
-  },
-
-  // (stand-in) the slam: four foes within reach, or a rival hero and one more
-  burst(b, p, def) {
-    const r = def.burst.radius - 0.5, n = b.countAt(p.pos.x, p.pos.z, r);
-    return n >= 4 || (b.n.heroes8 && n >= 2) ? {} : null;
   },
 
   // Rain of Fire on the densest knot of foes 10 m and more away (rival heroes count three, engines two; a little lead on where they are

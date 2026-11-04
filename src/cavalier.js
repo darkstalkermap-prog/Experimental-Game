@@ -40,6 +40,10 @@ export const CAV = {
   // The cry: every ally within `rally.radius` m takes `rally.ally` of the damage and is `rally.haste` faster for `rally.time` s (he takes `rally.self`).
   call: { range: 60, radius: 5, knights: 6, hp: 300, dmg: 1, speed: 15, ride: 6, through: 9, life: 15, reach: 2.3, hit: 1.4, heroHit: 0.6, stagger: 1.1, heroStagger: 0.5, knock: 11,
     rally: { radius: 28, time: 8, ally: 0.7, self: 0.6, haste: 1.25 } },
+  // Against rival heroes (who see the horse coming and turn with the blow): a sword blow from the saddle hits at most `gallop` times a
+  // standing one, whatever the speed and Momentum (against soldiers the whole gallop counts), and the Lance Charge's ride-down `lance` of
+  // what it does to a soldier. (Without it a charge and the blow after it took a Ranger from full to nothing in a twentieth of a second.)
+  hero: { gallop: 1.6, lance: 0.55 },
 };
 const SW = CAV.sweep, CALL = CAV.call, MOM = CAV.momentum;
 

@@ -280,7 +280,7 @@ export const PROMOTIONS = { swordsman: 'knight', spearman: 'knight', archer: 'lo
 // The spells behind the Mage's Fireball and the Cleric's Smite. They fly (or fall) where the caster aims and are
 // stopped by walls and hills.
 export const SPELLS = {
-  fireball: { name: 'Fireball', dmg: 105, radius: 4.4, speed: 40, life: 3, color: 0xff7a1a },   // (life: seconds before it fizzles out)
+  fireball: { name: 'Fireball', dmg: 95, radius: 4.4, speed: 40, life: 3, color: 0xff7a1a },   // (life: seconds before it fizzles out)
   smite: { name: 'Smite', dmg: 95, radius: 3.8, range: 60, color: 0xffe9a0 },
 };
 // The Ultimate (the third ability, on Z: src/ultimate.js). It does not come round on a timer: it charges from fighting, 0 to 1 (full),
@@ -293,11 +293,17 @@ export const ULT = {
   taken: 1 / 950,
   healed: 1 / 680, healCap: 0.25,   // (healCap: the most one heal of others can add, whatever the crowd it reaches)
   lasts: 1,   // (seconds after a cast before the charge starts to fill again, unless the class's `u` says how long it goes on working)
+  // how fast each class's bar fills, of the rates above: about 80 s of fighting for a full bar whatever the class (measured in 5-minute bot
+  // battles: a Ranger's or Cavalier's damage and a Cleric's healing filled theirs in under a minute, a Knight's blocks in an hour and a half)
+  rate: { knight: 1.1, berserker: 1, mage: 0.92, cleric: 0.72, cavalier: 0.75, ranger: 0.72 },
   // the Mage's Meteor: aimed as the volley is (a circle on the ground) up to `range` m; the rock comes down `fall` s after the cast. It deals
   // `dmg` of spell damage (times the Mage's spell bonus) to everyone within `radius` m, `edge` of it at the rim; soldiers are knocked down
   // (`stagger` s, `knock` m/s outward), heroes staggered `hero` s. Castle stone, gates and engines take `structure` (a catapult stone is
   // 140: a gate of 1400 takes about a quarter). Then the ground burns for `burn` s in `burnR` m: `burnDps` a second to the foes in it.
-  meteor: { range: 135, fall: 1.25, dmg: 260, radius: 9, edge: 0.35, stagger: 1.6, hero: 0.9, knock: 13, structure: 380, burn: 6, burnR: 6.5, burnDps: 22, tick: 0.5 },
+  // `crowd`, `burnCrowd`: in a packed host the rock's blow and the fire are shared out: with more soldiers than this under it, each takes
+  // that share (heroes always take it in full). A Conquest wave or a knot at a gate feels all of it; one of War Mode's great blocks of
+  // hundreds is broken open, not wiped out (a Meteor there did 13000 damage, the rest of a general's battle's worth for the others).
+  meteor: { range: 135, fall: 1.25, dmg: 260, radius: 9, edge: 0.35, stagger: 1.6, hero: 0.9, knock: 13, structure: 380, burn: 6, burnR: 6.5, burnDps: 22, tick: 0.5, crowd: 18, burnCrowd: 10 },
   // the Cleric's Sanctuary: a circle of light `radius` m round where she stands, for `time` s: allies inside (heroes and soldiers of her side,
   // co-op allies too) cannot be brought below 1 health
   sanctuary: { radius: 10, time: 5 },

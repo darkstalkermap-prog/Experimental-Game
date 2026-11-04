@@ -26,16 +26,16 @@ export const CLASSES = {
   knight: {
     name: 'Knight', icon: '🛡', color: '#a9bfe3', role: 'Vanguard',
     blurb: 'Plate armour and a kite shield: the hardest hero to bring down, and every blow he blocks is paid back.',
-    mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1, bow: 0.8, spell: 1 },
+    mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1.15, bow: 0.8, spell: 1 },
     passive: `Retribution: every blow your raised shield takes fills your Wrath bar (a parry ${Math.round(KNIGHT.wrath.parry / KNIGHT.wrath.block * 10) / 10}x as much, an arrow or spell on the shield a little). When it is full your next swing releases a shockwave that hits everyone in front of you (${KNIGHT.wave.reach} m), staggering them and throwing soldiers back.`,
     q: { id: 'shieldthrow', icon: '🥏', name: 'Shield Throw', cd: 10, desc: `Throw your shield where you aim (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m). It bounces between up to ${KNIGHT.toss.hits} enemies, stunning each one, then flies back to your hand. You cannot block until you catch it.` },
-    r: { id: 'challenge', icon: '📣', name: 'Challenge', cd: 16, desc: `Every enemy within ${KNIGHT.dare.radius} m, heroes too, has to attack you for ${KNIGHT.dare.time} s, and you take ${Math.round((1 - KNIGHT.dare.cut) * 100)}% less damage. Keep your shield up: every blow it takes fills your Wrath.` },
+    r: { id: 'challenge', icon: '📣', name: 'Challenge', cd: 16, desc: `Every enemy within ${KNIGHT.dare.radius} m, heroes too, has to attack you for ${KNIGHT.dare.time} s (a hero is held, ${Math.round(KNIGHT.dare.hold * 100)}% slower), and you take ${Math.round((1 - KNIGHT.dare.cut) * 100)}% less damage. Keep your shield up: every blow it takes fills your Wrath.` },
     u: { id: 'realmbanner', icon: '🚩', name: 'Banner of the Realm', kind: 'Ultimate', lasts: KNIGHT.banner.time, desc: `Plant your house's banner where you stand for ${KNIGHT.banner.time} s. Allies within ${KNIGHT.banner.radius} m of it heal over time (heroes ${Math.round(KNIGHT.banner.heal * 1000) / 10}% of their health a second), and enemies near it are slowed by ${Math.round((1 - KNIGHT.banner.slow) * 100)}%.` },
   },
   berserker: {
     name: 'Berserker', icon: '🪓', color: '#e0705a', role: 'Duelist',
     blurb: 'Light armour and a terrible temper. Hits harder than anyone, but is easier to hurt.',
-    mods: { hp: 1.1, armor: -1, speed: 1.07, melee: 1.3, bow: 0.6, spell: 1, bloodied: 0.15 },
+    mods: { hp: 1.2, armor: -1, speed: 1.07, melee: 1.3, bow: 0.6, spell: 1, bloodied: 0.15 },
     passive: `Rage: every blow you land or take fills it, and it ebbs away a few seconds after you stop fighting. Below half health you hit 15% harder.`,
     hold: { icon: '🌀', name: 'Whirlwind', key: 'Hold right mouse', desc: `With ${RAGE.spin.start} Rage or more, holding the right mouse button spins you with your axe out instead of raising your guard: you keep walking (a little slower) and cut everyone within ${RAGE.spin.radius} m about three times a second, for as long as you hold it and your Rage lasts. A crowd around you pays a little Rage back. With too little Rage, right mouse still blocks.` },
     q: { id: 'execute', icon: '🪓', name: 'Execute', cd: EXEC.cd, desc: `A heavy overhead chop at whoever is in front of you (up to ${EXEC.targets}). Anyone it leaves below ${Math.round(EXEC.below * 100)}% health dies on the spot, heroes too, and a kill gives Execute back at once, so you can chain it through a wounded crowd.` },
@@ -103,14 +103,12 @@ export const RANGER = {
 // as a body falling under `grav` m/s² would; a leap is at least `min` m, and ends at most `up` m higher than it began (not up a cliff). Walls, towers and hills in the way cut it short, and it never
 // ends on an enemy castle's walls or towers or inside anything. The landing slams the ground: `dmg` of his melee damage (less toward the
 // edge, `edge` at the rim) to every foe within `radius` m, who is staggered `stagger` s (a hero `hero` s) and thrown back `knock` m/s.
-// The long charges, the Knight's Shield Bash and the Cavalier's Lance Charge: hold Q for the end of the run (as far as a Fireball flies),
-// let go and the hero runs (or gallops) along the ground there at `speed` m/s (`mounted` on a horse). The run follows the ground and stops
-// short of what is in the way: a wall, a gate that is not open to him, a trunk, a rise steeper than `climb` m in half a metre, an enemy
-// castle's stone; it is at least `min` m. The Knight's run ends at the first foe in front of him (within `reach` m of his shield): the bash.
-// The Cavalier's goes on through them. Q again ends either early.
+// The long charge, the Cavalier's Lance Charge: hold R for the end of the run (as far as a Fireball flies), let go and he gallops (or
+// runs, on foot) along the ground there at `lance.mounted` m/s (`lance.speed` on foot), on through the foes. The run follows the ground
+// and stops short of what is in the way: a wall, a gate that is not open to him, a trunk, a rise steeper than `climb` m in half a metre,
+// an enemy castle's stone; it is at least `min` m. R again ends it early.
 export const RUSH = {
-  range: FIREBALL_RANGE, min: 1.5, climb: 0.6, reach: 1.4,
-  bash: { speed: 24, mounted: 26 },
+  range: FIREBALL_RANGE, min: 1.5, climb: 0.6,
   lance: { speed: 17, mounted: 27 },
 };
 
@@ -286,7 +284,7 @@ export class Abilities {
         if (e.t >= e.delay) { this.bulwarkWave(p, e); this.active.splice(i, 1); }
       } else {
         this.chargeSweep(p, e);
-        if (e.kind === 'charge' && this.rushOver(p, e, dt, false)) { this.active.splice(i, 1); p.buffs.del('charging'); }   // (reined in, or stopped against a wall)
+        if (e.kind === 'charge' && this.rushOver(p, e, dt)) { this.active.splice(i, 1); p.buffs.del('charging'); }   // (reined in, or stopped against a wall)
       }
     }
     this.burn(dt);
@@ -367,7 +365,7 @@ export class Abilities {
     return { pos: e, col: null };
   }
 
-  // ---------- the long charges (the Lance Charge; the Knight's old Shield Bash ran the same way) ----------
+  // ---------- the long charge (the Lance Charge) ----------
   // The run along the ground from `from` toward `want`, held to the reach and cut short in front of whatever stops a man running: a rise
   // too steep, a wall, a trunk, a gate that is not open to him, an enemy castle's stone. Returns { to, d, f } (to: where he stops) or null
   // when there is no room to run. The hero's own screen runs him along it (Player: a dash); the host plans it again for a guest, from where
@@ -392,16 +390,15 @@ export class Abilities {
   }
 
   // the speed of a run (m/s)
-  rushSpeed(p, id) {
-    const R = id === 'bash' ? RUSH.bash : RUSH.lance;
-    return (p.mounted ? R.mounted : R.speed) * (id === 'lancecharge' ? talentFx(p, 'chargeSpeed', 1) : 1);
+  rushSpeed(p) {
+    const R = RUSH.lance;
+    return (p.mounted ? R.mounted : R.speed) * talentFx(p, 'chargeSpeed', 1);
   }
 
-  // Is the run over? Its time is up, he has stopped (reined in, or held against something: no headway for a quarter of a second), or
-  // (the Knight's) a foe is right in front of his shield.
+  // Is the run over? Its time is up, or he has stopped (reined in, or held against something: no headway for a quarter of a second).
   // A guest's hero (remote) is where its pose messages put him, which come in bursts: there the guest's own word ends the run (it sends
-  // 'rushEnd' when its screen stops him: Player.update, NetSync), or the time allowed for it, and the foe in front of the shield.
-  rushOver(p, e, dt, foes = true) {
+  // 'rushEnd' when its screen stops him: Player.update, NetSync), or the time allowed for it.
+  rushOver(p, e, dt) {
     if (p.rushEnd) { p.rushEnd = false; return true; }
     if (e.t >= e.dur + (p.remote ? 0.5 : 0)) return true;
     if (!p.remote && (e.chk -= dt) <= 0) {
@@ -410,11 +407,7 @@ export class Abilities {
       e.last.copy(p.pos);
       if (e.t > 0.35 && moved < 0.6) return true;
     }
-    if (!foes) return false;
-    let hit = false;
-    const x = p.pos.x + e.f.x * 1.2, z = p.pos.z + e.f.z * 1.2;
-    this.eachFoe(p.team, x, z, RUSH.reach, (o) => { if (!o.isTowerArcher) hit = true; }, p.pos.y, 2.5);
-    return hit;
+    return false;
   }
 
   // Knight talent (Bastion Strike): the end of a Challenge, a slam of the shield all around (Shield Throw, Challenge, Retribution
@@ -779,7 +772,7 @@ export class Abilities {
     const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
     if (p.dash) p.dash.fresh = false;
     if (!plan) return false;
-    const f = plan.f, dur = plan.d / this.rushSpeed(p, 'lancecharge') + 0.15;
+    const f = plan.f, dur = plan.d / this.rushSpeed(p) + 0.15;
     p.buffs.add('charging', dur);
     p.rushEnd = false;
     this.active.push({ kind: 'charge', p, t: 0, dur, f, hit: new Set(), chk: 0.25, last: p.pos.clone() });
@@ -812,7 +805,8 @@ export class Abilities {
     this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
-      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1) * momentumMul(p), p, { melee: true, splash: true, charge: 1, ability: 'Lance Charge' });
+      const hero = o.isPlayer || o.kit ? CAV.hero.lance : 1;   // (a rival hero is ridden down for less: cavalier.js CAV.hero)
+      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1) * momentumMul(p) * hero, p, { melee: true, splash: true, charge: 1, ability: 'Lance Charge' });
       if (!o.alive) return;
       if (o.stagger) o.stagger(1.3, p);
       if (o.vel && !o.isPlayer) { o.vel.x += e.f.x * 12; o.vel.z += e.f.z * 12; }

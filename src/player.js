@@ -13,7 +13,7 @@ import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './her
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
 import { ultReady, spared } from './ultimate.js';
-import { stepMomentum, momentumMul } from './cavalier.js';
+import { CAV, stepMomentum, momentumMul } from './cavalier.js';
 import { mods as rules } from './mods.js';
 import { rules as biomeRules } from './biometwist.js';
 import { ViewModel } from './viewmodel.js';
@@ -684,8 +684,7 @@ export class Player {
     // let go to loose it). (The Ranger's Sniper Shot, a talent, is the scope on the right button: see the bow below.)
     if (input.hit('KeyQ')) {
       this.endScope();
-      if (this.dash && this.dash.rush && this.dash.rush === abilityOf(this, 'q').id) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (Q again: the Knight bashes where he is: Abilities.rushOver)
-      else if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
+      if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
       else if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input);
     }
     if (input.hit('KeyR')) {
@@ -730,7 +729,7 @@ export class Player {
       this.climbTop = !!(l && l.low);   // (the prompt says where to: the wall walk, or the top of the battlements)
     }
     if (this.aiming) this.updateAim(dt, input);
-    // a guest's Shield Bash run or Lance Charge has ended on its own screen (the foe, Q again, the end): the host bashes or reins in there
+    // a guest's Lance Charge has ended on its own screen (R again, the end, a wall): the host reins him in there too
     const rushing = !!(this.dash && this.dash.rush);
     if (this.wasRush && !rushing && this.netClient) g.net.toHost({ a: 'rushEnd' });
     this.wasRush = rushing;
@@ -844,7 +843,6 @@ export class Player {
       this.vel.z += (tz - this.vel.z) * k;
     }
 
-    if (this.dash && this.dash.rush === 'bash' && this.foeAhead(this.dash)) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (the run ends against the first foe)
     if (this.dash) {
       const d = this.dash;
       d.t -= dt;
@@ -1076,7 +1074,7 @@ export class Player {
         if (a.plan) a.at.copy(a.plan.to);
         a.far = !a.plan;
       }
-      if (a.plan) g.aimRing.show(a.at, def.id === 'bash' ? 3.4 * talentFx(this, 'bashReach', 1) : 2.6 * talentFx(this, 'chargeReach', 1), a.far, a.t); else g.aimRing.hide();
+      if (a.plan) g.aimRing.show(a.at, 2.6 * talentFx(this, 'chargeReach', 1), a.far, a.t); else g.aimRing.hide();
     } else if (def.id === 'leap') {
       if ((a.re -= dt) <= 0) {   // (the arc is worked out 20 times a second, not every frame)
         a.re = 0.05;
@@ -1101,7 +1099,6 @@ export class Player {
       const at = (def.id === 'leap' || def.rush) && !a.plan ? null : a.at.clone();
       this.cancelAim();
       if (at) this.useAbility(a.slot, input, at);
-      else if (def.id === 'bash') this.useAbility(a.slot, input);   // (no room to run: the bash where he stands)
       else g.audio.play('deny');
     } else if (!input.down(key)) this.cancelAim();   // the menu opened or the window lost focus: never loose it by accident
   }
@@ -1118,17 +1115,6 @@ export class Player {
     if (!this.aiming) return;
     this.aiming = null;
     if (this.isLocal && this.game.aimRing) this.game.aimRing.hide();
-  }
-
-  // a foe right in front of the shield on a Shield Bash run (the same test as Abilities.rushOver, on every hero's own screen)
-  foeAhead(d) {
-    let hit = false;
-    const x = this.pos.x + d.x * 1.2, z = this.pos.z + d.z * 1.2, y = this.pos.y;
-    this.game.grid.query(x, z, RUSH.reach + 2, (o) => {
-      if (hit || !o.alive || o === this || allied(o.team, this.team) || o.drive || Math.abs(o.pos.y - y) > 2.5) return;
-      if (Math.hypot(o.pos.x - x, o.pos.z - z) - (o.radius || 0.4) <= RUSH.reach) hit = true;
-    });
-    return hit;
   }
 
   // ---------- the Berserker in the air ----------
@@ -1256,20 +1242,14 @@ export class Player {
     if (this.staggerT > 0) { g.audio.play('deny'); return; }
     if (this.slotWaits(slot) || (this.power && slot === 'q')) { g.audio.play('deny'); if (slot === 'u' && this.isLocal) this.notify('Your Ultimate is still charging: fight to fill it.'); return; }
     const dir = this.lookDir();
-    const fl = Math.hypot(dir.x, dir.z) || 1;
-    const fx = dir.x / fl, fz = dir.z / fl;
     switch (def.id) {
-      case 'bash':
       case 'lancecharge': {
         // the long run: planned along the ground to where he looks (or the spot he chose), short of walls, gates and steep ground; he
-        // sets off at once on his own screen and the host checks it again (Abilities.bash / lancecharge)
+        // sets off at once on his own screen and the host checks it again (Abilities.lancecharge)
         if (this.climb || this.leap) { g.audio.play('deny'); return; }
         const plan = g.abilities.rushPlan(this, this.pos, at || g.abilities.aimPoint(this.eyePos(), dir, RUSH.range, this.team).pos);
-        if (!plan || (def.id === 'bash' && this.foeAhead({ x: plan.f.x, z: plan.f.z }))) {
-          if (def.id === 'bash') { this.dash = { x: fx, z: fz, v: 15, t: 0.25 }; break; }   // (a wall at his nose, or a foe at the shield: the old short lunge and the bash)
-          g.audio.play('deny'); if (this.isLocal) this.notify('No room to charge there.'); return;
-        }
-        const v = g.abilities.rushSpeed(this, def.id);
+        if (!plan) { g.audio.play('deny'); if (this.isLocal) this.notify('No room to charge there.'); return; }
+        const v = g.abilities.rushSpeed(this);
         this.cancelAim();
         this.dash = { x: plan.f.x, z: plan.f.z, v, t: plan.d / v, rush: def.id, plan, fresh: true };
         if (this.mounted) this.yaw = Math.atan2(plan.f.x, plan.f.z);
@@ -1417,8 +1397,10 @@ export class Player {
     const S = SWING;
     this.attackDir = DIRS.includes(dir) ? dir : 'right';
     const reach = (this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach) * (this.bigK ? 1 + (UNSTOP.reach - 1) * this.bigK : 1);   // (an Unstoppable Berserker reaches further)
-    const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
-    const dmg = this.sword.dmg * this.dmgMult * charge * momentumMul(this) * S.mult * (0.9 + Math.random() * 0.2);   // (the Cavalier's Momentum: cavalier.js)
+    // (from the saddle the speed adds weight, up to a full gallop's: a Lance Charge's dash is faster still, but the blow is no heavier for it)
+    const charge = this.mounted ? 1 + Math.max(0, Math.min(Math.abs(this.rideSpeed), HORSE.gallop) - 3) / 8 : 1;
+    const base = this.sword.dmg * this.dmgMult * S.mult * (0.9 + Math.random() * 0.2), mul = charge * momentumMul(this);   // (the Cavalier's Momentum: cavalier.js)
+    const dmg = base * mul, heroDmg = base * Math.min(mul, CAV.hero.gallop);   // (a rival hero takes at most CAV.hero.gallop of a standing blow)
     const info = { melee: true, charge: charge > 1.6 ? 1 : 0, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };   // (a blow at the gallop counts as heavy)
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
@@ -1435,7 +1417,8 @@ export class Player {
     hits.sort((a, b) => a.d - b.d);
     let hitSomething = false;
     for (const h of hits.slice(0, S.targets)) {
-      g.damage(h.u, h === hits[0] ? dmg : dmg * 0.5, this, info);
+      const d0 = h.u.isPlayer || h.u.kit ? heroDmg : dmg;
+      g.damage(h.u, h === hits[0] ? d0 : d0 * 0.5, this, info);
       hitSomething = true;
     }
     if (!hitSomething) {
