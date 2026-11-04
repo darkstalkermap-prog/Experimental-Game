@@ -1016,8 +1016,8 @@ def('weapon.sword', (b) => {
   const bl = [[-0.122, 0.026, 0.0058], [-0.3, 0.0245, 0.0054], [-0.6, 0.0215, 0.0048], [-0.84, 0.0175, 0.0042], [-0.95, 0.012, 0.0036], [-1.005, 0.0055, 0.0024], [-1.03, 0.001, 0.001]];
   b.loft(b.level >= 2 ? [bl[0], bl[3], bl[6]] : bl, { ...steel, sq: 1.35, seg: b.pick(12, 8, 4), a: [1, 1] });
   if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.4, s * 0.0052], [0.009, 0.52, 0.0016], { c: K.iron, m: 'steel', e: 0.5 });
-  // (the guard is iron, gilt on a soldier of the third level of training and up: gate 3)
-  for (const gd of b.level < 3 ? [{ ...iron, g: -3 }, { ...brass, g: 3 }] : [iron]) {
+  // (the guard is iron, gilt on a soldier of the third level of training and up: gate 3; near enough to see it)
+  for (const gd of b.level < 2 ? [{ ...iron, g: -3 }, { ...brass, g: 3 }] : [iron]) {
     if (b.level < 2) b.sweep([[-0.12, -0.098, 0], [-0.07, -0.114, 0], [0, -0.118, 0], [0.07, -0.114, 0], [0.12, -0.098, 0]], 0.011, 0.011, { ...gd, seg: 6, segs: b.pick(10, 6, 4) });
     else b.rbox([0, -0.115, 0], [0.25, 0.026, 0.03], { ...gd, e: 0.4 });
     b.rbox([0, -0.116, 0], [0.04, 0.03, 0.03], { ...gd, e: 0.45 });

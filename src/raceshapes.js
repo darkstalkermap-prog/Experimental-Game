@@ -270,7 +270,7 @@ def('elf:pelvis.plate', (b) => {
 // ---- arms
 def('elf:weapon.sword', (b) => {   // a long leaf-shaped blade, a slim guard swept toward the point, a long grip and a teardrop pommel
   bladeLoft(b, [[-0.11, 0.019, 0.005], [-0.3, 0.02, 0.0052], [-0.55, 0.025, 0.0052], [-0.78, 0.03, 0.005], [-0.92, 0.024, 0.0042], [-1.02, 0.01, 0.0026], [-1.07, 0.001, 0.001]], S.silver);
-  if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.46, s * 0.005], [0.0055, 0.6, 0.0014], { ...S.elfGold, e: 0.5 });   // (a gold line inlaid down each face)
+  if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.46, s * 0.005], [0.0055, 0.6, 0.0014], { ...S.elfGold, e: 0.5, seg: [6, 3] });   // (a gold line inlaid down each face)
   b.sweep([[-0.11, -0.13, 0], [-0.06, -0.105, 0], [0, -0.1, 0], [0.06, -0.105, 0], [0.11, -0.13, 0]], 0.008, 0.006, { ...S.elfGold, seg: 6, segs: b.pick(10, 6, 4) });
   b.rod([0, 0.09, 0], [0, -0.1, 0], 0.015, 0.016, { ...S.elfLeather, seg: b.pick(10, 7, 5) });
   b.ell([0, 0.11, 0], [0.018, 0.03, 0.016], { ...S.elfGold, seg: [8, 6] });
