@@ -197,7 +197,7 @@ function rhythm(g, p, n) {
   if (!R) return;
   const was = p.abilCd.r;
   p.abilCd.r = Math.max(0, was - Math.min(R.max, n * R.per));
-  if (p.abilCd.r !== was && p.remote && g.deliver) g.deliver(p, { k: 'cd', s: 'r', v: Math.round(p.abilCd.r * 10) / 10 });
+  if (p.abilCd.r !== was && p.remote && !p.isBot && g.deliver) g.deliver(p, { k: 'cd', s: 'r', v: Math.round(p.abilCd.r * 10) / 10 });
 }
 
 // The sweep's course where the battle is run: along the stretch he has ridden since the last frame, every foe out on its side
