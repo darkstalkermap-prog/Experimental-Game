@@ -81,7 +81,7 @@ function axeGeometry(o) {
   const ls = o.ls, m = new Mesher(), sides = sidesFor(o.detail);
   const fine = o.detail > 0;
   const top = 0.6 + 0.07 * ls, butt = -0.24;
-  const band = ls >= 2 ? PAINT.gold : PAINT.iron, dark = paint(0x5a5d63, 0.45, 0.6, PAT.steel);
+  const band = ls >= 2 ? PAINT.gold : PAINT.iron, dark = paint(0x55585e, 0.4, 0.66, PAT.steel);
   const ash = paint(0x7a5634, 0, 0.66, PAT.wood);
   // the haft: ash, a little oval and swelling toward the head, as a hafted axe is
   m.tube([[0, butt, 0], [0.002, -0.06, 0], [0, 0.22, 0.003], [0, top, 0]], [0.0165, 0.0172, 0.0168, 0.0158], sides + 1, { mat: ash, cap: 'round', scale: [1.06, 0.94] });
@@ -106,7 +106,7 @@ function axeGeometry(o) {
   const bit = (dirX, len, h, beard) => {
     const fr = [], N = fine ? 11 : 7, K = fine ? 14 : 10;
     for (let i = 0; i <= N; i++) fr.push({ p: V(dirX * (0.022 + (i / N) * len), hy, 0), u: V(0, 1, 0), v: V(0, 0, dirX) });
-    const edge = paint(0xe8ecf1, 1, 0.16, PAT.steel), hone = paint(0x9aa1aa, 0.8, 0.38, PAT.steel);
+    const edge = paint(0xe4e8ee, 1, 0.24, PAT.steel), hone = paint(0x8d939b, 0.75, 0.45, PAT.steel);
     m.sweep(fr, (i, t) => {
       const topY = lerp(0.03, h * 0.4, smoothstep(0.15, 1, t) * 0.8 + t * 0.2);
       const botY = -lerp(0.03, h * 0.6, Math.pow(smoothstep(0.08, 1, t), 1.4)) * (beard ? 1 : 0.8);
@@ -123,7 +123,7 @@ function axeGeometry(o) {
       return pts;
     }, { smooth: true, capEnd: true, mat: (t, i, j) => {
       const wave = 0.025 * Math.sin(j * 2.3 + dirX);   // (the hone line wanders: an edge worked by hand, and worn)
-      return t > 0.86 + wave ? edge : t > 0.74 + wave ? hone : ls >= 2 && t > 0.1 && t < 0.15 ? PAINT.goldDark : dark;
+      return t > 0.92 + wave * 0.6 ? edge : t > 0.84 + wave ? hone : ls >= 2 && t > 0.1 && t < 0.15 ? PAINT.goldDark : dark;
     } });
   };
   bit(-1, Lh, H, true);
