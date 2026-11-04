@@ -151,7 +151,7 @@ export function drawLobby(v, on) {
   // the list: one line per castle, or per hero seat
   const lines = [];
   // (the chip of the player's arms, in the colour of the house they hold: heraldry.js)
-  const holder = (p, house, t) => `<img class="arms" src="${armsChip(p.cos, (PALETTE[house] || PALETTE.blue).hex, t)}" alt="" title="${esc(armsTitle(p.cos))}">${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${isRaceId(p.rc) && !hero ? ` · ${esc(raceName(p.rc))}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
+  const holder = (p, house, t) => `<img class="arms" src="${armsChip(p.cos, (PALETTE[house] || PALETTE.blue).hex, t, !hero && isRaceId(p.rc) ? p.rc : 'human')}" alt="" title="${esc(armsTitle(p.cos))}">${esc(p.name)}${p === mine ? ' (you)' : ''}${p.netId === null ? ' · host' : ''}${CLASSES[p.cls] ? ` · ${esc(CLASSES[p.cls].icon)} ${esc(CLASSES[p.cls].name)}` : ''}${isRaceId(p.rc) && !hero ? ` · ${esc(raceName(p.rc))}` : ''}${lookText(p.cos) ? ` · <small>${esc(lookText(p.cos))}</small>` : ''}`;
   const tag = (state) => (state === 'open' ? '<em class="st open" title="A player who joins can sit here; an AI lord holds it if nobody does">open seat</em>' : '<em class="st">closed</em>');
   const acts = (n, p, state, free) => {
     const a = [];

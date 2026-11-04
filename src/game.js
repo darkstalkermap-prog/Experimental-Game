@@ -287,6 +287,7 @@ export class Game {
 
     setRaces(setup.races);   // (each house's army's look, before any soldier is made: races.js; only the look, never a number of the battle)
     this.races = currentRaces();
+    this.aiSigils = Array.isArray(setup.sigils) ? setup.sigils : [];   // (the AI lords' sigils, of their races: races.js aiSigils)
     assignArms(this);   // (a lord's arms on their castle, their soldiers and their hero; AI houses keep theirs: heraldry.js)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;

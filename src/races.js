@@ -27,6 +27,7 @@ function roll(n) {
   return fallback % n;
 }
 export const randomRace = () => RACE_IDS[roll(RACE_IDS.length)];
+export const lookRoll = roll;   // (the same dice for other looks: unlocks.js aiSigils)
 
 // A match's four races from what each castle's lord asked for (`wants`: a race id, or null for an AI lord or nobody) and what the
 // others are to be (`others`: 'random', 'same' (as the first race asked for) or 'human').

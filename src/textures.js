@@ -2,8 +2,8 @@
 import * as THREE from 'three';
 import { mulberry32 } from './noise.js';
 import { aniso } from './aniso.js';
-import { HOUSE_SIGILS } from './emblems.js';
-import { DEFAULT_ARMS, armsKey, paintField, paintSigil } from './heraldry.js';
+import { DEFAULT_ARMS, armsKey } from './heraldry.js';
+import { paintBanner } from './bannercut.js';
 
 function canvas(w, h) {
   const c = document.createElement('canvas');
@@ -117,25 +117,11 @@ export function roofTexture(seed = 5) {
 }
 
 // Heraldic banner for a team: the field in the house colour (divided with a second tint, if the lord's arms say so: heraldry.js) and a sigil:
-// the lord's own, or the emblem of the house (the one its soldiers wear). `arms`: { sig, div, tint }, a sigil id alone, or nothing.
+// the lord's own, or the emblem of the house (the one its soldiers wear), in the cut of the arms. `arms`: { sig, div, tint, bs }, a sigil id alone, or nothing.
 export function bannerTexture(colorHex, team, arms = null) {
   const a = typeof arms === 'string' ? { ...DEFAULT_ARMS, sig: arms } : arms || DEFAULT_ARMS;
   const [c, ctx] = canvas(128, 256);
-  paintField(ctx, 0, 0, 128, 256, a, colorHex, 108 / 256);
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.fillRect(0, 0, 128, 14);
-  // swallowtail notch
-  ctx.fillStyle = 'rgba(0,0,0,0)';
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath(); ctx.moveTo(30, 256); ctx.lineTo(64, 212); ctx.lineTo(98, 256); ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-  ctx.strokeStyle = '#e9d9a6';
-  ctx.lineWidth = 5;
-  ctx.strokeRect(8, 20, 112, 180);
-  ctx.save();
-  ctx.translate(64, 108);
-  paintSigil(ctx, a.sig ? a : { ...a, sig: HOUSE_SIGILS[team % HOUSE_SIGILS.length] }, colorHex, 46);
-  ctx.restore();
+  paintBanner(ctx, a, colorHex, team);   // (in the cut of the arms: bannercut.js)
   return finish(c, false);
 }
 
