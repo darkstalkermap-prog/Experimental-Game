@@ -28,24 +28,26 @@ const def = (name, make, open = false) => KIT.def(name, (b) => { b.exact = true;
 
 // ---------------------------------------------------------------- the looks
 // scale: the build [width, height, depth] on the man's; head: the head's own scale on that (a dwarf keeps a man's head); neck: where the head
-// joint sits on the torso (a man's is [0, 0.435, -0.012]); skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js);
+// joint sits on the torso (a man's is [0, 0.435, -0.012]). (The game's body is a man's whatever is drawn: a hero's arrow in the top 17% of it
+// is a headshot, classes.js headZone. So the dwarf is drawn no shorter than 0.88 with his head set high on his shoulders, its upper half in
+// that zone, and the elf no taller than 1.05, his eyes still under the top of the body); skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js);
 // coats, manes: their horses'; plume: how high a veteran's plume stands on each helm
 export const RACE_LOOK = {
   elf: {
-    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.93, 1.07, 0.93], head: [0.98, 1.0, 0.98],
+    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.93, 1.05, 0.93], head: [0.98, 1.0, 0.98],
     skins: [0xe6cdb2, 0xdcbf9e, 0xeed8c2, 0xcfb08e], hair: [0xe6dfca, 0xd6b45e, 0x1a1612, 0x6a3a1c, 0xcabf98], faces: [8, 8, 0, 4],
     coats: [0xd8d2c8, 0xb8b0a4, 0x9a8a78, 0xe8e2d8], manes: [0xe8e4dc, 0xcfc8b8],
     plume: { 'head.kettle': 0.4, 'head.nasal': 0.31, 'head.great': 0.4, 'head.crown': 0.32, 'head.hood': 0.32 },
   },
   dwarf: {
-    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.2, 0.86, 1.16], head: [0.92, 1.08, 0.93],
+    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.2, 0.88, 1.16], head: [0.92, 1.1, 0.93], neck: [0, 0.47, -0.01],
     skins: [0xd29c7a, 0xc28462, 0xb87a58, 0xdcaa88], hair: [0x8a3a1a, 0x5a3420, 0x1c1814, 0x8a8478, 0xa87a3a, 0x6a2a16], faces: [9, 9, 1, 5],
     coats: [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x8a5a30], manes: [0x1e1814, 0x3a2a1a],
     plume: { 'head.kettle': 0.33, 'head.nasal': 0.35, 'head.great': 0.33, 'head.crown': 0.33, 'head.hood': 0.3 },
   },
   orc: {
     id: 'orc', idx: 3, prefix: 'orc:', scale: [1.13, 1.03, 1.1], head: [1.04, 1.0, 1.04], neck: [0, 0.405, 0.045],
-    skins: [0x6a8a4a, 0x5a7a44, 0x7a8a5c, 0x66746a, 0x50683e], hair: [0x141210, 0x2a2018, 0x3a3028], faces: [10, 10, 6, 7],
+    skins: [0x6a8a46, 0x5e7e3e, 0x7a8c4e, 0x6c7e52, 0x52703a], hair: [0x141210, 0x2a2018, 0x3a3028], faces: [10, 10, 6, 7],
     coats: [0x2a221c, 0x3a2a1e, 0x4a3a2a, 0x1c1814], manes: [0x141210, 0x2a2018],
     plume: { 'head.kettle': 0.36, 'head.nasal': 0.34, 'head.great': 0.35, 'head.crown': 0.36, 'head.hood': 0.32 },
   },
@@ -206,8 +208,11 @@ def('elf:head.hood', (b) => {   // bare-headed with a fine circlet, a green cowl
 // ---- the trunk
 // a gold leaf laid on a surface (centre c, turned by rot), for the plate's and the collars' tracery
 const goldLeaf = (b, c, rot, k = 1, o = S.elfGold) => b.extrude(leafOutline(0.016 * k, -0.04 * k, 0.04 * k, 0.45, 5), 0.003, 0, c, { ...o, rot });
-def('elf:chest.mail', (b) => {   // a fine scale shirt, the house's long narrow surcoat, a high silver collar with gold leaves
+// a long cloak of muted green down the back, from the shoulders to the knee (behind where a trained soldier's own cloak hangs)
+const elfCloak = (b) => b.sheet([0, -0.06, -0.15], 0.48, 0.96, 5, b.pick(8, 5, 3), { rot: [0.05, 0, 0], ...S.elfGreenDk, w: [1.9, 1.0], dz: (x) => -0.035 * (x / 0.24) ** 2, d: mud(-0.52, -0.25, 0.4) });
+def('elf:chest.mail', (b) => {   // a fine scale shirt, the house's long narrow surcoat, a high silver collar with gold leaves, a long cloak
   trunk(b, { ...S.elfScale, a: [0.75, 1] });
+  elfCloak(b);
   tabardTop(b, 0.36, -0.03, 0.012, cloth, 0.55);
   if (b.level < 2) {
     neckband(b, S.silver, 1.02);
@@ -217,6 +222,7 @@ def('elf:chest.mail', (b) => {   // a fine scale shirt, the house's long narrow 
 }, true);
 def('elf:chest.plate', (b) => {   // curved plate swept up to a ridge, gold veins over it like a leaf's, a high gorget, the surcoat open over it
   trunk(b, { c: 0x3a4a3c, m: 'cloth', p: PAT.quilt, a: [0.7, 1], seg: b.pick(16, 10, 9), smooth: false });
+  elfCloak(b);
   b.loft(over(-0.05, 0.38, 0.022, 0.03), { sq: SQ, arc: [-1.25, 2.5], ...S.silver, a: [0.85, 1], seg: b.pick(20, 10, 6) });
   b.loft(over(-0.05, 0.4, 0.02), { sq: SQ, arc: [PI - 1.05, 2.1], ...S.silverDk, a: [0.85, 1], seg: b.pick(16, 8, 5) });
   b.band([onTrunk(-0.04, 0, 0.034), onTrunk(0.15, 0, 0.038), onTrunk(0.37, 0, 0.032)], 0.012, 0.004, { ...S.elfGold, out: trunkOut, segs: b.pick(10, 5, 3) });   // the midrib
@@ -230,9 +236,9 @@ def('elf:chest.plate', (b) => {   // curved plate swept up to a ridge, gold vein
 def('elf:chest.gambeson', (b) => {   // a green jerkin of soft leather, a short mantle of the house's colour, the quiver's baldric
   trunk(b, { ...S.elfGreen, a: [0.78, 1] });
   b.loft(over(-0.08, 0.33, 0.012, 0.016), { sq: SQ, arc: [0.12, TAU - 0.24], ...S.elfLeather, a: [0.8, 1], seg: b.pick(28, 12, 7) });
-  b.lathe([[0.285, 0.22], [0.284, 0.29], [0.266, 0.36], [0.232, 0.41], [0.16, 0.455], [0.085, 0.485]], [0, 0, -0.012], { sc: [1, 1, 0.64], ...clothDk, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
+  b.lathe([[0.25, 0.3], [0.244, 0.35], [0.222, 0.4], [0.16, 0.45], [0.085, 0.485]], [0, 0, -0.012], { sc: [1, 1, 0.68], ...clothDk, a: [0.65, 1], w: [0.25, 0], seg: b.pick(32, 14, 8) });
   if (b.level < 2) {
-    rim(b, 0.225, 0.286, 0.183, -0.012, 0.005, S.elfGold);
+    rim(b, 0.302, 0.25, 0.17, -0.012, 0.005, S.elfGold);
     b.band([[-0.15, 0.19, 0.125], [-0.06, 0.12, 0.13], [0.04, 0.05, 0.124], [0.14, -0.01, 0.1]], 0.03, 0.005, { ...S.elfLeather, out: trunkOut, segs: b.pick(10, 5, 3) });
     goldLeaf(b, [-0.03, 0.1, 0.138], [0, 0, 0.9], 0.9);
   }
@@ -480,9 +486,10 @@ def('orc:head.hood', (b) => {   // a leather skullcap, the topknot through it, a
 
 // crude plates on the trunk: [y, angle round, size, tilt], each with a lashing strap
 function crudePlates(b, list, o = S.orcIron) {
-  for (const [y, t, s, tilt] of list) {
-    const p = onTrunk(y, t, 0.03), r = trunkOut(...onTrunk(y, t, 0));
-    b.rbox(p, [s, s * 0.8, 0.016], { ...o, e: 0.15, flat: true, rot: [tilt, Math.atan2(r[0], r[2]), tilt * 0.6] });
+  for (const [y, t, s, spin] of list) {
+    const p = onTrunk(y, t, 0.026), r = trunkOut(...onTrunk(y, t, 0));
+    b.rbox(p, [s, s * 0.8, 0.016], { ...o, e: 0.15, flat: true, rot: [0, Math.atan2(r[0], r[2]), spin] });   // (turned in its own plane, then to face out)
+    if (b.level < 1) rivets(b, [[p[0], p[1] + s * 0.3, p[2]]], 0.007, S.rust);
   }
 }
 function orcSpikes(b, pts) { for (const [p, q] of pts) b.cone(p, q, 0.02, { ...S.orcIron, seg: 4 }); }
@@ -516,7 +523,8 @@ def('orc:chest.plate', (b) => {   // heavier: a breastplate beaten from black ir
 }, true);
 def('orc:chest.gambeson', (b) => {   // a fur and leather harness over bare green skin
   trunk(b, { ...skin, a: [0.72, 1] });
-  for (const sx of [-1, 1]) b.ell([sx * 0.08, 0.27, 0.075], [0.09, 0.07, 0.058], { ...skin, a: [0.8, 1], rot: [0, 0, sx * 0.15] });
+  for (const sx of [-1, 1]) b.ell([sx * 0.085, 0.29, 0.07], [0.095, 0.06, 0.05], { ...skin, a: [0.8, 1], rot: [0, 0, sx * -0.12] });   // (a heavy, square chest)
+  if (b.level < 2) b.ell([0, 0.12, 0.07], [0.1, 0.12, 0.05], { ...skin, a: [0.85, 1] });   // the gut
   b.loft([[0.3, 0.2, 0.135, -0.004], [0.36, 0.22, 0.145, -0.006], [0.41, 0.2, 0.13, -0.01], [0.45, 0.14, 0.1, -0.013], [0.49, 0.075, 0.068, -0.014]], { ...S.orcFur, a: [0.65, 1], seg: b.pick(24, 10, 7) });
   for (const sx of [-1, 1]) b.band([onTrunk(0.4, sx * 2.6, 0.012), [sx * 0.13, 0.44, 0.02], onTrunk(0.3, sx * 0.55, 0.014), onTrunk(0.15, 0, 0.026), onTrunk(-0.02, -sx * 0.75, 0.01)], 0.03, 0.005, { ...S.orcLeather, out: from([0, 0.2, -0.01]), segs: b.pick(14, 6, 3) });
   b.band([[-0.18, 0.43, -0.02], [-0.14, 0.38, 0.1], [-0.03, 0.24, 0.142], [0.09, 0.08, 0.128], [0.16, -0.05, 0.1]], 0.07, 0.006, { ...cloth, out: from([0, 0.2, -0.02]), segs: b.pick(14, 6, 3) });

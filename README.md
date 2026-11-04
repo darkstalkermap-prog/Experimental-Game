@@ -733,6 +733,40 @@ key carries the colours, so a match in other colours builds its world again).
 The rules of who may sit where are `src/seats.js` (pure functions, with unit tests in `test/seats.test.cjs`), the drawing is
 `src/lobbyui.js`, the colours are `src/teams.js`, and the host's decisions are in `src/main.js`.
 
+## Army races
+
+Each house's army can be one of five **races**: **Human** (the look the game always had), **Elves**, **Dwarves**, **Orcs** or
+**Undead**. Only the look changes: every soldier keeps the same health, damage, speed, reach, hitbox and timing whatever its
+race, so a race never changes how a battle goes (the same seed plays the same battle with any races).
+
+- **Elves**: tall and slender, long faces with pointed ears and flowing hair; fine curved silver plate with gold leaf work, tall
+  crested helms, long green cloaks, leaf-bladed swords and spears, almond shields and long recurved bows; white and grey horses.
+- **Dwarves**: short and broad, with great braided beards; heavy banded plate and riveted mail in iron and bronze, round helms
+  with spectacle guards and face plates, axes where the men carry swords, heavy round and oblong shields, short thick bows.
+- **Orcs**: big and hunched, heavy-jawed and tusked, green skin; crude black iron lashed on with leather, spikes, bone and fur,
+  cleavers, barbed spears and plank shields, a ragged hanging of the house's colour.
+- **Undead**: skeletons with a cold light in the eye sockets, ribs showing through rotted mail and grave rags, rusted and
+  green-tarnished ancient helms and arms, tattered cloth.
+
+The house's colour stays on every race (tabards, shields, cloaks, pennons, plumes, barding), so friend and foe read at a glance.
+
+**Picking.** On the main menu, **Your army** picks your house's race; **Other armies** (under *More options*) makes the other
+houses each a random race (rolled for every battle), the same as yours, or human. Both are remembered in the browser. Online,
+each player picks their own army in the lobby (*Your army*, under *Your colour*; the castle list shows each player's race); the
+host sends every house's race with the match start and every page builds the same looks. In Hero Mode a side's armies take
+the race of its first player. War Mode, King of the Hill, Hero Mode, spectating and the practice courtyard (its *Race* row in
+the soldiers section, so races can stand side by side) all use them; `?races=elf,dwarf,orc,undead` in the address sets all four
+for a single-player battle. The six heroes, the AI lords (who are drawn as heroes), the giants and the raiders stay as they are.
+
+**How.** `src/races.js` holds the choice (pure: the menu, the lobby and the match start share it; the look is never rolled with
+`Math.random`, which the battle's rules draw from). `src/raceshapes.js` holds each race's build (drawn proportions on the same
+rig and poses: the dwarf 0.88 tall and 1.2 wide with his head set high, so the upper half of it is still in the headshot zone of
+the man-sized body the game measures), skin, hair, faces (four more cells of the face atlas) and its own heads, trunks, weapons,
+shields, bows and cloaks, built only when a race is first worn. Parts a race has none of (the legs, arms and boots) are the
+men's, their bare metal and leather tinted in the shader for the race (silver, bronze, rusty black iron, verdigris): the race
+rides in the whole part of a per-instance number the shader already reads, so all races draw with the one crowd material and
+program, and a battle draws only the batches of the races in it.
+
 ## Hero Game Mode
 
 Two sides of **2, 3 or 4 heroes** (2 v 2, 3 v 3, 4 v 4: the **Teams** row; 3 v 3 at first), fought out of **one castle
@@ -1246,6 +1280,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/towerarchers.js` | The archers on the corner towers as men: hit by what reaches them, a slower tower while one is down, the next one 30 s later |
 | `src/units.js` | Soldier and cavalry AI, combat and animation |
 | `src/models.js`, `src/shapes.js`, `src/modelkit.js` | Soldier, horse and hero rigs (joint groups, two-segment limbs) built to human proportions (1.8 m, about 7.5 heads: neck, shoulders, elbows at the waist, fists at mid-thigh, knees, feet), their poses (walk, run, strike, block, duck, climb, ride astride, a shot with the bow (side-on, the bow arm at the mark, the string drawn to the jaw on a bent bow, the loose), three deaths; a cape hangs toward the ground and lies along the back of a man fallen on his face), and the catalogue of parts they wear, in layers as they are worn (a body of lofted rings that swells at the muscles and tapers at the joints; cloth, mail or leather over it; plates with rolled edges and rivets held on by straps and buckles; a surcoat, tabard or robe on top; helmets fitted to the skull; weapons, shields, heraldry; cloaks that wrap the shoulders and fall in folds) built from primitives with baked shading, small things only at the richest level. The models, their shapes, the crowd's batches and a giant's footfalls and fall are made with dice of their own (`quietly` in `src/modelkit.js`): three.js draws four numbers from `Math.random` to name every object it makes and the battle's rules draw from it too, so a change to how soldiers look never changes a seeded battle |
+| `src/races.js`, `src/raceshapes.js` | The army races (Human, Elves, Dwarves, Orcs, Undead): who is which race in a match, and each race's build, colours, faces and own shapes (see **Army races**) |
 | `src/heads.js` | Heads with a shape: the skull, brow, cheekbones, nose, lips and jaw as one smooth surface (ellipsoids blended in a distance field, found along the rays of a sphere and lit by its gradient), and the hair cuts and beards grown out from it |
 | `src/giantmodel.js` | The giant: a two-headed ettin rig with the soldier's joints, a second head and two ankles (drawn by the same crowd batches: both heads are one shape, the feet one more), its own sculpted shapes (smooth lofts swelled by muscles, the grooves shaded: bald scowling heads with deep-set eyes and long shaggy beards, a bare muscled trunk with scars and veins, a kilt of ragged hides with tufts, the iron boss and the house banner, layered rag wrappings tied with cord, bare feet with toes that turn at the ankle, a chipped stone hammer lashed to a knotted haft) and its own motion, which sets every joint: a gait whose feet stay planted (two-bone leg IK, the hips riding the planted legs, each foot landing on its heel and leaving on its toes), a body that sinks as each foot lands, heads that glance about, blows with a wind-up, an impact held with the hammer on the ground and a recovery, a spring that rocks it when hit, and falls that are set down on the ground, bounce once and settle; its LODs are a rich near model, a plain mid one and a baked far one |
 | `src/crowd.js`, `src/unitmat.js`, `src/unittex.js` | Every soldier, horse and hero body drawn as instances of shared shapes (a few batches, not hundreds of meshes); the one shader they share (patterns, mottled skin with a warm translucent edge, unevenly worn and scratched steel, leather with pores, creases and oiled patches, cloth with uneven dye and fading, fur and hair in strands, mud and dust climbing from the feet (baked per vertex); cloth that sways, capes that stream behind a runner, skirts and tassets that ride up onto the thighs in a crouch) and its face and emblem atlases |

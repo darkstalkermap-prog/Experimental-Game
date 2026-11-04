@@ -278,6 +278,8 @@ initLandMenu({
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
   // each house's army's race (a match online brings the host's; otherwise your army is yours, the others as the menu says: races.js)
+  const qsRaces = new URLSearchParams(location.search).get('races');   // (?races=elf,dwarf,orc,undead: every house's race, for tests and to show them off)
+  if (setup && qsRaces && setup.mode === 'single') setup.races = sanitizeRaces(qsRaces.split(','));
   if (setup && !setup.races) setup.races = assignRaces(raceWants((setup.players || []).map((p) => (p.me && !p.rc ? { ...p, rc: myRace } : p)), !!setup.hero), otherRaces, myRace);
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
   ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false);   // (War Mode: a hill for each side)
