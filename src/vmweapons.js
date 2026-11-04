@@ -164,13 +164,14 @@ function maceGeometry(o) {
   m.at(0, -0.16, 0); m.sphere(0.022, sides, gold); m.pop();
   const hy = top + 0.055;
   m.at(0, hy, 0); m.sphere(0.04, sides + 3, head);
-  // eight flanges, each a wedge whose outline swells to a point a little above the middle, its edge filed bright
-  const fl = [], NF = o.detail > 0 ? 7 : 5, bright = paint(0xe2e6ec, 1, 0.2, PAT.steel);
-  for (let i = 0; i <= NF; i++) fl.push({ p: V(0.028, -0.052 + (i / NF) * 0.108, 0), u: V(1, 0, 0), v: V(0, 0, -1) });
+  // eight flanges, each a wedge whose outline rises straight to a point a little above the middle, its edge filed bright
+  const fl = [], TS = o.detail > 0 ? [0, 0.2, 0.42, 0.62, 0.76, 0.89, 1] : [0, 0.32, 0.62, 1], bright = paint(0xe2e6ec, 1, 0.2, PAT.steel);
+  for (const t of TS) fl.push({ p: V(0.028, -0.052 + t * 0.108, 0), u: V(1, 0, 0), v: V(0, 0, -1) });
   for (let k = 0; k < 8; k++) {
     m.at(0, 0, 0, 0, (k / 8) * Math.PI * 2, 0);
-    m.sweep(fl, (i, t) => {
-      const r = 0.014 + 0.036 * Math.pow(Math.sin(Math.PI * Math.pow(t, 0.8)), 0.8), th = 0.0055 * (1 - 0.4 * t);
+    m.sweep(fl, (i) => {
+      const t = TS[i];
+      const r = t < 0.62 ? lerp(0.012, 0.05, t / 0.62) : lerp(0.05, 0.016, (t - 0.62) / 0.38), th = 0.0055 * (1 - 0.4 * t);
       return [[0, -th], [r * 0.7, -th * 0.8], [r, -th * 0.25], [r + 0.002, 0], [r, th * 0.25], [r * 0.7, th * 0.8], [0, th]];
     }, { smooth: false, capStart: true, capEnd: true, mat: (t, i, j) => (j === 2 || j === 3 ? bright : head) });
     m.pop();
