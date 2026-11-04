@@ -227,7 +227,8 @@ function makeHorse(team, variant = Math.floor(Math.random() * 6), barded = true)
   }
   const R = team === RAIDER_TEAM ? null : RACE_LOOK[raceOf(team)] || null;
   const coat = R && R.coats ? R.coats[variant % R.coats.length] : COATS[variant % COATS.length];
-  const h = { kind: 'horse', root, body, neck, tail, legs, parts, inst: new Float32Array(16), phase: Math.random() * 6, farKey: `horse:${barded ? 1 : 0}`, barded, headNod: 0 };
+  const h = { kind: 'horse', root, body, neck, tail, legs, parts, inst: new Float32Array(16), phase: Math.random() * 6, farKey: `horse:${barded ? 1 : 0}`, barded, headNod: 0,
+    mount: R && R.mount ? R.mount : null };   // (the race's build of horse: a soldier's mount wears it, units.js mountRace; a hero's horse stays a man's)
   setColor(h.inst, 0, team === RAIDER_TEAM ? 0x4d3a28 : TEAM_COLORS[team] ?? 0xffffff);
   setColor(h.inst, 4, coat);
   setColor(h.inst, 8, R && R.manes ? R.manes[variant % R.manes.length] : variant % COATS.length === 4 ? 0xb8b0a4 : 0x1e1814);

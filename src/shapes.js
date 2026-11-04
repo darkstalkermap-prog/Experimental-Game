@@ -1311,5 +1311,5 @@ export const KIT = {
   def, K, steel, plate, iron, gold, brass, leather, leatherDk, leatherLt, wood, skin, cloth, clothDk, mailM, linen, trim, hairM,
   mud, from, rim, rivets, buckle, grow, TRUNK, ringAt, over, onTrunk, trunkOut, onHips, SQ, belt, tabardSkirt, scabbard, hips, mailSkirt, tabardTop, trunk,
   neckband, gorget, shoulderStraps, HC, HELM, helm, helmRivets, coif, KITE_ON, ROUND_ON, kiteGeo, kiteZ, GRIP, NOCK, REST, drapeGeo, hang, hem, collar, clasp,
-  LEG, THIGH, CALF, ARM, UPPER, FOREARM,
+  LEG, THIGH, CALF, ARM, UPPER, FOREARM, boot, foot, pauldron,   // (boot, foot, pauldron: the races' limbs build on them, raceshapes.js)
 };

@@ -21,6 +21,7 @@ import { sculptHead, sculptHair, sculptBeard } from './heads.js';
 const {
   K, leather, leatherDk, cloth, clothDk, hairM, skin, mud, from, rim, rivets, over, onTrunk, trunkOut, SQ, belt, tabardSkirt,
   hips, mailSkirt, tabardTop, trunk, neckband, gorget, HC, helm, KITE_ON, ROUND_ON, GRIP, NOCK, REST, drapeGeo, collar, clasp, LEG,
+  grow, UPPER, CALF, boot, foot, pauldron,
 } = KIT;
 const TAU = Math.PI * 2, PI = Math.PI;
 // (a race's shape keeps its own colours: the shader's race tint passes it by, see EXACT in modelkit.js)
@@ -28,31 +29,32 @@ const def = (name, make, open = false) => KIT.def(name, (b) => { b.exact = true;
 
 // ---------------------------------------------------------------- the looks
 // scale: the build [width, height, depth] on the man's; head: the head's own scale on that (a dwarf keeps a man's head); neck: where the head
-// joint sits on the torso (a man's is [0, 0.435, -0.012]). (The game's body is a man's whatever is drawn: a hero's arrow in the top 17% of it
-// is a headshot, classes.js headZone. So the dwarf is drawn no shorter than 0.88 with his head set high on his shoulders, its upper half in
-// that zone, and the elf no taller than 1.05, his eyes still under the top of the body); skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js);
-// coats, manes: their horses'; plume: how high a veteran's plume stands on each helm
+// joint sits on the torso (a man's is [0, 0.435, -0.012]). The height drawn matches the height the game measures (races.js RACE_HEIGHT: what an
+// arrow hits, and the top 17% of it the head, classes.js headZone): the dwarf about three quarters of a man and stocky, the elf a tenth taller
+// and slender, the orc bulky and hunched (taller drawn, but his head carried low and forward, so the top of him is lower), the undead gaunt.
+// skins, hair: per-soldier colours; faces: cells of the face atlas (unittex.js); coats, manes: their horses'; mount: the horse's build
+// [width, height, length] (an elf's finer and taller, a dwarf's a stout pony, an orc's heavier); plume: how high a veteran's plume stands on each helm
 export const RACE_LOOK = {
   elf: {
-    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.93, 1.05, 0.93], head: [0.98, 1.0, 0.98],
+    id: 'elf', idx: 1, prefix: 'elf:', scale: [0.9, 1.1, 0.9], head: [0.96, 1.0, 0.96],
     skins: [0xe6cdb2, 0xdcbf9e, 0xeed8c2, 0xcfb08e], hair: [0xe6dfca, 0xd6b45e, 0x1a1612, 0x6a3a1c, 0xcabf98], faces: [8, 8, 0, 4],
-    coats: [0xd8d2c8, 0xb8b0a4, 0x9a8a78, 0xe8e2d8], manes: [0xe8e4dc, 0xcfc8b8],
+    coats: [0xd8d2c8, 0xb8b0a4, 0x9a8a78, 0xe8e2d8], manes: [0xe8e4dc, 0xcfc8b8], mount: [0.92, 1.08, 1.04],
     plume: { 'head.kettle': 0.4, 'head.nasal': 0.31, 'head.great': 0.4, 'head.crown': 0.32, 'head.hood': 0.32 },
   },
   dwarf: {
-    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.2, 0.88, 1.16], head: [0.92, 1.1, 0.93], neck: [0, 0.47, -0.01],
+    id: 'dwarf', idx: 2, prefix: 'dwarf:', scale: [1.3, 0.76, 1.24], head: [0.84, 1.24, 0.86], neck: [0, 0.455, -0.01],
     skins: [0xd29c7a, 0xc28462, 0xb87a58, 0xdcaa88], hair: [0x8a3a1a, 0x5a3420, 0x1c1814, 0x8a8478, 0xa87a3a, 0x6a2a16], faces: [9, 9, 1, 5],
-    coats: [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x8a5a30], manes: [0x1e1814, 0x3a2a1a],
+    coats: [0x5a3a22, 0x7a4e2c, 0x2a221c, 0x8a5a30], manes: [0x1e1814, 0x3a2a1a], mount: [1.08, 0.8, 0.86],
     plume: { 'head.kettle': 0.33, 'head.nasal': 0.35, 'head.great': 0.33, 'head.crown': 0.33, 'head.hood': 0.3 },
   },
   orc: {
-    id: 'orc', idx: 3, prefix: 'orc:', scale: [1.13, 1.03, 1.1], head: [1.04, 1.0, 1.04], neck: [0, 0.405, 0.045],
+    id: 'orc', idx: 3, prefix: 'orc:', scale: [1.2, 1.13, 1.16], head: [0.98, 0.9, 0.98], neck: [0, 0.385, 0.065],
     skins: [0x6a8a46, 0x5e7e3e, 0x7a8c4e, 0x6c7e52, 0x52703a], hair: [0x141210, 0x2a2018, 0x3a3028], faces: [10, 10, 6, 7],
-    coats: [0x2a221c, 0x3a2a1e, 0x4a3a2a, 0x1c1814], manes: [0x141210, 0x2a2018],
+    coats: [0x2a221c, 0x3a2a1e, 0x4a3a2a, 0x1c1814], manes: [0x141210, 0x2a2018], mount: [1.16, 1.02, 1.06],
     plume: { 'head.kettle': 0.36, 'head.nasal': 0.34, 'head.great': 0.35, 'head.crown': 0.36, 'head.hood': 0.32 },
   },
   undead: {
-    id: 'undead', idx: 4, prefix: 'undead:', scale: [0.9, 1.0, 0.88], head: [0.96, 1.0, 0.96],
+    id: 'undead', idx: 4, prefix: 'undead:', scale: [0.84, 1.0, 0.82], head: [1.0, 1.0, 1.0],
     skins: [0xcfc6aa, 0xbdb69c, 0xaeaa98, 0xc4bca2], hair: [0x8a8a84, 0xb8b4a8, 0x4a4844], faces: [11],
     coats: [0x6e6c66, 0x4a4844, 0x8a8478, 0x3a3834], manes: [0x2a2826, 0x8a8a84],
     plume: { 'head.kettle': 0.37, 'head.nasal': 0.36, 'head.great': 0.34, 'head.crown': 0.32, 'head.hood': 0.33 },
@@ -791,3 +793,312 @@ def('undead:cape.long', (b) => {   // a burial cloak in tatters
   collar(b, 0.6, 0.05, S.rag);
   clasp(b, S.verd);
 }, true);
+
+// ================================================================ the races' limbs: arms (shoulder frame), legs below the knee (knee frame), hips
+// Each race's own pauldrons, sleeves, greaves and boots and the skirt at its hips, so its army has a silhouette of its own and not only a
+// tint: the elves' leaf lamellar swept up in curves, the dwarves' massive banded plate, the orcs' scavenged plates and spikes strapped over
+// painted skin, the undead's bone under corroded plate with a cold light in it. The thigh and the forearm stay the men's, tinted to the race in
+// the shader (unitmat.js), and so does the foot near by (its own small shape: shapes.js footOf). Both arms wear the same shape, so whatever is
+// on one side of a pauldron is on the other too (front and back may differ). The plain level (2) and the far bake (3) keep the outline only.
+const _Y = new THREE.Matrix4(), _X = new THREE.Matrix4();
+// build `fn` in a frame at p, turned `yaw` round y (its +z facing out from the limb) and leaned `tilt` round its own x (negative: the
+// lower edge stands out)
+function at(b, p, yaw, tilt, fn) {
+  const m = new THREE.Matrix4().makeTranslation(p[0], p[1], p[2]).multiply(_Y.makeRotationY(yaw)).multiply(_X.makeRotationX(tilt));
+  b.within(m, fn);
+}
+// a ring of n leaf-shaped plates round a limb at height y (radius r, depth rz), hanging down `len`, each `w` half-wide
+function leafRing(b, y, r, rz, n, len, w, tilt, o, phase = 0) {
+  for (let i = 0; i < n; i++) {
+    const a = phase + (i / n) * TAU;
+    at(b, [Math.sin(a) * r, y, Math.cos(a) * rz], a, tilt, () => b.extrude(leafOutline(w, 0.006, -len, 0.38, b.pick(6, 4, 3)), 0.005, 0, [0, 0, 0], o));
+  }
+}
+// war paint: a streak of it down a limb, laid just over the skin (the orcs')
+const PAINT_RED = { c: 0x5e1410, m: 'cloth' }, PAINT_BLACK = { c: 0x141010, m: 'cloth' };
+function streak(b, pts, w, o = PAINT_RED) { if (b.level < 2) b.band(pts, w, 0.0015, { ...o, out: from([0, pts[0][1], 0]), segs: b.pick(6, 3, 2) }); }
+
+// ---- elves: flowing scale under curved, gilt-edged leaf lames, swept up at the shoulder like a wing
+function elfPauldron(b, rows, o = S.silver) {
+  b.shell([0, 0.018, -0.004], [0.084, 0.064, 0.088], 0, TAU, 0, PI * 0.5, { ...o, a: [0.85, 1] });
+  // the curve that sweeps up over the shoulder's top from front to back, gilt along its crest
+  b.sweep([[0, 0.05, 0.085], [0, 0.098, 0.03], [0, 0.112, -0.03], [0, 0.095, -0.09], [0, 0.06, -0.11]], 0.012, 0.006, { ...o, seg: b.pick(6, 5, 4), segs: b.pick(10, 6, 4) });
+  if (b.level < 2) b.sweep([[0, 0.058, 0.086], [0, 0.108, 0.03], [0, 0.122, -0.03], [0, 0.104, -0.09], [0, 0.068, -0.112]], 0.004, 0.003, { ...S.elfGold, seg: 4, segs: b.pick(10, 6, 4) });
+  const n = b.pick(11, 9, 7);
+  leafRing(b, 0.012, 0.09, 0.094, n, 0.085, 0.024, -0.3, o);
+  if (rows > 1 && b.level < 2) leafRing(b, -0.04, 0.078, 0.082, n, 0.075, 0.022, -0.22, S.silverDk, PI / n);
+  if (b.level < 2) rim(b, 0.016, 0.086, 0.09, -0.004, 0.0045, S.elfGold);
+}
+for (const st of ['mail', 'plate', 'cloth']) {
+  def('elf:arm.' + st, (b) => {
+    const base = st === 'cloth' ? { ...S.elfGreen, a: [0.85, 1] } : { ...S.elfScale, a: [0.85, 1] }, pad = st === 'cloth' ? 0.006 : 0.002;
+    b.ell([0, -0.035, 0.0], [0.054 + pad, 0.083, 0.06 + pad], base);
+    b.loft(grow(UPPER, pad), { ...base, seg: b.pick(18, 8, 6) });
+    if (b.level < 2) b.ell([0, -0.31, 0], [0.034 + pad, 0.036, 0.036 + pad], { ...base, a: [0.9, 0.9] });
+    if (st === 'plate') {
+      elfPauldron(b, 2);
+      if (b.level < 2) {
+        b.loft(grow(UPPER.slice(2), 0.011), { ...S.silver, a: [0.85, 1], seg: b.pick(14, 8, 6) });   // a slim rerebrace
+        rim(b, -0.155, 0.055, 0.063, 0.008, 0.003, S.elfGold);
+      }
+    } else if (st === 'mail') {
+      elfPauldron(b, 1, S.silverDk);
+    } else if (b.level < 2) {
+      leafRing(b, 0.02, 0.07, 0.074, b.pick(7, 6, 5), 0.06, 0.02, -0.25, S.elfLeather);   // a cap of leather leaves
+      rim(b, -0.25, 0.048, 0.05, 0.002, 0.004, S.elfGold);
+    }
+  });
+  // graceful greaves: slim, drawn to a leaf over the knee, a gilt line down the shin; long soft boots under them
+  def('elf:shin.' + st, (b) => {
+    const pad = st === 'cloth' ? 0.005 : 0.002, legs = st === 'cloth' ? S.elfGreenDk : S.elfScale;
+    b.dirt = mud(-0.5, -0.1, 0.8);
+    b.ell([0, 0, 0.004], [0.043 + pad, 0.045, 0.045 + pad], { ...legs, a: [0.92, 0.92] });
+    b.loft(grow(CALF.slice(0, 4), pad, pad * 0.8), { ...legs, seg: b.pick(18, 8, 6) });
+    boot(b, 'leather');
+    if (st !== 'cloth') {
+      const o = st === 'plate' ? S.silver : S.silverDk;
+      b.loft(grow(CALF.slice(0, 5), 0.013, 0.011), { ...o, arc: [-1.35, 2.7], a: [0.88, 1], seg: b.pick(14, 8, 6) });
+      // the knee's leaf, rising over the knee from the greave's top
+      at(b, [0, -0.02, 0.06], 0, 0.12, () => b.extrude(leafOutline(0.04, -0.03, 0.1, 0.42, b.pick(7, 5, 3)), 0.008, b.level < 2 ? 0.002 : 0, [0, 0, 0], o));
+      if (b.level < 2) {
+        b.band([[0, -0.03, 0.066], [0, -0.17, 0.068], [0, -0.33, 0.052]], 0.008, 0.0025, { ...S.elfGold, out: () => [0, 0, 1], segs: b.pick(8, 4, 3) });
+        rim(b, -0.36, 0.05, 0.056, 0.002, 0.0035, S.elfGold, [-1.35, 2.7]);
+      }
+    } else if (b.level < 2) {
+      leafRing(b, -0.12, 0.058, 0.064, b.pick(7, 6, 5), -0.05, 0.016, 0.25, S.elfLeather);   // the boot's cuff in leaves, pointing up
+    }
+    if (b.level >= 2) foot(b, 'leather');
+    b.dirt = null;
+  });
+}
+// a long split surcoat to below the knee: two narrow panels front and back (the elves' cut, as on pelvis.mail) over the scale
+def('elf:pelvis.gambeson', (b) => {
+  hips(b, LEG.cloth);
+  b.lathe([[0.235, -0.34], [0.2, 0.05]], [0, 0, 0], { sc: [1, 1, 0.78], ...S.elfGreen, w: [2.3, 2], a: [0.7, 1], seg: b.pick(28, 12, 8), d: mud(-0.36, -0.1, 0.4) });
+  belt(b, false, S.elfLeather);
+  tabardSkirt(b, -0.48, 0.9, cloth, 0.7);
+}, true);
+def('elf:kit.arm', (b) => {   // a trained soldier's: a second, higher sweep of steel (gate 1) or of gold (gate 4)
+  b.sweep([[0, 0.07, 0.08], [0, 0.13, 0.02], [0, 0.145, -0.04], [0, 0.12, -0.1]], 0.016, 0.007, { ...S.silver, g: 1, seg: 5, segs: b.pick(10, 6, 4) });
+  b.sweep([[0, 0.072, 0.082], [0, 0.135, 0.02], [0, 0.15, -0.04], [0, 0.125, -0.1]], 0.018, 0.008, { ...S.elfGold, g: 4, seg: 5, segs: b.pick(10, 6, 4) });
+});
+
+// ---- dwarves: thick riveted plate in bands, a massive pauldron with a comb, bronze at every edge; heavy boots
+function dwarfPauldron(b, k, comb) {
+  pauldron(b, k, S.iron);
+  if (b.level < 2) for (let i = 0; i < 3; i++) { const y = (-0.012 - i * 0.04) * k - 0.026 * k, r = (0.092 + i * 0.004) * k; rim(b, y, r, r * 0.98, 0, 0.005, S.bronze); }
+  else rim(b, -0.04 * k, 0.096 * k, 0.094 * k, 0, 0.006, S.bronze);
+  if (comb) b.rbox([0, 0.088 * k, -0.004], [0.016, 0.034, 0.15 * k], { ...S.bronze, e: 0.4 });   // the comb along its top
+  if (b.level < 1) rivets(b, [0, 1, 2, 3, 4, 5, 6, 7].map((i) => { const a = (i / 8) * TAU; return [Math.sin(a) * 0.088 * k, 0.03 * k, Math.cos(a) * 0.086 * k]; }), 0.007, S.bronze);
+}
+for (const st of ['mail', 'plate', 'cloth']) {
+  def('dwarf:arm.' + st, (b) => {
+    const base = st === 'cloth' ? { ...S.dwarfLeather, a: [0.85, 1] } : { ...S.dwarfMail, a: [0.85, 1] };
+    b.ell([0, -0.035, 0.0], [0.062, 0.088, 0.068], base);
+    b.loft(grow(UPPER, 0.012), { ...base, seg: b.pick(18, 8, 6) });
+    if (b.level < 2) b.ell([0, -0.31, 0], [0.046, 0.04, 0.048], { ...base, a: [0.9, 0.9] });
+    if (st === 'plate') {
+      dwarfPauldron(b, 1.32, true);
+      if (b.level < 2) for (const y of [-0.17, -0.22, -0.27]) {   // the rerebrace in three bands, each bronze-edged
+        b.lathe([[0.062, y + 0.026], [0.066, y], [0.062, y - 0.024]], [0, 0, 0.004], { ...S.iron, sc: [1, 1, 1.06], seg: b.pick(16, 8, 6) });
+        if (b.level < 1) rim(b, y - 0.024, 0.062, 0.066, 0.004, 0.003, S.bronze);
+      }
+    } else if (st === 'mail') {
+      dwarfPauldron(b, 1.14, false);
+    } else {
+      b.torus([0, -0.02, 0], 0.07, 0.026, { ...S.orcFur, rot: [PI / 2, 0, 0], sc: [1, 1.06, 1], seg: b.pick(14, 9, 6), sides: b.pick(6, 4, 3) });   // a fur roll at the shoulder
+      if (b.level < 1) rivets(b, [0, 1, 2, 3, 4, 5].map((i) => { const a = (i / 6) * TAU; return [Math.sin(a) * 0.066, -0.16, Math.cos(a) * 0.07]; }), 0.007, S.bronze);
+    }
+  });
+  def('dwarf:shin.' + st, (b) => {
+    b.dirt = mud(-0.5, -0.1, 0.8);
+    const legs = st === 'cloth' ? { c: 0x5a3a26, m: 'cloth', p: PAT.weave } : S.dwarfMail;
+    b.ell([0, 0, 0.004], [0.05, 0.05, 0.052], { ...legs, a: [0.92, 0.92] });
+    b.loft(grow(CALF.slice(0, 3), 0.008), { ...legs, seg: b.pick(18, 8, 6) });
+    // the heavy boot: wide in the shaft, a thick folded cuff, bronze bands round it
+    b.loft([[-0.1, 0.064, 0.07, -0.01], [-0.2, 0.06, 0.066, -0.008], [-0.32, 0.054, 0.058, 0.0], [-0.415, 0.052, 0.058, 0.004], [-0.45, 0.056, 0.064, 0.012]], { ...S.dwarfLeather, a: [0.78, 1], seg: b.pick(18, 8, 6) });
+    b.lathe([[0.066, -0.13], [0.076, -0.115], [0.078, -0.08], [0.068, -0.07]], [0, 0, -0.01], { ...(st === 'cloth' ? S.orcFur : S.dwarfLeather), sc: [1, 1, 1.08], seg: b.pick(18, 10, 6) });
+    if (b.level < 2) for (const y of [-0.24, -0.36]) rim(b, y, 0.061, 0.066, -0.005, 0.006, S.bronze);
+    if (st === 'plate') {
+      // the greave in banded lames down the front, riveted, under a round knee cop with a bronze boss
+      for (let i = 0; i < (b.level < 2 ? 3 : 1); i++) {
+        const y = -0.06 - i * 0.07;
+        b.lathe([[0.07, y - 0.035], [0.074, y], [0.07, y + 0.035]], [0, 0, 0], { ...S.iron, arc: [-1.25, 2.5], sc: [1, 1, 1.08], seg: b.pick(14, 8, 6) });
+        if (b.level < 1) rivets(b, [[0.05, y, 0.064], [-0.05, y, 0.064]], 0.006, S.bronze);
+      }
+      b.ell([0, 0.0, 0.04], [0.07, 0.068, 0.056], { ...S.iron, a: [1, 1] });
+      if (b.level < 2) b.ell([0, 0.0, 0.094], [0.026, 0.026, 0.012], { ...S.bronze });
+    }
+    if (b.level >= 2) foot(b, st === 'plate' ? 'plate' : 'leather');
+    b.dirt = null;
+  });
+}
+// the chain skirt to the knee, bronze-edged plates over the belly, the house's cloth front and back (shorter than a man's: the mail shows)
+for (const st of ['mail', 'plate']) {
+  def('dwarf:pelvis.' + st, (b) => {
+    hips(b, LEG.cloth);
+    b.lathe([[0.27, -0.42], [0.25, -0.2], [0.205, 0.05]], [0, 0, 0], { sc: [1, 1, 0.8], ...S.dwarfMail, w: SKIRT, a: [0.62, 1], seg: b.pick(28, 12, 8), d: mud(-0.44, -0.2, 0.4) });
+    if (b.level < 2) rim(b, -0.42, 0.27, 0.216, 0, 0.007, { ...S.bronze, w: SKIRT });
+    belt(b, false, S.dwarfLeather);
+    b.rbox([0, 0.055, 0.13], [0.09, 0.07, 0.03], { ...S.bronze, e: 0.4 });   // the great belt plate
+    if (st === 'plate') {
+      const ys = b.level < 2 ? [0.0, -0.07] : [-0.04];
+      ys.forEach((y, i) => {
+        b.lathe([[0.22 + i * 0.014, y - 0.075], [0.2 + i * 0.012, y + 0.04]], [0, 0, 0], { sc: [1, 1, 0.8], ...S.iron, w: SKIRT, a: [0.7, 1], seg: b.pick(28, 12, 8), arc: [-2.2, 4.4] });
+        if (b.level < 2) rim(b, y - 0.074, 0.222 + i * 0.014, (0.222 + i * 0.014) * 0.8, 0, 0.005, { ...S.bronze, w: SKIRT }, [-2.2, 4.4]);
+      });
+    }
+    tabardSkirt(b, -0.3, 0.9, cloth, 0.9);
+  }, true);
+}
+def('dwarf:kit.arm', (b) => {   // a broader dome over the great pauldron: steel (gate 1), gold (gate 4)
+  b.shell([0, 0.04, 0], [0.13, 0.08, 0.128], 0, TAU, 0, PI * 0.5, { ...S.steel, g: 1, a: [0.8, 1] });
+  b.shell([0, 0.044, 0], [0.134, 0.084, 0.132], 0, TAU, 0, PI * 0.5, { ...S.elfGold, g: 4 });
+});
+
+// ---- orcs: painted skin, scavenged plates strapped on with leather, spikes, bone and tusk trophies
+function orcPauldron(b, big) {
+  const k = big ? 1.15 : 0.95;
+  // a crude bowl beaten from black iron, faceted, its edge cut in jags; over it a second plate of a different, rustier iron
+  b.shell([0, 0.02, 0], [0.1 * k, 0.078 * k, 0.1 * k], 0, TAU, 0, PI * 0.52, { ...S.orcIron, a: [0.75, 1], flat: true, seg: [b.pick(8, 7, 6), b.pick(4, 3, 3)] });
+  const n = b.pick(9, 7, 5);
+  for (let i = 0; i < n; i++) { const a = (i / n) * TAU + 0.2; b.cone([Math.sin(a) * 0.092 * k, 0.012, Math.cos(a) * 0.092 * k], [Math.sin(a) * 0.112 * k, -0.04 - (i % 2) * 0.025, Math.cos(a) * 0.112 * k], 0.024, { ...S.orcIron, seg: 3 }); }
+  if (big) {
+    b.rbox([0, 0.07, 0.02], [0.13, 0.016, 0.12], { ...S.rust, e: 0.12, flat: true, rot: [0.25, 0.4, 0] });
+    for (const z of [-0.05, 0.0, 0.05]) b.cone([0, 0.08, z], [0, 0.18 - Math.abs(z) * 0.6, z * 1.6], 0.018, { ...S.orcIron, seg: 4 });   // spikes up from the crown
+  } else b.cone([0, 0.07, 0], [0, 0.13, -0.01], 0.016, { ...S.orcIron, seg: 4 });
+  if (b.level < 2) {
+    b.band([[0.06, -0.12, 0.04], [0, -0.12, 0.066], [-0.06, -0.12, 0.04], [-0.05, -0.12, -0.05], [0.05, -0.12, -0.05], [0.06, -0.12, 0.04]], 0.018, 0.004, { ...S.orcLeather, out: from([0, -0.12, 0]), segs: b.pick(12, 6, 3) });
+    // trophies: a tusk hung at the front on a thong, a knuckle of bone behind
+    b.rod([0, -0.03, 0.098 * k], [0, -0.08, 0.104 * k], 0.003, 0.003, { ...S.orcLeather, seg: 3 });
+    b.cone([0, -0.08, 0.104 * k], [0.008, -0.135, 0.118 * k], 0.011, { ...S.bone, seg: 5 });
+    b.ell([0, -0.06, -0.1 * k], [0.016, 0.022, 0.012], { ...S.bone, seg: [5, 4] });
+  }
+}
+for (const st of ['mail', 'plate', 'cloth']) {
+  def('orc:arm.' + st, (b) => {
+    const sk = { ...skin, a: [0.85, 1] };
+    b.ell([0, -0.035, 0.0], [0.06, 0.088, 0.066], sk);
+    b.loft(grow(UPPER, 0.008), { ...sk, seg: b.pick(18, 8, 6) });
+    if (b.level < 2) {
+      b.ell([0, -0.31, 0], [0.04, 0.04, 0.042], { ...sk, a: [0.9, 0.9] });
+      b.ell([0, -0.14, 0.026], [0.04, 0.075, 0.038], sk);   // the bulk of the biceps
+      // war paint: two streaks down the front of the arm and one round it, daubed by hand (the drips run down)
+      streak(b, [[0.014, -0.07, 0.058], [0.018, -0.16, 0.062], [0.012, -0.25, 0.05]], 0.012, st === 'cloth' ? PAINT_BLACK : PAINT_RED);
+      streak(b, [[-0.014, -0.08, 0.058], [-0.016, -0.17, 0.06], [-0.012, -0.22, 0.052]], 0.01, st === 'cloth' ? PAINT_BLACK : PAINT_RED);
+    }
+    if (st === 'plate') orcPauldron(b, true);
+    else if (st === 'mail') orcPauldron(b, false);
+    else {
+      b.ell([0, 0.01, -0.01], [0.08, 0.055, 0.082], { ...S.orcFur, a: [0.7, 1] });   // a hank of fur over the shoulder
+      if (b.level < 2) b.band([[0.05, -0.2, 0.04], [0, -0.21, 0.06], [-0.05, -0.2, 0.04], [-0.04, -0.21, -0.04], [0.04, -0.22, -0.04], [0.05, -0.2, 0.04]], 0.02, 0.004, { ...S.orcLeather, out: from([0, -0.21, 0]), segs: b.pick(12, 6, 3) });
+    }
+  });
+  def('orc:shin.' + st, (b) => {
+    b.dirt = mud(-0.5, -0.1, 0.8);
+    const legs = st === 'cloth' ? { ...skin } : S.orcLeather;
+    b.ell([0, 0, 0.004], [0.05, 0.05, 0.052], { ...legs, a: [0.92, 0.92] });
+    b.loft(grow(CALF.slice(0, 4), 0.006), { ...legs, seg: b.pick(18, 8, 6) });
+    boot(b, 'fur');
+    if (st !== 'cloth') {
+      // a plate scavenged from something bigger, strapped on askew over the shin; the knee under a spiked cop
+      b.rbox([0.006, -0.17, 0.06], [0.085, 0.2, 0.016], { ...(st === 'plate' ? S.orcIron : S.rust), e: 0.12, flat: true, rot: [-0.08, 0, 0.09] });
+      if (b.level < 2) for (const y of [-0.1, -0.24]) b.band([[0.055, y, 0.0], [0.05, y, 0.06], [0, y, 0.074], [-0.05, y, 0.06], [-0.055, y, 0.0], [0, y, -0.06], [0.055, y, 0.0]], 0.016, 0.004, { ...S.orcLeather, out: from([0, y, 0.005]), segs: b.pick(12, 6, 3) });
+      if (st === 'plate') {
+        b.shell([0, 0.0, 0.03], [0.064, 0.06, 0.054], -PI / 2, PI, 0, PI * 0.7, { ...S.orcIron, rot: [-PI / 2, 0, 0], flat: true, seg: [6, 4] });
+        b.cone([0, 0.0, 0.07], [0, 0.04, 0.14], 0.016, { ...S.orcIron, seg: 4 });   // the knee spike, forward and up
+      }
+    } else if (b.level < 2) streak(b, [[0.0, -0.04, 0.056], [0.004, -0.11, 0.058]], 0.012, PAINT_BLACK);
+    if (b.level >= 2) foot(b, 'fur');
+    b.dirt = null;
+  });
+}
+// a loincloth of the house's rag over leather, iron plates swinging from the belt on thongs, a bone at the buckle
+for (const st of ['mail', 'plate']) {
+  def('orc:pelvis.' + st, (b) => {
+    hips(b, S.orcLeather);
+    belt(b, false, S.orcLeather);
+    b.ell([0, 0.055, 0.13], [0.04, 0.045, 0.02], { ...S.bone });   // the buckle: a knuckle of bone
+    tabardSkirt(b, -0.36, 0.95, cloth, 0.8);
+    if (b.level < 2) for (const back of [0, PI]) for (let i = -1; i <= 1; i++) {   // its hem torn in points
+      const a = back + i * 0.28, x = Math.sin(a) * 0.255, z = Math.cos(a) * 0.2;
+      b.cone([x, -0.355, z], [x * 1.02, -0.42 - (i & 1) * 0.03, z * 1.02], 0.03, { ...cloth, seg: 3, w: [SKIRT + 0.9, SKIRT + 0.9] });
+    }
+    for (const s of [-1, 1]) {   // the side plates, each a different size and hung askew
+      const big = st === 'plate' ? 1 : 0.75;
+      b.rbox([s * 0.2, -0.12, 0.02], [0.03, 0.17 * big, 0.14 * big], { ...(s > 0 ? S.orcIron : S.rust), e: 0.12, flat: true, w: SKIRT, rot: [s * 0.12, 0, s * 0.18] });
+      if (st === 'plate' && b.level < 2) b.cone([s * 0.22, -0.06, 0.02], [s * 0.3, -0.02, 0.02], 0.014, { ...S.orcIron, seg: 4, w: SKIRT });
+    }
+  }, true);
+}
+def('orc:kit.arm', (b) => {   // a trained soldier's: one more great spike (iron, gate 1) or a band of gold plunder (gate 4)
+  b.cone([0, 0.06, -0.06], [0, 0.2, -0.12], 0.024, { ...S.orcIron, g: 1, seg: 4 });
+  b.torus([0, -0.08, 0], 0.066, 0.012, { ...S.elfGold, g: 4, rot: [PI / 2, 0, 0], seg: b.pick(12, 8, 6), sides: 4 });
+});
+
+// ---- undead: bare bone under corroded ancient plate fused to it, rotted mail and shroud, a cold light in the joints
+function undeadPauldron(b, big) {
+  const k = big ? 1.08 : 0.92;
+  b.shell([0, 0.018, 0], [0.09 * k, 0.07 * k, 0.092 * k], 0, TAU, 0, PI * 0.55, { ...(big ? S.oldIron : S.verd), a: [0.7, 1] });
+  b.lathe([[0.084 * k, 0.0], [0.095 * k, -0.02], [0.09 * k, -0.06]], [0, 0, 0], { ...S.verdDk, arc: [-2.2, 4.4], a: [0.7, 1] });   // a lame, broken away behind
+  // a ridge of vertebrae from front to back over the top: the bone grown into the iron
+  const nv = b.pick(5, 4, 3);
+  for (let i = 0; i < nv; i++) { const t = i / (nv - 1), a = -1.1 + t * 2.2; b.ell([0, 0.018 + Math.cos(a) * 0.075 * k, Math.sin(a) * 0.08 * k], [0.022, 0.014, 0.016], { ...skin, seg: [6, 4] }); }
+  if (big) for (const s of [-1, 1]) b.cone([0, 0.07 * k, s * 0.04], [0, 0.15, s * 0.07], 0.012, { ...skin, seg: 4 });   // two horns of bone
+  if (b.level < 2) {
+    b.ell([0, 0.01, 0.094 * k], [0.012, 0.012, 0.008], { ...S.glow, seg: [6, 4] });   // the cold light set in it
+    b.cone([0, -0.02, -0.09 * k], [0, -0.17, -0.1 * k], 0.03, { ...S.rag, seg: 3, w: [0.6, 0.1] });   // a strip of shroud hanging behind
+  }
+}
+for (const st of ['mail', 'plate', 'cloth']) {
+  def('undead:arm.' + st, (b) => {
+    const bone = { ...skin, a: [0.8, 1] };
+    // the bone of the upper arm, its heads at the shoulder and the elbow, bare between the rags
+    b.ell([0, -0.02, 0.0], [0.04, 0.05, 0.042], bone);
+    b.rod([0, -0.03, 0], [0, -0.29, 0.004], 0.021, 0.018, { ...bone, seg: b.pick(8, 6, 5) });
+    b.ell([0, -0.305, 0.0], [0.034, 0.03, 0.032], bone);
+    // a rotted sleeve over the top of it, its edge hanging in shreds
+    const sleeve = st === 'cloth' ? S.rag : S.rotMail;
+    b.lathe([[0.058, -0.17], [0.056, -0.1], [0.06, -0.02], [0.05, 0.04]], [0, 0, 0], { ...sleeve, a: [0.7, 1], seg: b.pick(16, 8, 6) });
+    if (b.level < 2) for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU + 0.3; b.cone([Math.sin(a) * 0.056, -0.165, Math.cos(a) * 0.056], [Math.sin(a) * 0.05, -0.2 - (i % 3) * 0.025, Math.cos(a) * 0.05], 0.016, { ...sleeve, seg: 3 }); }
+    if (st === 'plate') undeadPauldron(b, true);
+    else if (st === 'mail') undeadPauldron(b, false);
+  });
+  def('undead:shin.' + st, (b) => {
+    b.dirt = mud(-0.5, -0.1, 0.8);
+    const bone = { ...skin, a: [0.8, 1] };
+    b.ell([0, 0, 0.004], [0.04, 0.04, 0.042], bone);   // the knee's bone
+    b.rod([0, -0.02, 0.006], [0, -0.3, 0.0], 0.02, 0.016, { ...bone, seg: b.pick(8, 6, 5) });   // the shin bone, bare above the boot
+    if (b.level < 2) b.rod([0.024, -0.04, -0.008], [0.02, -0.28, -0.004], 0.009, 0.008, { ...bone, seg: 5 });
+    boot(b, 'leather');
+    if (st !== 'cloth') {
+      // the front half of an ancient greave, green with corrosion, a hole eaten through it
+      b.loft(grow(CALF.slice(0, 5), 0.016, 0.014), { ...(st === 'plate' ? S.verd : S.oldIron), arc: [-1.2, 2.4], a: [0.75, 1], seg: b.pick(12, 7, 5) });
+      if (b.level < 2) b.ell([0.02, -0.2, 0.075], [0.012, 0.018, 0.008], { ...S.dark, seg: [5, 4] });
+      if (st === 'plate') b.shell([0, 0.0, 0.026], [0.058, 0.056, 0.05], -PI / 2, PI, 0, PI * 0.7, { ...S.verdDk, rot: [-PI / 2, 0, 0] });
+    }
+    if (b.level < 2) b.band([[0.05, -0.1, 0.0], [0, -0.13, 0.062], [-0.05, -0.16, 0.0], [0, -0.19, -0.058], [0.05, -0.22, 0.0]], 0.022, 0.004, { ...S.rag, out: from([0, -0.16, 0.002]), segs: b.pick(12, 6, 3) });   // a rag wound round
+    if (b.level >= 2) foot(b, 'leather');
+    b.dirt = null;
+  });
+}
+// the hip bones under a shroud torn into strips, rusted plates hanging from a rotted belt
+for (const st of ['mail', 'plate']) {
+  def('undead:pelvis.' + st, (b) => {
+    b.ell([0, -0.04, -0.01], [0.13, 0.07, 0.09], { c: 0x16161a, m: 'cloth', a: [0.6, 0.8] });   // (the dark inside)
+    for (const s of [-1, 1]) b.ell([s * 0.09, 0.0, -0.01], [0.07, 0.07, 0.05], { ...skin, rot: [0, 0, s * 0.4] });   // the wings of the pelvis
+    b.rod([0, 0.14, -0.04], [0, -0.06, -0.05], 0.022, 0.02, { ...skin, seg: 6 });   // the spine's foot
+    belt(b, false, S.rag);
+    const n = b.pick(14, 10, 7);
+    for (let i = 0; i < n; i++) {   // the shroud: strips of different lengths all round
+      const a = (i / n) * TAU, x = Math.sin(a) * 0.24, z = Math.cos(a) * 0.19, l = 0.34 + ((i * 7) % 5) * 0.035;
+      b.cone([x * 0.86, 0.04, z * 0.86], [x * 1.08, -l, z * 1.08], 0.06, { ...(i % 3 ? S.rag : S.ragLt), seg: 3, w: [SKIRT + 0.9, SKIRT] });
+    }
+    if (st === 'plate') for (const s of [-1, 1]) b.rbox([s * 0.1, -0.18, 0.15], [0.12, 0.13, 0.02], { ...S.verd, e: 0.2, w: SKIRT, rot: [0.12, 0, s * 0.1] });
+    tabardSkirt(b, -0.3, 0.9, cloth, 0.7);
+  }, true);
+}
+def('undead:kit.arm', (b) => {   // a trained soldier's: a crown of bone points (gate 1) or of tarnished gold (gate 4) round the pauldron
+  for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; b.cone([0, 0.06 + Math.cos(a) * 0.04, Math.sin(a) * 0.08], [0, 0.12 + Math.cos(a) * 0.05, Math.sin(a) * 0.1], 0.012, { ...skin, g: 1, seg: 4 }); }
+  for (let i = 0; i < 5; i++) { const a = -0.9 + i * 0.45; b.cone([0, 0.065 + Math.cos(a) * 0.04, Math.sin(a) * 0.082], [0, 0.13 + Math.cos(a) * 0.05, Math.sin(a) * 0.104], 0.014, { ...S.elfGold, g: 4, seg: 4 }); }
+});
