@@ -32,6 +32,9 @@ Pick the mode in the menu (and, for an online game, in the lobby); **Conquest** 
   between. Two minutes to buy an army of up to 500 with 30,000 gold and set it out (your hero stands in front of it from the
   first moment), then the armies fight to the last man; your hero fights too.
   Single player against AI generals or online with 2 to 4 players (see **War Mode** below).
+- **Specialty Battles** (their own card on the menu): set pieces with a map and rules of their own. The first is
+  **Stonecleft Hold**, 1 vs 3: your fortress seals a mountain gorge and three allied Orc lords march on it together
+  (see **Specialty Battles** below). Single player.
 
 ## Play
 
@@ -843,6 +846,34 @@ movement, swing, shot and ability paths as a person); `Game.start` switches the 
 `hero: { win: 'kills' | 'castle' | 'timed' }`, and `game.hero` is null in every other mode. The menu, HUD and
 controls read `game.hero` (`index.html`, `src/ui.js`, `src/main.js`, `Game.handleInput`).
 
+## Specialty Battles
+
+The **Specialty Battles** card on the main menu (under the Battle setup) lists set pieces with a map and rules of their own.
+A click starts one at once with the hero and the difficulty chosen on the menu; **Watch** watches AI lords play it. Quick Play
+and Play Again repeat it like any other mode. Single player only (the tooltips say so; the lobby does not offer them).
+
+**Stonecleft Hold** (1 vs 3). *Your fortress seals a mountain gorge. Three lords march on it together. Hold the wall.*
+- **The map.** A range of mountains runs across the north of the field, its face a cliff far too steep to climb (for
+  soldiers, heroes, horses and engines alike). One gorge is cut into it. Across the gorge runs one long curtain wall from
+  cliff to cliff, with a wall walk, four stairs up to it, four towers and a single gate; behind it the yard on the gorge
+  floor, and at the back the keep on a rock shelf with a ramp up to it. The three lords' castles stand out on the open field
+  (left, centre, right), and their roads meet before the gorge's mouth.
+- **The armies.** Your army is **Human** or **Elves** (the card's *Your army* row; a saved race the battle does not offer
+  falls back to Human), the three lords are **Orcs**. Only the look, as everywhere (see **Army races**).
+- **The rules.** Conquest underneath (waves every 30 seconds, gold, the shop, engines, tower archers, the hero classes). The
+  three lords are allies: they never fight each other, and all their waves and pushes go for the hold. The hold is built
+  stronger (walls x2.5, gate x3, keep x2.5), its tower archers start at level 2, its barracks holds 18, its purse is 1,200
+  gold and six more men stand on its walls from the start.
+- **Winning and losing.** Break all three of their keeps, or hold your keep until the clock runs out: 18 minutes on Easy,
+  22 on Normal, 25 on Hard, counted from the first wave and shown in the top panel ("Hold for 18:20"). Your keep falling
+  loses. The end screen says how long you held and how many keeps you broke; personal bests are kept apart from Conquest's.
+
+Code: `src/specialty.js` (the list: name, blurb, map size, races; plain data), `src/specialui.js` (the menu card),
+`src/stonecleft.js` (the map's shape as pure functions: the ground, the gorge, roads, where trees may stand),
+`src/holdphysics.js` (its ground), `src/holdcastle.js` (the fortress, built from the castle's own pieces), `src/holdgame.js`
+(the sides, the hold's advantages `HOLD_RULES`, the clock and the ends). Every other map is built exactly as before: the
+world key carries the battle's id, so leaving it rebuilds the normal map.
+
 ## War Mode
 
 Pick **War Mode** in the Mode row of the menu (or of the lobby). There are no castles, waves, upgrades or income. Every army
@@ -1272,6 +1303,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
 | `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
 | `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |
+| `src/specialty.js`, `src/specialui.js`, `src/stonecleft.js`, `src/holdphysics.js`, `src/holdcastle.js`, `src/holdgame.js` | Specialty Battles: the list and the menu card; Stonecleft Hold's map, ground, fortress and rules (see **Specialty Battles**) |
 | `src/hill.js` | The hill in the middle: the banner, and in King of the Hill the capture, scoring, gold and win |
 | `src/hillbar.js`, `src/castlebar.js` | The King of the Hill timer bar (a segment per side), and the castle panel shown near a castle (keep, gate, walls) |
 | `src/pings.js` | Pings and markers: the crosshair ray and what it hit, the marker wheel, map clicks, the beacons and edge arrows, the sounds, and the host's checks and relay to allies |
