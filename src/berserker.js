@@ -355,9 +355,9 @@ ULT_SHOW.execkill = (ctx) => {
   const { A, g, at, dir, sz } = ctx, fx = g.fx;
   const c = V1.copy(at).setY(at.y + 1.1);
   fx._blood(c, 14 + 6 * sz, dir.x, dir.z);
-  fx.flash(c, A.col.set(0xff3020), 3.2 + sz, 0.25, 0.9);
-  fx.ring(at, 0.8, A.col.set(0xff4a30), 18, { up: 1.6, size: 0.3, speed: 4 });
-  A.gfx.glyph('pulse', at.x, at.y, at.z, 2.2, 0xff2a1a, 0.6, { strength: 1.8 });
+  fx.flash(c, A.col.set(0xff3020), 1.8 + 0.4 * sz, 0.2, 0.45);
+  fx.ring(at, 0.6, A.col.set(0xff4a30), 14, { up: 1.4, size: 0.24, speed: 3 });
+  A.gfx.glyph('pulse', at.x, at.y, at.z, 1.5, 0xb01a10, 0.5, { strength: 1.1 });
   if (g.camfx) g.camfx.boom(at, 0.35);
   ctx.snd('execute');
 };
@@ -367,10 +367,11 @@ ULT_SHOW.unstop = (ctx) => {
   gf.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xff6a3a, 0.8, { team: house, strength: 2.2 });
   gf.glyph('pulse', at.x, at.y, at.z, R, 0xff2a10, 0.9, { strength: 2 });
   gf.glyph('rune', at.x, at.y, at.z, R * 0.7, 0xff4a20, 1.4, { arms: 5, team: house, strength: 1.6 });
-  gf.pillar(at.x, at.y, at.z, 0xff5a30, 0.8, 1.6, 9, 1.8);
+  const own = who && who === g.player;   // (seen from inside, a column of light round the camera would hide everything)
+  if (!own) gf.pillar(at.x, at.y, at.z, 0xff5a30, 0.6, 1.3, 6, 1.1);
   fx._dust(V1.copy(at).setY(at.y + 0.2), 30, R * 0.7, '');
   fx.ring(at, R * 0.4, A.col.set(0xff7a40), 34, { up: 1.2, size: 0.45, speed: 10 });
-  fx.flash(V1.copy(at).setY(at.y + 2), A.col.set(0xff4020), 9, 0.4, 1);
+  fx.flash(V1.copy(at).setY(at.y + (own ? 0.4 : 2)), A.col.set(0xff4020), own ? 3 : 5, 0.3, own ? 0.35 : 0.6);
   fx.crater(at, 2.4);
   if (g.camfx) g.camfx.boom(at, 0.85);
   ctx.snd('roar');

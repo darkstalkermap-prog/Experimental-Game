@@ -545,7 +545,7 @@ export class ViewModel {
       if (ex >= 0 && ex < 0.75) {
         const up = easeOut(clamp(ex / 0.2, 0, 1)), down = easeInOut(clamp((ex - 0.2) / 0.08, 0, 1)), back = 1 - easeInOut(clamp((ex - 0.48) / 0.27, 0, 1));
         ax -= 0.1 * up * (1 - down) * back; ay += (0.2 * up - 0.34 * down) * back; az += (0.05 * up - 0.16 * down) * back;
-        arx -= (1.3 * up - 2.4 * down) * back; arz += 0.15 * up * (1 - down) * back;
+        arx += (0.9 * up - 2.1 * down) * back; arz += 0.15 * up * (1 - down) * back;   // (back over the shoulder, then the head driven forward and down)
         trailing = trailing || (down > 0.05 && down < 1);
       }
       this.stagAmt = smooth(this.stagAmt, p.staggerT > 0 ? Math.min(1, p.staggerT * 3) : 0, 26, dt);
