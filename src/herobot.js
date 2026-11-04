@@ -15,16 +15,18 @@ import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
 import { KNIGHT, knightTossPick, knightGuard } from './knight.js';
+import { botSpin, execTarget } from './berserker.js';
+import { sweepNow } from './cavalier.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
   knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ricochet', 'kn_phalanx', 'kn_avenge'],
-  berserker: ['bz_quake', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_meteor', 'bz_dervish', 'bz_reaper'],
+  berserker: ['bz_headsman', 'bz_quake', 'bz_seethe', 'bz_scars', 'bz_dervish', 'bz_meteor', 'bz_reaper'],
   ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_hawk', 'rg_heavy', 'rg_deadeye', 'rg_volley'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
-  cavalier: ['cv_barding', 'cv_lance', 'cv_horn', 'cv_sweep', 'cv_banner', 'cv_thunder', 'cv_vanguard'],
+  cavalier: ['cv_lance', 'cv_edge', 'cv_saddle', 'cv_sweep', 'cv_thunder', 'cv_rhythm', 'cv_vanguard'],
 };
 
 // How each class likes to fight: melee classes close in; the Ranger and the casters keep a band of distance (lo..hi
@@ -507,10 +509,16 @@ export class HeroBot {
         if (o) { this.aimAtFoe(o, KNIGHT.toss.speed, 0.5); this.cast('q'); }   // (a spinning shield is wide: a steadier aim than an arrow's)
         break;
       }
-      case 'berserker':
-        if (r && hpf > 0.4 && this.leapIn(4 + need)) break;
-        if (q && hpf > 0.2 && (n.c3 >= 2 + need || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
+      case 'berserker': {
+        if (r && hpf > 0.4 && !p.buffs.has('whirl') && this.leapIn(4 + need)) break;
+        // Execute: a foe in reach low enough to die of it (a kill gives it back: look again soon, for the next), else a rival hero at hand
+        const o = q && execTarget(this, p);
+        if (o) {
+          this.aimAtFoe(o, 1e3, 0.3);
+          if (this.cast('q')) this.castOk = Math.min(this.castOk, now + 0.3);
+        }
         break;
+      }
       case 'ranger': {
         // the Sniper Shot at a far rival hero, giant or siege crew; Power Shot (or the Volley) at the ranks
         if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
@@ -528,9 +536,9 @@ export class HeroBot {
         if (q) this.bolt('q', 2, 90);   // (Smite reaches as far as a Fireball: 120 m; a bot lets fly within 90)
         break;
       }
-      case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short)
-        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need)) break;
-        if (r && ((this.friends.length >= 3 && n.c12 >= 2) || (hpf < 0.55 && n.c8 >= 1) || (n.heroes8 && this.friends.length >= 1))) this.cast('r');
+      case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short; the sweep whenever foes are about to go past)
+        if (r && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need, 'r')) break;
+        if (q && sweepNow(this, p)) this.cast('q');
         break;
       default: break;
     }
@@ -579,7 +587,7 @@ export class HeroBot {
 
   // The long charges: a run (Shield Bash) or a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or
   // the densest knot of foes lo..hi m off, with nothing in the way of the run.
-  runAt(id, lo, hi, need) {
+  runAt(id, lo, hi, need, slot = 'q') {
     const p = this.p, A = this.g.abilities;
     if (p.climb || p.leap || p.dash) return false;
     let best = null, bs = 0;
@@ -595,7 +603,7 @@ export class HeroBot {
     const plan = A.rushPlan(p, p.pos, want);
     if (!plan || plan.d < l - 2) return false;   // (something in the way: walk round)
     this.faceYaw = p.yaw = Math.atan2(dx, dz); p.pitch = 0;
-    return this.cast('q', plan.to.clone());
+    return this.cast(slot, plan.to.clone());
   }
 
   // Leap: into a rival hero or a knot of foes a fair way off (where they will be when he comes down), to open a fight or join one;
@@ -739,10 +747,11 @@ export class HeroBot {
     this.go = p.stamina > 8 && d > 4 ? 2 : 1;
     this.face = close ? 'target' : 'way';
     if (!close) return;
-    if (d < 3.2 && ahead < 0.2) this.go = 0;   // beside it: stand and strike
-    else if (ahead < -0.3 && d < 9) {          // just rode past it
+    const pass = !!p.mods.momentum;   // (a Cavalier keeps his Momentum: he rides through, on a little way, and wheels round for another pass)
+    if (d < 3.2 && ahead < 0.2 && !pass) this.go = 0;   // beside it: stand and strike
+    else if (ahead < -0.3 && d < (pass ? 14 : 9)) {     // just rode past it
       if (now - this.passAt > 4) this.passAt = now;
-      if (now - this.passAt < 0.9) { this.face = 'fixed'; this.faceYaw = p.heading; this.go = 2; }
+      if (now - this.passAt < (pass ? 1.4 : 0.9)) { this.face = 'fixed'; this.faceYaw = p.heading; this.go = 2; }
     }
   }
 
@@ -904,6 +913,7 @@ export class HeroBot {
     }
 
     // fight
+    if (p.classId === 'berserker') p.spinHeld = p.weapon === 'sword' && botSpin(this, p);   // (the Whirlwind: held while foes are close and Rage lasts)
     if (p.staggerT > 0) { p.atk = null; p.blocking = false; p.drawT = 0; }
     else if (p.weapon === 'sword') {
       m.left = m.right = m.rightPressed = false;

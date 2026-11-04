@@ -199,13 +199,13 @@ export class WarMode {
   // ---------------- the army (the battle's own simulation decides; a guest asks it) ----------------
   armyOf(team) {
     const list = [];
-    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew) list.push(u);
+    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && !u.summon) list.push(u);   // (the Cavalier's called knights are no part of it)
     return list;
   }
   counts(team) {
     const c = { total: 0 };
     for (const t of WAR_TYPES) c[t] = 0;
-    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && own(c, u.type)) { c[u.type]++; c.total++; }
+    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && !u.summon && own(c, u.type)) { c[u.type]++; c.total++; }
     return c;
   }
 
@@ -364,7 +364,7 @@ export class WarMode {
   // the living soldiers of house `team` in group k (a giant marches with the infantry)
   groupList(team, k) {
     const list = [];
-    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && (u.isGiant ? 'inf' : groupOf(u.type)) === k) list.push(u);
+    for (const u of this.g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && !u.summon && (u.isGiant ? 'inf' : groupOf(u.type)) === k) list.push(u);
     return list;
   }
 
@@ -734,7 +734,7 @@ export class WarMode {
   standing(team) {
     const g = this.g, f = g.factions[team];
     let n = 0;
-    for (const u of g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew) n++;
+    for (const u of g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && !u.summon) n++;
     const hero = f.isPlayer && f.player ? f.player.alive : !!(f.hero && f.hero.alive);
     return { n, hero };
   }
@@ -761,7 +761,7 @@ export class WarMode {
   worth(team) {
     const g = this.g, f = g.factions[team];
     let w = 0;
-    for (const u of g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && own(WAR.units, u.type)) w += WAR.units[u.type].cost * Math.max(0.2, u.hp / u.maxHp);
+    for (const u of g.units) if (u.alive && u.team === team && !u.isHero && !u.isCrew && !u.summon && own(WAR.units, u.type)) w += WAR.units[u.type].cost * Math.max(0.2, u.hp / u.maxHp);
     if (f.isPlayer && f.player ? f.player.alive : f.hero && f.hero.alive) w += 300;
     return Math.round(w);
   }

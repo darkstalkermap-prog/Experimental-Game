@@ -24,6 +24,7 @@ import { allied } from './teams.js';
 import { rigSetBow } from './models.js';
 import { ULT_AI } from './ultimate.js';
 import { KNIGHT, knightTossPick } from './knight.js';
+import { rageTick, botSpin, execTarget, lordBits, lordFlags } from './berserker.js';
 
 // the class each style of lord fights as (rivals.js PERSONAS), and the plain lords' by house (Aldmoor, Varr, Elden, Sol)
 export const PERSONA_CLASS = { rusher: 'berserker', turtler: 'knight', breaker: 'mage', raider: 'ranger', merchant: 'cleric', zealot: 'cleric', warlord: 'knight', titan: 'berserker', opportunist: 'ranger' };
@@ -174,6 +175,7 @@ export class LordKit {
       else if (this.readyAt[s] < 0) this.readyAt[s] = g.time + this.sk.slack * Math.random();
     }
     u.buffs.update(dt);
+    rageTick(u, dt);   // (a Berserker lord's Rage and Whirlwind: berserker.js)
     const haste = u.buffs.get('haste');   // (his own Rally Cry: the soldier's own haste is what speeds his feet)
     if (haste) { u.hasteT = Math.max(u.hasteT, u.buffs.time('haste')); u.hasteMul = haste; }
     if (u.hp < this.lastHp) this.recent += this.lastHp - u.hp;
@@ -297,7 +299,7 @@ export class LordKit {
 
   // what the snapshot entry of this lord carries for the guests: his class, the bow out and drawn (and, for War Mode, which leaves out the
   // height, how far above the ground a leap has carried him: liftOf)
-  net() { return (CLASS_IDS.indexOf(this.u.classId) & 7) | (this.bowOn ? 8 : 0) | (this.draw ? 16 : 0); }
+  net() { return (CLASS_IDS.indexOf(this.u.classId) & 7) | (this.bowOn ? 8 : 0) | (this.draw ? 16 : 0) | lordBits(this.u); }   // (32, 64: a Berserker spinning, Unstoppable)
   liftOf() {
     const u = this.u;
     if (!u.leap) return 0;
@@ -309,6 +311,7 @@ export class LordKit {
     const u = this.u, v = u.kitNet | 0;
     if (!!(v & 8) !== this.bowOn) { this.bowOn = !!(v & 8); rigSetBow(u.model, this.bowOn); }
     if (v & 16) { u.swingT = Math.max(u.swingT, 0.3); if (u.swingT > 0.42) u.swingT = 0.42; }
+    if (u.classId === 'berserker') lordFlags(u, v);
   }
 
   // What reaches the lord of a blow (Unit.takeDamage): his Bulwark, Frost Ward and the talents that answer blows, as a hero's (Player.takeDamage).
@@ -404,11 +407,12 @@ export class LordKit {
   // Q and R, class by class, as the hero bots use them (herobot.js planAbilities): on groups and rival heroes, the defence when it is needed.
   think() {
     const u = this.u, n = this.n;
-    const q = this.ready('q'), r = this.ready('r'), ult = u.ult >= 1;
-    if (!q && !r && !ult) return;
+    const q = this.ready('q'), r = this.ready('r'), ult = u.ult >= 1, bz = u.classId === 'berserker';
+    if (!q && !r && !ult && !bz) return;
     this.stats.looks++;
     if (Math.random() > this.sk.see) return;
     this.scan();
+    if (bz) u.spinHeld = botSpin(this, u);   // (the Whirlwind, held while foes are close and his Rage lasts: berserker.js)
     if (ult && this.ultimate()) return;
     const t = u.target && u.target.alive ? u.target : null;
     const foe = t && !t.isStructure && !t.isSiege ? t : null;
@@ -423,10 +427,12 @@ export class LordKit {
         if (o) this.cast('q', this.aimAt(o, KNIGHT.toss.speed, 1, V2));
         break;
       }
-      case 'berserker':
-        if (r && hpf > 0.35 && this.leapIn(4 + need)) break;
-        if (q && hpf > 0.2 && (n.c3 >= 2 + need || n.heroNear < 3.5 || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q', this.look());
+      case 'berserker': {
+        if (r && hpf > 0.35 && !u.buffs.has('whirl') && this.leapIn(4 + need)) break;
+        const o = q && execTarget(this, u);   // Execute: a foe in reach low enough to die of it, else a rival hero at hand
+        if (o) { u.yaw = Math.atan2(o.pos.x - u.pos.x, o.pos.z - u.pos.z); this.cast('q', this.look()); }
         break;
+      }
       case 'ranger':
         if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
         if (q) { if (abilityOf(u, 'q').id === VOLLEY_Q.id) this.volley(3 + need); else this.powerShot(3 + need); }

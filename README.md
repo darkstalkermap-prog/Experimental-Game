@@ -299,8 +299,20 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     a red warning ("Challenged!", with an arrow toward you) and a red tether to you, and everyone sees the tethers. Keep your shield
     up: the blows it draws fill your Wrath. (The old Q, Shield Bash, and R, Bulwark, are gone: the throw is his reach, Challenge his
     defence; Avenging Wall and Bastion Strike now work under Challenge.)
-  - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
-    spin for a second and cut everyone around you three times. **R Leap** (11 s): hold R and a circle on the ground shows
+  - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health), built on momentum
+    (`src/berserker.js`). **Rage** (the red bar under stamina): every blow you land fills it (9 a sword blow on a soldier, 13 on a
+    hero, 5 for each foe a Leap or an Execute hits), and so does every blow you take (55 for a blow worth all your health, less in
+    proportion); 3 s after the last blow either way it ebbs at 12 a second. **Whirlwind** (hold the right mouse button): with 20
+    Rage or more the button spins you with the axe out instead of raising your guard. You keep walking (at 70% pace) and cut
+    everyone within 4.2 m about three times a second (half your sword damage a cut; soldiers stagger, a hero only at the first cut)
+    for as long as you hold it and Rage lasts: it drains 22 a second, and each foe a cut reaches gives 1 back (2 a cut at most), so
+    full Rage spins about 4.5 s alone and 6 to 7 s in a crowd. Let go and it stops; with too little Rage the right button blocks as
+    always. Others see the whole body turning. **Q Execute** (8 s): the axe goes up over your shoulder and comes down a quarter of
+    a second later, a heavy overhead chop (1.7x sword damage) at whoever is in front of you, up to three (the others for half).
+    Anyone it leaves below 25% health dies on the spot, heroes too (a Frost Ward or a Cleric's Sanctuary still saves a man), and a
+    kill gives Execute back at once (0.35 s for the axe to come up), so a wounded crowd falls one chop after the other. EXECUTE
+    shows under the crosshair when the foe in front would die of it. In the practice yard a dummy counts as below a quarter once it
+    has taken three quarters of a knight's health (180) in the last 5 s. **R Leap** (11 s): hold R and a circle on the ground shows
     where you will land, up to 120 m away (as far as a Mage's Fireball flies: `FIREBALL_RANGE` in `src/config.js`); let go and you
     leap there in a high arc over the soldiers (longer leaps go higher, up to 7 m over the line, and take up to 2.3 s; nothing staggers
     you in the air). Walls, towers and hills in the way cut the leap short in front of them (the circle turns to the warning colour), and
@@ -330,11 +342,22 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     aim, as far as a Fireball flies (120 m), blasting everyone near where it strikes; a crackle as it leaves the hand, thunder where it
     lands. Chain Smite (talent) arcs it on to two more foes. **R Healing Light**: heal yourself for 45% and
     every ally within 14 m for 40%.
-  - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you and tramples harder).
-    **Q Lance Charge** (14 s): hold Q for where the charge ends, up to 120 m away (as far as a Fireball flies), let go and gallop
-    there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in your path and going on through them.
-    Walls, gates, trunks and steep rises stop it short; Q again reins in. Numbers: `RUSH` in `src/classes.js`. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
-    (you take 40% less).
+  - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you, 30% less damage, and tramples 25% harder): the
+    horse is the star. **Momentum** (passive): the faster you ride, the harder your sword blows, your trampling, Sweeping Strike and
+    Lance Charge land, up to +60% at a full gallop. It counts from 6 m/s and is full at a full gallop (13.5 m/s); it rises 0.55 a
+    second toward what the speed gives (about 2 s from a canter to full), falls 1.4 a second when you slow down, and a turn faster than
+    1.3 rad/s above a walk gains nothing and bleeds 0.6 a second: long straight runs and wide curves keep it high. A horseshoe gauge low
+    in the middle of the screen (only in the saddle) fills with gold as it builds, a thin inner arc shows the speed of the moment, and
+    the bonus is written in it. **Q Sweeping Strike** (6 s): for 1.2 s the blade sweeps out to one side as you ride (a crescent of
+    light that sweeps from across the horse's head round to behind you, three times, and a band of light on the ground), cutting every
+    foe you ride past within 3.6 m on that side once for your sword's damage times Momentum (soldiers staggered and thrown out). The
+    side is chosen as you press Q: glance left or right of where the horse runs (more than about 11°) and it goes that way; looking
+    straight ahead it goes to the side with more foes, and to the sword side (right) when that is even. On foot it is one wide cut
+    (100° either side, 3.2 m) in front of you. **R Lance Charge** (14 s): hold R for where the charge ends, up to 120 m away (as far
+    as a Fireball flies), let go and gallop there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in
+    your path and going on through them; its blows carry Momentum (it builds during the gallop). Q during the charge sweeps as you go.
+    Walls, gates, trunks and steep rises stop it short; R again reins in. Numbers: `RUSH` in `src/classes.js`, `CAV` in
+    `src/cavalier.js`.
 
   **The Ultimate (Z)**: every class has a third ability, its one huge moment. It does not come round on a timer: a ring round its
   icon (the round tile beside R) fills as you fight, from the damage you deal (rival heroes count most, castle stone least), the
@@ -355,7 +378,21 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     hanging cloth that stirs in the wind, a ring in your colour round it) for 12 s. Allies within 10 m of it heal over time (heroes
     2.5% of their health a second, soldiers 4%; they glint green), and enemies inside the ring move 40% slower (a cold mist at their
     feet). Bots and the computer's Knight lords plant it where the fight is thick and their side is in it, or when hard pressed.
-  - **Berserker, Ranger, Cavalier**: for now a simple stand-in (Rampage, Stampede: a slam all round the hero;
+  - **Berserker: Unstoppable**: a roar that hurts everyone within 4.5 m and throws the soldiers among them through the air, and for
+    8 s you are twice your size (everyone sees it; your eyes rise 30%, your body is 0.25 m wider and 65% taller to hit and to walk,
+    still well under a gate's 6 m arch). Nothing can slow, stagger or knock you back, your reach is 45% longer, Rage does not ebb,
+    and every soldier you hit, with the axe, the Whirlwind or Execute, is sent flying in an arc (alive or dead; heroes, riders,
+    giants, engine crews and men on the walls stand). Embers rise off you while it lasts.
+  - **Cavalier: Call the Charge**: hold Z to point at a spot up to 60 m away, let go and blow the horn (a brass call, then the
+    thunder of hooves). The old Rally Cry goes out with it: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
+    (you take 40% less). Six armoured lancers of your house and race ride out in a wedge behind you (two by two, each pair further back
+    and wider), each in a puff of dust, and charge through the spot at 15 m/s in that wedge (drawn in to half its width, the leading
+    pair 9 m beyond it), each riding down every foe within 2.3 m of him once: 1.4 times your sword's damage (a hero 60% of that),
+    staggered and thrown on. Then they fight there as any riders do, and after 15 s from the horn they ride off in a cloud of dust
+    (the fallen stay where they lie). They are no part of your army: they count to no garrison, army or War Mode limit, take no
+    orders and are worth no gold to whoever kills them. On foot the horn calls them all the same. Online the host runs them; every
+    screen has them as soldiers and plays the horn, the cry and the dust.
+  - **Ranger**: for now a simple stand-in (
     Arrow Storm: a wide volley of 45 arrows on a circle up to 70 m away), to be replaced by each class's own.
 
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
@@ -380,11 +417,12 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
-  speed, draw time); most change an ability: the Knight's Shield Throw stuns longer and bounces once more (Ricochet), his Challenge lasts longer and fills Wrath faster (Hold the Line), the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Whirlwind strikes
-  once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
+  speed, draw time); most change an ability: the Knight's Shield Throw stuns longer and bounces once more (Ricochet), his Challenge lasts longer and fills Wrath faster (Hold the Line), the Cavalier's Sweeping Strike reaches further and his charge goes faster (Wide Sweep, Thundering Hooves), the Berserker's Execute finishes
+  foes below 32% (Headsman), his Rage fills faster and lasts longer (Seething Blood), his Whirlwind costs less and reaches further
+  (Dervish), and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
   hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
   Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
-  to more foes, the Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
+  to more foes, the Cavalier's Momentum builds faster and climbs higher (Born to the Saddle) and every foe his sweep cuts takes time off his Lance Charge (Rider's Rhythm). A gold hint, "Talent point available", pulses on the HUD while you have a point
   to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
   own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
   level, parent, free point, castle) and says why it refused one. Every number is in the table at the top of
@@ -405,7 +443,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   | Every wave you live through | 10 |
   | Breaking an enemy gate / opening a breach / breaking a keep | 40 / 15 / 250 |
   | Taking the hill (King of the Hill) while standing on it | 25 |
-  | A Healing Light that really mends others / a Rally Cry | 5% of the health restored (at most 40) / 3 for each ally reached (at most 24) |
+  | A Healing Light that really mends others / the Cavalier's Call the Charge | 5% of the health restored (at most 40) / 3 for each ally its cry reaches (at most 24) |
 
   It takes 120, 320, 640 and 1100 experience in all to reach levels 2 to 5. **Every level** adds health (+7% of the
   class's), armour, a little speed, faster healing out of combat, abilities that recharge sooner and more damage with
@@ -687,7 +725,8 @@ lords.
 
 **Lords fight as heroes.** Every lord the computer plays (a rival lord, a plain lord, the lord who takes over a house whose player left, and War Mode's
 AI generals) is a hero of a class: he wears its look under a lord's long cape and uses its **Q** and **R** as a hero bot does (`src/lordkit.js`). The
-Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a knot of foes or at a rival hero), the Patient and the Ironclad Knights
+Reckless and the Giantsworn are Berserkers (Whirlwind held in a crowd while his Rage lasts, Execute on a man low enough to die of it
+and again at once after a kill, Leap into a knot of foes or at a rival hero, Unstoppable in a crowd or at a rival hero), the Patient and the Ironclad Knights
 (Shield Throw at a hero or a knot of foes up to 40 m off, Challenge into a crowd or when pressed, the shockwave when their Wrath is full: a lord's shield turning a blow aside fills it), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
 Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
 fights with the bow from 34 m, never from a wall post; Power Shot down a line of foes, Sniper Shot at a far hero, giant or siege crew). The plain lords:
@@ -770,8 +809,18 @@ The rules of who may sit where are `src/seats.js` (pure functions, with unit tes
 ## Army races
 
 Each house's army can be one of five **races**: **Human** (the look the game always had), **Elves**, **Dwarves**, **Orcs** or
-**Undead**. Only the look changes: every soldier keeps the same health, damage, speed, reach, hitbox and timing whatever its
-race, so a race never changes how a battle goes (the same seed plays the same battle with any races).
+**Undead**. A race changes the look and the **size** of its soldiers, nothing else: every soldier keeps the same health,
+damage, speed, reach, collision radius and timing whatever its race.
+
+**Sizes.** Each race stands at its own height, and what can be hit is what you see (`src/races.js` RACE_HEIGHT, drawn by
+`src/raceshapes.js` RACE_LOOK): **Dwarves** 0.76 of a man (1.41 m against 1.85), broad and stocky (1.3 wide); **Elves** 1.1 (2.04 m),
+slender; **Orcs** drawn 1.13 tall and bulky (1.2 wide) but hunched, the head carried low and forward, so they stand 1.08 (2.0 m);
+**Undead** a man's height, gaunt. The height the game measures follows it: an arrow over a dwarf's head misses, an arrow at an elf's
+drawn head is a headshot (the top 17%, as for every body), and archers aim at the drawn chest. Riders sit on their race's mount (an
+elf's finer, taller horse, a dwarf's stout pony, an orc's heavier beast: the horse's build only) and stand that much lower or higher;
+tower archers and siege crews take their race's height too. Walls, roofs and gates still test a soldier as a man-sized body, so every
+race goes where it always went. The men are 1: a battle of men plays exactly as before (the same seed, the same battle); a battle with
+other races differs where an arrow now hits or misses a taller or shorter soldier.
 
 - **Elves**: tall and slender, long faces with pointed ears and flowing hair; fine curved silver plate with gold leaf work, tall
   crested helms, long green cloaks, leaf-bladed swords and spears, almond shields and long recurved bows; white and grey horses.
@@ -796,10 +845,26 @@ for a single-player battle. The six heroes, the AI lords (who are drawn as heroe
 `Math.random`, which the battle's rules draw from). `src/raceshapes.js` holds each race's build (drawn proportions on the same
 rig and poses: the dwarf 0.88 tall and 1.2 wide with his head set high, so the upper half of it is still in the headshot zone of
 the man-sized body the game measures), skin, hair, faces (four more cells of the face atlas) and its own heads, trunks, weapons,
-shields, bows and cloaks, built only when a race is first worn. Parts a race has none of (the legs, arms and boots) are the
-men's, their bare metal and leather tinted in the shader for the race (silver, bronze, rusty black iron, verdigris): the race
-rides in the whole part of a per-instance number the shader already reads, so all races draw with the one crowd material and
-program, and a battle draws only the batches of the races in it.
+shields, bows and cloaks, built only when a race is first worn. Parts a race has none of (the thighs, forearms and the foot
+near by) are the men's, their bare metal and leather tinted in the shader for the race (silver, bronze, rusty black iron,
+verdigris): the race rides in the whole part of a per-instance number the shader already reads, so all races draw with the one
+crowd material and program, and a battle draws only the batches of the races in it.
+
+**Armour of each race.** Beyond the heads and trunks, every race has its own upper arms (with the pauldrons), lower legs (greaves
+and boots) and hips, for mail, plate and cloth, and its own trained-soldier pauldron trim (`kit.arm`), so an army reads as a
+different army by its outline and not only by its tint:
+- **Elves**: flowing scale under rings of leaf-shaped lames, pauldrons swept up over the shoulder in a gilt-crested curve, slim
+  greaves drawn to a leaf over the knee with a gilt line down the shin, long soft boots, a surcoat split to below the knee.
+- **Dwarves**: massive pauldrons of banded iron (bronze at every lame, a comb along the top, rivets), the rerebrace in bronze-
+  edged bands, a chain skirt to the knee with a great bronze belt plate, heavy wide boots with folded cuffs and bronze bands,
+  banded greaves under a round knee cop.
+- **Orcs**: bare green arms daubed with war paint, crude faceted pauldrons with a jagged edge and spikes, tusks and bone hung on
+  thongs, scavenged plates strapped askew over the shins with a spiked knee, a loincloth of the house's rag torn in points with
+  odd iron plates swinging at the hips.
+- **Undead**: bare bone (the arm's and shin's bones, the pelvis) under rotted sleeves and corroded plate grown through with a ridge
+  of vertebrae and horns of bone, a cold light set in each pauldron, half-greaves eaten through, a shroud in strips at the hips.
+The far bake of each kind takes the race's parts too. Each race's part is one more batch only while that race is in view (a
+4-race battle draws a handful more instanced batches; the counts are in the round's report).
 
 ## Hero Game Mode
 
@@ -833,10 +898,11 @@ a rider, then a lancer); rams and catapults roll out as in the war modes. Both h
 a soldier has about 3.4 times the health and damage of a round-one soldier and a wave is five times as big.
 
 **The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
-alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
+alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target and wheels round for another pass (never standing still beside it: his Momentum), sweeps when two foes or a rival hero are about to go past, Lance Charges at a knot of foes and Calls the Charge on a knot of seven or more (five when his own men are in the thick of it), a wounded
 rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
 looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
-close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
+close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall, holds the Whirlwind in a knot of foes
+or on a rival hero while his Rage lasts, and Executes a foe in reach who is low enough to die of it, chaining kills), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
 fight (to a sword, foes in an enemy courtyard behind a gate that will not open for them, with no breach, are out of reach), and spend
 their talents from a list for each class. Their stamina drains and returns as a person's does. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
@@ -1091,8 +1157,8 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` and its numbers, in `src/talents.js`).
   Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Challenge is stored, and when Challenge ends
   the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
-  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
-  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Arrow Volley): zoomed in, the bow draws
+  the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): every foe an Execute kills heals 8% of your health (Reaper gives 0.6% for each
+  foe each cut of a Whirlwind, up to 4). Ranger, *Steady Aim* (instead of Arrow Volley): zoomed in, the bow draws
   25% faster and the arrow flies 25% faster, and Power Shot stays your Q. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
   harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
   Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
@@ -1108,8 +1174,28 @@ apart, and a sigil that would vanish on its field is drawn in silver or black in
 the browser with the rest of the account. Your arms fly on your castle's hanging banners, flags and levy standards; your
 soldiers wear them on their surcoats and shields; your hero carries them on his shield (the Knight's kite is painted with them
 whole, the other classes show the sigil on a plaque) and a Renown cloak carries the sigil on its back; the lobby and the
-scoreboard show each lord's arms as a small shield. AI lords keep their house's emblem (tower, crossed swords, oak, sun; the
-raiders a skull), which is now the same on their banners and on their soldiers. In the world the arms are cells of the soldiers'
+scoreboard show each lord's arms as a small shield. AI lords of the men keep their house's emblem (tower, crossed swords, oak,
+sun; the raiders a skull), which is now the same on their banners and on their soldiers.
+
+**Race heraldry.** Each race other than the men has six **sigils** of its own, free to all (`src/unlocks.js` RACE_SIGILS, painted
+in `src/racesigils.js`): the Elves a crescent moon with a leaf, a swan wing, a nine-rayed star in a ring of leaves, an arrow through
+a ring, an oak crown and a leaping hind; the Dwarves an anvil and hammer, a peak with a rune, a forge flame, crossed mattocks, a
+bearded face and stacked ingots; the Orcs a fanged maw, crossed cleavers, a broken skull, a jagged war-axe, three claw slashes
+and a great tusk; the Undead a crowned skull, an eclipse, a raven on bones, a broken sword, a hollow lantern and a coffin cross.
+All are our own designs. Each race paints in its own **hand** (worked into the sigil's pixels as it is painted): the Orcs daub
+theirs, edges bitten by the brush and paint running in drips; the Elves and Dwarves engrave and gild theirs (a bevel lit from
+above, a line cut inside the edge); the Undead's are faded and flaking. Each race also flies two **banner cuts** of its own
+(`src/bannercut.js`; the men's swallowtail is open to all): the Elves' long swallow-tailed silk pennant edged in gilt leaves and a
+silk drawn to one leaf point; the Dwarves' square standard in a riveted iron frame with a band of runes and a stepped plate banded
+in bronze; the Orcs' ragged hide, laced and daubed, and a war rag hacked into strips; the Undead's holed and stained shroud and a
+pall in five tongues. The cut is painted into the banner's alpha, so the castle's banners, flags and levy standards all show it,
+and the levy standards' poles carry the race's furniture (`src/upgrades.js`: a leaf blade and gilt crescent, a framed cloth and a
+hammer head, spikes, a skull and horns, a bone crossbar and a crowned skull). The lobby and scoreboard chips use the race's shield
+(heater, leaf, cut-cornered square, round planks, cracked heater). In the Renown panel, *Your arms* shows your army's race (the
+menu's *Your army*) first, its sigils and cuts, with tabs to look at the others'; the cut is kept with the account (`bs`, '' is the
+race's own first) and travels with the rest of your look online (sanitised to known ids). With no sigil chosen a lord of a race
+bears one of its sigils (by castle). **AI lords** of a race bear one of its sigils at random: the host draws them once
+(`aiSigils`, never with `Math.random`) and sends them with the races in the match start, so every screen flies the same arms. In the world the arms are cells of the soldiers'
 emblem atlas (`src/unittex.js`): eight for the houses and eight painted at the start of a match for the lords who bear their own,
 their tint and sigil colour given to the shader as two small uniform arrays, so no draw call or material is added.
 
@@ -1184,10 +1270,10 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
-| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow |
+| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow. Berserker: with 20 Rage or more, hold to Whirlwind instead (spin and cut all round you while Rage lasts) |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
 | Q | Class ability: attack (Ranger: Power Shot draws and looses itself; with the Arrow Volley talent, hold to place the circle, let go to loose it) |
-| R | Class ability: defence |
+| R | Class ability: defence (the Berserker's Leap, the Ranger's Sniper Shot and the Cavalier's Lance Charge are attacks on R: hold to aim, let go; R again reins the Cavalier in) |
 | Z | Ultimate, once its ring is full (it charges as you fight; aimed ones: hold to place the circle, let go to cast) |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
@@ -1354,6 +1440,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
 | `src/knight.js` | The Knight's kit: Retribution (Wrath, the shockwave), Shield Throw, Challenge, Banner of the Realm; their looks, sounds and bot rules |
 | `src/knighthud.js` | The Wrath bar and the "Challenged!" warning on the HUD |
+| `src/cavalier.js` | The Cavalier's own: Momentum and its horseshoe gauge, Sweeping Strike and its blade of light, Call the Charge (the horn, the cry, the knights' ride), when the bots use them; numbers in `CAV` |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |

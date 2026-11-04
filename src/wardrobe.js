@@ -4,8 +4,9 @@
 import { progress, trackInfo, renownTo, rankOf, BESTS, MASTERY_CLASSES } from './progress.js';
 import { ITEMS, ITEM_BY_KEY, itemTitle } from './unlocks.js';
 import { previewCanvas, armsBanner } from './cosmetics.js';
-import { FREE_SIGILS, BANNERS, DIVISIONS, TINTS, sigilName } from './unlocks.js';
-import { armsOf, armsCanvas, css } from './heraldry.js';
+import { FREE_SIGILS, BANNERS, DIVISIONS, TINTS, sigilName, RACE_SIGILS, stylesFor, bannerStyleOf } from './unlocks.js';
+import { armsOf, armsCanvas, css, flownArms } from './heraldry.js';
+import { RACES, isRaceId, raceName } from './races.js';
 import { TEAM_COLORS } from './config.js';
 import { CLASSES } from './classes.js';
 import { clockText } from './matchlog.js';
@@ -88,6 +89,13 @@ const CSS = `
 .wd-sig .nw { position: absolute; top: 1px; right: 1px; padding: 0 3px; font: 700 8px/1.4 Cinzel, serif; background: #8c1f24; color: #f6e8c0; border-radius: 2px; }
 .wd-div canvas { width: 30px; height: 36px; }
 .wd-tint { width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px solid rgba(60,40,15,0.5) !important; box-shadow: inset 0 -3px 6px rgba(0,0,0,0.25); }
+.wd-races { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 6px; }
+.wd-races button { padding: 2px 9px; font: 600 11.5px Cinzel, serif; letter-spacing: 0.04em; background: rgba(255,255,255,0.3) !important; color: #2a1f14 !important; border: 1px solid rgba(90,60,20,0.35) !important; border-radius: 10px; }
+.wd-races button.on { background: linear-gradient(#fff6d2, #efd88f) !important; border-color: #b8862a !important; }
+.wd-races button i { font-style: normal; opacity: 0.7; font-weight: 400; }
+.wd-cut canvas { width: 26px; height: 52px; }
+.wd-cut { width: 74px; }
+.wd-cut b { max-width: 72px; }
 .wd-tint.worn { border: 3px solid #fff6d2 !important; box-shadow: 0 0 0 2px #b8862a, 0 0 8px rgba(224,180,76,0.8); }
 
 `;
@@ -170,7 +178,8 @@ function render() {
   const worn = el('div', 'wd-worn');
   const fig = (label, canvas) => { const f = el('figure'); f.append(canvas, el('figcaption', '', label)); return f; };
   const cloak = ITEM_BY_KEY[`cloak:${a.equipped.cloak}`];
-  worn.append(fig(a.equipped.banner ? `${sigilName(a.equipped.banner)} banner` : 'House banner', armsBanner(armsOf(a.equipped), 56, 84, 0)));
+  const fl = flownArms(armsOf(a.equipped), myRace(), 0);
+  worn.append(fig(`${sigilName(fl.sig)} banner`, armsBanner(fl, 56, 84, 0)));
   worn.append(fig(cloak ? cloak.name : 'No cloak', cloak ? previewCanvas(cloak, 60, 84, 0) : previewCanvas({ kind: 'cloak', id: 'none' }, 60, 84, 0)));
   top.append(tot, nx, worn);
   sc.append(top);
@@ -190,7 +199,7 @@ function render() {
   cg.append(defC);
   for (const it of ITEMS.filter((x) => x.kind === 'cloak')) cg.append(itemCard(a, it, a.equipped.cloak, wear('cloak')));
   left.append(cg);
-  left.append(el('div', 'wd-note', 'In first person you cannot see your own back: a cloak shows on your hero to the other players of an online game, with your sigil on it. Your arms fly over your castle and show on your shield and your soldiers. AI lords keep the arms of their houses.'));
+  left.append(el('div', 'wd-note', 'In first person you cannot see your own back: a cloak shows on your hero to the other players of an online game, with your sigil on it. Your arms fly over your castle and show on your shield and your soldiers. AI lords of the men keep the arms of their houses; an AI lord of another race bears one of its sigils.'));
   // mastery
   right.append(el('h3', 'section', 'Class mastery'));
   for (const id of MASTERY_CLASSES) {
@@ -241,29 +250,43 @@ function render() {
   p.append(sc);
 }
 
-// The arms: the banner and shield they make, then a row of sigils (the house's own, the free ones, then the ones Renown unlocks: locked ones say
-// how far off they are), the divisions of the field and the second tints. A click wears it at once (progress.js keeps it).
+// your army's race as the menu keeps it (main.js 'cw-race'): the arms are shown as that race flies them
+function myRace() {
+  try { const r = localStorage.getItem('cw-race'); return isRaceId(r) ? r : 'human'; } catch (e) { return 'human'; }
+}
+let viewRace = null;   // (the race whose sigils and banner cuts are shown: your army's until you look at another's)
+
+// The arms: the banner and shield they make (as your army's race flies them), then the sigils: a race's own set (your army's first; the others a
+// click away), then the common ones (the house's own, the free ones, then the ones Renown unlocks: locked ones say how far off they are); the cut of
+// the banner (the race's own two, or the men's swallowtail), the divisions of the field and the second tints. A click wears it at once.
 function armsSection(a) {
   const box = el('div');
   const h = el('h3', 'section', 'Your arms'); h.append(el('small', '', 'on your castle, your soldiers, your shield and your cloak'));
   box.append(h);
-  const arms = armsOf(a.equipped), house = TEAM_COLORS[0];
+  const race = myRace(), view = viewRace || race;
+  const arms = armsOf(a.equipped), house = TEAM_COLORS[0], flown = flownArms(arms, race, 0);
   const wrap = el('div', 'wd-arms');
-  const pv = el('div', 'pv'); pv.title = 'Your banner and your shield, in the colour of your house';
-  pv.append(armsBanner(arms, 64, 128, 0), armsCanvas(arms, house, 0, 84, 100));
+  const pv = el('div', 'pv'); pv.title = `Your banner and your shield as your army (${raceName(race)}) flies them, in the colour of your house`;
+  pv.append(armsBanner(flown, 64, 128, 0), armsCanvas(flown, house, 0, 84, 100, race));
   const ctl = el('div');
   const wear = (kind, id) => { progress.equip(kind, id); progress.markSeen(); render(); };
   const head = (text, note) => { const e = el('h4', '', text); if (note) e.append(el('small', '', note)); return e; };
-  // sigils
-  ctl.append(head('Sigil', 'the free ones, and more with Renown'));
-  const sr = el('div', 'wd-row');
+  // which race's sets are shown
+  const tabs = el('div', 'wd-races');
+  for (const r of RACES) {
+    const b = el('button', r.id === view ? 'on' : '', r.name); b.type = 'button'; b.dataset.race = r.id;
+    if (r.id === race) b.append(el('i', '', ' · your army'));
+    b.addEventListener('click', () => { viewRace = r.id; render(); });
+    tabs.append(b);
+  }
+  ctl.append(head('Race', 'its own sigils and banners: your army is chosen on the menu'), tabs);
   const nextKey = (trackInfo(a).next || {}).key;
-  const sig = (id, name, item) => {
+  const sig = (id, name, item, shield = 'human') => {
     const open = !item || a.unlocked.includes(item.key);
     const b = el('button', 'wd-sig wd-card' + (arms.sig === id ? ' worn' : '') + (open ? '' : ' locked'));
     b.type = 'button';
     b.dataset.item = item ? item.key : `sigil:${id}`;
-    b.append(armsCanvas({ ...arms, sig: id }, house, 0, 68, 82), el('b', '', name));
+    b.append(armsCanvas({ ...arms, sig: id || (shield !== 'human' ? flownArms({ ...arms, sig: '' }, shield, 0).sig : '') }, house, 0, 68, 82, shield), el('b', '', name));
     if (open) {
       b.title = arms.sig === id ? `${name}: worn` : `${name}: click to bear it`;
       b.addEventListener('click', () => wear('banner', id));
@@ -276,17 +299,39 @@ function armsSection(a) {
     }
     return b;
   };
-  sr.append(sig('', 'House', null));
+  // the race's own sigils (free), on its shield
+  if (RACE_SIGILS[view]) {
+    ctl.append(head(`${raceName(view)} sigils`, 'free, painted in their own hand'));
+    const rr = el('div', 'wd-row');
+    for (const s of RACE_SIGILS[view]) { const b = sig(s.id, s.name, null, view); b.title = `${s.name}: ${s.blurb}`; rr.append(b); }
+    ctl.append(rr);
+  }
+  ctl.append(head('Common sigils', 'any race may bear them; more with Renown'));
+  const sr = el('div', 'wd-row');
+  sr.append(sig('', race === 'human' ? 'House' : 'Race', null, race));
   for (const s of FREE_SIGILS) sr.append(sig(s.id, s.name, null));
   for (const bn of BANNERS) sr.append(sig(bn.id, bn.name, ITEM_BY_KEY[`banner:${bn.id}`]));
   ctl.append(sr);
+  // the cut of the banner: the race's own (the first is the default), or the men's
+  ctl.append(head('Banner', view === race ? 'its cut and what its pole carries' : `the cuts ${raceName(view)} fly`));
+  const br = el('div', 'wd-row');
+  const worn = bannerStyleOf(arms.bs, race);
+  for (const st of stylesFor(view)) {
+    const on = view === race ? worn === st.id : arms.bs === st.id;
+    const b = el('button', 'wd-sig wd-cut' + (on ? ' worn' : ''));
+    b.type = 'button'; b.dataset.bs = st.id; b.title = `${st.name}: ${st.blurb}${view !== race && st.race !== 'human' ? ` (flown by ${raceName(view)}: your army flies its own until you play them)` : ''}`;
+    b.append(armsBanner({ ...flownArms(arms, view, 0), bs: st.id }, 26, 52, 0), el('b', '', st.name));
+    b.addEventListener('click', () => wear('bs', st.id));
+    br.append(b);
+  }
+  ctl.append(br);
   // the field
   ctl.append(head('Field', 'how it is divided'));
   const dr = el('div', 'wd-row');
   for (const d of DIVISIONS) {
     const b = el('button', 'wd-sig wd-div' + (arms.div === d.id ? ' worn' : ''));
     b.type = 'button'; b.dataset.div = d.id; b.title = d.name;
-    b.append(armsCanvas({ ...arms, div: d.id, sig: arms.sig || '' }, house, 0, 60, 72), el('b', '', d.name));
+    b.append(armsCanvas({ ...flown, div: d.id }, house, 0, 60, 72, race), el('b', '', d.name));
     b.addEventListener('click', () => wear('div', d.id));
     dr.append(b);
   }
