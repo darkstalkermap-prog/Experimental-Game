@@ -920,7 +920,7 @@ export class Game {
       return;
     }
     // soldiers may block with shield or weapon
-    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && !info.power && target.tryBlock(attacker, info)) {   // (a Power Shot goes through shields)
+    if (!target.isPlayer && target.tryBlock && !target.shieldOut && !info.splash && !info.magic && !info.power && target.tryBlock(attacker, info)) {   // (a Power Shot goes through shields; a Knight lord whose shield is in the air has none)
       const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
       this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
       this.audio.play('block', target.pos);

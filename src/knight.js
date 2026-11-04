@@ -451,7 +451,7 @@ function tossLook(A, who, from) {
     const M = materials();
     slot.mesh.material = M.team[who ? who.team : 0] || M.team[0];
     slot.mesh.visible = true;
-    L = { slot, who, pos: from.clone(), to: from.clone(), home: false, speed: T.speed, back: T.back, wait: 0, t: 0, acc: 0, spin: Math.random() * 6, step: tossLookStep };
+    L = { slot, who, pos: from.clone(), to: from.clone(), home: false, speed: T.speed, back: T.back, wait: 0, t: 0, acc: 0, spin: 0, step: tossLookStep };   // (no gameplay dice in a look: it is made outside quietly)
     A.tosses.push(L);
     A.ultFx.push(L);
   }
