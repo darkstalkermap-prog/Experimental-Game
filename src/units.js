@@ -461,6 +461,7 @@ export class Unit {
       if (t) this.target = t;
       else if (charging) this.target = (far ? g.war.chargeFoe(this) : g.fieldFoe(this)) || null;
     }
+    if (this.tauntUntil > g.time && this.taunt && this.taunt.alive) this.target = this.taunt;   // (a Knight's Challenge: he must fight him, knight.js)
 
     if (!this.target || this.target.isStructure) {
       this.target = null;
@@ -853,6 +854,7 @@ export class Unit {
           const mult = (t.isStructure ? this.structMult : t.isSiege ? this.siegeBonus : 1) * (this.ranged ? 0.5 : 1) * (spear ? SPEAR.dmg : 1);
           const charge = this.mounted ? 1 + Math.max(0, Math.hypot(this.vel.x, this.vel.z) - 3) / 8 : 1;
           const check = spear && !t.isPlayer && this.meetsCharge(t);   // (judged before the blow: it may throw him back)
+          if (this.kit && this.wrath >= 1) this.game.abilities.retribution(this);   // (a lord who fights as a Knight, his Wrath full: the shockwave)
           this.game.damage(t, this.dmg * mult * charge * (0.85 + Math.random() * 0.3), this, { melee: true, attackDir: this.attackDir });
           if (check && t.alive) t.stagger(SPEAR.stagger, this);
         }

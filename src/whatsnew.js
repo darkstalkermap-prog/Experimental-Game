@@ -48,6 +48,16 @@ export const UPDATES = [
     ],
   },
   {
+    id: 16,
+    title: 'The Knight: blocking pays back',
+    items: [
+      'Retribution: every blow your shield blocks fills a Wrath bar under your stamina. When it is full your shield glints, and your next swing sends out a shockwave that hits everyone in front of you and throws soldiers back.',
+      'Q is now Shield Throw: the shield flies where you aim, bounces between up to three enemies and stuns each one, then comes back to your hand. You cannot block until you catch it.',
+      'R is now Challenge: every enemy within 12 m, heroes too, has to attack you for 3 seconds while you take half damage. Keep your shield up and your Wrath fills fast. A player you challenge sees a red tether and a warning.',
+      'The Knight\'s Ultimate is Banner of the Realm: plant your house\'s banner for 12 seconds. Allies near it heal, and enemies near it are slowed. Shield Bash and Bulwark are gone, and the talent tree follows the new abilities.',
+    ],
+  },
+  {
     id: 15,
     title: 'Better-looking weapons',
     items: [

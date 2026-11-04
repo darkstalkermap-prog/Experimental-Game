@@ -24,6 +24,7 @@ import { TALENT_PREFS } from './herobot.js';
 import { allied } from './teams.js';
 import { rigSetBow } from './models.js';
 import { ULT_AI } from './ultimate.js';
+import { KNIGHT, knightTossPick } from './knight.js';
 import { rageTick, botSpin, execTarget, lordBits, lordFlags } from './berserker.js';
 
 // the class each style of lord fights as (rivals.js PERSONAS), and the plain lords' by house (Aldmoor, Varr, Elden, Sol)
@@ -420,13 +421,14 @@ export class LordKit {
     const gap = foe ? Math.hypot(foe.pos.x - u.pos.x, foe.pos.z - u.pos.z) - (foe.radius || 0.4) : Infinity;
     const hpf = u.hp / u.maxHp, heavy = this.recent > u.maxHp * 0.12, need = this.need;
     switch (u.classId) {
-      case 'knight':
-        if (r && (n.c8 >= 3 + need || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r', this.look()); break; }
-        // Shield Bash: at hand on a knot or a rival hero, or a run at one up to 40 m off
-        if (q && foe && gap < 5 && (((foe.isPlayer || foe.kit) && gap < 4) || this.countAt(u.pos.x + Math.sin(u.yaw) * 3, u.pos.z + Math.cos(u.yaw) * 3, 3.4) >= 2 + need)) {
-          this.cast('q', this.aimAt(foe, 1e3, 1, V2), foe.pos.clone());
-        } else if (q && hpf > 0.4 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
+      case 'knight': {
+        // Challenge: on a knot of foes at hand, a rival hero close, or when pressed (they turn on him, and he takes half the damage)
+        if (r && hpf > 0.25 && (n.c8 >= 3 + need || n.heroNear < 6 || (heavy && n.c5 >= 2))) { this.cast('r', this.look()); break; }
+        // Shield Throw: at a rival hero or a knot of foes it can bounce through, with a clear line (knight.js)
+        const o = q ? knightTossPick(this, u, need, 40) : null;
+        if (o) this.cast('q', this.aimAt(o, KNIGHT.toss.speed, 1, V2));
         break;
+      }
       case 'berserker': {
         if (r && hpf > 0.35 && !u.buffs.has('whirl') && this.leapIn(4 + need)) break;
         const o = q && execTarget(this, u);   // Execute: a foe in reach low enough to die of it, else a rival hero at hand

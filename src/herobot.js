@@ -14,6 +14,7 @@ import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
+import { KNIGHT, knightTossPick, knightGuard } from './knight.js';
 import { botSpin, execTarget } from './berserker.js';
 import { XARROW, xarrowAim, xarrowMark, hawkSpot } from './ranger.js';
 import { sweepNow } from './cavalier.js';
@@ -21,7 +22,7 @@ import { sweepNow } from './cavalier.js';
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
-  knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
+  knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ricochet', 'kn_phalanx', 'kn_avenge'],
   berserker: ['bz_headsman', 'bz_quake', 'bz_seethe', 'bz_scars', 'bz_dervish', 'bz_meteor', 'bz_reaper'],
   ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_keen', 'rg_wildfire', 'rg_talons', 'rg_sniper'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
@@ -321,6 +322,7 @@ export class HeroBot {
     const p = this.p, st = this.style, me = p.pos, foes = this.foes, dist = this.dist;
     const atHome = this.retreat && this.homeD <= 16;
     if (this.retreat && !atHome) return null;
+    if (p.chalBy && p.chalUntil > this.g.time && p.chalBy.alive) return p.chalBy;   // (a Knight's Challenge: he must fight him, knight.js)
     let best = null, bs = 1e9;
     const friendHero = this.friends.some((f) => f.isPlayer);
     const g = this.g, mine = st.kind === 'melee' ? g.castleAt(me) : null;
@@ -416,6 +418,7 @@ export class HeroBot {
         this.guardUntil = Math.max(this.guardUntil, now + hold);
       }
     }
+    knightGuard(this, now);   // (a Knight who Challenges keeps his shield up until his Wrath is full: knight.js)
   }
 
   // ---------------------------------------------------------------------------------------------- potions
@@ -500,13 +503,15 @@ export class HeroBot {
     const gap = foe ? this.gap : Infinity;
     const heavy = this.recent > p.maxHp * 0.12;   // taking a beating
     switch (p.classId) {
-      case 'knight':
-        if (r && (n.c8 >= 3 + need || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r'); break; }
-        // Shield Bash: at hand on a group or a rival hero; or a run at a rival hero, or a knot of foes, up to 40 m off
-        if (q && foe && gap < 5 && ((foe.isPlayer && gap < 4) || this.countAt(p.pos.x + Math.sin(p.yaw) * 3, p.pos.z + Math.cos(p.yaw) * 3, 3.4) >= 2 + need)) {
-          this.aimAtFoe(foe, 1e3); this.cast('q', foe.pos.clone());
-        } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
+      case 'knight': {
+        // Challenge: on a knot of foes at hand, a rival hero close, or when pressed (it halves the damage, and the blows it draws onto the
+        // raised shield fill his Wrath: knightGuard keeps the shield up); not with the shield away
+        if (r && !p.shieldOut && hpf > 0.25 && (n.c8 >= 3 + need || (n.heroes8 && this.heroGap < 6) || (heavy && n.c5 >= 2))) { this.cast('r'); break; }
+        // Shield Throw: at a rival hero or a knot of foes within 45 m it can bounce through, with a clear line (knight.js)
+        const o = q ? knightTossPick(this, p, need) : null;
+        if (o) { this.aimAtFoe(o, KNIGHT.toss.speed, 0.5); this.cast('q'); }   // (a spinning shield is wide: a steadier aim than an arrow's)
         break;
+      }
       case 'berserker': {
         if (r && hpf > 0.4 && !p.buffs.has('whirl') && this.leapIn(4 + need)) break;
         // Execute: a foe in reach low enough to die of it (a kill gives it back: look again soon, for the next), else a rival hero at hand

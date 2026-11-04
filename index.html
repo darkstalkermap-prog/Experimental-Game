@@ -207,6 +207,18 @@
   #hpText { position: absolute; inset: 0; text-align: center; font-size: 14px; line-height: 17px; text-shadow: 0 1px 2px #000; }
   #stbar { height: 6px; margin-bottom: 4px; }
   #xpbar { height: 6px; margin-bottom: 6px; }
+  /* the Knight's Wrath (knighthud.js): under the stamina, steel-blue filling to gold; full, it glows (his next swing is the shockwave) */
+  #wrbar { height: 9px; margin-bottom: 4px; }
+  #wrbar .fill { width: 0; background: linear-gradient(90deg, #7d93c4, #e8c46a); transition: width 0.15s; }
+  #wrbar span { position: absolute; right: 4px; top: -2px; font-size: 9.5px; line-height: 13px; color: #f2e6c8; text-shadow: 0 1px 2px #000; letter-spacing: 1px; text-transform: uppercase; }
+  #wrbar.full { box-shadow: 0 0 9px 2px rgba(255,214,110,0.75); animation: wrathglow 0.8s ease-in-out infinite alternate; }
+  #wrbar.full .fill { background: linear-gradient(90deg, #ffd56a, #fff1b8); }
+  #wrbar.full span { color: #4a3210; text-shadow: none; }
+  @keyframes wrathglow { from { box-shadow: 0 0 4px 1px rgba(255,214,110,0.45); } to { box-shadow: 0 0 12px 3px rgba(255,214,110,0.95); } }
+  /* a Knight's Challenge on you: a red call at the top of the screen, the arrow pointing at him */
+  #chalWarn { position: absolute; left: 50%; top: 21%; transform: translateX(-50%); padding: 5px 16px; background: rgba(60,0,0,0.6); border: 1px solid #ff5a40; border-radius: 6px; color: #ffd8d0; font-size: 15px; white-space: nowrap; pointer-events: none; box-shadow: 0 0 14px rgba(255,60,30,0.5); }
+  #chalWarn b { font-family: Cinzel, serif; font-size: 20px; color: #ff6a50; letter-spacing: 1px; margin-right: 6px; }
+  #chalWarn .arrow { display: inline-block; margin-left: 10px; font-style: normal; color: #ff6a50; font-size: 16px; }
   #xpFill { background: linear-gradient(#b79bff, #6a47d6); width: 0; }
   #xpbar.max #xpFill { background: linear-gradient(#ffe08a, #d9a521); width: 100% !important; }
   #xpbar.glow { animation: xpglow 1.4s ease-out; }
@@ -1027,7 +1039,7 @@
       <b>Space at a wall</b><span>Jump at a castle wall to climb over the battlements onto the wall walk (an enemy's is slower)</span>
       <b>C (hold)</b><span>Duck: harder to hit, slower</span>
       <b>Left click</b><span>Swing your sword (hold to keep swinging) · hold and release to shoot the bow</span>
-      <b>Right click</b><span>Block with your shield: stops blows from the front; just in time parries · aim bow · Berserker: with Rage, hold to Whirlwind instead · Ranger with the Sniper Shot talent: raise the scope, click to loose</span>
+      <b>Right click</b><span>Block with your shield: stops blows from the front; just in time parries (a Knight's blocks fill his Wrath: full, his next swing is a shockwave) · aim bow · Berserker: with Rage, hold to Whirlwind instead · Ranger with the Sniper Shot talent: raise the scope, click to loose</span>
       <b>1 / 2 / wheel</b><span>Sword &amp; shield / bow</span>
       <b>Q</b><span>Class ability: attack</span>
       <b>R</b><span>Class ability: mostly a defence (some are aimed: hold to place the circle, let go: the Ranger's Hunting Hawk; the Cavalier's Lance Charge, R again reins in)</span>

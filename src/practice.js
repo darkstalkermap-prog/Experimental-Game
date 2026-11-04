@@ -409,6 +409,7 @@ export class PracticeCourt {
   heal() {
     const p = this.g.player;
     p.hp = p.maxHp; p.stamina = 100; p.abilCd = { q: 0, r: 0, s: 0 }; p.ult = 1;   // (the Ultimate charged too, to try it)
+    if (p.classId === 'knight') { p.wrath = 1; p.wrathAt = this.g.time; }   // (and a Knight's Wrath, to try the shockwave: knight.js)
     p.arrows = PLAYER.maxArrows; p.potions = 3; p.lastHurt = -99;
     p.buffs.clear();
   }

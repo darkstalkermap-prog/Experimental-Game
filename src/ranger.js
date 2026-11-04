@@ -168,7 +168,7 @@ function hawkTick(A, e) {
     g.damage(v, e.dmg, e.p, { ability: 'Hunting Hawk', dir: V1.set(v.pos.x - c.x, 0, v.pos.z - c.z) });
     if (v.alive) {
       A.markFoe(v, e.mark);
-      if (v.isPlayer) v.buffs.add('slowed', e.slow, H.slowK);
+      if (v.isPlayer) v.buffs.add('slow', e.slow, 1 - H.slowK);   // (the one slow a hero has: Player.speedMult, as the Knight's banner)
       else if (v.slowT !== undefined) v.slowT = Math.max(v.slowT, e.slow);
     }
   }

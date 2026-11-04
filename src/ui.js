@@ -6,6 +6,7 @@ import { raceOf } from './races.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
 import { allied, colorName } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH, abilityOf } from './classes.js';
+import { updateKnightHud } from './knighthud.js';
 import { rageHud } from './berserker.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
@@ -824,6 +825,7 @@ export class UI {
     updateMomentumHud(p);   // (the Cavalier's horseshoe gauge, while he rides: cavalier.js)
     this.updateAbilities(dt);
     updateTalentHud(this, p);
+    updateKnightHud(this, p);   // (the Wrath bar, and the warning when a Knight has Challenged you: knighthud.js)
     $('crosshair').classList.toggle('block', p.blocking);
     this.updatePrompt();
     $('crosshair').classList.toggle('bow', p.weapon === 'bow');

@@ -8,6 +8,7 @@ import { limitShadow } from './shadows.js';
 import { TEAM_COLORS } from './config.js';
 import { VMU, kitMaterial, glowMaterial, glowTexture, syncKitFov } from './vmmat.js';
 import { handGeometry, armGeometry, shieldGeometry, bowGeometry, arrowGeometry, PAINT } from './vmkit.js';
+import { knightArm } from './knight.js';
 import { weaponGeometry, lanceGeometry, flaskGeometry, quiverGeometry } from './vmweapons.js';
 import { Mesher, paint, tone, PAT } from './vmgeo.js';
 import { armsOf } from './heraldry.js';
@@ -601,6 +602,7 @@ export class ViewModel {
       const sinceGuard = t - p.blockStart;   // a fresh guard thrusts out a little (the parry window): out over a few frames, back over a third of a second
       const shove = p.blocking ? clamp(sinceGuard / 0.06, 0, 1) * clamp(1 - sinceGuard / 0.35, 0, 1) : 0;
       this.place(L.grp, sp, ox + S.sx.step(0, dt) + 0.1 * bashZ, oy + S.sy.step(0, dt) - swapDip + this.landDip * 0.02 + 0.5 * bashZ * 0.1, oz + S.sz.step(0, dt) - 0.05 * shove + bashZ, S.srx.step(0, dt), S.sry.step(0, dt) + lx * 0.5, 0);
+      if (kite && knightArm(this, p, t, L)) L.grp.updateMatrix();   // (Shield Throw: the arm flings the shield, hangs empty, catches it: knight.js)
       // the left hand hauling up a wall
       if (climbW > 0.02) {
         const ph = p.climb ? Math.sin((p.climb.t / Math.max(0.1, p.climb.dur)) * 13 + Math.PI) : 0;

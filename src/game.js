@@ -25,6 +25,7 @@ import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
 import { ultGain, dealtWeight } from './ultimate.js';
+import { wrathGain } from './knight.js';
 import { rageHit } from './berserker.js';
 import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
@@ -923,16 +924,17 @@ export class Game {
       return;
     }
     // soldiers may block with shield or weapon
-    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && target.tryBlock(attacker, info)) {
+    if (!target.isPlayer && target.tryBlock && !target.shieldOut && !info.splash && !info.magic && target.tryBlock(attacker, info)) {   // (a Knight lord whose shield is in the air has none)
       const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
       this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
       this.audio.play('block', target.pos);
       if (attacker.isPlayer) this.deliver(attacker, { k: 'fb', text: 'Blocked' });
+      if (target.kit) wrathGain(target, 'lord');   // (a lord who fights as a Knight: his Wrath, knight.js)
       return;
     }
     // heroes guard with their shield: a blow from in front is stopped (raising the guard just as it lands parries, and the
     // attacker reels), while it costs stamina; with too little left, or against arrows and spells, the shield only softens it
-    if (target.isPlayer && target.blocking && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {
+    if (target.isPlayer && target.blocking && !target.shieldOut && target.weapon === 'sword' && attacker && attacker.pos && !info.splash) {   // (a Knight whose shield is in the air has none: knight.js)
       const fx = Math.sin(target.yaw), fz = Math.cos(target.yaw);
       const dx = attacker.pos.x - target.pos.x, dz = attacker.pos.z - target.pos.z;
       const d = Math.hypot(dx, dz) || 1;
@@ -945,13 +947,16 @@ export class Game {
             this.fx.sparks(at, 22);
             this.audio.play('parry', target.pos);
             this.deliver(target, { k: 'fb', text: 'Parry!', good: true });
+            wrathGain(target, 'parry');   // (the Knight's Retribution: every blow on the shield fills his Wrath, knight.js)
           } else {
             this.fx.sparks(at, 10);
             this.audio.play('block', target.pos);
             this.deliver(target, { k: 'fb', text: 'Blocked' });
+            wrathGain(target, 'block');
           }
           return;
         }
+        wrathGain(target, 'soft');
         dmg *= 1 - target.blockPower;
         target.stamina = Math.max(0, target.stamina - 8);
         this.fx.sparks(at, 8);

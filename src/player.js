@@ -349,7 +349,7 @@ export class Player {
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.get('slowed') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (1 - this.buffs.get('slow')) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = abilityOf(this, slot); return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   // is the ability in this slot not ready yet (Q and R: the cooldown; the Ultimate: the charge)?
@@ -798,7 +798,7 @@ export class Player {
       // the horse has momentum and turns toward where you look
       let target = 0;
       sprint = input.down('ShiftLeft') && this.stamina > 5;
-      const haste = (this.buffs.get('haste') || 1) * (this.buffs.get('slowed') || 1);   // (the Ranger's hawk slows a horse too)
+      const haste = (this.buffs.get('haste') || 1) * (1 - this.buffs.get('slow'));   // (a slow, the Knight's banner or the Ranger's hawk, holds a horse back too)
       if (input.down('KeyW')) target = (sprint ? HORSE.gallop : HORSE.walk) * haste;
       if (input.down('KeyS')) target = -HORSE.back;
       const dv = target - this.rideSpeed;
@@ -895,7 +895,7 @@ export class Player {
   swordInput(dt, m) {
     const g = this.game;
     let atk = this.atk;
-    if (m.right && (!atk || atk.phase !== 'strike')) {
+    if (m.right && !this.shieldOut && (!atk || atk.phase !== 'strike')) {   // (no guard while a Knight's shield is in the air: knight.js)
       if (!this.blocking) this.blockStart = g.time;   // raising the guard opens a parry window
       this.blocking = true;
       if (atk) { this.atk = atk = null; this.swingT = -1; }
@@ -1413,6 +1413,7 @@ export class Player {
   meleeStrike(dir = this.atkDir) {
     const g = this.game;
     if (this.netClient) { g.net.toHost({ a: 'strike', ...this.poseMsg(), d: DIR_IDX[dir] }); return; }
+    if (this.wrath >= 1 && this.classId === 'knight') g.abilities.retribution(this);   // (a full Wrath bar: this swing sends out the shockwave, knight.js)
     const S = SWING;
     this.attackDir = DIRS.includes(dir) ? dir : 'right';
     const reach = (this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach) * (this.bigK ? 1 + (UNSTOP.reach - 1) * this.bigK : 1);   // (an Unstoppable Berserker reaches further)
