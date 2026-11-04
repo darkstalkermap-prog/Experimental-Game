@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { CASTLE } from './config.js';
 import { allied } from './teams.js';
+import { raceHeight } from './races.js';
 
 // where they stand on the (+,+) tower roof (castle-local metres, mirrored for the other three), and whether they face east
 export const ARCHER_SPOTS = [[22, 26.2, 0], [26.2, 22, 1], [26.2, 24, 1]];
@@ -26,7 +27,6 @@ class TowerArcher {
     this.name = 'Tower archer';
     this.pos = c.toWorld(t.sx * ax + t.ox, t.sz * az + t.oz, CASTLE.towerH);   // (ox, oz: a tower that stands off its corner, castle.js buildTower)
     this.radius = TOWER_ARCHER.radius;
-    this.height = TOWER_ARCHER.height;
     this.maxHp = TOWER_ARCHER.hp;
     this.hp = this.maxHp;
     this.armor = TOWER_ARCHER.armor;
@@ -36,6 +36,8 @@ class TowerArcher {
     this.alive = false;  // on and not down (what everyone that hurts things looks at)
   }
 
+  // (his race's height: races.js; asked each time, as the castle and its archers stand before the match's races are known)
+  get height() { return TOWER_ARCHER.height * raceHeight(this.team); }
   chest(out = new THREE.Vector3()) { return out.set(this.pos.x, this.pos.y + this.height * 0.7, this.pos.z); }
   aimPoint(out) { return out.set(this.pos.x, this.pos.y + this.height * 0.9, this.pos.z); }
 
@@ -88,10 +90,10 @@ export function tickArchers(c, dt) {
 // is there an archer of another side than `team` whose body this point is in? (pad widens him; skip: the ones to look past)
 export function archerAt(g, pt, team, pad, skip = null) {
   const top = CASTLE.baseY + CASTLE.towerH;
-  if (pt.y < top - 0.1 || pt.y > top + TOWER_ARCHER.height + 0.1) return null;   // (nowhere near a tower roof: the usual answer)
+  if (pt.y < top - 0.1 || pt.y > top + TOWER_ARCHER.height * 1.15 + 0.1) return null;   // (nowhere near a tower roof: the usual answer)
   for (const c of g.castles) {
     if (!c || !c.towerLevel || allied(c.team, team)) continue;
-    if (Math.abs(pt.y - c.center.y - CASTLE.towerH) > TOWER_ARCHER.height + 0.2) continue;
+    if (Math.abs(pt.y - c.center.y - CASTLE.towerH) > TOWER_ARCHER.height * 1.15 + 0.2) continue;
     const R = c.archerReach || CASTLE.H + 12;   // (how far from its middle a castle's towers stand: further on the hold's long wall, holdcastle.js)
     if (Math.abs(pt.x - c.center.x) > R || Math.abs(pt.z - c.center.z) > R) continue;
     for (const a of archersOf(c)) {

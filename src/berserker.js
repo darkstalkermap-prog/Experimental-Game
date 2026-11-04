@@ -128,7 +128,7 @@ export function flingTick(u, dt) {
   u.pos.x += u.vel.x * dt; u.pos.z += u.vel.z * dt;
   const L = WORLD.playHalf;
   u.pos.x = Math.max(-L, Math.min(L, u.pos.x)); u.pos.z = Math.max(-L, Math.min(L, u.pos.z));
-  P.resolve(u.pos, u.radius, u.pos.y, u.height, u.team);
+  P.resolve(u.pos, u.radius, u.pos.y, u.moveH ?? u.height, u.team);
   u.pos.y += F.vy * dt - 0.5 * WORLD.gravity * dt * dt;
   F.vy -= WORLD.gravity * dt;
   const ground = P.groundHeight(u.pos.x, u.pos.z, u.pos.y + 0.5);

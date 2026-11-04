@@ -289,6 +289,7 @@ export class Game {
 
     setRaces(setup.races);   // (each house's army's look, before any soldier is made: races.js; only the look, never a number of the battle)
     this.races = currentRaces();
+    this.aiSigils = Array.isArray(setup.sigils) ? setup.sigils : [];   // (the AI lords' sigils, of their races: races.js aiSigils)
     assignArms(this);   // (a lord's arms on their castle, their soldiers and their hero; AI houses keep theirs: heraldry.js)
     this.factions = this.castles.map((c, i) => {
       const human = this.humans.find((h) => h.team === i) || null;
@@ -804,7 +805,7 @@ export class Game {
   }
 
   pushOutOfWalls(castle) {
-    for (const u of this.units) if (u.alive && castle.inFootprint(u.pos, 2) && !u.post) this.physics.resolve(u.pos, u.radius, u.pos.y, u.height, u.team);
+    for (const u of this.units) if (u.alive && castle.inFootprint(u.pos, 2) && !u.post) this.physics.resolve(u.pos, u.radius, u.pos.y, u.moveH ?? u.height, u.team);
     for (const h of this.humans) {
       if (castle.inFootprint(h.pos, 2)) this.physics.resolve(h.pos, h.radius, h.pos.y, h.height, h.team);
     }

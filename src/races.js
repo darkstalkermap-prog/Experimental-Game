@@ -1,5 +1,5 @@
-// The race of each house's army: only how its soldiers look (Human, Elves, Dwarves, Orcs, Undead). Every number of the battle stays the
-// same whatever the race (health, damage, speed, reach, hitboxes, timing): the look is chosen here and drawn by models.js and
+// The race of each house's army (Human, Elves, Dwarves, Orcs, Undead): how its soldiers look, and how tall they stand (RACE_HEIGHT: what
+// can be hit). Every other number stays the same whatever the race (health, damage, speed, reach, radius, timing): the look is drawn by models.js and
 // raceshapes.js. Pure rules and state (no DOM, no three.js), shared by the menu, the lobby, the match start and the tests.
 //   A match's races: one id per castle (index = team). The raiders and the heroes keep the human look.
 export const RACES = [
@@ -27,6 +27,7 @@ function roll(n) {
   return fallback % n;
 }
 export const randomRace = () => RACE_IDS[roll(RACE_IDS.length)];
+export const lookRoll = roll;   // (the same dice for other looks: unlocks.js aiSigils)
 
 // A match's four races from what each castle's lord asked for (`wants`: a race id, or null for an AI lord or nobody) and what the
 // others are to be (`others`: 'random', 'same' (as the first race asked for) or 'human').
@@ -63,3 +64,8 @@ export const currentRaces = () => current.slice();
 export const raceOf = (team) => (Number.isInteger(team) && team >= 0 && team < 4 ? current[team] : 'human');
 // the races in the field, each once
 export const racesInPlay = () => [...new Set(current)];
+// How tall each race stands, on a man's 1 (raceshapes.js draws them so, models.js RACE_LOOK): the height the game measures a soldier by (what an
+// arrow can hit, his head, where he is aimed at), so a shot at the drawn head counts and a shot over a dwarf misses. Only the height: his reach,
+// radius, speed and every other number are a man's. (The men are 1, so a battle of men plays exactly as it always did.)
+export const RACE_HEIGHT = { human: 1, elf: 1.1, dwarf: 0.76, orc: 1.08, undead: 1 };
+export const raceHeight = (team) => RACE_HEIGHT[raceOf(team)] || 1;

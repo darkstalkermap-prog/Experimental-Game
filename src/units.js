@@ -11,6 +11,7 @@ import { mods } from './mods.js';
 import { groundMul } from './biometwist.js';
 import { giantStep, GIANT_FALL, giantHammerHead } from './giantmodel.js';
 import { quietly } from './modelkit.js';
+import { raceHeight } from './races.js';
 import { flingTick } from './berserker.js';
 
 const tmp = new THREE.Vector3();
@@ -74,7 +75,10 @@ export class Unit {
     this.cd = t.cd;
     this.mounted = !!t.mounted;
     this.radius = this.mounted ? 0.85 : 0.42 * (t.scale || 1);
-    this.height = this.mounted ? 2.75 : 1.85 * (t.scale || 1);
+    this.moveH = this.mounted ? 2.75 : 1.85 * (t.scale || 1);   // (the height the walls and roofs are tested against: a man's whatever his race, so he goes where he always went)
+    // the height an arrow can hit and his head is at: his race's (races.js; drawn so by models.js). The raiders, heroes and giants are men's size.
+    const hk = team === RAIDER_TEAM || stats.hero || t.giant ? 1 : raceHeight(team);
+    this.height = hk === 1 ? this.moveH : this.mounted ? 2.75 * (1 + (hk - 1) * 0.55) : this.moveH * hk;
     this.variant = stats.variant ?? Math.floor(Math.random() * 6);
     this.idleT = Math.random() * 10;
     this.attackDir = 'over';
@@ -155,9 +159,11 @@ export class Unit {
     this.model = m;
     if (this.mounted) {
       this.horse = buildHorse(team, this.variant, team !== RAIDER_TEAM);
+      const mt = this.horse.mount;
+      if (mt) { this.horse.root.scale.set(mt[0], mt[1], mt[2]); this.horse.seat = mt[1]; }   // (the race's mount: a finer, taller horse, a stout pony, a heavier beast; only drawn)
       this.mesh = new THREE.Group();
       this.mesh.add(this.horse.root);
-      m.root.position.set(0, SADDLE_Y + (m.seatLift || 0), -0.05);   // (a dwarf, drawn shorter, sits up to the saddle: models.js)
+      m.root.position.set(0, SADDLE_Y * (this.horse.seat || 1) + (m.seatLift || 0), -0.05);   // (a dwarf, drawn shorter, sits up to the saddle: models.js)
       this.mesh.add(m.root);
     } else {
       this.mesh = m.root;
@@ -779,7 +785,7 @@ export class Unit {
         else { this.pos.x = ox; this.pos.z = oz; }
       }
     }
-    P.resolve(this.pos, this.radius, this.pos.y, this.height, this.team, this.ghostT > 0, this.ghostT > 0);
+    P.resolve(this.pos, this.radius, this.pos.y, this.moveH, this.team, this.ghostT > 0, this.ghostT > 0);
     const ground = P.groundHeight(this.pos.x, this.pos.z, this.pos.y);
     // off a wall or a ledge (a drop far bigger than the step taken) he falls; walking down a slope, however steep and however fast he rides, he stays on
     // the ground (he used to come down at most 12 m/s and floated metres over a steep slope)

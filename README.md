@@ -777,8 +777,18 @@ The rules of who may sit where are `src/seats.js` (pure functions, with unit tes
 ## Army races
 
 Each house's army can be one of five **races**: **Human** (the look the game always had), **Elves**, **Dwarves**, **Orcs** or
-**Undead**. Only the look changes: every soldier keeps the same health, damage, speed, reach, hitbox and timing whatever its
-race, so a race never changes how a battle goes (the same seed plays the same battle with any races).
+**Undead**. A race changes the look and the **size** of its soldiers, nothing else: every soldier keeps the same health,
+damage, speed, reach, collision radius and timing whatever its race.
+
+**Sizes.** Each race stands at its own height, and what can be hit is what you see (`src/races.js` RACE_HEIGHT, drawn by
+`src/raceshapes.js` RACE_LOOK): **Dwarves** 0.76 of a man (1.41 m against 1.85), broad and stocky (1.3 wide); **Elves** 1.1 (2.04 m),
+slender; **Orcs** drawn 1.13 tall and bulky (1.2 wide) but hunched, the head carried low and forward, so they stand 1.08 (2.0 m);
+**Undead** a man's height, gaunt. The height the game measures follows it: an arrow over a dwarf's head misses, an arrow at an elf's
+drawn head is a headshot (the top 17%, as for every body), and archers aim at the drawn chest. Riders sit on their race's mount (an
+elf's finer, taller horse, a dwarf's stout pony, an orc's heavier beast: the horse's build only) and stand that much lower or higher;
+tower archers and siege crews take their race's height too. Walls, roofs and gates still test a soldier as a man-sized body, so every
+race goes where it always went. The men are 1: a battle of men plays exactly as before (the same seed, the same battle); a battle with
+other races differs where an arrow now hits or misses a taller or shorter soldier.
 
 - **Elves**: tall and slender, long faces with pointed ears and flowing hair; fine curved silver plate with gold leaf work, tall
   crested helms, long green cloaks, leaf-bladed swords and spears, almond shields and long recurved bows; white and grey horses.
@@ -803,10 +813,26 @@ for a single-player battle. The six heroes, the AI lords (who are drawn as heroe
 `Math.random`, which the battle's rules draw from). `src/raceshapes.js` holds each race's build (drawn proportions on the same
 rig and poses: the dwarf 0.88 tall and 1.2 wide with his head set high, so the upper half of it is still in the headshot zone of
 the man-sized body the game measures), skin, hair, faces (four more cells of the face atlas) and its own heads, trunks, weapons,
-shields, bows and cloaks, built only when a race is first worn. Parts a race has none of (the legs, arms and boots) are the
-men's, their bare metal and leather tinted in the shader for the race (silver, bronze, rusty black iron, verdigris): the race
-rides in the whole part of a per-instance number the shader already reads, so all races draw with the one crowd material and
-program, and a battle draws only the batches of the races in it.
+shields, bows and cloaks, built only when a race is first worn. Parts a race has none of (the thighs, forearms and the foot
+near by) are the men's, their bare metal and leather tinted in the shader for the race (silver, bronze, rusty black iron,
+verdigris): the race rides in the whole part of a per-instance number the shader already reads, so all races draw with the one
+crowd material and program, and a battle draws only the batches of the races in it.
+
+**Armour of each race.** Beyond the heads and trunks, every race has its own upper arms (with the pauldrons), lower legs (greaves
+and boots) and hips, for mail, plate and cloth, and its own trained-soldier pauldron trim (`kit.arm`), so an army reads as a
+different army by its outline and not only by its tint:
+- **Elves**: flowing scale under rings of leaf-shaped lames, pauldrons swept up over the shoulder in a gilt-crested curve, slim
+  greaves drawn to a leaf over the knee with a gilt line down the shin, long soft boots, a surcoat split to below the knee.
+- **Dwarves**: massive pauldrons of banded iron (bronze at every lame, a comb along the top, rivets), the rerebrace in bronze-
+  edged bands, a chain skirt to the knee with a great bronze belt plate, heavy wide boots with folded cuffs and bronze bands,
+  banded greaves under a round knee cop.
+- **Orcs**: bare green arms daubed with war paint, crude faceted pauldrons with a jagged edge and spikes, tusks and bone hung on
+  thongs, scavenged plates strapped askew over the shins with a spiked knee, a loincloth of the house's rag torn in points with
+  odd iron plates swinging at the hips.
+- **Undead**: bare bone (the arm's and shin's bones, the pelvis) under rotted sleeves and corroded plate grown through with a ridge
+  of vertebrae and horns of bone, a cold light set in each pauldron, half-greaves eaten through, a shroud in strips at the hips.
+The far bake of each kind takes the race's parts too. Each race's part is one more batch only while that race is in view (a
+4-race battle draws a handful more instanced batches; the counts are in the round's report).
 
 ## Hero Game Mode
 
@@ -1116,8 +1142,28 @@ apart, and a sigil that would vanish on its field is drawn in silver or black in
 the browser with the rest of the account. Your arms fly on your castle's hanging banners, flags and levy standards; your
 soldiers wear them on their surcoats and shields; your hero carries them on his shield (the Knight's kite is painted with them
 whole, the other classes show the sigil on a plaque) and a Renown cloak carries the sigil on its back; the lobby and the
-scoreboard show each lord's arms as a small shield. AI lords keep their house's emblem (tower, crossed swords, oak, sun; the
-raiders a skull), which is now the same on their banners and on their soldiers. In the world the arms are cells of the soldiers'
+scoreboard show each lord's arms as a small shield. AI lords of the men keep their house's emblem (tower, crossed swords, oak,
+sun; the raiders a skull), which is now the same on their banners and on their soldiers.
+
+**Race heraldry.** Each race other than the men has six **sigils** of its own, free to all (`src/unlocks.js` RACE_SIGILS, painted
+in `src/racesigils.js`): the Elves a crescent moon with a leaf, a swan wing, a nine-rayed star in a ring of leaves, an arrow through
+a ring, an oak crown and a leaping hind; the Dwarves an anvil and hammer, a peak with a rune, a forge flame, crossed mattocks, a
+bearded face and stacked ingots; the Orcs a fanged maw, crossed cleavers, a broken skull, a jagged war-axe, three claw slashes
+and a great tusk; the Undead a crowned skull, an eclipse, a raven on bones, a broken sword, a hollow lantern and a coffin cross.
+All are our own designs. Each race paints in its own **hand** (worked into the sigil's pixels as it is painted): the Orcs daub
+theirs, edges bitten by the brush and paint running in drips; the Elves and Dwarves engrave and gild theirs (a bevel lit from
+above, a line cut inside the edge); the Undead's are faded and flaking. Each race also flies two **banner cuts** of its own
+(`src/bannercut.js`; the men's swallowtail is open to all): the Elves' long swallow-tailed silk pennant edged in gilt leaves and a
+silk drawn to one leaf point; the Dwarves' square standard in a riveted iron frame with a band of runes and a stepped plate banded
+in bronze; the Orcs' ragged hide, laced and daubed, and a war rag hacked into strips; the Undead's holed and stained shroud and a
+pall in five tongues. The cut is painted into the banner's alpha, so the castle's banners, flags and levy standards all show it,
+and the levy standards' poles carry the race's furniture (`src/upgrades.js`: a leaf blade and gilt crescent, a framed cloth and a
+hammer head, spikes, a skull and horns, a bone crossbar and a crowned skull). The lobby and scoreboard chips use the race's shield
+(heater, leaf, cut-cornered square, round planks, cracked heater). In the Renown panel, *Your arms* shows your army's race (the
+menu's *Your army*) first, its sigils and cuts, with tabs to look at the others'; the cut is kept with the account (`bs`, '' is the
+race's own first) and travels with the rest of your look online (sanitised to known ids). With no sigil chosen a lord of a race
+bears one of its sigils (by castle). **AI lords** of a race bear one of its sigils at random: the host draws them once
+(`aiSigils`, never with `Math.random`) and sends them with the races in the match start, so every screen flies the same arms. In the world the arms are cells of the soldiers'
 emblem atlas (`src/unittex.js`): eight for the houses and eight painted at the start of a match for the lords who bear their own,
 their tint and sigil colour given to the shader as two small uniform arrays, so no draw call or material is added.
 

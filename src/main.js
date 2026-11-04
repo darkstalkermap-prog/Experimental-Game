@@ -29,6 +29,7 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
   warProblem, heroProblem, emptyTeams, reseat, colorWants, sideOfSeat, seatInUse } from './seats.js';
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { isRaceId, isOtherRaces, assignRaces, raceWants, sanitizeRaces } from './races.js';
+import { aiSigils, sanitizeSigils } from './unlocks.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
 import { sanitizeWar, warHills, menuPlan, planOf } from './warmode.js';
 import { SPECIALTY, isSpecialty, setSpecialWorld, specialRaces } from './specialty.js';
@@ -292,6 +293,7 @@ function begin(diff, setup = null, map = mapSize) {
   const qsRaces = new URLSearchParams(location.search).get('races');   // (?races=elf,dwarf,orc,undead: every house's race, for tests and to show them off)
   if (setup && qsRaces && setup.mode === 'single') setup.races = sanitizeRaces(qsRaces.split(','));
   if (setup && !setup.races) setup.races = assignRaces(raceWants((setup.players || []).map((p) => (p.me && !p.rc ? { ...p, rc: myRace } : p)), !!setup.hero), otherRaces, myRace);
+  if (setup && !setup.sigils) setup.sigils = aiSigils(setup.races);   // (the AI lords' sigils, of their races: heraldry.js)
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
   ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false, setup && setup.special);   // (War Mode: a hill for each side; a Specialty Battle: its own world)
   if (net) game.net = net;
@@ -752,11 +754,12 @@ $('startOnline').addEventListener('click', () => {
   const colors = assignColors(colorWants(players, !!hero));
   const races = assignRaces(raceWants(players, !!hero), otherRaces, myRace);   // (each house's army's race: the guests build the same looks)
   const empty = hero ? [] : emptyTeams(room.slots, players);
+  const sigils = aiSigils(races);   // (the AI lords' sigils: drawn here once, so every screen flies the same)
   const opts = matchOptions(hero ? [] : players.map((p) => p.team).concat(empty));   // (no rival lord for a castle a person holds, or nobody)
-  net.toAll({ k: 'start', diff: roomDiff, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors, races });
+  net.toAll({ k: 'start', diff: roomDiff, players, watch: watchers.map((w) => w.netId), map: mapSize, coop, obj: war ? 'war' : objective, war, opts, hero, empty, colors, races, sigils });
   const me = players.find((p) => p.netId === null);   // (none: the host watches, and simulates the battle without a hero of its own)
   begin(roomDiff, { mode: 'host', spectator: !me, localTeam: me ? me.team : 0, players: players.map((p) => ({ ...p, me: p === me })), watchers: watchers.filter((w) => w.netId !== null),
-    coop: !hero && coop, objective, hero, war, empty, colors, races, options: opts });
+    coop: !hero && coop, objective, hero, war, empty, colors, races, sigils, options: opts });
 });
 
 $('joinBtn').addEventListener('click', async () => {
@@ -793,7 +796,7 @@ $('joinBtn').addEventListener('click', async () => {
       const hero = d.hero ? { win: HERO.modes[d.hero.win] ? d.hero.win : 'kills', size: heroSize(d.hero.size), seats: cleanSeats(d.hero.seats) } : null;
       const players = d.players.map((p) => ({ team: p.team, hs: p.hs, name: p.name, cls: p.cls, cos: sanitizeLoadout(p.cos), me: p === me }));
       const empty = Array.isArray(d.empty) ? d.empty.filter((t) => Number.isInteger(t) && t >= 0 && t < 4) : [];
-      begin(isDiff(d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), races: sanitizeRaces(d.races), options: sanitizeOptions(d.opts) }, d.map || 'medium');
+      begin(isDiff(d.diff) ? d.diff : 'normal', { mode: 'client', spectator: watching, localTeam: me ? me.team : 0, players, coop: !!d.coop && !hero, objective: OBJECTIVES[d.obj] ? d.obj : 'conquest', hero, war: d.obj === 'war' && !hero ? sanitizeWar(d.war) : null, empty, colors: sanitizeColors(d.colors), races: sanitizeRaces(d.races), sigils: sanitizeSigils(d.sigils, d.races), options: sanitizeOptions(d.opts) }, d.map || 'medium');
     }
   };
   net.on('data', guestData);
