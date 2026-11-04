@@ -735,10 +735,11 @@ export class HeroBot {
     this.go = p.stamina > 8 && d > 4 ? 2 : 1;
     this.face = close ? 'target' : 'way';
     if (!close) return;
-    if (d < 3.2 && ahead < 0.2) this.go = 0;   // beside it: stand and strike
-    else if (ahead < -0.3 && d < 9) {          // just rode past it
+    const pass = !!p.mods.momentum;   // (a Cavalier keeps his Momentum: he rides through, on a little way, and wheels round for another pass)
+    if (d < 3.2 && ahead < 0.2 && !pass) this.go = 0;   // beside it: stand and strike
+    else if (ahead < -0.3 && d < (pass ? 14 : 9)) {     // just rode past it
       if (now - this.passAt > 4) this.passAt = now;
-      if (now - this.passAt < 0.9) { this.face = 'fixed'; this.faceYaw = p.heading; this.go = 2; }
+      if (now - this.passAt < (pass ? 1.4 : 0.9)) { this.face = 'fixed'; this.faceYaw = p.heading; this.go = 2; }
     }
   }
 
