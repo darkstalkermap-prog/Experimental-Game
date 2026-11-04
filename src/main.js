@@ -31,8 +31,8 @@ import { drawLobby, drawSolo } from './lobbyui.js';
 import { isRaceId, isOtherRaces, assignRaces, raceWants, sanitizeRaces } from './races.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
 import { sanitizeWar, warHills, menuPlan, planOf } from './warmode.js';
-import { SPECIALTY, isSpecialty, setSpecialWorld } from './specialty.js';
-import { initSpecialMenu, showSpecialPick } from './specialui.js';
+import { SPECIALTY, isSpecialty, setSpecialWorld, specialRaces } from './specialty.js';
+import { initSpecialMenu, showSpecialPick, showSpecialRace } from './specialui.js';
 import { FramePacer } from './framepace.js';
 
 const $ = (id) => document.getElementById(id);
@@ -366,7 +366,7 @@ function showSolo() {
     },
     size(n) { heroCount = heroSize(n); store('cw-herosize', heroCount); if (heroOn) $('objDesc').textContent = heroDesc(); afterSolo(); },
     color(id) { if (!isColorId(id)) return; myColor = id; store('cw-color', id); afterSolo(); },
-    race(id) { if (!isRaceId(id)) return; myRace = id; store('cw-race', id); showSolo(); },   // (the soldiers are made when the battle starts: no world to rebuild)
+    race(id) { if (!isRaceId(id)) return; myRace = id; store('cw-race', id); showSolo(); showSpecialRace(myRace); },   // (the soldiers are made when the battle starts: no world to rebuild)
     others(o) { if (!isOtherRaces(o)) return; otherRaces = o; store('cw-races', o); showSolo(); },
   });
   foldMoreOptions();
@@ -404,7 +404,9 @@ function refreshQuick() {
   if (quickReady) $('quickInfo').textContent = currentSetupLine();
 }
 // the Specialty Battles card (specialui.js): a battle starts at a click, with the hero and the difficulty chosen here; its Watch button watches it instead
-initSpecialMenu({ start: (id) => startSpecial(id), watch: (id) => startSpecial(id, true) });
+// its Your army row picks your army's race as the setup's row does (one choice: your army), from the races the battle offers
+initSpecialMenu({ start: (id) => startSpecial(id), watch: (id) => startSpecial(id, true), race: (id) => { if (!isRaceId(id)) return; myRace = id; store('cw-race', id); showSolo(); showSpecialRace(myRace); } });
+showSpecialRace(myRace);
 // everything the line reads exists now: show the remembered difficulty and mode (the page opens on the last match's setup)
 quickReady = true;
 selectDifficulty(difficulty);
@@ -487,7 +489,9 @@ function startSpecial(id, watch = false) {
   refreshQuick();
   const me = { team: 0, name: 'You', cls: heroClass, col: myColor, me: true };
   const colors = assignColors(watch ? [null, null, null, null] : colorWants([me], false));
-  begin(difficulty, { mode: 'single', special: id, spectator: watch, localTeam: 0, players: watch ? [] : [me], objective: 'conquest', empty: [], colors, options: matchOptions(watch ? [] : [0]) }, SPECIALTY[id].map);
+  // (the battle's own races: your army as you picked it if the battle offers it, else its first; the lords' as the battle says: specialty.js)
+  const races = specialRaces(id, myRace) || undefined;
+  begin(difficulty, { mode: 'single', special: id, spectator: watch, localTeam: 0, players: watch ? [] : [me], objective: 'conquest', empty: [], colors, races, options: matchOptions(watch ? [] : [0]) }, SPECIALTY[id].map);
 }
 // Quick Play: the last battle again (a Specialty Battle, or the one the setup below describes)
 $('quickPlay').addEventListener('click', () => { if (quickSpecial) startSpecial(quickSpecial); else startSolo(); });

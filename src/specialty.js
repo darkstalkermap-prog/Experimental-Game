@@ -15,8 +15,25 @@ export const SPECIALTY = {
     how: 'You alone against three allied lords. Win by breaking all three enemy keeps, or by holding your keep until the clock runs out. Lose when your keep falls.',
     map: 'medium',       // the map size it is built on (the menu's Map row does not apply)
     single: true,        // single player only (the lobby does not offer it)
+    // the races of the armies (races.js: only their look): the hold is held by Humans or Elves, as the player picks on the card; the three lords are Orcs
+    races: ['human', 'elf'],
+    foes: 'orc',
   },
 };
+
+// the race the player's army takes in battle `id`: their own (the menu's Your army) when the battle offers it, otherwise the battle's first
+export function specialRace(id, mine) {
+  const s = SPECIALTY[id];
+  if (!s || !s.races) return mine;
+  return s.races.includes(mine) ? mine : s.races[0];
+}
+// the four houses' races for battle `id` (index = team; the player holds house 0), or null when the battle sets none (the menu's rules then apply)
+export function specialRaces(id, mine) {
+  const s = SPECIALTY[id];
+  if (!s || !s.races || !s.foes) return null;
+  const r = specialRace(id, mine);
+  return [0, 1, 2, 3].map((t) => (t === 0 ? r : s.foes));
+}
 
 export const SPECIALTY_IDS = Object.keys(SPECIALTY);
 export const isSpecialty = (id) => typeof id === 'string' && Object.prototype.hasOwnProperty.call(SPECIALTY, id);
