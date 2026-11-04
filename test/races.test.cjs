@@ -35,3 +35,11 @@ test('what a lord asks for: a castle each in a war, a side\'s first player in He
   assert.equal(R.raceOf(4), 'human', 'the raiders are men');
   assert.deepEqual(R.racesInPlay().sort(), ['dwarf', 'elf', 'human', 'orc']);
 });
+
+test('Stonecleft Hold: Human or Elves hold it (any other saved race is Human there), three Orc lords', async () => {
+  const S = await load('src/specialty.js');
+  assert.deepEqual(S.specialRaces('stonecleft', 'elf'), ['elf', 'orc', 'orc', 'orc']);
+  assert.deepEqual(S.specialRaces('stonecleft', 'human'), ['human', 'orc', 'orc', 'orc']);
+  for (const r of ['orc', 'dwarf', 'undead', undefined, 'nonsense']) assert.deepEqual(S.specialRaces('stonecleft', r), ['human', 'orc', 'orc', 'orc'], String(r));
+  assert.equal(S.specialRaces('nothing', 'elf'), null, 'not a Specialty Battle: the menu\'s rules');
+});
