@@ -317,10 +317,10 @@ export function botSpin(brain, p) {
 }
 
 // Whom to Execute: a foe within the chop's reach who is low enough to die of it (a rival hero first, then the lowest); else a rival
-// hero at hand for the heavy blow itself. Null: not now.
+// hero at hand, or the nearest of a few foes packed in front, for the heavy blow itself. Null: not now.
 export function execTarget(brain, p) {
   const below = EXEC.below + talentFx(p, 'execBelow', 0), reach = EXEC.reach * (1 + (UNSTOP.reach - 1) * (p.bigK || 0)) - 0.4;
-  let best = null, bs = -1, hero = null;
+  let best = null, bs = -1, hero = null, near = null, nd = 1e9, n = 0;
   for (let i = 0; i < brain.foes.length; i++) {
     const o = brain.foes[i], d = brain.dist[i];
     if (o.isSiege || o.isStructure || d > reach || Math.abs(o.pos.y - p.pos.y) > 2.2) continue;
@@ -328,8 +328,9 @@ export function execTarget(brain, p) {
     const low = o.isDummy ? dummyLow(o) : o.hp < o.maxHp * below + p.meleeDmg * EXEC.dmg * 0.4;   // (low already, or the chop will make him so)
     if (low) { const s = (h ? 2 : 0) + 1 - o.hp / o.maxHp; if (s > bs) { bs = s; best = o; } }
     else if (h && d < 2.4 && !hero) hero = o;
+    if (d < reach - 0.6) { n++; if (d < nd) { nd = d; near = o; } }
   }
-  return best || hero;
+  return best || hero || (n >= 3 + (brain.need || 0) ? near : null);
 }
 
 // The Ultimate: into a knot of foes, or a rival hero close while he still has health to make use of it.
