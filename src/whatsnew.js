@@ -12,6 +12,7 @@ export const UPDATES = [
       'Each race has six sigils of its own, painted in its own hand: daubed and dripping for the Orcs, engraved and gilt for the Elves and Dwarves, faded and flaking for the Undead. Choose one under Renown, Your arms: your army\'s race comes first, the common sigils are still there.',
       'Banners in the cut of their race: the Elves\' long swallow-tailed silk, the Dwarves\' iron-framed squares, the Orcs\' ragged hides and war rags, the Undead\' tattered shrouds and palls. Two to choose from for each race (or the classic swallowtail), on your castle, your levy standards with their own pole-tops, and your chip in the lobby.',
       'AI lords of a race bear one of its sigils, drawn at random each match; online every player sees the same arms.',
+      'Every race is its own size now: Dwarves stand about three quarters of a man, broad and stocky; Elves a head taller and slender; Orcs big, bulky and hunched; the Undead gaunt. What you see is what you hit: an arrow over a dwarf misses, a shot at an elf\'s head is a headshot. Riders sit on their race\'s mount: a fine tall elven horse, a stout dwarf pony, a heavy orc beast. Health, damage and speed stay the same for all.',
     ],
   },
   {

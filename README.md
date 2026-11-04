@@ -739,8 +739,18 @@ The rules of who may sit where are `src/seats.js` (pure functions, with unit tes
 ## Army races
 
 Each house's army can be one of five **races**: **Human** (the look the game always had), **Elves**, **Dwarves**, **Orcs** or
-**Undead**. Only the look changes: every soldier keeps the same health, damage, speed, reach, hitbox and timing whatever its
-race, so a race never changes how a battle goes (the same seed plays the same battle with any races).
+**Undead**. A race changes the look and the **size** of its soldiers, nothing else: every soldier keeps the same health,
+damage, speed, reach, collision radius and timing whatever its race.
+
+**Sizes.** Each race stands at its own height, and what can be hit is what you see (`src/races.js` RACE_HEIGHT, drawn by
+`src/raceshapes.js` RACE_LOOK): **Dwarves** 0.76 of a man (1.41 m against 1.85), broad and stocky (1.3 wide); **Elves** 1.1 (2.04 m),
+slender; **Orcs** drawn 1.13 tall and bulky (1.2 wide) but hunched, the head carried low and forward, so they stand 1.08 (2.0 m);
+**Undead** a man's height, gaunt. The height the game measures follows it: an arrow over a dwarf's head misses, an arrow at an elf's
+drawn head is a headshot (the top 17%, as for every body), and archers aim at the drawn chest. Riders sit on their race's mount (an
+elf's finer, taller horse, a dwarf's stout pony, an orc's heavier beast: the horse's build only) and stand that much lower or higher;
+tower archers and siege crews take their race's height too. Walls, roofs and gates still test a soldier as a man-sized body, so every
+race goes where it always went. The men are 1: a battle of men plays exactly as before (the same seed, the same battle); a battle with
+other races differs where an arrow now hits or misses a taller or shorter soldier.
 
 - **Elves**: tall and slender, long faces with pointed ears and flowing hair; fine curved silver plate with gold leaf work, tall
   crested helms, long green cloaks, leaf-bladed swords and spears, almond shields and long recurved bows; white and grey horses.

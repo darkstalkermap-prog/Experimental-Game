@@ -1,5 +1,5 @@
-// The race of each house's army: only how its soldiers look (Human, Elves, Dwarves, Orcs, Undead). Every number of the battle stays the
-// same whatever the race (health, damage, speed, reach, hitboxes, timing): the look is chosen here and drawn by models.js and
+// The race of each house's army (Human, Elves, Dwarves, Orcs, Undead): how its soldiers look, and how tall they stand (RACE_HEIGHT: what
+// can be hit). Every other number stays the same whatever the race (health, damage, speed, reach, radius, timing): the look is drawn by models.js and
 // raceshapes.js. Pure rules and state (no DOM, no three.js), shared by the menu, the lobby, the match start and the tests.
 //   A match's races: one id per castle (index = team). The raiders and the heroes keep the human look.
 export const RACES = [
