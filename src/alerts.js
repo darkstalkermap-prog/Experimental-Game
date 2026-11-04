@@ -85,8 +85,8 @@ export const TIPS = [
   { id: 'ranger', cls: 'ranger', text: 'Ranger: aim for the head (double damage) and draw fully to shoot through a line of men. [Q] Power Shot breaks a rank, hold [R] for the Sniper Shot: the view zooms in, steadies, and one heavy arrow flies flat as far as a Fireball. Let go to loose.' },
   { id: 'mage', cls: 'mage', text: 'Mage: Fireball ([Q]) burns gates and siege engines as well as men; Frost Ward ([R]) soaks up the next blows.' },
   { id: 'cleric', cls: 'cleric', text: 'Cleric: Healing Light ([R]) heals you and every ally within 14 m. Smite ([Q]) throws lightning from your hand as far as a Fireball flies.' },
-  { id: 'cavalier', cls: 'cavalier', learn: 'mounted', text: 'Cavalier: [E] mounts your warhorse, or whistles it over. Hold [Q] to aim a Lance Charge as far as a Fireball flies: let go and gallop through whoever is in your way.' },
-  { id: 'rally', cls: 'cavalier', text: 'Cavalier: Rally Cry ([R]) speeds up and shields every ally near you, and you take less damage too.' },
+  { id: 'cavalier', cls: 'cavalier', learn: 'mounted', text: 'Cavalier: [E] mounts your warhorse, or whistles it over. The faster you ride, the harder you hit: keep up the gallop and turn wide to fill the horseshoe (Momentum).' },
+  { id: 'sweep', cls: 'cavalier', text: 'Cavalier: [Q] Sweeping Strike cuts every foe you ride past on one side (glance left or right as you press it). Hold [R] to aim a Lance Charge as far as a Fireball flies.' },
   // the respawn screen
   { id: 'd-guard', at: 'death', text: 'Hold right click to block blows from the front, and keep enemies in front of you: a shield does not cover your back.' },
   { id: 'd-potion', at: 'death', text: 'Save your healing draught for the fight: [H] heals 130 health.' },
