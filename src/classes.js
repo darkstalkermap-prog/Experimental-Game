@@ -12,6 +12,7 @@ import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
 import { ULT_METHODS, ULT_SHOW, ultReady, ultGain } from './ultimate.js';
 import { quietly } from './modelkit.js';
+import { KNIGHT, KNIGHT_METHODS, KNIGHT_BUFFS } from './knight.js';
 
 const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
 
@@ -21,12 +22,12 @@ export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'ca
 export const CLASSES = {
   knight: {
     name: 'Knight', icon: '🛡', color: '#a9bfe3', role: 'Vanguard',
-    blurb: 'Plate armour and a kite shield: the hardest hero to bring down.',
-    mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1, bow: 0.8, spell: 1, block: 0.1 },
-    passive: 'Your shield blocks 10% more of the damage from the front.',
-    q: { id: 'bash', icon: '💥', name: 'Shield Bash', cd: 12, aimed: true, rush: true, desc: `Hold Q to see where your charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and run at it behind your shield. The first enemy you meet takes the bash: heavy damage, knocked back and stunned, and everyone beside him too. Walls, gates and steep ground stop you; Q again bashes where you are.` },
-    r: { id: 'bulwark', icon: '🛡', name: 'Bulwark', cd: 18, desc: 'Plant your shield. For 5 s you take 70% less damage and cannot be staggered; allies beside you take 40% less.' },
-    u: { id: 'burst', icon: '⚒️', name: 'Earthbreaker', kind: 'Ultimate', placeholder: true, burst: { radius: 7, dmg: 3, edge: 0.5, stun: 1.8, knock: 12 }, desc: 'Drive your shield into the ground: a shock all around you hurts, stuns and throws back everyone within 7 m.' },
+    blurb: 'Plate armour and a kite shield: the hardest hero to bring down, and every blow he blocks is paid back.',
+    mods: { hp: 1.3, armor: 5, speed: 0.94, melee: 1, bow: 0.8, spell: 1 },
+    passive: `Retribution: every blow your raised shield takes fills your Wrath bar (a parry ${Math.round(KNIGHT.wrath.parry / KNIGHT.wrath.block * 10) / 10}x as much, an arrow or spell on the shield a little). When it is full your next swing releases a shockwave that hits everyone in front of you (${KNIGHT.wave.reach} m), staggering them and throwing soldiers back.`,
+    q: { id: 'shieldthrow', icon: '🥏', name: 'Shield Throw', cd: 10, desc: `Throw your shield where you aim (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m). It bounces between up to ${KNIGHT.toss.hits} enemies, stunning each one, then flies back to your hand. You cannot block until you catch it.` },
+    r: { id: 'challenge', icon: '📣', name: 'Challenge', cd: 16, desc: `Every enemy within ${KNIGHT.dare.radius} m, heroes too, has to attack you for ${KNIGHT.dare.time} s, and you take ${Math.round((1 - KNIGHT.dare.cut) * 100)}% less damage. Keep your shield up: every blow it takes fills your Wrath.` },
+    u: { id: 'realmbanner', icon: '🚩', name: 'Banner of the Realm', kind: 'Ultimate', lasts: KNIGHT.banner.time, desc: `Plant your house's banner where you stand for ${KNIGHT.banner.time} s. Allies within ${KNIGHT.banner.radius} m of it heal over time (heroes ${Math.round(KNIGHT.banner.heal * 1000) / 10}% of their health a second), and enemies near it are slowed by ${Math.round((1 - KNIGHT.banner.slow) * 100)}%.` },
   },
   berserker: {
     name: 'Berserker', icon: '🪓', color: '#e0705a', role: 'Duelist',
@@ -236,6 +237,7 @@ export class Abilities {
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
     this.ultInit();   // (the Ultimates' pooled looks and their list: ultimate.js)
+    this.knightInit();   // (the Knight's flying shields, banners and tethers: knight.js)
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
@@ -273,11 +275,6 @@ export class Abilities {
         if (e.n >= e.shots.length) this.active.splice(i, 1);
         continue;
       }
-      if (e.kind === 'rush') {   // the Knight's run: it ends in the bash (at the first foe, at the end, or where he was stopped)
-        if (!p.alive) { this.active.splice(i, 1); continue; }
-        if (this.rushOver(p, e, dt)) { this.active.splice(i, 1); this.bashHit(p, e.f); if (p.dash && p.dash.rush) p.dash = null; }
-        continue;
-      }
       if (e.kind === 'leap') {   // the Berserker comes down: the slam (where the leap was planned to end, whatever became of him)
         if (e.t >= e.dur) { this.active.splice(i, 1); if (p.alive) this.slam(p, e.to); }
         continue;
@@ -295,6 +292,7 @@ export class Abilities {
       }
     }
     this.burn(dt);
+    this.knightTick(dt);   // (the Knight's Wrath: knight.js)
   }
 
   // Looks that run on every screen: the glyphs on the ground, shells and columns of light, the dust behind a charging hero.
@@ -371,8 +369,7 @@ export class Abilities {
     return { pos: e, col: null };
   }
 
-  // ---------- Knight ----------
-  // ---------- the long charges (Shield Bash, Lance Charge) ----------
+  // ---------- the long charges (the Lance Charge; the Knight's old Shield Bash ran the same way) ----------
   // The run along the ground from `from` toward `want`, held to the reach and cut short in front of whatever stops a man running: a rise
   // too steep, a wall, a trunk, a gate that is not open to him, an enemy castle's stone. Returns { to, d, f } (to: where he stops) or null
   // when there is no room to run. The hero's own screen runs him along it (Player: a dash); the host plans it again for a guest, from where
@@ -422,53 +419,8 @@ export class Abilities {
     return hit;
   }
 
-  // Shield Bash: the run (Player.useAbility has set the hero off on it: p.dash) and, when it is over, the bash. With no room to run (a
-  // wall at his nose) it is the bash where he stands.
-  bash(p, cam, dir, at) {
-    const own = p.dash && p.dash.rush === 'bash' && p.dash.fresh ? p.dash.plan : null;
-    const plan = own || (at ? this.rushPlan(p, p.pos, at) : null);
-    const f = plan ? plan.f : flat(dir);
-    if (p.dash) p.dash.fresh = false;
-    p.rushEnd = false;   // (a guest's word that an earlier run ended, come after the host had ended it: not this run's end)
-    // no room to run, or a foe already at the shield (the host's copy of a guest may be closer to one than the guest's screen shows):
-    // the bash at once
-    if (!plan || this.rushOver(p, { t: 0, dur: 1, chk: 1, f, last: p.pos }, 0)) { this.bashHit(p, f); if (p.dash && p.dash.rush) p.dash = null; return; }
-    const dur = plan.d / this.rushSpeed(p, 'bash') + 0.3;
-    p.buffs.add('charging', dur);
-    this.active.push({ kind: 'rush', p, t: 0, dur, f, chk: 0.25, last: p.pos.clone() });
-    this.emit('rush', p.pos, f, [plan.to]);
-  }
-
-  // the bash itself: everything in the cone in front of the shield
-  bashHit(p, f) {
-    const g = this.g;
-    p.buffs.del('charging');
-    const c = p.pos.clone().addScaledVector(f, 2.8);
-    const dmg = p.meleeDmg * 2 * talentFx(p, 'bashDmg', 1);
-    const reach = talentFx(p, 'bashReach', 1), stun = 1.6 + talentFx(p, 'bashStun', 0);
-    this.eachFoe(p.team, c.x, c.z, 3.4 * reach, (o) => {
-      if ((o.pos.x - p.pos.x) * f.x + (o.pos.z - p.pos.z) * f.z < -0.5) return;   // never behind you
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 1, ability: 'Shield Bash' });
-      if (!o.alive) return;
-      if (o.stagger) o.stagger(stun, p);
-      if (o.vel && !o.isPlayer) { o.vel.x += f.x * 10; o.vel.z += f.z * 10; }
-    }, p.pos.y, 3);
-    this.emit('bash', c, f, null, reach);
-  }
-
-  bulwark(p) {
-    const t = 5 + talentFx(p, 'bulwarkTime', 0), reach = 8 + talentFx(p, 'bulwarkRadius', 0);
-    p.buffs.add('guard', t, 0.3);
-    p.buffs.add('steady', t);
-    const reflect = talentFx(p, 'reflect', 0);
-    if (reflect) p.buffs.add('reflect', t, reflect);   // Avenging Wall (Knight talent): see Player.takeDamage
-    const wave = talentFx(p, 'bulwarkWave', null);   // Bastion Strike (alternative to Avenging Wall): the shield slams down when Bulwark ends
-    if (wave) this.active.push(p.bwave = { kind: 'bwave', p, t: 0, dur: t + 1, delay: t, wave, sum: 0 });   // (Player.takeDamage fills the store)
-    this.eachFriend(p.team, p.pos.x, p.pos.z, reach, (o) => { if (o !== p) this.guard(o, t, 0.6 - talentFx(p, 'bulwarkAlly', 0)); });
-    this.emit('bulwark', p.pos, ZERO, null, reach / 8);
-  }
-
-  // Knight talent (Bastion Strike): the end of the Bulwark, a slam of the planted shield all around
+  // Knight talent (Bastion Strike): the end of a Challenge, a slam of the shield all around (Shield Throw, Challenge, Retribution
+  // and the Banner are in knight.js)
   bulwarkWave(p, e) {
     const g = this.g, w = e.wave, foes = [];
     p.bwave = null;
@@ -976,27 +928,6 @@ export class Abilities {
     const house = this.houseColor(who);
     const heading = Math.atan2(dir.z, dir.x);
     switch (id) {
-      case 'bash': {
-        // the cone the shield sweeps (from the hero), and the slam where it lands
-        const f = flat(dir), from = at.clone().addScaledVector(f, -2.8);
-        gf.glyph('cone', from.x, from.y, from.z, 6.6 * sz, 0xbfd6ff, 0.55, { dir: heading, arc: 0.95, team: house, strength: 1.7 });
-        gf.glyph('shock', at.x, at.y, at.z, 3.5 * sz, 0xdfeaff, 0.5, { team: house });
-        fx._dust(at.clone().setY(at.y + 0.2), 14, 2.4, '');
-        fx._sparks(chest.clone().addScaledVector(f, 0.4), 20);
-        fx.flash(chest, this.col.set(0xbfd6ff), 3.2, 0.2, 0.7);
-        snd('clang'); snd('thud');
-        break;
-      }
-      case 'bulwark': {
-        const r = 8 * sz;
-        gf.dome(0x7db4ff, 5, 2.0, who, { strength: 1.5, x: at.x, y: at.y, z: at.z });
-        gf.glyph('rune', at.x, at.y, at.z, r, 0x7db4ff, 2.6, { arms: 6, team: house, strength: 1.5 });
-        gf.glyph('shock', at.x, at.y, at.z, r, 0xcfe2ff, 0.9, { team: house });
-        fx.ring(at, 1.3, this.col.set(0x9cc4ff), 22, { up: 1.8, size: 0.3 });
-        fx._sparks(chest, 14);
-        snd('block');
-        break;
-      }
       case 'bwave': {   // Bastion Strike (Knight talent): the planted shield comes down and a ring runs out
         const r = 5 * sz;
         gf.glyph('shock', at.x, at.y, at.z, r * 1.2, 0xdfeaff, 0.6, { team: house, strength: 1.8 });
@@ -1116,16 +1047,6 @@ export class Abilities {
         snd('buy');
         break;
       }
-      case 'rush': {
-        // the Knight sets off behind his shield: dust where he started, the end of the run marked, a trail of dust behind him
-        const f = flat(dir), to = targets && targets[0];
-        gf.glyph('shock', at.x, at.y, at.z, 2.4, 0xdfeaff, 0.4, { team: house });
-        fx._dust(at.clone().setY(at.y + 0.2), 10, 1.8, '');
-        if (to) gf.glyph('rune', to.x, to.y, to.z, 2.2, 0xbfd6ff, 0.9, { arms: 4, team: house, strength: 1.2 });
-        if (who) this.trails.push({ who, f, t: 0, dur: to ? Math.hypot(to.x - at.x, to.z - at.z) / RUSH.bash.speed + 0.3 : 1, acc: 0 });
-        snd('swing');
-        break;
-      }
       case 'charge': {
         const f = flat(dir);
         gf.glyph('cone', at.x, at.y, at.z, 7.5, 0xffd870, 0.6, { dir: Math.atan2(f.z, f.x), arc: 0.6, team: house, strength: 1.5 });
@@ -1154,8 +1075,9 @@ export class Abilities {
   }
 }
 
-// the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js
-Object.assign(Abilities.prototype, ULT_METHODS);
+// the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js; so is the Knight's kit (knight.js)
+Object.assign(Abilities.prototype, ULT_METHODS, KNIGHT_METHODS);
+Object.assign(BUFF_NAMES, KNIGHT_BUFFS);
 
 function stepUltFx(A, dt) {
   for (let i = A.ultFx.length - 1; i >= 0; i--) if (A.ultFx[i].step(A, A.ultFx[i], dt) === false) A.ultFx.splice(i, 1);

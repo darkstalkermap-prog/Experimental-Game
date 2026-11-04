@@ -23,6 +23,7 @@ import { TALENT_PREFS } from './herobot.js';
 import { allied } from './teams.js';
 import { rigSetBow } from './models.js';
 import { ULT_AI } from './ultimate.js';
+import { KNIGHT, knightTossPick } from './knight.js';
 
 // the class each style of lord fights as (rivals.js PERSONAS), and the plain lords' by house (Aldmoor, Varr, Elden, Sol)
 export const PERSONA_CLASS = { rusher: 'berserker', turtler: 'knight', breaker: 'mage', raider: 'ranger', merchant: 'cleric', zealot: 'cleric', warlord: 'knight', titan: 'berserker', opportunist: 'ranger' };
@@ -414,13 +415,14 @@ export class LordKit {
     const gap = foe ? Math.hypot(foe.pos.x - u.pos.x, foe.pos.z - u.pos.z) - (foe.radius || 0.4) : Infinity;
     const hpf = u.hp / u.maxHp, heavy = this.recent > u.maxHp * 0.12, need = this.need;
     switch (u.classId) {
-      case 'knight':
-        if (r && (n.c8 >= 3 + need || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r', this.look()); break; }
-        // Shield Bash: at hand on a knot or a rival hero, or a run at one up to 40 m off
-        if (q && foe && gap < 5 && (((foe.isPlayer || foe.kit) && gap < 4) || this.countAt(u.pos.x + Math.sin(u.yaw) * 3, u.pos.z + Math.cos(u.yaw) * 3, 3.4) >= 2 + need)) {
-          this.cast('q', this.aimAt(foe, 1e3, 1, V2), foe.pos.clone());
-        } else if (q && hpf > 0.4 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
+      case 'knight': {
+        // Challenge: into a crowd, on a rival hero at hand, or when pressed (his men's foes turn on him, and he takes half the damage)
+        if (r && (n.c12 >= 4 + need || (n.heroes8 && hpf > 0.3) || (heavy && n.c8 >= 2 && hpf > 0.25))) { this.cast('r', this.look()); break; }
+        // Shield Throw: at a rival hero or a knot of foes it can bounce through, with a clear line (knight.js)
+        const o = q ? knightTossPick(this, u, need, 40) : null;
+        if (o) this.cast('q', this.aimAt(o, KNIGHT.toss.speed, 1, V2));
         break;
+      }
       case 'berserker':
         if (r && hpf > 0.35 && this.leapIn(4 + need)) break;
         if (q && hpf > 0.2 && (n.c3 >= 2 + need || n.heroNear < 3.5 || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q', this.look());

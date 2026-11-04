@@ -14,11 +14,12 @@ import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
+import { KNIGHT, knightTossPick, knightGuard } from './knight.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
-  knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
+  knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ricochet', 'kn_phalanx', 'kn_avenge'],
   berserker: ['bz_quake', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_meteor', 'bz_dervish', 'bz_reaper'],
   ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_hawk', 'rg_heavy', 'rg_deadeye', 'rg_volley'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
@@ -317,6 +318,7 @@ export class HeroBot {
     const p = this.p, st = this.style, me = p.pos, foes = this.foes, dist = this.dist;
     const atHome = this.retreat && this.homeD <= 16;
     if (this.retreat && !atHome) return null;
+    if (p.chalBy && p.chalUntil > this.g.time && p.chalBy.alive) return p.chalBy;   // (a Knight's Challenge: he must fight him, knight.js)
     let best = null, bs = 1e9;
     const friendHero = this.friends.some((f) => f.isPlayer);
     const g = this.g, mine = st.kind === 'melee' ? g.castleAt(me) : null;
@@ -412,6 +414,7 @@ export class HeroBot {
         this.guardUntil = Math.max(this.guardUntil, now + hold);
       }
     }
+    knightGuard(this, now);   // (a Knight who Challenges keeps his shield up until his Wrath is full: knight.js)
   }
 
   // ---------------------------------------------------------------------------------------------- potions
@@ -495,13 +498,15 @@ export class HeroBot {
     const gap = foe ? this.gap : Infinity;
     const heavy = this.recent > p.maxHp * 0.12;   // taking a beating
     switch (p.classId) {
-      case 'knight':
-        if (r && (n.c8 >= 3 + need || (hpf < 0.6 && n.c8 >= 1) || (n.heroes8 && hpf < 0.8) || (heavy && n.c8))) { this.cast('r'); break; }
-        // Shield Bash: at hand on a group or a rival hero; or a run at a rival hero, or a knot of foes, up to 40 m off
-        if (q && foe && gap < 5 && ((foe.isPlayer && gap < 4) || this.countAt(p.pos.x + Math.sin(p.yaw) * 3, p.pos.z + Math.cos(p.yaw) * 3, 3.4) >= 2 + need)) {
-          this.aimAtFoe(foe, 1e3); this.cast('q', foe.pos.clone());
-        } else if (q && hpf > 0.5 && n.c5 === 0) this.runAt('bash', 8, 40, 3 + need);
+      case 'knight': {
+        // Challenge: into a crowd, on a rival hero at hand, or when pressed (it halves the damage, and the blows it draws onto the raised
+        // shield fill his Wrath: knightGuard keeps the shield up); not with the shield away
+        if (r && !p.shieldOut && (n.c12 >= 4 + need || (n.heroes8 && hpf > 0.3) || (heavy && n.c8 >= 2 && hpf > 0.25))) { this.cast('r'); break; }
+        // Shield Throw: at a rival hero or a knot of foes within 45 m it can bounce through, with a clear line (knight.js)
+        const o = q ? knightTossPick(this, p, need) : null;
+        if (o) { this.aimAtFoe(o, KNIGHT.toss.speed); this.cast('q'); }
         break;
+      }
       case 'berserker':
         if (r && hpf > 0.4 && this.leapIn(4 + need)) break;
         if (q && hpf > 0.2 && (n.c3 >= 2 + need || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');

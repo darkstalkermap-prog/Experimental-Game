@@ -286,6 +286,7 @@ export class HostSync {
         order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId), xp: Math.floor(h.xp), lvl: h.level,
         tal: Object.keys(h.talents),   // the talents learnt (see talents.js)
         ult: Math.floor((h.ult || 0) * 100),   // the Ultimate's charge in hundredths, rounded down: "full" only when it is (ultimate.js)
+        wr: h.wrath > 0 ? Math.floor(h.wrath * 100) : undefined,   // a Knight's Wrath in hundredths (knight.js)
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -559,6 +560,7 @@ export class ClientSync {
       p.potions = me.potions;
       // (just after this guest let its Ultimate go, a snapshot sent before the host heard of it still says full: not believed for a second)
       if (Number.isFinite(me.ult) && g.time - p.ultSentAt > 1) p.ult = Math.max(0, Math.min(1, me.ult / 100));
+      p.wrath = Number.isFinite(me.wr) ? Math.max(0, Math.min(1, me.wr / 100)) : 0;
       p.kills = me.kills;
       p.deaths = me.deaths;
       p.lastOrder = me.order;

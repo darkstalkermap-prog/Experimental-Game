@@ -13,16 +13,18 @@
 
 export const TUNE = {
   knight: {
-    bashDmg: 0.25,         // Spiked Boss: more Shield Bash damage
-    bashStun: 0.8,         // Skull Rattler: seconds added to the stun
-    bashReach: 0.25,       // Battering Ram: a wider sweep ...
-    bashCd: 0.25,          //   ... and a quicker recharge
+    tossDmg: 0.25,         // Spiked Boss: more Shield Throw damage
+    tossStun: 0.6,         // Skull Rattler: seconds added to the stun
+    tossHits: 1,           // Ricochet: foes added to the bounce ...
+    tossReach: 4,          //   ... metres added to the bounce's reach ...
+    tossCd: 0.2,           //   ... and a quicker recharge
     hp: 0.12, armor: 2,    // Tempered Plate
-    bulwarkTime: 2,        // Hold the Line: seconds added
-    bulwarkRadius: 4,      // Phalanx: metres added to the reach ...
-    bulwarkAlly: 0.1,      //   ... and more of the damage allies do not take (on top of 40%)
-    reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker
-    bastion: { share: 0.3, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): this share of every melee blow taken under Bulwark is stored, and when it ends the shield slams down: the store strikes the foes within this reach (shared between them) and staggers them. Avenging Wall hands back 40% at once, to the one who struck; the slam comes to about the same in all
+    dareTime: 1,           // Hold the Line: seconds added to Challenge ...
+    dareWrath: 1.5,        //   ... and blows blocked while it lasts fill Wrath this much faster
+    dareRadius: 4,         // Phalanx: metres added to Challenge's reach ...
+    dareAlly: { radius: 8, cut: 0.25 },   //   ... and the allies this near take this much less damage while it lasts
+    reflect: 0.4,          // Avenging Wall: the share of a melee blow dealt back to the attacker while Challenge lasts
+    bastion: { share: 0.3, radius: 5, stun: 0.5 },   // Bastion Strike (alternative to Avenging Wall): this share of every melee blow taken under Challenge is stored, and when it ends the shield slams down: the store strikes the foes within this reach (shared between them) and staggers them. Avenging Wall hands back 40% at once, to the one who struck; the slam comes to about the same in all
   },
   berserker: {
     whirlRadius: 0.2,      // Cyclone: a longer reach
@@ -92,22 +94,23 @@ const pc = (x) => `${Math.round(x * 100)}%`;
 const K = TUNE.knight, Z = TUNE.berserker, R = TUNE.ranger, M = TUNE.mage, C = TUNE.cleric, V = TUNE.cavalier;
 
 export const TALENTS = [
-  // ---------- Knight: Shield Bash | Bulwark (the capstone is under Phalanx) ----------
+  // ---------- Knight: Shield Throw | Challenge (the capstone is under Phalanx) ----------
   { id: 'kn_boss', cls: 'knight', br: 'q', tier: 1, needs: null, icon: '🔩', name: 'Spiked Boss',
-    desc: `Shield Bash hits ${pc(K.bashDmg)} harder.`, fx: { bashDmg: 1 + K.bashDmg } },
+    desc: `Shield Throw hits ${pc(K.tossDmg)} harder.`, fx: { tossDmg: 1 + K.tossDmg } },
   { id: 'kn_rattle', cls: 'knight', br: 'q', tier: 2, needs: 'kn_boss', icon: '💫', name: 'Skull Rattler',
-    desc: `Shield Bash stuns for ${K.bashStun} s longer.`, fx: { bashStun: K.bashStun } },
-  { id: 'kn_ram', cls: 'knight', br: 'q', tier: 3, needs: 'kn_rattle', icon: '🐏', name: 'Battering Ram',
-    desc: `Shield Bash sweeps ${pc(K.bashReach)} wider and recharges ${pc(K.bashCd)} sooner.`, fx: { bashReach: 1 + K.bashReach, cd_bash: 1 - K.bashCd } },
+    desc: `Shield Throw stuns for ${K.tossStun} s longer.`, fx: { tossStun: K.tossStun } },
+  { id: 'kn_ricochet', cls: 'knight', br: 'q', tier: 3, needs: 'kn_rattle', icon: '↯', name: 'Ricochet',
+    desc: `Shield Throw bounces to ${K.tossHits === 1 ? 'one more enemy' : `${K.tossHits} more enemies`}, ${K.tossReach} m further, and recharges ${pc(K.tossCd)} sooner.`,
+    fx: { tossHits: K.tossHits, tossReach: K.tossReach, cd_shieldthrow: 1 - K.tossCd } },
   { id: 'kn_plate', cls: 'knight', br: 'r', tier: 1, needs: null, icon: '⛓', name: 'Tempered Plate',
     desc: `+${pc(K.hp)} health and +${K.armor} armour.`, mods: { mul: { hp: 1 + K.hp }, add: { armor: K.armor } } },
   { id: 'kn_hold', cls: 'knight', br: 'r', tier: 2, needs: 'kn_plate', icon: '🏰', name: 'Hold the Line',
-    desc: `Bulwark lasts ${K.bulwarkTime} s longer.`, fx: { bulwarkTime: K.bulwarkTime } },
+    desc: `Challenge lasts ${K.dareTime} s longer, and blows you block while it lasts fill your Wrath ${pc(K.dareWrath - 1)} faster.`, fx: { dareTime: K.dareTime, dareWrath: K.dareWrath } },
   { id: 'kn_phalanx', cls: 'knight', br: 'r', tier: 3, needs: 'kn_hold', icon: '🛡', name: 'Phalanx',
-    desc: `Bulwark covers allies ${K.bulwarkRadius} m further away, and they take ${pc(0.4 + K.bulwarkAlly)} less damage instead of 40%.`,
-    fx: { bulwarkRadius: K.bulwarkRadius, bulwarkAlly: K.bulwarkAlly } },
+    desc: `Challenge reaches ${K.dareRadius} m further, and allies within ${K.dareAlly.radius} m of you take ${pc(K.dareAlly.cut)} less damage while it lasts.`,
+    fx: { dareRadius: K.dareRadius, dareAlly: K.dareAlly } },
   { id: 'kn_avenge', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', icon: '⚔', name: 'Avenging Wall',
-    desc: `While Bulwark stands, a melee attacker takes ${pc(K.reflect)} of the blow back.`, fx: { reflect: K.reflect } },
+    desc: `While Challenge lasts, a melee attacker takes ${pc(K.reflect)} of the blow back.`, fx: { reflect: K.reflect } },
 
   // ---------- Berserker: Whirlwind | Leap (the capstone is under Dervish) ----------
   { id: 'bz_cyclone', cls: 'berserker', br: 'q', tier: 1, needs: null, icon: '🌪', name: 'Cyclone',
@@ -201,7 +204,7 @@ export const TALENTS = [
 // They are kept out of TALENTS (and talentsOf) on purpose: everything that walks "the tree" (bots, the practice yard's All talents) stays as it was.
 export const ALT_TALENTS = {
   kn_bastion: { id: 'kn_bastion', cls: 'knight', br: 'r', tier: 4, needs: 'kn_phalanx', alt: 'kn_avenge', icon: '🔨', name: 'Bastion Strike',
-    desc: `While Bulwark stands ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
+    desc: `While Challenge lasts ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
   bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
     desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
   rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_heavy', alt: 'rg_volley', icon: '🔭', name: 'Steady Aim',
