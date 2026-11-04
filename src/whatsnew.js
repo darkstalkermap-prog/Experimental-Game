@@ -5,6 +5,16 @@
 
 export const UPDATES = [
   {
+    id: 19,
+    title: 'The Ranger: fire and the hawk',
+    items: [
+      'Q is now Explosive Arrow: a glowing arrow that bursts where it strikes, throwing soldiers back, and sets the ground on fire for a few seconds.',
+      'R is now Hunting Hawk: hold R to pick a spot and your hawk flies there. Every enemy in the circle is marked for 6 seconds: your side sees them through walls, and they take 25% more damage from everyone. Then it dives on the nearest enemy hero.',
+      'Her Ultimate is Rain of Fire: a huge circle where 72 burning arrows come down, and the ground burns after them, siege engines too.',
+      'Sniper Shot is now the top talent of her tree, on the right mouse button: with it ready, holding the right button raises the scope. Power Shot is gone; Piercing Shots stays.',
+    ],
+  },
+  {
     id: 15,
     title: 'Better-looking weapons',
     items: [

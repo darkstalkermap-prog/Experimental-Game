@@ -1293,6 +1293,7 @@ export class Player {
       case 'smite': this.castFlash = 1; this.castColor = 0xe8f0ff; break;   // (the open hand: viewmodel.js, castKind)
       case 'heal': this.castFlash = 1; this.castColor = 0x9affa0; break;
       case 'ward': this.castFlash = 1; this.castColor = 0x9fe0ff; break;
+      case 'rainfire': if (this.vm) this.vm.recoil = 1; break;   // (the flight is loosed from the bow: the first-person loose)
       default: if (def.cast) { this.castFlash = 1; this.castColor = def.cast; } break;   // (an Ultimate's spell hand: ultimate.js)
     }
     this.castKind = def.id;

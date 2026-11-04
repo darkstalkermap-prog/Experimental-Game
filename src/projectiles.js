@@ -169,7 +169,7 @@ export class Projectiles {
     const snipe = !!(opts && opts.snipe), S = RANGER.snipe, boom = (opts && opts.boom) || 0, fire = !!(opts && opts.fire);
     const flatT = snipe ? S.range / S.speed : 0;   // (how long a Sniper Shot flies flat)
     const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: snipe ? flatT + 2.5 : 6, big, tr: -1, trb: 0, ability,
-      grav: snipe ? S.grav : (opts && opts.grav) || 1, flatT, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null, boom, fire, fl: 0 };
+      grav: snipe ? S.grav : (opts && opts.grav) || 1, flatT, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null, boom, fire, fl: 0, from: boom ? from.clone() : null };
     const fx = this.game.fx;
     if (snipe) fx.tracer(from, vel, flatT, this.tracerColor(team), 0.55, 0.06, 0.035, G_ARROW * S.grav);   // (long and bright, while it flies flat)
     else if (boom || fire) fx.tracer(from, vel, 6, FIRE_STREAK, 0.55, boom ? 0.1 : 0.14, 0.09, G_ARROW * e.grav);   // (a streak of fire)

@@ -512,7 +512,7 @@ export class HeroBot {
       case 'ranger': {
         // the hawk first (on a rival hero, or a knot of foes: they are marked, and the arrows that follow hurt more), then the
         // Explosive Arrow at a hero, an engine or a knot (at hand too: a blast at her feet throws back a foe who has caught her)
-        if (r && this.hawk(4 + need)) break;
+        if (r && this.hawk(3 + need)) break;
         if (q) this.explosive(2 + need);
         break;
       }
@@ -631,12 +631,13 @@ export class HeroBot {
     return this.cast('r', at);
   }
 
-  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js); the draw is held on the mark
-  // (act) and looses itself
+  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js), or (once it has waited ready
+  // for a few seconds with no knot in sight) at whoever is in reach; the draw is held on the mark (act) and looses itself
   explosive(need) {
     const p = this.p;
     if (p.power || p.scope || p.mounted || p.climb) return false;
-    const m = xarrowMark(this.foes, this.dist, need, (o) => this.clearShot(o));
+    const clear = (o) => this.clearShot(o);
+    const m = xarrowMark(this.foes, this.dist, need, clear) || (this.t - this.readyAt.q > 3 ? xarrowMark(this.foes, this.dist, 1, clear) : null);
     if (!m) return false;
     this.powerAt = m.o; this.powerGround = m.ground;
     this.aimXarrow(m.o, m.ground);

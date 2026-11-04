@@ -21,7 +21,9 @@ import { quietly } from './modelkit.js';
 // (`hit` of her bow's damage, headshots and all); then the blast: `dmg` of her bow's damage to every foe within `radius` m (`edge` of
 // it at the rim; walls shelter), soldiers staggered up to `stagger` s and thrown back `knock` m/s, heroes staggered `hero` s; engines
 // take `siege` of the blast and a gate `gate` of it. The ground burns for `burn` s in `burnR` m, `burnDps` of her bow's damage a second.
-export const XARROW = { draw: 0.4, speed: 60, grav: 0.55, hit: 1, dmg: 2.1, radius: 3.8, edge: 0.4, stagger: 0.8, hero: 0.35, knock: 7, siege: 1.6, gate: 1.2, burn: 4, burnR: 3.4, burnDps: 0.4 };
+// It has to fly `arm` m before it will burst (the fuse catches in the air): loosed into a foe at arm's length it is only an arrow, so a
+// Ranger caught in a brawl cannot blast her way out of it.
+export const XARROW = { draw: 0.4, speed: 60, grav: 0.55, arm: 7, hit: 1, dmg: 2.1, radius: 3.8, edge: 0.4, stagger: 0.8, hero: 0.35, knock: 7, siege: 1.6, gate: 1.2, burn: 4, burnR: 3.4, burnDps: 0.4 };
 
 // Hunting Hawk. Sent up to `range` m, it flies at `speed` m/s (at least `minT` s) and marks every foe within `radius` m of the spot for
 // `mark` s (blows on him deal `amp` more). After circling `circle` s it dives (`dive` s) on the nearest rival hero within `swoopR` m of
@@ -61,9 +63,10 @@ export const RANGER_METHODS = {
     this.emit('xarrow', from, dir);
   },
 
-  // the arrow e (projectiles.js) has struck at `at`: the blast, and the fire on the ground under it
+  // the arrow e (projectiles.js) has struck at `at`: the blast, and the fire on the ground under it (if it has flown far enough to burst)
   xboom(e, at) {
     const g = this.g, X = XARROW, o = e.owner, team = e.team;
+    if (e.from && e.from.distanceToSquared(at) < X.arm * X.arm) { this.emit('xdud', at, ZERO); return; }
     const R = X.radius * talentFx(o, 'xRadius', 1), c = at.clone();
     this.eachFoe(team, c.x, c.z, R, (u, d) => {
       if (u.isSiege) { g.damage(u, e.boom * X.siege, o, { ability: 'Explosive Arrow' }); return; }
@@ -181,6 +184,14 @@ export const RANGER_SHOW = {
     g.fx.flash(V1.copy(at).addScaledVector(dir, 0.5), A.col.set(0xffa040), 2.2, 0.16, 0.9);
     g.fx.fireTrail(V1);
     ctx.snd('xarrow');
+  },
+
+  // too close to burst: a puff of smoke and a spit of sparks
+  xdud(ctx) {
+    const { g, at } = ctx;
+    g.fx.smoke(at);
+    g.fx._sparks(at, 6);
+    ctx.snd('xdud');
   },
 
   // the blast, and (sz > 0) the ground catching fire under it
@@ -486,6 +497,7 @@ SOUNDS.xarrow = (a, k) => {
   a.noise(0.45, 2600, 0.8, 0.2 * k, 'bandpass');
   a.noise(0.3, 6000, 1, 0.08 * k, 'highpass', 0.04);
 };
+SOUNDS.xdud = (a, k) => { a.noise(0.25, 2400, 1, 0.12 * k, 'bandpass'); a.noise(0.4, 600, 0.6, 0.08 * k, 'lowpass', 0.03); };
 SOUNDS.xboom = (a, k) => {
   a.noise(0.08, 3200, 1.5, 0.45 * k, 'bandpass');
   a.tone(62, 0.7, 0.6 * k, 'sine', 0.45, 0.01);
@@ -531,15 +543,15 @@ export function xarrowAim(e, t, tv, out) {
 }
 
 // The best mark for the Explosive Arrow among a bot's foes (foes, dist: as HeroBot and LordKit keep them): a rival hero (worth four, and
-// more with men round him), an engine (three), or the soldier with the most others round him, at least `need`; 2..60 m off with a clear
-// line (clear(o)). Returns { o, ground } (ground: aim at his feet, so the blast takes the knot) or null.
+// more with men round him), an engine (three), or the soldier with the most others round him, at least `need`; 8.5..60 m off with a clear
+// line (clear(o)). Not at hand: it would not burst. Returns { o, ground } (ground: aim at his feet, so the blast takes the knot) or null.
 export function xarrowMark(foes, dist, need, clear) {
   const R = XARROW.radius;
   let best = null, bs = 0;
   const step = Math.max(1, Math.ceil(foes.length / 40));
   for (let i = 0; i < foes.length; i += step) {
     const o = foes[i], d = dist[i];
-    if (d < 2 || d > 60) continue;
+    if (d < XARROW.arm + 1.5 || d > 60) continue;   // (too close and it will not burst)
     let s = isHero(o) ? 4 : o.isSiege ? 3 : 0;
     for (const f of foes) if (f !== o && !f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < R) s += isHero(f) ? 2 : 1;
     if (!isHero(o) && !o.isSiege) s += 1;

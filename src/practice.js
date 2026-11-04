@@ -20,7 +20,7 @@ const LAYOUT = {
   ladder: () => [-8, -4, 0, 4, 8].map((x, i) => ({ x, z: 9, tier: i })),            // one of every armour, side by side
   row: (tier) => [-8, -4, 0, 4, 8].map((x) => ({ x, z: 17, tier })),                // five alike: the fair comparison
   crowd: (tier) => { const out = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) out.push({ x: (c - 1.5) * 1.7, z: 28 + r * 1.7, tier }); return out; },
-  far: (tier) => [{ x: -6, z: 46, tier }, { x: 6, z: 46, tier }, { x: 0, z: 56, tier }],   // for the bow, spells and the volley
+  far: (tier) => [{ x: -6, z: 46, tier }, { x: 6, z: 46, tier }, { x: 0, z: 56, tier }],   // for the bow, spells and the hawk
   // up on the far wall's top, the furthest the yard goes: heads over the stone for the Sniper Shot, a wall walk for the Leap to reach
   wall: (tier) => [-8, 0, 8].map((x) => ({ x, z: 2 * PRACTICE.hd - PRACTICE.start + PRACTICE.wallT / 2, y: PRACTICE.wallH, tier })),
 };
@@ -28,9 +28,9 @@ export const STAND_NAMES = { ladder: 'Ladder', row: 'Row of five', crowd: 'Crowd
 export const STAND_HINTS = {
   ladder: 'one of each armour tier, side by side (9 m)',
   row: 'five of the chosen armour in a line (17 m): the fair test for soldiers',
-  crowd: 'twelve close together (28 m): area spells, the Whirlwind, the volley',
-  far: 'three far off (46 and 56 m): bow, spells and the volley',
-  wall: 'three up on the far wall (63 m): the Sniper Shot, and a Leap up onto the wall',
+  crowd: 'twelve close together (28 m): area spells, the Whirlwind, the Explosive Arrow and the Ultimates',
+  far: 'three far off (46 and 56 m): bow, spells and the Hunting Hawk',
+  wall: 'three up on the far wall (63 m): the Sniper Shot (a Ranger talent), and a Leap up onto the wall',
 };
 
 const hex = (c) => '#' + c.toString(16).padStart(6, '0');

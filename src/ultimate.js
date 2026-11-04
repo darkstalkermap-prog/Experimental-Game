@@ -323,33 +323,31 @@ function meteorLookStep(A, e, dt) {
     return true;
   }
   // it lands: the blast, then the burning ground (burnLook) carries on as a look of its own
-  {
-    if (e.look) hideMeteorLook(e.look);
-    const R = M.radius;
-    fx.explosion(V1.copy(at).setY(at.y + 0.6), 7);
-    fx.explosion(V1.copy(at).setY(at.y + 4.5), 5);   // (a second ball of flame, higher: the blast stands tall)
-    for (let i = 0; i < 18; i++) {   // a column of fire where it struck, and flames thrown round it
-      const a = Math.random() * Math.PI * 2, r = i < 8 ? Math.random() * 1.5 : 2 + Math.random() * (R - 2);
-      V1.set(at.x + Math.cos(a) * r, at.y + (i < 8 ? Math.random() * 5 : 0.2), at.z + Math.sin(a) * r);
-      fx.blaze(V1, i < 8 ? 3.6 : 2.2);
-    }
-    A.gfx.pillar(at.x, at.y, at.z, 0xff9a40, 0.9, 3.2, 26, 1.8);
-    for (let i = 0; i < 9; i++) {   // the plume of black smoke that rises after it, and hangs
-      const a = Math.random() * Math.PI * 2, r = Math.random() * 3;
-      fx.smoke(V1.set(at.x + Math.cos(a) * r, at.y + 0.5 + Math.random() * 3, at.z + Math.sin(a) * r));
-    }
-    fx.crater(at, 4.6);
-    fx.scorch(at, R * 0.9);
-    fx._dust(V1.copy(at).setY(at.y + 0.3), 40, R * 0.8, '');
-    fx._sparks(V1.copy(at).setY(at.y + 1.2), 40);
-    fx.ring(at, R * 0.5, A.col.set(0xffa060), 40, { up: 1.2, size: 0.5, speed: 12 });
-    A.gfx.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xffc080, 0.8, { team: e.house, strength: 2 });
-    A.gfx.glyph('pulse', at.x, at.y, at.z, R, 0xff4a1a, 1.0, { strength: 2 });
-    if (g.magic) g.magic.flash(V1.copy(at).setY(at.y + 2), 0xff8a30, 22);
-    if (g.camfx) g.camfx.boom(at, 1);
-    if (!e.silent) g.audio.play('meteor', at);
-    burnLook(A, at, M.burnR, M.burn, e.silent);   // (then the ground burns, glowing until it goes out)
+  if (e.look) hideMeteorLook(e.look);
+  const R = M.radius;
+  fx.explosion(V1.copy(at).setY(at.y + 0.6), 7);
+  fx.explosion(V1.copy(at).setY(at.y + 4.5), 5);   // (a second ball of flame, higher: the blast stands tall)
+  for (let i = 0; i < 18; i++) {   // a column of fire where it struck, and flames thrown round it
+    const a = Math.random() * Math.PI * 2, r = i < 8 ? Math.random() * 1.5 : 2 + Math.random() * (R - 2);
+    V1.set(at.x + Math.cos(a) * r, at.y + (i < 8 ? Math.random() * 5 : 0.2), at.z + Math.sin(a) * r);
+    fx.blaze(V1, i < 8 ? 3.6 : 2.2);
   }
+  A.gfx.pillar(at.x, at.y, at.z, 0xff9a40, 0.9, 3.2, 26, 1.8);
+  for (let i = 0; i < 9; i++) {   // the plume of black smoke that rises after it, and hangs
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 3;
+    fx.smoke(V1.set(at.x + Math.cos(a) * r, at.y + 0.5 + Math.random() * 3, at.z + Math.sin(a) * r));
+  }
+  fx.crater(at, 4.6);
+  fx.scorch(at, R * 0.9);
+  fx._dust(V1.copy(at).setY(at.y + 0.3), 40, R * 0.8, '');
+  fx._sparks(V1.copy(at).setY(at.y + 1.2), 40);
+  fx.ring(at, R * 0.5, A.col.set(0xffa060), 40, { up: 1.2, size: 0.5, speed: 12 });
+  A.gfx.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xffc080, 0.8, { team: e.house, strength: 2 });
+  A.gfx.glyph('pulse', at.x, at.y, at.z, R, 0xff4a1a, 1.0, { strength: 2 });
+  if (g.magic) g.magic.flash(V1.copy(at).setY(at.y + 2), 0xff8a30, 22);
+  if (g.camfx) g.camfx.boom(at, 1);
+  if (!e.silent) g.audio.play('meteor', at);
+  burnLook(A, at, M.burnR, M.burn, e.silent);   // (then the ground burns, glowing until it goes out)
   return false;
 }
 

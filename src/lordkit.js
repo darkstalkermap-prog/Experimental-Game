@@ -529,9 +529,11 @@ export class LordKit {
     return this.beginDraw('s', best, S.draw + S.settle * (1.1 + (1 - this.skill) * 0.6));
   }
 
-  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js), drawn and loosed by drawing()
+  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js), or at whoever is in reach once
+  // it has waited ready a few seconds; drawn and loosed by drawing()
   explosive(need) {
-    const m = xarrowMark(this.foes, this.dist, need, (o) => this.clearShot(o));
+    const clear = (o) => this.clearShot(o);
+    const m = xarrowMark(this.foes, this.dist, need, clear) || (this.readyAt.q >= 0 && this.g.time - this.readyAt.q > 3 ? xarrowMark(this.foes, this.dist, 1, clear) : null);
     return !!m && this.beginDraw('q', m.o, XARROW.draw, m.ground);
   }
 
