@@ -828,7 +828,7 @@ export class UI {
       if (g.phase === 'prep') setText($('phase'), `Battle begins in ${clock(g.phaseT)}`);
       else setText($('phase'), `Next wave in ${clock(g.phaseT)}`);
       setText($('war'), f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`);
-      if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: the practice panel'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
+      if (g.practice) { $('round').textContent = 'Practice courtyard'; $('phase').textContent = 'P: change hero, level and talents · soldiers · dummies'; $('war').textContent = 'Try heroes and soldiers on the dummies'; updatePracticeHud(this); }
       setText($('weapon'), p.drive ? `${p.drive.name} · ${Math.ceil(p.drive.hp)}/${Math.round(p.drive.maxHp)} HP`
         : p.weapon === 'sword' ? `${p.sword.name} & ${p.shield.name}`
         : `${p.bow.name} · ${p.arrows} arrows`);

@@ -1365,6 +1365,7 @@ export class Game {
 
   localSwitchClass(id) {
     const p = this.player;
+    if (this.practice && this.court) { if (id === p.classId) return false; this.court.setHeroClass(id); this.ui.toast(`You are now a ${p.cls.name}.`); return true; }   // (full health and ready abilities, like the practice panel)
     if (this.mode !== 'client') return this.switchClass(p, id);
     const why = this.hero ? 'Heroes keep their class in the Hero Game Mode' : p.classBlock(id);
     if (why) { this.audio.play('deny'); this.ui.toast(why); return false; }
