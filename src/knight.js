@@ -89,14 +89,17 @@ export const KNIGHT_METHODS = {
     }
     this.bannerPool = [];
     for (let i = 0; i < 2; i++) this.bannerPool.push(makeBanner(g, M));
-    // the tethers: one set of line segments for every Challenge on screen (the lightning's material in red: the same shader)
-    const n = 32, geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage));
+    // the tethers: a ribbon turned to the camera for each foe a Challenge binds, all of them one mesh (one draw while any is on screen)
+    const n = 32, geo = new THREE.BufferGeometry(), idx = [];
+    for (let i = 0; i < n; i++) idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4 + 2, i * 4 + 1, i * 4 + 3);
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * 12), 3).setUsage(THREE.DynamicDrawUsage));
+    const uv = new Float32Array(n * 8);
+    for (let i = 0; i < n; i++) uv.set([0, 0, 1, 0, 0, 1, 1, 1], i * 8);
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    geo.setIndex(idx);
     geo.setDrawRange(0, 0);
-    const mat = g.magic.boltMat.clone();
-    mat.color.set(0xff3324);
-    mat.opacity = 0.85;
-    this.tether = new THREE.LineSegments(geo, mat);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xff3a22, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    this.tether = new THREE.Mesh(geo, mat);
     this.tether.frustumCulled = false;
     this.tether.visible = false;
     this.tether.renderOrder = 6;
@@ -304,7 +307,10 @@ const KNIGHT_SHOW = {
   wrathfull(ctx) {
     const { g, who } = ctx;
     if (!who) return;
-    shieldSpot(who, V1);
+    if (who === g.player && g.camera) {   // (his own: on the shield in his hand, low on the left of the view)
+      const fx = Math.sin(who.yaw), fz = Math.cos(who.yaw), c = g.camera.position;
+      V1.set(c.x + fx * 0.8 + fz * 0.42, c.y - 0.32, c.z + fz * 0.8 - fx * 0.42);
+    } else shieldSpot(who, V1);
     g.fx.flash(V1, COL.set(0xfff0c8), 2.2, 0.35, 1.2);
     g.fx.gold(V1);
     g.fx._sparks(V1, 8);
@@ -369,6 +375,8 @@ const KNIGHT_SHOW = {
         const d = (u.pos.x - q.x) ** 2 + (u.pos.z - q.z) ** 2;
         if (d < bd) { bd = d; best = u; }
       });
+      const me = g.player;   // (one's own hero is matched directly: he may have moved since the grid last placed him)
+      if (me && me.alive && !allied(me.team, who.team) && !foes.includes(me) && me.chest(V1).distanceToSquared(q) < 2.5 * 2.5 && (!best || me.chest(V1).distanceToSquared(q) < bd)) best = me;
       if (best) foes.push(best);
     }
     const end = g.time + t;
@@ -485,6 +493,7 @@ function tossLookStep(A, L, dt) {
   m.rotation.set(-Math.PI / 2 + 0.25, 0, L.spin, 'XYZ');
   m.updateMatrix();
   L.acc += dt;
+  if (who === g.player && d < 3) L.acc = 0;   // (not in his own eyes as he catches it)
   while (L.acc > 0.035) {   // (a gleam off the steel rim behind it)
     L.acc -= 0.035;
     g.fx.frostTrail(V2.set(L.pos.x + (Math.random() - 0.5) * 0.4, L.pos.y + (Math.random() - 0.5) * 0.2, L.pos.z + (Math.random() - 0.5) * 0.4));
@@ -528,7 +537,7 @@ export function knightArm(vm, p, t, L) {
   let dx = 0, dy = 0, dz = 0, rz = 0;
   if (away) {
     const k = Math.min(1, since / 0.1), r = Math.min(1, Math.max(0, (since - 0.12) / 0.4));
-    dx = 0.2 * k * (1 - r); dz = -0.24 * k * (1 - r); dy = 0.04 * k * (1 - r) - 0.1 * r; rz = -0.5 * k * (1 - r);
+    dx = 0.2 * k * (1 - r); dz = -0.24 * k * (1 - r); dy = 0.04 * k * (1 - r) - 0.06 * r; rz = -0.5 * k * (1 - r);
   } else if (back >= 0 && back < 0.3) {
     const k = 1 - back / 0.3;
     dz = -0.1 * k * k; dx = 0.05 * k * k;
@@ -634,10 +643,23 @@ function waveCloth(b, t) {
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the tethers
+// a strip from c to q, w m wide, turned to face the eye at `cam` (4 corners into arr at j)
+const RA = new THREE.Vector3(), RB = new THREE.Vector3();
+function ribbon(arr, j, c, q, cam, w) {
+  RA.subVectors(q, c);
+  RB.set((c.x + q.x) / 2 - cam.x, (c.y + q.y) / 2 - cam.y, (c.z + q.z) / 2 - cam.z);
+  RA.cross(RB);
+  const l = RA.length() || 1, k = w / l;
+  const sx = RA.x * k, sy = RA.y * k, sz = RA.z * k;
+  arr[j] = c.x - sx; arr[j + 1] = c.y - sy; arr[j + 2] = c.z - sz;
+  arr[j + 3] = c.x + sx; arr[j + 4] = c.y + sy; arr[j + 5] = c.z + sz;
+  arr[j + 6] = q.x - sx; arr[j + 7] = q.y - sy; arr[j + 8] = q.z - sz;
+  arr[j + 9] = q.x + sx; arr[j + 10] = q.y + sy; arr[j + 11] = q.z + sz;
+}
 // (a look stepped by Abilities.updateFx while any Challenge is on this screen: a red line from the knight to each foe he holds, and a red
 // glow over their heads)
 function stepDares(A, e, dt) {
-  const g = A.g, L = A.tether;
+  const g = A.g, L = A.tether, cam = g.camera.position;
   if (!L) { A.daring = false; return false; }
   const arr = L.geometry.attributes.position.array;
   let n = 0;
@@ -646,19 +668,18 @@ function stepDares(A, e, dt) {
     if (g.time >= d.end || !w || w.alive === false) { A.dares.splice(i, 1); continue; }
     const c = w.chest ? w.chest(V1) : V1.copy(w.pos).setY(w.pos.y + 1.2);
     d.acc += dt;
-    const glow = d.acc > 0.2;
+    const glow = d.acc > 0.15;
     if (glow) d.acc = 0;
     for (const o of d.foes) {
       if (!o.alive || n >= A.tetherMax) continue;
       const q = o.chest(V2);
       if (o === g.player) q.y -= 0.5;   // (from his own eyes the line comes in at the chest, not through the camera)
-      const j = n * 6;
-      arr[j] = c.x; arr[j + 1] = c.y; arr[j + 2] = c.z; arr[j + 3] = q.x; arr[j + 4] = q.y; arr[j + 5] = q.z;
+      ribbon(arr, n * 12, c, q, cam, 0.045);
       n++;
-      if (glow) g.fx.orb(V3.set(o.pos.x, o.pos.y + (o.height || 1.8) + 0.35, o.pos.z), COL.set(0xff2a1a), 0.35);
+      if (glow) g.fx.orb(V3.set(o.pos.x, o.pos.y + (o.height || 1.8) + 0.4, o.pos.z), COL.set(0xff2a1a), 0.6);
     }
   }
-  L.geometry.setDrawRange(0, n * 2);
+  L.geometry.setDrawRange(0, n * 6);
   L.geometry.attributes.position.needsUpdate = true;
   if (A.dares.length) return true;
   L.visible = false;

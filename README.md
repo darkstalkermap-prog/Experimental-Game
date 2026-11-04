@@ -69,7 +69,7 @@ can see what armour does to a blow. The floor has chalk lines every 10 m and dis
 Press **P** for the practice panel (the mouse is free while it is up, and the yard carries on behind it):
 
 - **Your hero**: any of the six classes at level 1 to 5, with full health and ready abilities each time. **All talents** gives the whole tree of
-  the class at any level (**No talents** clears it, **Talent tree (N)** spends the points the level gives), **Heal and refill** tops everything up.
+  the class at any level (**No talents** clears it, **Talent tree (N)** spends the points the level gives), **Heal and refill** tops everything up (a Knight's Wrath too, to try the shockwave on the dummies).
   The line below shows what your hero is now (health, armour, sword, bow, spells, speed, recharge).
 - **Soldiers**: any kind (swordsman, spearman, archer and cavalry; knight, longbowman and lancer; lord and giant) at any **veteran rank** (1 to 5,
   +12% health, +10% damage, +1 armour per rank above the first) and any **training tier** (0 to 5, +15% health and damage and a better kit), one, five,
@@ -282,15 +282,23 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
   attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
-  - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). He carries a tall kite shield (so do knight
-    soldiers and the AI lords), painted with your arms; in first person it is carried low and turned aside, and on guard its top
-    sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash** (12 s): hold Q and a
-    circle shows where your run ends, up to 120 m away (as far as a Mage's Fireball flies); let go and you run there behind your
-    shield at 24 m/s (26 mounted). The first enemy in front of the shield ends the run with the bash: heavy damage, a long stun and
-    a shove for everyone in the cone ahead. The run follows the ground and stops short of walls, gates that are not open to you,
-    trunks, steep rises and an enemy castle's stone; Q again bashes where you are, and with a wall at your nose it is the old short
-    lunge. **R Bulwark**: for 5 s
-    you take 70% less damage and can't be staggered; allies beside you take 40% less.
+  - **Knight** (130% health, +5 armour, slower). He carries a tall kite shield (so do knight soldiers and the AI lords), painted
+    with your arms; in first person it is carried low and turned aside, and on guard its top sits just under your eyes. It blocks
+    exactly as any shield does, and blocking is how he builds his big hit (`src/knight.js`):
+    **Retribution** (passive): every blow your raised shield takes fills the **Wrath** bar under your stamina (5 blocked blows fill
+    it; a parry counts 1.7x, an arrow or a spell on the shield, or a blow the shield only softened, a little). It fades slowly after
+    12 s without a block. Full, it glows and your shield glints with a ring of steel (everyone sees and hears it), and your **next
+    swing releases a shockwave**: a cone 9 m long in front of you (60 degrees either side) that deals 2.2x your sword damage (55% at
+    the far end), staggers everyone in it (heroes briefly) and throws soldiers back. **Q Shield Throw** (10 s): the shield flies where
+    you aim (as far as a Mage's Fireball flies, 120 m) at 55 m/s, spinning flat with a gleam behind it. It bounces between up to 3
+    enemies (each next one the nearest within 10 m, with nothing in the way), dealing 1.3x your sword damage and stunning each
+    (1.1 s, a hero 0.8 s; a hero who meets it with his own raised shield keeps his feet), then flies back to your hand. A wall, the
+    ground or the end of its reach sends it back early. While it is away you cannot block: in first person your arm follows
+    through and hangs empty until you catch it. **R Challenge** (16 s): every enemy within 12 m, heroes too, has to attack you for
+    3 s, and you take 50% less damage. Soldiers and the computer's lords turn on you, hero bots too; a person you challenge sees
+    a red warning ("Challenged!", with an arrow toward you) and a red tether to you, and everyone sees the tethers. Keep your shield
+    up: the blows it draws fill your Wrath. (The old Q, Shield Bash, and R, Bulwark, are gone: the throw is his reach, Challenge his
+    defence; Avenging Wall and Bastion Strike now work under Challenge.)
   - **Berserker** (130% sword damage, light armour, quick; hits 15% harder below half health). **Q Whirlwind**:
     spin for a second and cut everyone around you three times. **R Leap** (11 s): hold R and a circle on the ground shows
     where you will land, up to 120 m away (as far as a Mage's Fireball flies: `FIREBALL_RANGE` in `src/config.js`); let go and you
@@ -343,7 +351,11 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     and leaves a scorched crater, and the ground burns for 6 s: 22 damage a second to every foe in 6.5 m of it.
   - **Cleric: Sanctuary**: a dome and circle of golden light 10 m round you for 5 s, with a soft hum: no one of your side inside it,
     hero or soldier (co-op allies too), can be brought below 1 health. A chime when it ends.
-  - **Knight, Berserker, Ranger, Cavalier**: for now a simple stand-in (Earthbreaker, Rampage, Stampede: a slam all round the hero;
+  - **Knight: Banner of the Realm**: you plant your house's banner where you stand (a pole with a gold finial and your arms on a
+    hanging cloth that stirs in the wind, a ring in your colour round it) for 12 s. Allies within 10 m of it heal over time (heroes
+    2.5% of their health a second, soldiers 4%; they glint green), and enemies inside the ring move 40% slower (a cold mist at their
+    feet). Bots and the computer's Knight lords plant it where the fight is thick and their side is in it, or when hard pressed.
+  - **Berserker, Ranger, Cavalier**: for now a simple stand-in (Rampage, Stampede: a slam all round the hero;
     Arrow Storm: a wide volley of 45 arrows on a circle up to 70 m away), to be replaced by each class's own.
 
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
@@ -368,7 +380,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
-  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Whirlwind strikes
+  speed, draw time); most change an ability: the Knight's Shield Throw stuns longer and bounces once more (Ricochet), his Challenge lasts longer and fills Wrath faster (Hold the Line), the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Whirlwind strikes
   once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
   hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
   Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
@@ -676,7 +688,7 @@ lords.
 **Lords fight as heroes.** Every lord the computer plays (a rival lord, a plain lord, the lord who takes over a house whose player left, and War Mode's
 AI generals) is a hero of a class: he wears its look under a lord's long cape and uses its **Q** and **R** as a hero bot does (`src/lordkit.js`). The
 Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a knot of foes or at a rival hero), the Patient and the Ironclad Knights
-(Shield Bash at hand or a run of up to 40 m at a knot or a hero, Bulwark when pressed), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
+(Shield Throw at a hero or a knot of foes up to 40 m off, Challenge into a crowd or when pressed, the shockwave when their Wrath is full: a lord's shield turning a blow aside fills it), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
 Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
 fights with the bow from 34 m, never from a wall post; Power Shot down a line of foes, Sniper Shot at a far hero, giant or siege crew). The plain lords:
 Aldmoor a Knight, Varr a Berserker, Elden a Cleric, Sol a Mage; a War Mode general draws a class. No lord is a Cavalier (a lord has no horse). The
@@ -1077,7 +1089,7 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
 - **Alternate capstone talents**, one for each class, in the capstone's own place in the talent tree. Each costs one point like
   the capstone it can stand in for, replaces it (a hero has one or the other, and Respec lets them change their mind) and is a
   **sidegrade**: a different effect that is no bigger than the original's (`ALT_TALENTS` and its numbers, in `src/talents.js`).
-  Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
+  Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Challenge is stored, and when Challenge ends
   the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
   the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
   anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Arrow Volley): zoomed in, the bow draws
@@ -1297,7 +1309,7 @@ man is doing, with a little kept on the rig between frames so that nothing snaps
   straight); the hips come down where a stride is long; the heel lifts as the leg goes behind. Standing, a foot steps only when the body has
   turned or been pushed off it. Near the camera the foot turns at its own ankle to lie as it was set down (flat, or rolled onto the toe),
   so a planted toe or heel never dips into the ground while the shin leans over it. On a slope each foot finds its own ground. Going sideways or backwards at speed the hips turn part way into
-  the stride. Past a sprint (a Shield Bash's run) the steps stay a sprint's.
+  the stride. Past a sprint (a Lance Charge on foot) the steps stay a sprint's.
 - **Blends, not snaps.** The guard, a stagger, a climb, a jump ease in and out by weights; anything abrupt (a blow cut short, a blow seen
   late on a guest, the bow taken out, mounting, landing, a burst of speed, death) is carried as an offset from the last pose drawn that
   fades out in a fraction of a second, so the new pose plays at once and only the difference eases away. A hero hops into and out of the
@@ -1309,7 +1321,7 @@ man is doing, with a little kept on the rig between frames so that nothing snaps
   frame for the 300 an animated ring holds at most), and only the soldiers in that ring are posed. It is worked out in four steps whose
   numbers pass through typed arrays (one big function ran past what the engine inlines, and boxed the numbers of every call it did not), so
   it makes little garbage: a 1600-soldier War Mode battle makes about 9% more than before.
-- **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Bash's push and a blow cut short ease in
+- **First person** (`src/viewmodel.js`): the guard, a stagger, the Whirlwind's spin, the Shield Throw's follow-through and catch and a blow cut short ease in
   and out; the wind-up and the strike leave their rest at a speed instead of jumping to it.
 
 The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/giantmodel.js`).
@@ -1340,6 +1352,8 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
+| `src/knight.js` | The Knight's kit: Retribution (Wrath, the shockwave), Shield Throw, Challenge, Banner of the Realm; their looks, sounds and bot rules |
+| `src/knighthud.js` | The Wrath bar and the "Challenged!" warning on the HUD |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |

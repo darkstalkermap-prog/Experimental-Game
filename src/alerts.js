@@ -80,7 +80,7 @@ export const TIPS = [
   { id: 'pingwheel', team: true, learn: 'marker', text: 'Hold the middle button and flick the mouse to leave a marker: Go here, Attack, Defend, Danger or Need help.' },
   { id: 'mapping', team: true, learn: 'marker', text: 'Press [M] and click the big map to mark a spot for your team; right click removes your nearest marker.' },
   { id: 'arrows', text: 'Arrows run out. Each wave brings five more, so save them for archers and siege crews.' },
-  { id: 'knight', cls: 'knight', text: 'Knight: hold [Q] to aim a Shield Bash run (as far as a Fireball flies): you charge behind the shield and bash the first enemy you meet. [R] Bulwark cuts the damage you take by 70% for five seconds.' },
+  { id: 'knight', cls: 'knight', text: 'Knight: every blow you block (right mouse) fills your Wrath bar; when it is full your next swing sends out a shockwave. [Q] Shield Throw bounces between up to three enemies and comes back (no blocking until you catch it). [R] Challenge makes every enemy within 12 m attack you while you take half damage.' },
   { id: 'berserker', cls: 'berserker', text: 'Berserker: hold [R] to mark a spot as far as a Fireball flies, let go and Leap there over the soldiers, slamming the ground where you land. [Q] Whirlwind finishes what the slam began.' },
   { id: 'ranger', cls: 'ranger', text: 'Ranger: aim for the head (double damage) and draw fully to shoot through a line of men. [Q] Power Shot breaks a rank, hold [R] for the Sniper Shot: the view zooms in, steadies, and one heavy arrow flies flat as far as a Fireball. Let go to loose.' },
   { id: 'mage', cls: 'mage', text: 'Mage: Fireball ([Q]) burns gates and siege engines as well as men; Frost Ward ([R]) soaks up the next blows.' },

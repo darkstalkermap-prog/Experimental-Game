@@ -2,7 +2,10 @@
 // shield takes and, full, glows: the next swing releases the shockwave, knight.js), and for anyone a Knight has Challenged a red warning at
 // the top of the screen with an arrow toward him. The elements are made the first time they are needed; each field is written only when it
 // changes.
+import * as THREE from 'three';
+
 let wr = null, warn = null;
+const V = new THREE.Vector3();
 
 function bar() {
   if (wr) return wr;
@@ -55,11 +58,14 @@ export function updateKnightHud(ui, p) {
   const t = Math.max(p.buffs.time('challenged'), mine ? mine.until - g.time : 0);
   const text = `${who && who.name ? `${who.name} calls you out` : 'A Knight calls you out'} · ${Math.ceil(t)} s`;
   if (text !== w.text) { w.text = text; w.who.textContent = text; }
-  // the arrow: where he is from where you look (up: ahead of you)
+  // the arrow: where he is on the screen from its middle (up: ahead of you; behind you, down)
   let rot = '';
-  if (who && who.pos) {
-    const a = Math.atan2(who.pos.x - p.pos.x, who.pos.z - p.pos.z) - p.yaw;
-    rot = `rotate(${Math.round((-a * 180) / Math.PI)}deg)`;
+  const cam = g.camera;
+  if (who && who.pos && cam) {
+    V.copy(who.pos); V.y += 1.6;
+    V.project(cam);
+    const behind = V.z > 1, x = behind ? -V.x : V.x, y = behind ? -Math.abs(V.y) - 1 : V.y;
+    rot = `rotate(${Math.round((Math.atan2(x, y) * 180) / Math.PI)}deg)`;
   }
   if (rot !== w.rot) { w.rot = rot; w.arrow.style.transform = rot; w.arrow.style.visibility = rot ? '' : 'hidden'; }
 }
