@@ -375,8 +375,8 @@ const KNIGHT_SHOW = {
         const d = (u.pos.x - q.x) ** 2 + (u.pos.z - q.z) ** 2;
         if (d < bd) { bd = d; best = u; }
       });
-      const me = g.player;   // (one's own hero is matched directly: he may have moved since the grid last placed him)
-      if (me && me.alive && !allied(me.team, who.team) && !foes.includes(me) && me.chest(V1).distanceToSquared(q) < 2.5 * 2.5 && (!best || me.chest(V1).distanceToSquared(q) < bd)) best = me;
+      const me = g.player;   // (one's own hero is matched directly: the grid may not have him where he is now)
+      if (me && me.alive && !allied(me.team, who.team) && !foes.includes(me) && me.chest(V1).distanceToSquared(q) < 4 * 4) best = me;   // (his own place on the host may lag his screen a little)
       if (best) foes.push(best);
     }
     const end = g.time + t;
@@ -643,19 +643,19 @@ function waveCloth(b, t) {
 }
 
 // ------------------------------------------------------------------------------------------------------------------ the tethers
-// a strip from c to q, w m wide, turned to face the eye at `cam` (4 corners into arr at j)
+// a strip from c (w0 m wide) to q (w1 m wide), turned to face the eye at `cam` (4 corners into arr at j)
 const RA = new THREE.Vector3(), RB = new THREE.Vector3();
-function ribbon(arr, j, c, q, cam, w) {
+function ribbon(arr, j, c, q, cam, w0, w1) {
   RA.subVectors(q, c);
   RB.set((c.x + q.x) / 2 - cam.x, (c.y + q.y) / 2 - cam.y, (c.z + q.z) / 2 - cam.z);
   RA.cross(RB);
-  const l = RA.length() || 1, k = w / l;
-  const sx = RA.x * k, sy = RA.y * k, sz = RA.z * k;
-  arr[j] = c.x - sx; arr[j + 1] = c.y - sy; arr[j + 2] = c.z - sz;
-  arr[j + 3] = c.x + sx; arr[j + 4] = c.y + sy; arr[j + 5] = c.z + sz;
-  arr[j + 6] = q.x - sx; arr[j + 7] = q.y - sy; arr[j + 8] = q.z - sz;
-  arr[j + 9] = q.x + sx; arr[j + 10] = q.y + sy; arr[j + 11] = q.z + sz;
+  const l = RA.length() || 1, a = w0 / l, b = w1 / l;
+  arr[j] = c.x - RA.x * a; arr[j + 1] = c.y - RA.y * a; arr[j + 2] = c.z - RA.z * a;
+  arr[j + 3] = c.x + RA.x * a; arr[j + 4] = c.y + RA.y * a; arr[j + 5] = c.z + RA.z * a;
+  arr[j + 6] = q.x - RA.x * b; arr[j + 7] = q.y - RA.y * b; arr[j + 8] = q.z - RA.z * b;
+  arr[j + 9] = q.x + RA.x * b; arr[j + 10] = q.y + RA.y * b; arr[j + 11] = q.z + RA.z * b;
 }
+
 // (a look stepped by Abilities.updateFx while any Challenge is on this screen: a red line from the knight to each foe he holds, and a red
 // glow over their heads)
 function stepDares(A, e, dt) {
@@ -667,6 +667,8 @@ function stepDares(A, e, dt) {
     const d = A.dares[i], w = d.who;
     if (g.time >= d.end || !w || w.alive === false) { A.dares.splice(i, 1); continue; }
     const c = w.chest ? w.chest(V1) : V1.copy(w.pos).setY(w.pos.y + 1.2);
+    const own = w === g.player;   // (from his own eyes: the tethers start a step ahead of him, thin, so they do not fill the view)
+    if (own) { c.x += Math.sin(w.yaw) * 1.6; c.z += Math.cos(w.yaw) * 1.6; c.y -= 0.35; }
     d.acc += dt;
     const glow = d.acc > 0.15;
     if (glow) d.acc = 0;
@@ -674,7 +676,7 @@ function stepDares(A, e, dt) {
       if (!o.alive || n >= A.tetherMax) continue;
       const q = o.chest(V2);
       if (o === g.player) q.y -= 0.5;   // (from his own eyes the line comes in at the chest, not through the camera)
-      ribbon(arr, n * 12, c, q, cam, 0.045);
+      ribbon(arr, n * 12, c, q, cam, own ? 0.006 : 0.03, 0.05);
       n++;
       if (glow) g.fx.orb(V3.set(o.pos.x, o.pos.y + (o.height || 1.8) + 0.4, o.pos.z), COL.set(0xff2a1a), 0.6);
     }

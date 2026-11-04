@@ -47,11 +47,12 @@ export function updateKnightHud(ui, p) {
       if (full !== b.full) { b.full = full; b.el.classList.toggle('full', full); }
     }
   }
-  // Challenged: the warning while it lasts (a person's own buff list says so, also on a guest: it comes with the snapshot)
+  // Challenged: the warning while it lasts (a person's own buff list says so, also on a guest: it comes with the snapshot); the Challenge's
+  // look on this screen (knight.js) says which Knight it was
   const w = warning();
   if (!w) return;
   const A = g.abilities, mine = A && A.chalOnMe && A.chalOnMe.until > g.time ? A.chalOnMe : null;
-  const on = p.alive && (p.buffs.has('challenged') || !!mine);
+  const on = p.alive && p.buffs.has('challenged');   // (the host's word: the look only says who and where)
   if (on !== w.on) { w.on = on; w.el.classList.toggle('hidden', !on); }
   if (!on) return;
   const who = mine ? mine.who : p.chalBy;
