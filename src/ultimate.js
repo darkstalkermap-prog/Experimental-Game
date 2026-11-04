@@ -508,7 +508,7 @@ export const ULT_AI = {
       if (isHero(f)) heroes++;
       if (f.hp < f.maxHp * 0.55) need += isHero(f) ? 3 : 1;
     }
-    if (heroes >= 2 && b.n.c8 >= 4) need += 2;
+    if (heroes >= 2 && b.n.c8 >= 4) need += 4;   // (two of her heroes and a knot of foes: the light lets them fight on)
     return need >= 4 ? {} : null;
   },
 
