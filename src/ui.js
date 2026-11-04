@@ -5,6 +5,7 @@ import { armsChip } from './heraldry.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
 import { allied, colorName } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH, abilityOf } from './classes.js';
+import { rageHud } from './berserker.js';
 import { roadDist } from './world.js';
 import { MAX_LEVEL, XP_FOR_LEVEL, levelProgress } from './heroes.js';
 import { buildTalentTab, refreshTalentTab, updateTalentHud } from './talentui.js';
@@ -57,6 +58,8 @@ export function renderClassPicker(root, info, selected, onPick) {
     info.innerHTML = `<b>${esc(c.icon)} ${esc(c.name)}</b> · ${esc(c.role)}. ${esc(c.blurb)}
       <div class="ab"><b>Q · ${esc(c.q.icon)} ${esc(c.q.name)}</b> (${c.q.cd} s): ${esc(c.q.desc)}</div>
       <div class="ab"><b>R · ${esc(c.r.icon)} ${esc(c.r.name)}</b> (${c.r.cd} s): ${esc(c.r.desc)}</div>
+      ${c.hold ? `<div class="ab"><b>${esc(c.hold.key)} · ${esc(c.hold.icon)} ${esc(c.hold.name)}</b>: ${esc(c.hold.desc)}</div>` : ''}
+      ${c.u ? `<div class="ab"><b>${ULT.keyName} · ${esc(c.u.icon)} ${esc(c.u.name)}</b> (Ultimate): ${esc(c.u.desc)}</div>` : ''}
       <div class="ab"><b>Passive:</b> ${esc(c.passive)}</div>
       <div class="st">Health ${Math.round(PLAYER.hp * m.hp)} · armour ${PLAYER.armor + m.armor} · speed ${pct(m.speed)} · sword ${pct(m.melee)} · bow ${pct(m.bow)}${m.spell !== 1 ? ` · spells ${pct(m.spell)}` : ''}${m.horse ? ' · starts with a warhorse' : ''}</div>`;
   };
@@ -815,6 +818,7 @@ export class UI {
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
+    rageHud(p, dt);   // (the Berserker's Rage bar, and the Execute cue: berserker.js)
     this.updateAbilities(dt);
     updateTalentHud(this, p);
     $('crosshair').classList.toggle('block', p.blocking);

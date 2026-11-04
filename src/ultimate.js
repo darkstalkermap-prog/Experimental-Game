@@ -3,8 +3,8 @@
 // (damage dealt, damage taken, health restored), 0 to 1, and when it is full the icon in the dock glows and one press lets it go.
 // The charge is kept through a fall and lost with a change of class. Its numbers are in config.js (ULT).
 //
-// HOW A CLASS ADDS ITS ULTIMATE (the Knight, Berserker, Cavalier and Ranger have simple stand-ins below, `placeholder: true`, to be
-// replaced the same way the Mage's Meteor and the Cleric's Sanctuary are made):
+// HOW A CLASS ADDS ITS ULTIMATE (the Knight, Cavalier and Ranger have simple stand-ins below, `placeholder: true`, to be replaced the
+// same way the Mage's Meteor and the Cleric's Sanctuary are made; the Berserker's Unstoppable lives in berserker.js with the rest of him):
 //
 // 1. The definition: classes.js, CLASSES.<class>.u, next to q and r:
 //      u: { id, icon, name, desc, kind: 'Ultimate', aimed?, range?, radius?, cast?, ...your numbers }
@@ -127,7 +127,7 @@ export const ULT_METHODS = {
     this.emit('sanctuary', c, ZERO);
   },
 
-  // ---------------------------------------------------------------- Knight, Berserker, Cavalier: a stand-in
+  // ---------------------------------------------------------------- Knight, Cavalier: a stand-in
   // (placeholder) a slam all around the hero: def.burst { radius, dmg (of his melee damage), edge, stun, knock }. Each of these
   // classes' own Ultimate takes its place.
   burst(p, cam, dir, at, def) {

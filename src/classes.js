@@ -12,6 +12,7 @@ import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
 import { ULT_METHODS, ULT_SHOW, ultReady, ultGain } from './ultimate.js';
 import { quietly } from './modelkit.js';
+import { BERSERKER_METHODS, RAGE, EXEC, UNSTOP } from './berserker.js';
 
 const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
 
@@ -32,10 +33,11 @@ export const CLASSES = {
     name: 'Berserker', icon: '🪓', color: '#e0705a', role: 'Duelist',
     blurb: 'Light armour and a terrible temper. Hits harder than anyone, but is easier to hurt.',
     mods: { hp: 1.1, armor: -1, speed: 1.07, melee: 1.3, bow: 0.6, spell: 1, bloodied: 0.15 },
-    passive: 'Below half health you hit 15% harder.',
-    q: { id: 'whirl', icon: '🌀', name: 'Whirlwind', cd: 9, desc: 'Spin with your blade for a second, cutting everyone around you three times.' },
+    passive: `Rage: every blow you land or take fills it, and it ebbs away a few seconds after you stop fighting. Below half health you hit 15% harder.`,
+    hold: { icon: '🌀', name: 'Whirlwind', key: 'Hold right mouse', desc: `With ${RAGE.spin.start} Rage or more, holding the right mouse button spins you with your axe out instead of raising your guard: you keep walking (a little slower) and cut everyone within ${RAGE.spin.radius} m about three times a second, for as long as you hold it and your Rage lasts. A crowd around you pays a little Rage back. With too little Rage, right mouse still blocks.` },
+    q: { id: 'execute', icon: '🪓', name: 'Execute', cd: EXEC.cd, desc: `A heavy overhead chop at whoever is in front of you (up to ${EXEC.targets}). Anyone it leaves below ${Math.round(EXEC.below * 100)}% health dies on the spot, heroes too, and a kill gives Execute back at once, so you can chain it through a wounded crowd.` },
     r: { id: 'leap', icon: '⤴', name: 'Leap', cd: 11, aimed: true, kind: 'Attack', desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
-    u: { id: 'burst', icon: '💢', name: 'Rampage', kind: 'Ultimate', placeholder: true, burst: { radius: 7.5, dmg: 3.4, edge: 0.5, stun: 1.2, knock: 6 }, desc: 'A furious blow on the ground that cuts down and throws back everyone within 7.5 m.' },
+    u: { id: 'unstoppable', icon: '💢', name: 'Unstoppable', kind: 'Ultimate', lasts: UNSTOP.time, desc: `With a roar that throws back everyone near you, you grow to twice your size for ${UNSTOP.time} s: nothing can slow, stagger or knock you back, your blows reach further, and every soldier you hit is sent flying.` },
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
@@ -204,7 +206,7 @@ export class Buffs {
 export const BUFF_NAMES = {
   guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Fury', ghost: 'Evading',
   ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', snap: 'Cold Snap',
-  leaping: 'Leaping',
+  leaping: 'Leaping', unstop: 'Unstoppable',
 };
 
 const ZERO = new THREE.Vector3();
@@ -283,9 +285,7 @@ export class Abilities {
         continue;
       }
       if (!p.alive || e.t > e.dur) { if (e.kind === 'bwave') p.bwave = null; this.active.splice(i, 1); continue; }
-      if (e.kind === 'whirl') {
-        while (e.n < e.hits && e.t >= 0.12 + e.n * 0.3) { this.whirlTick(p, e.n, e.n === e.hits - 1); e.n++; }
-      } else if (e.kind === 'pulse') {
+      if (e.kind === 'pulse') {
         if (e.t >= e.delay) { this.healBurst(p, e.scale); this.active.splice(i, 1); }
       } else if (e.kind === 'bwave') {
         if (e.t >= e.delay) { this.bulwarkWave(p, e); this.active.splice(i, 1); }
@@ -482,28 +482,7 @@ export class Abilities {
   }
 
   // ---------- Berserker ----------
-  whirl(p) {
-    p.buffs.add('whirl', 1.25);
-    this.active.push({ kind: 'whirl', p, t: 0, n: 0, dur: 1.3, hits: 3 + talentFx(p, 'whirlHits', 0) });
-  }
-
-  whirlTick(p, n, last = false) {
-    const g = this.g;
-    const dmg = p.meleeDmg * 0.85, reach = talentFx(p, 'whirlRadius', 1);
-    let foes = 0;
-    this.eachFoe(p.team, p.pos.x, p.pos.z, 4.2 * reach, (o) => {
-      g.damage(o, dmg, p, { melee: true, splash: true, charge: 0.5, ability: 'Whirlwind' });
-      if (o.alive && o.stagger) o.stagger(0.45, p);
-      if (!o.isSiege) foes++;
-    }, p.pos.y, 2.8);
-    const reaper = talentFx(p, 'reaper', null);   // Reaper (Berserker talent): the blade drinks
-    if (reaper && foes) p.heal(p.maxHp * reaper.heal * Math.min(foes, reaper.foes));
-    const tithe = talentFx(p, 'tithe', 0);   // Blood Tithe (alternative to Reaper): the last strike pays a flat share back
-    if (tithe && last && foes) p.heal(p.maxHp * tithe);
-    p.swingT = 0.25;
-    p.attackDir = n % 2 ? 'left' : 'right';
-    this.emit('whirl', p.pos, ZERO, null, reach);
-  }
+  // (Rage, the held Whirlwind, Execute and Unstoppable are in berserker.js, mixed in below; the Leap is here)
 
   // ---------- Berserker: the Leap ----------
   // The arc of a leap of d metres (up by dy): how high it bulges over the straight line, and how long it takes (as long as a body
@@ -1156,6 +1135,7 @@ export class Abilities {
 
 // the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js
 Object.assign(Abilities.prototype, ULT_METHODS);
+Object.assign(Abilities.prototype, BERSERKER_METHODS);   // (the Berserker's Whirlwind, Execute and Unstoppable: berserker.js)
 
 function stepUltFx(A, dt) {
   for (let i = A.ultFx.length - 1; i >= 0; i--) if (A.ultFx[i].step(A, A.ultFx[i], dt) === false) A.ultFx.splice(i, 1);

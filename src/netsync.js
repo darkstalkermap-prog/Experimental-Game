@@ -15,6 +15,7 @@ import { packFaction, unpackFaction, packHero, unpackHero } from './snapshot.js'
 import { standFor, packComeback, absorbComeback } from './comeback.js';
 import { placeOfSeat } from './seats.js';
 import { packUnits, unpackUnits, thinEvents } from './warnet.js';
+import { heroBits, heroFlags } from './berserker.js';
 export { Interp, setInterpDelay } from './interpolation.js';
 
 const TYPE_NAMES = Object.keys(UNIT_TYPES);
@@ -266,7 +267,7 @@ export class HostSync {
         staggered: h.staggerT > 0 ? 1 : 0,
         classId: CLASS_IDS.indexOf(h.classId),
         driving: h.drive ? 1 : 0,
-        movementFlags: (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0),
+        movementFlags: (h.ducking ? 1 : 0) | (h.climbing ? 2 : 0) | heroBits(h),   // (4, 8: a Berserker spinning, Unstoppable: berserker.js)
         level: h.level,
         hid: g.hero ? h.hid : undefined,
         heroKills: g.hero ? h.heroKills || 0 : undefined,
@@ -286,6 +287,7 @@ export class HostSync {
         order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId), xp: Math.floor(h.xp), lvl: h.level,
         tal: Object.keys(h.talents),   // the talents learnt (see talents.js)
         ult: Math.floor((h.ult || 0) * 100),   // the Ultimate's charge in hundredths, rounded down: "full" only when it is (ultimate.js)
+        rg: h.classId === 'berserker' ? Math.round(h.rage) : undefined,   // the Berserker's Rage (berserker.js)
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -511,6 +513,7 @@ export class ClientSync {
       if (state.level && state.level !== h.level) { h.level = state.level; if (h.body) h.buildTag(); }               // or reached a new level
       if (!h.interp) h.interp = new Interp();
       h.interp.push(state.x, state.y, state.z, state.mounted ? state.heading : state.yaw, state.yaw); // riders turn by their horse's heading
+      heroFlags(g, h, state.movementFlags);
       h.netPose = { x: state.x, y: state.y, z: state.z, yaw: state.yaw, pitch: state.pitch, vx: 0, vz: 0, b: state.blocking, w: state.weapon, m: state.mounted, h: state.heading, rs: state.rideSpeed, hx: state.horseX, hy: state.horseY, hz: state.horseZ, hyaw: state.horseYaw, dk: state.movementFlags & 1, cl: (state.movementFlags >> 1) & 1 };
       const mv = state.mounted ? state.rideSpeed : 0;
       h.netPose.vx = Math.sin(state.mounted ? state.heading : state.yaw) * mv;
@@ -559,6 +562,7 @@ export class ClientSync {
       p.potions = me.potions;
       // (just after this guest let its Ultimate go, a snapshot sent before the host heard of it still says full: not believed for a second)
       if (Number.isFinite(me.ult) && g.time - p.ultSentAt > 1) p.ult = Math.max(0, Math.min(1, me.ult / 100));
+      p.rage = Number.isFinite(me.rg) ? Math.max(0, Math.min(100, me.rg)) : 0;
       p.kills = me.kills;
       p.deaths = me.deaths;
       p.lastOrder = me.order;
