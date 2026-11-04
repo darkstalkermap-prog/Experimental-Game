@@ -32,7 +32,7 @@ export const KNIGHT = {
   // Shield Throw: out at `speed` m/s up to `range` m, a bounce to the nearest foe within `bounce` m of the last, `hits` foes in all, each
   // taking `dmg` of his melee damage and stunned `stun` s (a hero `hero` s, nothing if his own shield is up facing it); back at `back` m/s.
   // A foe within `hitR` m of its path is struck; after `maxT` s it is back in his hand whatever happened
-  toss: { range: FIREBALL_RANGE, speed: 55, back: 60, bounce: 10, hits: 3, dmg: 1.3, stun: 1.1, hero: 0.8, hitR: 0.55, maxT: 8 },
+  toss: { range: FIREBALL_RANGE, speed: 55, back: 60, bounce: 10, hits: 3, dmg: 1.3, stun: 1.1, hero: 0.8, hitR: 0.8, maxT: 8 },
   // Challenge: every foe within `radius` m for `time` s; he takes `cut` of the damage
   dare: { radius: 12, time: 3, cut: 0.5 },
   // the Banner: `radius` m for `time` s; every `every` s heroes of his side near it heal `heal` of their health a second, soldiers
@@ -714,14 +714,22 @@ export function knightTossPick(b, p, need, hi = 45) {
   return best;
 }
 
-// The guard while he Challenges (HeroBot.planGuard): the blows it draws are what fill his Wrath, so with foes at hand he keeps the shield
-// up between his own swings until the bar is full (then he swings: the shockwave).
+// The Knight bot's guard (HeroBot.planGuard, a few times a second): blocking is how he fills his Wrath, so with foes at hand he keeps the
+// shield up between his own swings, nearly all the time while he Challenges (the blows it draws are what he wants); with the bar full he
+// lowers it and swings at once (the shockwave).
 export function knightGuard(b, now) {
   const p = b.p;
-  if (p.classId !== 'knight' || p.shieldOut || !(p.chalUntil > p.game.time) || (p.wrath || 0) >= 1 || p.atk || b.n.c3 === 0) return;
-  if (Math.random() < 0.55 + 0.35 * b.skill) {
+  if (p.classId !== 'knight' || p.shieldOut) return;
+  if ((p.wrath || 0) >= 1) {
+    if (b.n.c5 >= 1) { b.guardUntil = Math.min(b.guardUntil, now); b.gapUntil = Math.min(b.gapUntil, now); }
+    return;
+  }
+  if (p.atk || b.n.c3 === 0) return;
+  const dare = p.chalUntil > p.game.time;
+  const chance = dare ? 0.6 + 0.35 * b.skill : b.n.c3 >= 2 ? 0.25 + 0.3 * b.skill : 0;
+  if (Math.random() < chance) {
     if (b.guardUntil <= now) b.guardAt = now;
-    b.guardUntil = Math.max(b.guardUntil, now + 0.45);
+    b.guardUntil = Math.max(b.guardUntil, now + (dare ? 0.6 : 0.4));
   }
 }
 

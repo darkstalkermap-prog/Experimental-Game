@@ -499,12 +499,12 @@ export class HeroBot {
     const heavy = this.recent > p.maxHp * 0.12;   // taking a beating
     switch (p.classId) {
       case 'knight': {
-        // Challenge: into a crowd, on a rival hero at hand, or when pressed (it halves the damage, and the blows it draws onto the raised
-        // shield fill his Wrath: knightGuard keeps the shield up); not with the shield away
-        if (r && !p.shieldOut && (n.c12 >= 4 + need || (n.heroes8 && hpf > 0.3) || (heavy && n.c8 >= 2 && hpf > 0.25))) { this.cast('r'); break; }
+        // Challenge: on a knot of foes at hand, a rival hero close, or when pressed (it halves the damage, and the blows it draws onto the
+        // raised shield fill his Wrath: knightGuard keeps the shield up); not with the shield away
+        if (r && !p.shieldOut && hpf > 0.25 && (n.c8 >= 3 + need || (n.heroes8 && this.heroGap < 6) || (heavy && n.c5 >= 2))) { this.cast('r'); break; }
         // Shield Throw: at a rival hero or a knot of foes within 45 m it can bounce through, with a clear line (knight.js)
         const o = q ? knightTossPick(this, p, need) : null;
-        if (o) { this.aimAtFoe(o, KNIGHT.toss.speed); this.cast('q'); }
+        if (o) { this.aimAtFoe(o, KNIGHT.toss.speed, 0.5); this.cast('q'); }   // (a spinning shield is wide: a steadier aim than an arrow's)
         break;
       }
       case 'berserker':

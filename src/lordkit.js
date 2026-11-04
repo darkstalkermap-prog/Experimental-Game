@@ -416,8 +416,8 @@ export class LordKit {
     const hpf = u.hp / u.maxHp, heavy = this.recent > u.maxHp * 0.12, need = this.need;
     switch (u.classId) {
       case 'knight': {
-        // Challenge: into a crowd, on a rival hero at hand, or when pressed (his men's foes turn on him, and he takes half the damage)
-        if (r && (n.c12 >= 4 + need || (n.heroes8 && hpf > 0.3) || (heavy && n.c8 >= 2 && hpf > 0.25))) { this.cast('r', this.look()); break; }
+        // Challenge: on a knot of foes at hand, a rival hero close, or when pressed (they turn on him, and he takes half the damage)
+        if (r && hpf > 0.25 && (n.c8 >= 3 + need || n.heroNear < 6 || (heavy && n.c5 >= 2))) { this.cast('r', this.look()); break; }
         // Shield Throw: at a rival hero or a knot of foes it can bounce through, with a clear line (knight.js)
         const o = q ? knightTossPick(this, u, need, 40) : null;
         if (o) this.cast('q', this.aimAt(o, KNIGHT.toss.speed, 1, V2));
