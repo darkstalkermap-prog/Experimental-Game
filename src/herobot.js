@@ -14,6 +14,7 @@ import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
+import { sweepNow } from './cavalier.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
@@ -23,7 +24,7 @@ export const TALENT_PREFS = {
   ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_hawk', 'rg_heavy', 'rg_deadeye', 'rg_volley'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
-  cavalier: ['cv_barding', 'cv_lance', 'cv_horn', 'cv_sweep', 'cv_banner', 'cv_thunder', 'cv_vanguard'],
+  cavalier: ['cv_lance', 'cv_edge', 'cv_saddle', 'cv_sweep', 'cv_thunder', 'cv_rhythm', 'cv_vanguard'],
 };
 
 // How each class likes to fight: melee classes close in; the Ranger and the casters keep a band of distance (lo..hi
@@ -523,9 +524,9 @@ export class HeroBot {
         if (q) this.bolt('q', 2, 90);   // (Smite reaches as far as a Fireball: 120 m; a bot lets fly within 90)
         break;
       }
-      case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short)
-        if (q && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need)) break;
-        if (r && ((this.friends.length >= 3 && n.c12 >= 2) || (hpf < 0.55 && n.c8 >= 1) || (n.heroes8 && this.friends.length >= 1))) this.cast('r');
+      case 'cavalier':   // (the charge first: its window, a gallop away from the foe, is short; the sweep whenever foes are about to go past)
+        if (r && hpf > 0.35 && this.runAt('lancecharge', 5, 45, 2 + need, 'r')) break;
+        if (q && sweepNow(this, p)) this.cast('q');
         break;
       default: break;
     }
@@ -574,7 +575,7 @@ export class HeroBot {
 
   // The long charges: a run (Shield Bash) or a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or
   // the densest knot of foes lo..hi m off, with nothing in the way of the run.
-  runAt(id, lo, hi, need) {
+  runAt(id, lo, hi, need, slot = 'q') {
     const p = this.p, A = this.g.abilities;
     if (p.climb || p.leap || p.dash) return false;
     let best = null, bs = 0;
@@ -590,7 +591,7 @@ export class HeroBot {
     const plan = A.rushPlan(p, p.pos, want);
     if (!plan || plan.d < l - 2) return false;   // (something in the way: walk round)
     this.faceYaw = p.yaw = Math.atan2(dx, dz); p.pitch = 0;
-    return this.cast('q', plan.to.clone());
+    return this.cast(slot, plan.to.clone());
   }
 
   // Leap: into a rival hero or a knot of foes a fair way off (where they will be when he comes down), to open a fight or join one;

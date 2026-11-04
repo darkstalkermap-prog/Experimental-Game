@@ -210,7 +210,7 @@ export class HostSync {
         const a = [u.id, TYPE_IDX[u.type], u.team, r1(u.pos.x), r2(u.pos.y), r1(u.pos.z), r2(u.yaw), u.alive ? 1 : 0,
           u.swingT >= 0 ? r2(u.swingT) : -1, r1(Math.hypot(u.vel.x, u.vel.z)), u.variant, Math.round((u.hp / u.maxHp) * 100),
           DIR_IDX[u.attackDir] || 0, u.staggerT > 0 ? 1 : 0, u.blockFlash > 0 || u.braced ? 1 : 0,
-          u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0), u.crewOf ? u.crewOf.id * 4 + u.crewSlot + 1 : 0];
+          u.rank | (u.lane ? 8 : 0) | (u.army ? 16 : 0) | (u.summon ? 32 : 0), u.crewOf ? u.crewOf.id * 4 + u.crewSlot + 1 : 0];
         if (u.isHero) a.push(u.name, u.kit ? u.kit.net() : 0);   // (a lord's class, and his bow: lordkit.js)
         return a;
       }),
@@ -407,6 +407,7 @@ export class ClientSync {
       if (pend && g.time < pend.until) { u.lane = pend.role === 'lane'; u.army = pend.role === 'army'; }
       else { u.lane = !!(flags & 8); u.army = !!(flags & 16); if (pend) g.rolePending.delete(id); }
       u.crewRef = crewRef;   // engine id * 4 + seat + 1, or 0
+      if (flags & 32 && !u.summon) u.summon = { net: true };   // (a knight the Cavalier called: no part of the army on this screen either)
       if (u.kit) u.kitNet = kit | 0;
       u.hp = (hpPct / 100) * u.maxHp;
     }

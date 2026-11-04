@@ -12,6 +12,7 @@ import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
 import { ULT_METHODS, ULT_SHOW, ultReady, ultGain } from './ultimate.js';
 import { quietly } from './modelkit.js';
+import { CAV, CAV_METHODS, momentumMul } from './cavalier.js';
 
 const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
 
@@ -66,12 +67,12 @@ export const CLASSES = {
   },
   cavalier: {
     name: 'Cavalier', icon: '🐎', color: '#e8b84a', role: 'Shock cavalry',
-    blurb: 'Starts with a warhorse. Rides down the enemy and keeps the whole army moving.',
-    mods: { hp: 1.1, armor: 3, speed: 1, melee: 1, bow: 0.8, spell: 1, horse: true, rider: 0.7, trample: 1.25 },
-    passive: 'Mounted, the horse shields you (30% less damage) and tramples 25% harder.',
-    q: { id: 'lancecharge', icon: '🐎', name: 'Lance Charge', cd: 14, aimed: true, rush: true, desc: `Hold Q to see where the charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and gallop there with the lance couched (on foot, a rush), flattening everyone in your path. Walls, gates and steep ground stop you; Q again reins in.` },
-    r: { id: 'rally', icon: '📯', name: 'Rally Cry', cd: 20, desc: 'A war cry for every ally within 28 m: 30% less damage taken and 25% faster for 8 s (you take 40% less).' },
-    u: { id: 'burst', icon: '🌪', name: 'Stampede', kind: 'Ultimate', placeholder: true, burst: { radius: 7, dmg: 3, edge: 0.5, stun: 1.4, knock: 16 }, desc: 'Rear up and crash down: everyone within 7 m is hurt, staggered and thrown back.' },
+    blurb: 'Starts with a warhorse, and the horse is the star: the faster you ride, the harder you hit. Rides down the enemy and calls up knights.',
+    mods: { hp: 1.1, armor: 3, speed: 1, melee: 1, bow: 0.8, spell: 1, horse: true, rider: 0.7, trample: 1.25, momentum: CAV.momentum.top },
+    passive: `Momentum: the faster you ride, the harder your blows, trampling and abilities land, up to +${Math.round(CAV.momentum.top * 100)}% at a full gallop (the horseshoe gauge on the HUD). It builds as you gallop and drains when you slow down or turn hard. The horse also shields you (30% less damage).`,
+    q: { id: 'sweep', icon: '🌙', name: 'Sweeping Strike', cd: 6, desc: `For ${CAV.sweep.time} s your blade sweeps out to one side as you ride, cutting every foe you pass within ${CAV.sweep.reach} m once. Look left or right to choose the side; looking ahead, it goes to the side with more foes. On foot, one wide cut in front of you.` },
+    r: { id: 'lancecharge', icon: '🐎', name: 'Lance Charge', cd: 14, aimed: true, rush: true, kind: 'Attack', desc: `Hold R to see where the charge ends (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and gallop there with the lance couched (on foot, a rush), flattening everyone in your path. Walls, gates and steep ground stop you; R again reins in.` },
+    u: { id: 'callcharge', icon: '📯', name: 'Call the Charge', kind: 'Ultimate', aimed: true, range: CAV.call.range, radius: CAV.call.radius, lasts: CAV.call.life, desc: `Hold Z to point at a spot (up to ${CAV.call.range} m), let go and blow the horn: every ally within ${CAV.call.rally.radius} m takes 30% less damage and moves 25% faster for ${CAV.call.rally.time} s, and ${CAV.call.knights} armoured knights of your house ride out behind you in a wedge and charge the spot, riding down everyone in their way. They fight on for ${CAV.call.life} s, then ride off. On foot the horn calls them all the same.` },
   },
 };
 
@@ -236,6 +237,7 @@ export class Abilities {
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
     this.ultInit();   // (the Ultimates' pooled looks and their list: ultimate.js)
+    this.cavInit();   // (the Cavalier's Sweeping Strike blades: cavalier.js)
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
@@ -912,7 +914,7 @@ export class Abilities {
     this.eachFoe(p.team, c.x, c.z, (p.mounted ? 2.6 : 2) * talentFx(p, 'chargeReach', 1), (o) => {
       if (e.hit.has(o)) return;
       e.hit.add(o);
-      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1), p, { melee: true, splash: true, charge: 1, ability: 'Lance Charge' });
+      g.damage(o, (p.meleeDmg * 2 + (p.mounted ? 25 : 0)) * talentFx(p, 'chargeDmg', 1) * momentumMul(p), p, { melee: true, splash: true, charge: 1, ability: 'Lance Charge' });
       if (!o.alive) return;
       if (o.stagger) o.stagger(1.3, p);
       if (o.vel && !o.isPlayer) { o.vel.x += e.f.x * 12; o.vel.z += e.f.z * 12; }
@@ -921,20 +923,7 @@ export class Abilities {
     }, p.pos.y, 3);
   }
 
-  rally(p) {
-    const t = 8 + talentFx(p, 'rallyTime', 0), reach = talentFx(p, 'rallyReach', 1);
-    let rallied = 0;
-    this.eachFriend(p.team, p.pos.x, p.pos.z, 28 * reach, (o) => {
-      if (o === p) return;
-      rallied++;
-      this.guard(o, t, 0.7 - talentFx(p, 'rallyAlly', 0));
-      this.haste(o, t, 1.25);
-    });
-    p.gainXp(Math.min(SUPPORT_XP.rallyCap, rallied * SUPPORT_XP.rally), 'support');
-    p.buffs.add('guard', t, 0.6 - talentFx(p, 'rallySelf', 0));
-    p.buffs.add('haste', t, 1.25);
-    this.emit('rally', p.pos, ZERO, null, reach);
-  }
+  // (Sweeping Strike and Call the Charge, the Cavalier's Q and Ultimate, are in cavalier.js: the Rally Cry is part of the Ultimate now)
 
   // ---------- looks ----------
   // Show the effect here and, in a hosted game, on everyone else's screen too. sz: how much wider than usual its rings
@@ -1155,7 +1144,7 @@ export class Abilities {
 }
 
 // the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js
-Object.assign(Abilities.prototype, ULT_METHODS);
+Object.assign(Abilities.prototype, ULT_METHODS, CAV_METHODS);
 
 function stepUltFx(A, dt) {
   for (let i = A.ultFx.length - 1; i >= 0; i--) if (A.ultFx[i].step(A, A.ultFx[i], dt) === false) A.ultFx.splice(i, 1);
