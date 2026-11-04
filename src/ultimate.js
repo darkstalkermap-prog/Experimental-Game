@@ -93,7 +93,7 @@ export const ULT_METHODS = {
     const g = this.g;
     if (!g.scene || !g.projectiles) return;
     // (the rock's material: the catapult stone's, darker and glowing from within; its colours are uniforms, so it is the same shader)
-    if (!this.meteorMat) this.meteorMat = new THREE.MeshStandardMaterial({ color: 0x3a2c24, roughness: 1, flatShading: true, emissive: 0xff4a10, emissiveIntensity: 0.55 });
+    if (!this.meteorMat) this.meteorMat = new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 1, flatShading: true, emissive: 0xff3a08, emissiveIntensity: 0.22 });
     for (let i = 0; i < 2; i++) this.meteorPool.push(makeMeteorLook(this));
   },
 
@@ -379,7 +379,7 @@ function makeMeteorLook(A) {
   const g = A.g, P = g.projectiles;
   const rock = new THREE.Mesh(P.rockGeo, A.meteorMat || P.rockMat);
   rock.frustumCulled = false;
-  rock.scale.setScalar(0.0001);
+  rock.visible = false;   // (hidden while idle: no draw call; its shader is the catapult stone's, compiled with the world)
   g.scene.add(rock);
   const nv = (SH_RINGS + 1) * (SH_SEGS + 1);
   const polar = new Float32Array(nv * 2), idx = [];
@@ -412,6 +412,7 @@ function startMeteorLook(A, m, at) {
   pos.needsUpdate = true;
   m.geo.setDrawRange(0, SH_RINGS * SH_SEGS * 6);
   m.on = true;
+  m.rock.visible = true;
   m.spin.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
   m.rock.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
 }
@@ -426,7 +427,7 @@ function placeMeteorLook(m, x, y, z, s, t) {
 
 function hideMeteorLook(m) {
   m.on = false;
-  m.rock.scale.setScalar(0.0001);
+  m.rock.visible = false;
   m.geo.setDrawRange(0, 0);
 }
 
