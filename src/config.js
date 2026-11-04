@@ -295,9 +295,10 @@ export const SPELLS = {
 // roughly 60 to 90 s of steady fighting (the bot battle in the round-13 tests). It is kept through a fall and lost with a change of class.
 export const ULT = {
   key: 'KeyZ', keyName: 'Z',
-  dealt: { hero: 1 / 700, soldier: 1 / 1300, siege: 1 / 2600, structure: 1 / 4200 },
-  taken: 1 / 900,
-  healed: 1 / 650,
+  dealt: { hero: 1 / 820, soldier: 1 / 1500, siege: 1 / 3000, structure: 1 / 5000 },
+  taken: 1 / 1050,
+  healed: 1 / 750, healCap: 0.25,   // (healCap: the most one heal of others can add, whatever the crowd it reaches)
+  lasts: 1,   // (seconds after a cast before the charge starts to fill again, unless the class's `u` says how long it goes on working)
   // the Mage's Meteor: aimed as the volley is (a circle on the ground) up to `range` m; the rock comes down `fall` s after the cast. It deals
   // `dmg` of spell damage (times the Mage's spell bonus) to everyone within `radius` m, `edge` of it at the rim; soldiers are knocked down
   // (`stagger` s, `knock` m/s outward), heroes staggered `hero` s. Castle stone, gates and engines take `structure` (a catapult stone is

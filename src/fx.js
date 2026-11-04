@@ -322,6 +322,25 @@ export class FX {
     }
   }
 
+  // a big tongue of fire, s times a torch's: the ground a Meteor set burning, and the flames wrapped round the falling rock (ultimate.js)
+  blaze(p, s = 1) {
+    const G = this.add, A = this.alpha;
+    let o = G.spawn(F.FLAME, R.FIRE, p.x + rr(-0.25, 0.25) * s, p.y, p.z + rr(-0.25, 0.25) * s, rr(-0.3, 0.3), rr(1.0, 2.2) * s, rr(-0.3, 0.3), rr(0.45, 0.8), rr(0.8, 1.3) * s, rr(0.3, 0.6) * s);
+    G.tint(o, 1.6, 1.2, 0.95, 1);
+    G.motion(o, 0.4, -1.4, 0.12, 0.3);
+    G.spin(o, rr(-0.4, 0.4), 0);
+    if (Math.random() < 0.4) {
+      o = G.spawn(F.EMBER, R.EMBER, p.x, p.y + 0.3 * s, p.z, rr(-1.2, 1.2), rr(1.5, 3.5), rr(-1.2, 1.2), rr(0.6, 1.3), 0.09, 0.03);
+      G.motion(o, 0.6, -0.8, 0.2, 0);
+      G.tint(o, 1.8, 1.8, 1.8, 1);
+    }
+    if (Math.random() < 0.3) {
+      o = A.spawn(F.PUFF1 + ((Math.random() * 3) | 0), R.SOOT, p.x, p.y + 0.6 * s, p.z, rr(-0.3, 0.3), rr(1.2, 2.2), rr(-0.3, 0.3), rr(1.4, 2.4), 0.5 * s, rr(1.6, 2.4) * s);
+      A.tint(o, 1, 1, 1, 0.6);
+      A.motion(o, 0.5, -0.3, 0.4, -1.2);
+    }
+  }
+
   // the burst of a fireball
   explosion(p, r = 3.5) {
     const G = this.add, A = this.alpha;

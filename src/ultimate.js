@@ -13,6 +13,8 @@
 //            `range` m with a ring of `radius` m; letting go casts it there (the method gets the spot as `at`). Not aimed: it goes off
 //            the moment Z is pressed.
 //    cast    the colour of the raised spell hand in the first-person view as it is cast (Player.useAbility: castFlash); omit for none.
+//    lasts   seconds the Ultimate goes on working after the cast (the Meteor's fall and burning ground); the charge does not fill again
+//            until then, so an Ultimate never pays for the next one with its own damage (default ULT.lasts).
 //    The definition is passed to the method as its fifth argument, so its numbers can live on it (see the stand-ins' `burst`).
 // 2. The method: `name(p, cam, dir, at, def)` in your class's section of ULT_METHODS below. It runs only where the battle is
 //    simulated (single player, or the host), mixed into Abilities (classes.js), so `this` is Abilities: this.g (the game),
@@ -66,7 +68,7 @@ export function dealtWeight(target) {
 export function ultGain(o, amount, w) {
   if (!o || o.ult === undefined || !o.alive || !(amount > 0) || !(w > 0)) return;
   const g = o.game;
-  if (!g || !g.simulating) return;
+  if (!g || !g.simulating || o.ultHold > g.time) return;   // (an Ultimate still at work charges nothing: Abilities.use sets ultHold)
   o.ult = Math.min(1, o.ult + amount * w);
 }
 
@@ -90,6 +92,8 @@ export const ULT_METHODS = {
     this.meteorPool = [];
     const g = this.g;
     if (!g.scene || !g.projectiles) return;
+    // (the rock's material: the catapult stone's, darker and glowing from within; its colours are uniforms, so it is the same shader)
+    if (!this.meteorMat) this.meteorMat = new THREE.MeshStandardMaterial({ color: 0x3a2c24, roughness: 1, flatShading: true, emissive: 0xff4a10, emissiveIntensity: 0.55 });
     for (let i = 0; i < 2; i++) this.meteorPool.push(makeMeteorLook(this));
   },
 
@@ -223,8 +227,8 @@ export const ULT_SHOW = {
     A.gfx.glyph('pulse', at.x, at.y, at.z, M.radius * 0.6, 0xff7a30, M.fall, { strength: 1.2 });
     ctx.snd('meteorfall');
     const look = A.meteorPool.find((m) => !m.on) || null;
-    // it comes in from high up behind the caster's line, steep and fast
-    const from = new THREE.Vector3(at.x - dir.x * 46, at.y + 92, at.z - dir.z * 46);
+    // it comes in from high up beyond the spot and a little aside, steep and fast, so the caster sees it fall ahead of him
+    const from = new THREE.Vector3(at.x + dir.x * 34 - dir.z * 22, at.y + 95, at.z + dir.z * 34 + dir.x * 22);
     if (look) startMeteorLook(A, look, at);
     A.ultFx.push({ t: 0, at: at.clone(), from, u: from.clone().sub(at).normalize(), look, acc: 0, silent: ctx.silent, house, step: meteorLookStep });
   },
@@ -259,16 +263,18 @@ function meteorLookStep(A, e, dt) {
   const g = A.g, fx = g.fx, at = e.at;
   e.t += dt;
   if (e.t < M.fall) {
-    const s = e.t / M.fall, k = s * s * (0.6 + 0.4 * s);   // (it gathers speed as it falls)
+    const s = e.t / M.fall, k = s * (0.35 + 0.65 * s);   // (it gathers speed as it falls)
     const x = e.from.x + (at.x - e.from.x) * k, y = e.from.y + (at.y + 1.2 - e.from.y) * k, z = e.from.z + (at.z - e.from.z) * k;
     if (e.look) placeMeteorLook(e.look, x, y, z, s, e.t);
     e.acc += dt;
-    while (e.acc > 0.016) {   // (a dense trail of flame behind it: a puff every 16 ms, along the stretch it covered)
+    while (e.acc > 0.016) {   // (flames wrapped round it and a long trail of fire and smoke behind it: a puff every 16 ms)
       e.acc -= 0.016;
-      const b = 0.5 + Math.random() * 6, u = e.u;   // (0.5 to 6.5 m behind the rock, along the way it came)
-      V1.set(x + u.x * b + (Math.random() - 0.5) * 1.3, y + u.y * b + (Math.random() - 0.5) * 1.3, z + u.z * b + (Math.random() - 0.5) * 1.3);
-      fx.fireTrail(V1);
-      if (Math.random() < 0.5) fx.smokeTrail(V1, ZERO);
+      const u = e.u;
+      fx.blaze(V1.set(x + (Math.random() - 0.5) * 2, y + (Math.random() - 0.5) * 2, z + (Math.random() - 0.5) * 2), 2.4);
+      const b = 1 + Math.random() * 14;   // (1 to 15 m behind the rock, along the way it came)
+      V1.set(x + u.x * b + (Math.random() - 0.5) * 1.6, y + u.y * b + (Math.random() - 0.5) * 1.6, z + u.z * b + (Math.random() - 0.5) * 1.6);
+      fx.blaze(V1, 1.6 - b * 0.06);
+      if (Math.random() < 0.6) fx.smokeTrail(V1, ZERO);
     }
     if (Math.random() < 0.35) fx.flash(V1.set(x, y, z), A.col.set(0xffa040), 7, 0.12, 0.9);
     return true;
@@ -277,7 +283,18 @@ function meteorLookStep(A, e, dt) {
     e.landed = true;
     if (e.look) hideMeteorLook(e.look);
     const R = M.radius;
-    fx.explosion(V1.copy(at).setY(at.y + 0.6), 6.5);
+    fx.explosion(V1.copy(at).setY(at.y + 0.6), 7);
+    fx.explosion(V1.copy(at).setY(at.y + 4.5), 5);   // (a second ball of flame, higher: the blast stands tall)
+    for (let i = 0; i < 18; i++) {   // a column of fire where it struck, and flames thrown round it
+      const a = Math.random() * Math.PI * 2, r = i < 8 ? Math.random() * 1.5 : 2 + Math.random() * (R - 2);
+      V1.set(at.x + Math.cos(a) * r, at.y + (i < 8 ? Math.random() * 5 : 0.2), at.z + Math.sin(a) * r);
+      fx.blaze(V1, i < 8 ? 3.6 : 2.2);
+    }
+    A.gfx.pillar(at.x, at.y, at.z, 0xff9a40, 0.9, 3.2, 26, 1.8);
+    for (let i = 0; i < 9; i++) {   // the plume of black smoke that rises after it, and hangs
+      const a = Math.random() * Math.PI * 2, r = Math.random() * 3;
+      fx.smoke(V1.set(at.x + Math.cos(a) * r, at.y + 0.5 + Math.random() * 3, at.z + Math.sin(a) * r));
+    }
     fx.crater(at, 4.6);
     fx.scorch(at, R * 0.9);
     fx._dust(V1.copy(at).setY(at.y + 0.3), 40, R * 0.8, '');
@@ -285,7 +302,7 @@ function meteorLookStep(A, e, dt) {
     fx.ring(at, R * 0.5, A.col.set(0xffa060), 40, { up: 1.2, size: 0.5, speed: 12 });
     A.gfx.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xffc080, 0.8, { team: e.house, strength: 2 });
     A.gfx.glyph('pulse', at.x, at.y, at.z, R, 0xff4a1a, 1.0, { strength: 2 });
-    A.gfx.glyph('rune', at.x, at.y, at.z, M.burnR, 0xff3a10, M.burn, { arms: 9, strength: 1.2 });   // (the burning ground, glowing until it goes out)
+    A.gfx.glyph('rune', at.x, at.y, at.z, M.burnR, 0xff3a10, M.burn, { arms: 9, strength: 1.6 });   // (the burning ground, glowing until it goes out)
     if (g.magic) g.magic.flash(V1.copy(at).setY(at.y + 2), 0xff8a30, 22);
     if (g.camfx) g.camfx.boom(at, 1);
     if (!e.silent) g.audio.play('meteor', at);
@@ -295,15 +312,16 @@ function meteorLookStep(A, e, dt) {
   if (e.t > M.fall + M.burn) return false;
   const left = 1 - (e.t - M.fall) / M.burn;
   e.acc += dt;
-  const every = 0.03 / Math.max(0.3, left);
+  const every = 0.012 / Math.max(0.25, left);   // (about 80 flames a second at first, fewer and lower as it dies down)
   while (e.acc > every) {
     e.acc -= every;
     const a = Math.random() * Math.PI * 2, r = M.burnR * Math.sqrt(Math.random()) * 0.95;
     const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
-    V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.15, z);
-    fx.fireTrail(V1);
-    if (Math.random() < 0.06) fx.smoke(V1);
+    V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.1, z);
+    fx.blaze(V1, (1.1 + Math.random() * 1.1) * (0.45 + 0.55 * left));
+    if (Math.random() < 0.04) fx.smoke(V1);
   }
+  if (Math.random() < 0.25) fx.flash(V1.set(at.x, at.y + 1.2, at.z), A.col.set(0xff7a30), M.burnR * 1.6 * (0.4 + 0.6 * left), 0.3, 0.5);   // (the glow of it on everything near)
   e.crackle = (e.crackle || 0) - dt;
   if (e.crackle <= 0) { e.crackle = 1.1; if (!e.silent) g.audio.play('burning', at); }
   return true;
@@ -359,7 +377,7 @@ void main() {
 
 function makeMeteorLook(A) {
   const g = A.g, P = g.projectiles;
-  const rock = new THREE.Mesh(P.rockGeo, P.rockMat);
+  const rock = new THREE.Mesh(P.rockGeo, A.meteorMat || P.rockMat);
   rock.frustumCulled = false;
   rock.scale.setScalar(0.0001);
   g.scene.add(rock);
@@ -400,7 +418,7 @@ function startMeteorLook(A, m, at) {
 
 function placeMeteorLook(m, x, y, z, s, t) {
   m.rock.position.set(x, y, z);
-  m.rock.scale.setScalar(3.1);
+  m.rock.scale.setScalar(4.4);   // (about 6 m across: the catapult stone's mesh is 1.3 m)
   m.rock.rotation.set(m.spin.x * t, m.spin.y * t, m.spin.z * t);
   m.mat.uniforms.uR.value = 0.3 + 0.7 * s;      // (the shadow spreads and darkens as the rock nears)
   m.mat.uniforms.uA.value = 0.12 + 0.5 * s * s;

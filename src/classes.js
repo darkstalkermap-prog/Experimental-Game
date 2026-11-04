@@ -44,7 +44,7 @@ export const CLASSES = {
     passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
     q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
     r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, kind: 'Attack', desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
-    u: { id: 'arrowstorm', icon: '🌧', name: 'Arrow Storm', kind: 'Ultimate', placeholder: true, aimed: true, range: 70, radius: 9, storm: { arrows: 45, dmg: 0.75, radius: 9, span: 1.6 }, desc: 'Hold Z to put a wide circle on the ground (up to 70 m), let go and 45 arrows rain down on it.' },
+    u: { id: 'arrowstorm', icon: '🌧', name: 'Arrow Storm', kind: 'Ultimate', placeholder: true, aimed: true, range: 70, radius: 9, storm: { arrows: 45, dmg: 0.75, radius: 9, span: 1.6 }, lasts: 3.5, desc: 'Hold Z to put a wide circle on the ground (up to 70 m), let go and 45 arrows rain down on it.' },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -53,7 +53,7 @@ export const CLASSES = {
     passive: 'Both abilities recharge 15% faster.',
     q: { id: 'fireball', icon: '🔥', name: 'Fireball', cd: 7, desc: 'Hurl a fireball that explodes on impact, scorching everything around it and burning gates and engines.' },
     r: { id: 'ward', icon: '❄', name: 'Frost Ward', cd: 16, desc: 'A shell of ice soaks up the next 170 damage for 8 s, and chills and staggers enemies close to you.' },
-    u: { id: 'meteor', icon: '☄️', name: 'Meteor', kind: 'Ultimate', aimed: true, range: ULT.meteor.range, radius: ULT.meteor.radius, cast: 0xff7a2a, desc: `Hold Z to mark a spot on the ground (up to ${ULT.meteor.range} m, further than a Fireball flies), let go and a huge burning rock falls on it out of the sky a moment later: ${ULT.meteor.dmg} damage in ${ULT.meteor.radius} m (less toward the rim), soldiers knocked flat, walls, gates and engines broken as by a siege stone. The ground burns for ${ULT.meteor.burn} s.` },
+    u: { id: 'meteor', icon: '☄️', name: 'Meteor', kind: 'Ultimate', aimed: true, range: ULT.meteor.range, radius: ULT.meteor.radius, cast: 0xff7a2a, lasts: ULT.meteor.fall + ULT.meteor.burn, desc: `Hold Z to mark a spot on the ground (up to ${ULT.meteor.range} m, further than a Fireball flies), let go and a huge burning rock falls on it out of the sky a moment later: ${ULT.meteor.dmg} damage in ${ULT.meteor.radius} m (less toward the rim), soldiers knocked flat, walls, gates and engines broken as by a siege stone. The ground burns for ${ULT.meteor.burn} s.` },
   },
   cleric: {
     name: 'Cleric', icon: '✚', color: '#f2e08c', role: 'Support',
@@ -62,7 +62,7 @@ export const CLASSES = {
     passive: 'Health regenerates two and a half times faster out of combat.',
     q: { id: 'smite', icon: '⚡', name: 'Smite', cd: 8, desc: `Hurl a bolt of holy lightning from your open hand at whatever you are aiming at, as far as a Mage's Fireball flies (${FIREBALL_RANGE} m), blasting everyone near where it strikes.` },
     r: { id: 'heal', icon: '✚', name: 'Healing Light', cd: 14, desc: 'Heal yourself for 45% of your health and every ally within 14 m for 40% of theirs.' },
-    u: { id: 'sanctuary', icon: '🔆', name: 'Sanctuary', kind: 'Ultimate', cast: 0xffe9a0, desc: `A circle of golden light ${ULT.sanctuary.radius} m round you for ${ULT.sanctuary.time} s: no ally inside it, hero or soldier, can be brought below 1 health.` },
+    u: { id: 'sanctuary', icon: '🔆', name: 'Sanctuary', kind: 'Ultimate', cast: 0xffe9a0, lasts: ULT.sanctuary.time, desc: `A circle of golden light ${ULT.sanctuary.radius} m round you for ${ULT.sanctuary.time} s: no ally inside it, hero or soldier, can be brought below 1 health.` },
   },
   cavalier: {
     name: 'Cavalier', icon: '🐎', color: '#e8b84a', role: 'Shock cavalry',
@@ -247,6 +247,7 @@ export class Abilities {
     if (ult) {   // the Ultimate: no cooldown, the charge must be full (ultimate.js), and it is spent
       if (!ultReady(p)) return false;
       p.ult = 0;
+      p.ultHold = this.g.time + (def.lasts ?? ULT.lasts);   // (no charge from its own blows while it is still at work: ultimate.js)
     } else {
       if (p.abilCd[slot] > 0.45) return false;   // a little slack for network delay
       p.abilCd[slot] = p.abilityCd(slot);
@@ -254,7 +255,7 @@ export class Abilities {
     // (a guest says where its eyes are: never more than a step from where the host has its hero)
     const eye = p.eyePos(this.tmpv);
     if (cam.distanceToSquared(eye) > 9) cam = eye.clone();
-    if (this[def.id](p, cam, dir.clone().normalize(), at, def) === false) { if (ult) p.ult = 1; else p.abilCd[slot] = 0; return false; }   // (a leap with nowhere to go)
+    if (this[def.id](p, cam, dir.clone().normalize(), at, def) === false) { if (ult) { p.ult = 1; p.ultHold = 0; } else p.abilCd[slot] = 0; return false; }   // (a leap with nowhere to go)
     return true;
   }
 
@@ -865,7 +866,7 @@ export class Abilities {
       if (aegis) this.guard(o, aegis.time, 1 - aegis.cut);
       if (healed.length < 14) healed.push(o.chest(new THREE.Vector3()));
     });
-    ultGain(p, mended, ULT.healed);
+    ultGain(p, Math.min(mended, ULT.healCap / ULT.healed), ULT.healed);   // (a light over a whole army: at most a quarter of the charge)
     this.emit('heal', p.pos, ZERO, healed, reach / 14);
     p.gainXp(Math.min(SUPPORT_XP.healCap, mended * SUPPORT_XP.heal), 'support');
   }
