@@ -1016,9 +1016,15 @@ def('weapon.sword', (b) => {
   const bl = [[-0.122, 0.026, 0.0058], [-0.3, 0.0245, 0.0054], [-0.6, 0.0215, 0.0048], [-0.84, 0.0175, 0.0042], [-0.95, 0.012, 0.0036], [-1.005, 0.0055, 0.0024], [-1.03, 0.001, 0.001]];
   b.loft(b.level >= 2 ? [bl[0], bl[3], bl[6]] : bl, { ...steel, sq: 1.35, seg: b.pick(12, 8, 4), a: [1, 1] });
   if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.4, s * 0.0052], [0.009, 0.52, 0.0016], { c: K.iron, m: 'steel', e: 0.5 });
-  if (b.level < 2) b.sweep([[-0.12, -0.098, 0], [-0.07, -0.114, 0], [0, -0.118, 0], [0.07, -0.114, 0], [0.12, -0.098, 0]], 0.011, 0.011, { ...iron, seg: 6, segs: b.pick(10, 6, 4) });
-  else b.rbox([0, -0.115, 0], [0.25, 0.026, 0.03], { ...iron, e: 0.4 });
-  b.rbox([0, -0.116, 0], [0.04, 0.03, 0.03], { ...iron, e: 0.45 });
+  // (the guard is iron, gilt on a soldier of the third level of training and up: gate 3)
+  for (const gd of b.level < 3 ? [{ ...iron, g: -3 }, { ...brass, g: 3 }] : [iron]) {
+    if (b.level < 2) b.sweep([[-0.12, -0.098, 0], [-0.07, -0.114, 0], [0, -0.118, 0], [0.07, -0.114, 0], [0.12, -0.098, 0]], 0.011, 0.011, { ...gd, seg: 6, segs: b.pick(10, 6, 4) });
+    else b.rbox([0, -0.115, 0], [0.25, 0.026, 0.03], { ...gd, e: 0.4 });
+    b.rbox([0, -0.116, 0], [0.04, 0.03, 0.03], { ...gd, e: 0.45 });
+  }
+  if (b.level < 2) b.rbox([0, -0.136, 0], [0.024, 0.016, 0.034], { c: K.iron, m: 'steel', e: 0.4 });   // (the blade's ricasso langet)
+  // (up close, a honed bright line down each edge)
+  if (b.level < 1) for (const s of [-1, 1]) b.sweep([[s * 0.0235, -0.14, 0], [s * 0.0225, -0.45, 0], [s * 0.0175, -0.82, 0], [s * 0.009, -0.97, 0]], 0.0026, 0.0018, { c: 0xe2e6eb, m: 'steel', seg: 4, segs: 6 });
   b.rod([0, 0.07, 0], [0, -0.105, 0], 0.017, 0.019, { c: K.leatherDk, m: 'leather', p: PAT.leather, seg: b.pick(10, 7, 5) });
   if (b.level < 1) for (const y of [0.06, -0.095]) b.torus([0, y, 0], 0.019, 0.003, { ...brass, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
   b.rod([0, 0.085, -0.012], [0, 0.085, 0.012], 0.03, 0.03, { ...brass, seg: b.pick(14, 8, 6) });
@@ -1042,20 +1048,35 @@ def('weapon.axe', (b) => {
   b.rod([0, 0.1, 0], [0, -0.95, 0], 0.024, 0.022, { ...wood, seg: 7 });
   b.extrude([[0, 0.12], [0.1, 0.18], [0.2, 0.15], [0.2, -0.17], [0.1, -0.2], [0, -0.14]], 0.02, 0.004, [0, -0.78, 0], { ...steel, rot: [0, -PI / 2, 0] });
 });
-// The Berserker's great axe: a long haft bound in leather where the hands go, iron langets up to the head, a broad bearded crescent of a
-// blade with a spike behind it
+// The Berserker's great war axe: a long ash haft bound in leather where both hands go, an iron butt cap, iron langets riveted down from
+// the head, a broad bearded crescent of dark forged iron with a polished edge (a bright band along the whole cutting line, the beard's
+// point hooked back), and a spike behind it
+const AXE_IRON = { c: 0x5d6168, m: 'iron' }, AXE_EDGE = { c: 0xd4d8de, m: 'steel' };
 def('weapon.greataxe', (b) => {
-  b.rod([0, 0.3, 0], [0, -1.5, 0], 0.027, 0.025, { ...wood, seg: b.pick(10, 6, 5) });
+  const hy = -1.33;
+  b.rod([0, 0.34, 0], [0, -1.58, 0], 0.028, 0.026, { ...wood, c: 0x7a5634, seg: b.pick(10, 6, 5) });
+  b.lathe([[0.0, 0.33], [0.034, 0.34], [0.034, 0.37], [0.0, 0.39]], [0, 0, 0], { ...iron, seg: b.pick(10, 6, 5) });   // the butt cap
   if (b.level < 2) {
-    b.rod([0, 0.14, 0], [0, -0.24, 0], 0.031, 0.031, { ...leatherDk, seg: b.pick(10, 6, 5) });
-    for (const s of [-1, 1]) b.rbox([s * 0.026, -1.08, 0], [0.006, 0.26, 0.022], { ...iron, e: 0.5 });
-    if (b.level < 1) for (const y of [0.14, -0.24]) b.torus([0, y, 0], 0.031, 0.004, { ...iron, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
+    b.rod([0, 0.16, 0], [0, -0.26, 0], 0.032, 0.032, { ...leatherDk, seg: b.pick(10, 6, 5) });
+    b.rod([0, 0.32, 0], [0, 0.22, 0], 0.031, 0.031, { ...leather, seg: b.pick(10, 6, 5) });
+    for (const s of [-1, 1]) b.rbox([s * 0.027, hy + 0.21, 0], [0.007, 0.3, 0.024], { ...iron, e: 0.5 });
+    if (b.level < 1) {
+      for (let k = 0; k <= 6; k++) b.torus([0, 0.16 - k * 0.07, 0], 0.032, 0.0035, { ...leather, rot: [PI / 2, 0, 0], seg: 10, sides: 3 });   // (the wrap's turns)
+      for (const y of [0.16, -0.26, 0.22]) b.torus([0, y, 0], 0.033, 0.0045, { ...iron, rot: [PI / 2, 0, 0], seg: 12, sides: 4 });
+      for (const s of [-1, 1]) rivets(b, [[s * 0.031, hy + 0.12, 0], [s * 0.031, hy + 0.22, 0], [s * 0.031, hy + 0.32, 0]], 0.0055, iron);
+    }
   }
-  const bit = [[0, 0.13], [0.06, 0.15], [0.14, 0.21], [0.22, 0.21], [0.27, 0.11], [0.285, -0.02], [0.27, -0.15], [0.21, -0.26], [0.12, -0.27], [0.06, -0.16], [0, -0.12]];
-  b.extrude(bit, 0.024, b.level < 2 ? 0.007 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
-  b.extrude([[0, 0.06], [-0.12, 0.025], [-0.2, 0], [-0.12, -0.025], [0, -0.06]], 0.024, b.level < 2 ? 0.005 : 0, [0, -1.25, 0], { ...steel, rot: [0, -PI / 2, 0] });
-  b.rbox([0, -1.25, 0], [0.07, 0.15, 0.07], { ...iron, e: 0.4 });
-  b.cone([0, -1.5, 0], [0, -1.58, 0], 0.03, { ...iron, seg: 5 });
+  // the bit (x out from the haft, y along it) and the honed band along its cutting line, from the upper horn round to the beard's point
+  const bit = [[0, 0.11], [0.08, 0.14], [0.17, 0.2], [0.245, 0.215], [0.29, 0.13], [0.315, 0.0], [0.305, -0.13], [0.27, -0.24], [0.215, -0.33], [0.17, -0.3], [0.12, -0.22], [0.06, -0.15], [0, -0.12]];
+  b.extrude(bit, 0.022, b.level < 2 ? 0.006 : 0, [0, hy, 0], { ...AXE_IRON, rot: [0, -PI / 2, 0] });
+  if (b.level < 3) {
+    const out = bit.slice(3, 9), inn = out.map(([x, y], i) => [x - 0.036 * (i === 0 || i === 5 ? 0.6 : 1), y * 0.96]).reverse();
+    b.extrude([...out, ...inn], b.level < 2 ? 0.035 : 0.025, 0, [0, hy, 0], { ...AXE_EDGE, rot: [0, -PI / 2, 0] });   // (just proud of the bevelled bit)
+  }
+  b.extrude([[0, 0.065], [-0.13, 0.025], [-0.22, 0], [-0.13, -0.025], [0, -0.065]], 0.024, b.level < 2 ? 0.005 : 0, [0, hy, 0], { ...AXE_IRON, rot: [0, -PI / 2, 0] });
+  b.rbox([0, hy, 0], [0.075, 0.17, 0.075], { ...iron, e: 0.4 });
+  if (b.level < 2) for (const y of [hy + 0.085, hy - 0.085]) b.rbox([0, y, 0], [0.082, 0.014, 0.082], { ...iron, c: K.ironDk, e: 0.4 });
+  b.cone([0, -1.58, 0], [0, -1.66, 0], 0.03, { ...iron, seg: 5 });
 });
 def('weapon.club', (b) => {
   b.rod([0, 0.35, 0], [0, -1.5, 0], 0.05, 0.15, { c: 0x5a3e24, m: 'wood', p: PAT.grain, seg: b.pick(12, 8, 6) });
