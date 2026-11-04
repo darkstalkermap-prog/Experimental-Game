@@ -75,16 +75,22 @@ export function rageTick(p, dt) {
   if (g.simulating) {
     if (held && free && p.rage > (spinning ? 0 : S.start - 1e-6) && !(p.spinBlock > g.time)) {
       if (!spinning) { p.spinT = 0.05; p.spinN = 0; }   // (the first cut comes almost at once)
-      p.buffs.add('whirl', 0.25);
+      keepSpin(p);
       p.rage = Math.max(0, p.rage - S.drain * talentFx(p, 'spinCost', 1) * dt);
       if ((p.spinT -= dt) <= 0) { p.spinT += S.every; g.abilities.spinTick(p); }
     } else if (spinning) p.buffs.del('whirl');
     if (!p.buffs.has('whirl') && g.time - p.rageAt > RAGE.hold && !p.buffs.has('unstop')) p.rage = Math.max(0, p.rage - RAGE.ebb * talentFx(p, 'rageEbb', 1) * dt);
     if (spinning || p.bigK > 0) noteBody(g, p);
   } else if (p.isLocal) {   // a guest: its spin shows (and slows it) at once; the host's word comes in the snapshot
-    if (held && free && p.rage > (spinning ? 0.5 : S.start - 1e-6)) p.buffs.add('whirl', 0.25);
+    if (held && free && p.rage > (spinning ? 0.5 : S.start - 1e-6)) keepSpin(p);
     else if (!held) p.buffs.del('whirl');
   }
+}
+
+// the spin's mark, kept up a quarter of a second at a time (the same record, not a new one every frame)
+function keepSpin(p) {
+  const o = p.buffs.b.whirl;
+  if (o && o.t > 0) o.t = Math.max(o.t, 0.25); else p.buffs.add('whirl', 0.25);
 }
 
 // Rage from a blow that took `lost` health (Game.damage, where the battle is run), and the blows of an Unstoppable Berserker.
@@ -269,8 +275,7 @@ function grow(p, dt) {
 function noteBody(g, o) {
   const A = g.abilities;
   if (!A || !A.ultFx) return;
-  if (!A.bzBodies) { A.bzBodies = new Set(); A.ultFx.push({ step: bodiesStep }); }
-  else if (!A.ultFx.some((e) => e.step === bodiesStep)) A.ultFx.push({ step: bodiesStep });   // (the list is new with every world)
+  if (!A.bzBodies) { A.bzBodies = new Set(); A.ultFx.push({ step: bodiesStep }); }   // (once a world: Abilities, and its list, are new with each)
   A.bzBodies.add(o);
 }
 
