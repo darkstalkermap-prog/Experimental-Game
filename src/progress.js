@@ -47,13 +47,16 @@ export function freshAccount() {
   return {
     v: VERSION, renown: 0, carry: 0, unlocked: [], equipped: { banner: '', cloak: '', div: 'plain', tint: 'argent' }, seen: 0,
     mastery: Object.fromEntries(MASTERY_CLASSES.map((c) => [c, 0])),
-    best: Object.fromEntries(BESTS.map((b) => [b.key, 0])),
+    best: freshBest(),
+    spec: {},   // the personal bests of each Specialty Battle, kept apart from the war's: { stonecleft: { kills, ... } } (specialty.js)
     tot: { matches: 0, wins: 0, secs: 0, kills: 0 },
     extra: {},   // what a newer build wrote that this one does not know: kept and written back, so that nothing is ever lost
   };
 }
 
-const KNOWN = new Set(['v', 'renown', 'carry', 'unlocked', 'equipped', 'seen', 'mastery', 'best', 'tot']);
+const freshBest = () => Object.fromEntries(BESTS.map((b) => [b.key, 0]));
+const SPEC_ID = /^[a-z]{1,24}$/;   // (a Specialty Battle's id, as specialty.js names them: nothing else is kept under `spec`)
+const KNOWN = new Set(['v', 'renown', 'carry', 'unlocked', 'equipped', 'seen', 'mastery', 'best', 'spec', 'tot']);
 const count = (x, max = 1e9) => (typeof x === 'number' && Number.isFinite(x) && x > 0 ? Math.min(Math.floor(x), max) : 0);
 
 export const nextItem = (a) => ITEMS.find((it) => !a.unlocked.includes(it.key)) || null;
@@ -83,6 +86,14 @@ export function sanitizeAccount(raw) {
   a.seen = Math.min(count(raw.seen), a.unlocked.length);
   if (raw.mastery && typeof raw.mastery === 'object') for (const c of MASTERY_CLASSES) a.mastery[c] = count(raw.mastery[c]);
   if (raw.best && typeof raw.best === 'object') for (const b of BESTS) a.best[b.key] = count(raw.best[b.key]);
+  if (raw.spec && typeof raw.spec === 'object' && !Array.isArray(raw.spec)) {
+    for (const id of Object.keys(raw.spec)) {
+      const s = raw.spec[id];
+      if (!SPEC_ID.test(id) || !s || typeof s !== 'object') continue;
+      a.spec[id] = freshBest();
+      for (const b of BESTS) a.spec[id][b.key] = count(s[b.key]);
+    }
+  }
   if (raw.tot && typeof raw.tot === 'object') for (const k of Object.keys(a.tot)) a.tot[k] = count(raw.tot[k]);
   a.v = Math.max(VERSION, count(raw.v) || VERSION);
   for (const k of Object.keys(raw)) if (!KNOWN.has(k)) a.extra[k] = raw[k];
@@ -179,7 +190,7 @@ export function earn(a, amount) {
 }
 
 // ---------------------------------------------------------------- a match
-// Fold one finished match into an account. `m`: { time, waves, kills, won, difficulty, cls, events, stats: { kills, streak, dmg, waves, armyKills, gold,
+// Fold one finished match into an account. `m`: { time, waves, kills, won, difficulty, cls, events, special (a Specialty Battle's id, or nothing), stats: { kills, streak, dmg, waves, armyKills, gold,
 // breaches } }. Returns { account, result }: the new account, and everything the end screen tells (it is the account that changes, never the old one).
 export function applyMatch(old, m) {
   const a = sanitizeAccount(serialize(old));
@@ -210,19 +221,21 @@ export function applyMatch(old, m) {
   made.armyKills = st.armyKills | 0; made.gold = st.gold | 0; made.breaches = st.breaches | 0;
   made.time = Math.round(m.time || 0);
   made.fastWin = m.won && m.time >= FASTEST_WIN_MIN ? Math.round(m.time) : 0;
+  // (a Specialty Battle, `m.special`, keeps its records apart: 30 kills holding a gorge against three is no Conquest record, nor is it beaten by one)
+  const table = m.special && SPEC_ID.test(m.special) ? (a.spec[m.special] || (a.spec[m.special] = freshBest())) : a.best;
   const records = [], firsts = [];
   for (const b of BESTS) {
-    const v = made[b.key] || 0, prev = a.best[b.key];
+    const v = made[b.key] || 0, prev = table[b.key];
     if (!v) continue;
     const beats = prev === 0 || (b.better > 0 ? v > prev : v < prev);
     if (!beats) continue;
     if (!b.quiet) (prev === 0 ? firsts : records).push({ key: b.key, label: b.label, unit: b.unit, value: v, prev });
-    a.best[b.key] = v;
+    table[b.key] = v;
   }
   a.tot.matches++; if (m.won) a.tot.wins++;
   a.tot.secs += Math.round(m.time || 0); a.tot.kills += m.kills | 0;
   const after = { renown: a.renown, carry: a.carry, next: (nextItem(a) || {}).key || null, unlocked: a.unlocked.length };
-  return { account: a, result: { gained: pay.total, parts: pay.parts, mult: pay.mult, before, after, crossed, worn, mastery, records, firsts, made, best: { ...a.best } } };
+  return { account: a, result: { gained: pay.total, parts: pay.parts, mult: pay.mult, before, after, crossed, worn, mastery, records, firsts, made, best: { ...table } } };
 }
 
 // ---------------------------------------------------------------- reading the account

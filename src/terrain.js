@@ -108,7 +108,7 @@ function coverAt(c, x, z, n2) {
 export function rockCover(nz, physics, x, z, h, slope) {
   if (physics.war) h = physics.dressHeight(x, z, h);
   const sx = x + active.ox, sz = z + active.oz, tl = treeLineAt(nz, x, z), rockN = rockNoise(nz, sx, sz);
-  const canopy = canopyAt(h, tl, forestDensity(nz, sx, sz), slope, rockN) * active.def.canopy;
+  const canopy = canopyAt(h, tl, forestDensity(nz, sx, sz), slope, rockN) * active.def.canopy * (physics.hold ? physics.canopy(x, z) : 1);   // (none on Stonecleft's cliffs)
   const steep = 1 - 1 / Math.sqrt(1 + slope * slope);   // (1 - N.y, what the shaders see)
   const shader = Math.max(smoothstep(0.5, 0.74, steep), smoothstep(tl - 6, tl + 14, h));
   return Math.max(bakedRock(h, tl, slope, rockN), shader) * (1 - 0.92 * canopy);
@@ -147,12 +147,21 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   if (B.bands) base.multiplyScalar(1 + bands(nz, sx, sz, B.bands));
   const shade = 0.9 + n2 * 0.15;
   base.multiplyScalar(shade);
+  const cliff = physics.hold && !o.far ? physics.cliff(x, z) : 0;   // (Stonecleft's cliffs are rock from their foot up, whatever the smoothed normals say: holdphysics.js)
+  if (cliff > 0) base.lerp(C.rock, cliff * 0.8);
   // the same layers as masks, for the shader
   let castle = 0, hill = 0, sandW = 0, patchW = 0;
   if (!o.far) {   // (beyond the play area there are no castles, hill or yard)
     if (physics.war) {   // War Mode's field: no castles or hill; the ground is trampled bare in patches where the armies muster (the hilltops) and fight (the field)
       const worn = Math.max(1 - smoothstep(FIELD.floor * 0.8, FIELD.front, Math.hypot(x, z)), 1 - smoothstep(0, 6, hillDistance(x, z)));
       castle = worn * smoothstep(0.45, 0.8, n2) * 0.6;
+    } else if (physics.hold) {   // Stonecleft: the three lords' castles as on every map, the hold's yard and the ground before its wall (stonecleft.js); no hill
+      for (const s of CASTLE_SITES) {
+        if (s.hold) continue;
+        const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
+        castle = Math.max(castle, (1 - smoothstep(CASTLE.H + 2, CASTLE.H + 14, d)) * (0.55 + 0.3 * n2));
+      }
+      castle = Math.max(castle, physics.dirt(x, z));
     } else {
       for (const s of CASTLE_SITES) {
         const d = Math.max(Math.abs(x - s.x), Math.abs(z - s.z));
@@ -165,16 +174,17 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
     const d = Math.max(Math.abs(x - physics.practice.x) - PRACTICE.hw, Math.abs(z - physics.practice.z) - PRACTICE.hd);
     sandW = (1 - smoothstep(PRACTICE.wallT, PRACTICE.wallT + 9, d)) * 0.92;
   }
-  if (B.patch && !o.far && !physics.practice) patchW = patchAt(nz, roadDist, x, z, slope);
+  if (B.patch && !o.far && !physics.practice) patchW = patchAt(nz, roadDist, x, z, slope) * (physics.hold ? 1 - physics.dirt(x, z) : 1);   // (no pond in the hold's yard)
   const mask = o.mask;
   // the forest on the foot of the mountains: the same inputs as the trees' placement (scenery.js), so the canopy is where the trees are
   const rockN = rockNoise(nz, sx, sz);
   // under the play area's own trees where they stand on a steep face (scatter.js places them; they cannot move, they are solid): forest floor round
   // them instead of bare rock, so a stand on the wall reads as a stand on its own patch of wood, not as dots on the stone
-  const wood = canopyAt(h, tl, forest, slope, rockN) * B.canopy, cover = o.cover ? coverAt(o.cover, x, z, n2) * B.canopy : 0;
+  const wood = canopyAt(h, tl, forest, slope, rockN) * B.canopy * (physics.hold && !o.far ? physics.canopy(x, z) : 1), cover = o.cover ? coverAt(o.cover, x, z, n2) * B.canopy : 0;   // (Stonecleft: not on its cliffs, holdphysics.js)
   const canopy = Math.max(wood, cover);
   mask[0] = castle; mask[1] = hill; mask[2] = sandW || patchW; mask[3] = canopy;
   o.alt[0] = smoothstep(tl - 6, tl + 14, h);
+  if (cliff > o.alt[0]) o.alt[0] = cliff;
   o.alt[1] = smoothstep(B.snowLine - 14, B.snowLine + 8, h + 14 * (n1 - 0.5));
   if (!o.bake) return o;
   // the baked colour (what Q.terrain 0 and 1 show): the ground layers, then rock where it is steep, bare above the trees, snow on top
@@ -187,7 +197,7 @@ export function groundSample(nz, roadDist, physics, x, z, h, slope, o) {
   if (patchW) all.lerp(C.patch, patchW);
   tmp.copy(C.rock).lerp(C.rockWarm, n1);
   // bare rock: patches on the steep faces (the cliffs of the wall), and everything above the trees
-  const rockW = bakedRock(h, tl, slope, rockN);
+  const rockW = Math.max(bakedRock(h, tl, slope, rockN), cliff);
   tmp.multiplyScalar(0.75 + 0.35 * rockN);
   all.lerp(tmp, rockW * (1 - 0.92 * canopy));
   all.lerp(C.forestDark, wood * 0.8);   // (the splat shader paints crowns here; the baked colour is just their dark average)
@@ -253,7 +263,7 @@ export class Terrain {
     this.scene = scene;
     this.physics = physics;
     this.roadDist = env.roadDist;
-    setRoads(env.roads, !!physics.war);
+    setRoads(env.roads, !!physics.war, physics.hold ? 0 : 34);   // (Stonecleft has no ring road: roads.js)
     setBiomeLook(active.def);   // (the splat shader's palette: uniforms, so every biome shares one program)
     this.group = new THREE.Group();
     this.group.userData.owner = 'a3 terrain';

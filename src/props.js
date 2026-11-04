@@ -192,3 +192,49 @@ export function populate(A, fixed, fires, ctx) {
     (key === 'masonry' ? fixed : A).merge(one);
   }
 }
+
+// The life in Stonecleft's hold (holdcastle.js; castle-local metres as there: the curtain wall's inner face at z = 18, the yard on the gorge floor behind it,
+// the keep's shelf from z = -16 back). The same pieces as every castle's, where nobody walks: under the wall walk between its stairs, against the gorge's
+// sides behind the stairs, and on the shelf beside the keep; the way from the gate to the ramp (|x| < 4) and the ramp itself stay clear.
+// ctx as for populate: { team, detail, ground(lx, lz) -> height above the yard (the shelf stands 5 m up) }
+export function populateHold(A, fixed, fires, ctx) {
+  const d = ctx.detail;
+  if (d < 1) return;
+  const rng = mulberry32(ctx.team * 977 + 31), tc = rgb(TEAM_COLORS[ctx.team]), P = new Parts(ctx.team + 70);
+  const g = ctx.ground;
+  const M = (x, z, ry = 0) => place(x, g(x, z), z, ry);
+  const j = (v) => (rng() - 0.5) * v;
+  // ---- under the wall walk, against the wall (their backs to it), between the stairs and the posts
+  const kinds = ['barrels', 'crates', 'sacks', 'bales', 'crates', 'barrels'];
+  const xs = d >= 2 ? [7.6, 19.4, 24.2, 29.4, 37.8, 43.2] : [7.6, 24.2, 37.8];
+  xs.forEach((ax, i) => {
+    for (const s of [-1, 1]) {
+      const m = M(s * ax + j(0.4), 16.5 + j(0.2), Math.PI + j(0.3)), k = kinds[(i + (s > 0 ? 3 : 0)) % kinds.length];
+      if (k === 'barrels') { barrel(P, at(m, -0.5, 0, 0)); barrel(P, at(m, 0.5, 0, 0)); if (d >= 2) barrel(P, at(m, 0, 0.9, 0.3)); } else if (k === 'crates') { crate(P, at(m, -0.5, 0, 0)); crate(P, at(m, 0.5, 0, 0, 0.2)); if (d >= 2) crate(P, at(m, 0, 0.9, 0, 0.5), 0.8); } else if (k === 'sacks') { sacks(P, at(m, -0.4, 0, 0)); if (d >= 2) sacks(P, at(m, 0.9, 0, 0.1, 1)); } else { bale(P, at(m, -0.5, 0, 0)); bale(P, at(m, 0.35, 0, 0)); bale(P, at(m, -0.1, 0.5, 0, 0.3)); }
+    }
+  });
+  rack(P, M(-9.5, 17.5, Math.PI), tc);
+  // ---- the yard: a forge and a well against the gorge's sides, tents and a cart behind the stairs, dummies to drill at, braziers at the foot of the ramp
+  forge(P, M(-31, -3.5, Math.PI / 2 - 0.15), fires);
+  well(P, M(21, -9));
+  for (const [x, z] of d >= 2 ? [[-14, 7.5], [-16.4, 5.6], [-12.2, 4.8]] : [[-14, 7.5], [-16.4, 5.6]]) dummy(P, M(x + j(0.2), z + j(0.2), Math.PI + j(1.5)));
+  for (const s of [-1, 1]) brazier(P, M(s * 6.2, -1.2), fires);
+  cart(P, M(-22, -11, 0.5 + j(0.2)));
+  if (d >= 2) {
+    tent(P, M(26.5, -2, -Math.PI / 2 + 0.25 + j(0.2)), tc);
+    tent(P, M(-24.5, -12.5, Math.PI / 2 - 0.3 + j(0.2)), mul(tc, 0.85));
+    haystack(P, M(31, -6.5));
+    stall(P, M(16, -11.5, 0.15), mul(tc, 0.8));
+    cookfire(P, M(13, -4), fires);
+    for (const [x, z] of [[33.5, 2.2], [34.6, 3.4], [33, 3.9]]) barrel(P, M(x, z));
+  }
+  // ---- on the shelf: braziers by the keep's door, stores against its sides
+  for (const s of [-1, 1]) brazier(P, M(s * 4.6, -21.2), fires);
+  crate(P, M(-12.5, -27, 0.3)); crate(P, M(-13.4, -25.8, 0.9)); sacks(P, M(-12.6, -24.4, 0.4));
+  barrel(P, M(12.4, -26.5)); barrel(P, M(13.3, -27.6)); if (d >= 2) { barrel(P, M(12.7, -28.7)); haystack(P, M(14, -36)); }
+  for (const key of P.keys()) {
+    const one = new Parts(1);
+    one.acc[key] = P.acc[key];
+    (key === 'masonry' ? fixed : A).merge(one);
+  }
+}

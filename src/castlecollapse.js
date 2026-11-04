@@ -150,11 +150,12 @@ function slerp(a, ao, b, bo, t, out, o) {
 }
 
 // ---------------------------------------------------------------- the plan
-// The structures: 0 the keep, 1..4 the corner towers (castle-local coordinates)
-function structures(rng) {
+// The structures: 0 the keep, 1..4 the corner towers (castle-local coordinates). keepOnly: the keep alone (the hold's towers stand on its wall, far from
+// its keep, and outlast it: holdcastle.js)
+function structures(rng, keepOnly = false) {
   const S = [{ cx: 0, cz: KEEP_Z, hw: keepW / 2 + 0.6, h: keepH, top: keepH + 6.5, cut: 5.6 + rng() * 1.6, amp: 2.0, t0: 0, win: 0.75, lean: 0.11 + rng() * 0.05 }];
-  const order = [0, 1, 2, 3].sort(() => rng() - 0.5);
-  [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz], i) => {
+  const order = keepOnly ? [] : [0, 1, 2, 3].sort(() => rng() - 0.5);
+  if (!keepOnly) [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sz], i) => {
     S.push({ cx: sx * 22.7, cz: sz * 22.7, hw: 4.9, h: towerH, top: towerH + 6, cut: 6.2 + rng() * 2.2, amp: 1.6, t0: 0.15 + order[i] * 0.14, win: 0.6, lean: 0.14 + rng() * 0.08, sx, sz });
   });
   S.forEach((s, i) => {
@@ -179,10 +180,11 @@ function stumpAt(s, x, z) {
 const structOf = (cx, cz) => (Math.abs(cx) > 14 && Math.abs(cz) > 14 ? 1 + (cx > 0 ? 1 : 0) + (cz > 0 ? 2 : 0) : 0);
 
 // Rubble and scorch marks: more pieces of the same meshes, folded to a point until the dust hides them (see plan)
-function addExtras(K, A, rng, d) {
+function addExtras(K, A, rng, d, keepOnly = false) {
   const HW = keepW / 2, z0 = KEEP_Z - HW, z1 = KEEP_Z + HW;
-  // scorch marks on the floor
-  for (const [cx, cz, r] of [[0, z1 + 2.6, 3.4], [-3.4, z1 + 4.6, 2], [3.6, z1 + 3.6, 2.3], [1, z0 - 2, 2.6], [-8, 6, 1.8], [7, -2, 2.2], [0, 9, 2.6]]) {
+  // scorch marks on the floor (a keep on its own shelf: only the ones on the shelf round its foot)
+  const marks = [[0, z1 + 2.6, 3.4], [-3.4, z1 + 4.6, 2], [3.6, z1 + 3.6, 2.3], [1, z0 - 2, 2.6], [-8, 6, 1.8], [7, -2, 2.2], [0, 9, 2.6]];
+  for (const [cx, cz, r] of keepOnly ? marks.slice(0, 6) : marks) {
     const k = 0.18, c = [k, k * 0.9, k * 0.8], n = 9, a = A.a('plain');
     A.piece(cx, 0.09, cz, r, 0.05, r);
     const base = a.pos.length / 3;
@@ -203,16 +205,17 @@ function addExtras(K, A, rng, d) {
 // The shapes of a keep and its four towers cut into pieces are the same for every castle (castle-local metres), so they are made once for each level of detail
 // and shared: a castle that falls only copies the arrays it moves and works out its own plan. (`warmCollapse` makes them ahead of time.)
 const BASES = new Map();
-function baseFor(d) {
-  let B = BASES.get(d);
+function baseFor(d, keepOnly = false) {
+  const key = keepOnly ? d + ':keep' : d;
+  let B = BASES.get(key);
   if (B) return B;
   const rng = mulberry32(4711), table = new Table(), seed = 5;
   const K = new ChunkParts(seed + 4, table), A = new ChunkParts(seed + 2, table), R = new ChunkParts(seed + 3, table);
   const fires = [];
-  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
+  if (!keepOnly) for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) G.tower(K, A, R, sx, sz, d);
   G.keep(K, A, R, d, fires);
   const extraFrom = table.n;
-  addExtras(K, A, rng, d);
+  addExtras(K, A, rng, d, keepOnly);
   const n = table.n;
   // the three meshes: stone (with the metal and the dark glass), tiles, timber
   const defs = [
@@ -244,17 +247,17 @@ function baseFor(d) {
     }
     return { mat: def.mat, pos, nor, uv, col, idx: nv > 65535 ? new Uint32Array(idx) : new Uint16Array(idx) };
   });
-  B = { n, extraFrom, table, v0, vn, mesh, groups };
-  BASES.set(d, B);
+  B = { n, extraFrom, table, v0, vn, mesh, groups, keepOnly };
+  BASES.set(key, B);
   return B;
 }
 // make the shared shapes now (the game does it while a match is being set up, so that no keep ever falls with a hitch)
-export function warmCollapse(d) {
-  const B = baseFor(d);
+export function warmCollapse(d, keepOnly = false) {
+  const B = baseFor(d, keepOnly);
   if (B.warm) return;
   B.warm = true;
   const o = Object.create(Collapse.prototype);   // (a plan worked out and thrown away, so that the first real one is not the first run of its code)
-  o.n = B.n; o.table = B.table; o.extraFrom = B.extraFrom;
+  o.n = B.n; o.table = B.table; o.extraFrom = B.extraFrom; o.keepOnly = keepOnly;
   o.plan(mulberry32(1));
 }
 
@@ -275,8 +278,9 @@ export class Collapse {
   }
 
   build() {
-    const c = this.castle, B = baseFor(c.detail), rng = mulberry32((c.team * 101 + 5) * 7 + 13);
-    this.n = B.n; this.table = B.table; this.extraFrom = B.extraFrom; this.v0 = B.v0; this.vn = B.vn; this.mesh = B.mesh;
+    // (a keep that stands on its own, away from the towers: the hold's, raised on its shelf; `keepShift` moves the castle-local pieces there)
+    const c = this.castle, sh = c.keepShift, B = baseFor(c.detail, !!sh), rng = mulberry32((c.team * 101 + 5) * 7 + 13);
+    this.n = B.n; this.table = B.table; this.extraFrom = B.extraFrom; this.v0 = B.v0; this.vn = B.vn; this.mesh = B.mesh; this.keepOnly = B.keepOnly;
     // the live arrays are this castle's own copies of the shared shapes; the unmoved shapes stay in `base` (shared, never written)
     this.groups = B.groups.map((g) => {
       if (!g) { this.meshes.push(null); return null; }
@@ -291,6 +295,7 @@ export class Collapse {
       geo.boundingBox = new THREE.Box3(new THREE.Vector3(-70, -2, -70), new THREE.Vector3(70, 40, 70));
       const mesh = new THREE.Mesh(geo, c.partsMaterial(g.mat));
       mesh.castShadow = true; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.frustumCulled = false;
+      if (sh) { mesh.matrix.makeTranslation(sh.x, sh.y, sh.z); mesh.matrixWorldNeedsUpdate = true; }
       this.meshes.push(mesh);
       c.group.add(mesh);
       c.vis.push(mesh);
@@ -301,7 +306,7 @@ export class Collapse {
 
   // what each piece does (see the header)
   plan(rng) {
-    const n = this.n, T = this.table, S = structures(rng);
+    const n = this.n, T = this.table, S = structures(rng, this.keepOnly);
     this.S = S;
     const f = (k) => new Float32Array(n * k);
     this.tRel = f(1); this.tLand = f(1); this.Tf = f(1);
@@ -385,7 +390,7 @@ export class Collapse {
     // the shape of the whole: shocks, clouds and sounds
     this.events.push({ t: 0, k: 'blast', x: 0, y: keepH * 0.5, z: KEEP_Z, s: 7 });
     this.events.push({ t: 0.08, k: 'burst', x: 0, y: keepH + 2, z: KEEP_Z, s: 3.4 }, { t: 0.32, k: 'burst', x: (rng() - 0.5) * 5, y: keepH * 0.7, z: KEEP_Z + (rng() - 0.5) * 5, s: 3 });
-    for (let i = 1; i <= 4; i++) this.events.push({ t: S[i].t0 + 0.05, k: 'tower', x: S[i].cx, y: towerH * 0.6, z: S[i].cz, s: 4.6 }, { t: S[i].t0 + 0.12, k: 'burst', x: S[i].cx, y: towerH + 1, z: S[i].cz, s: 2.4 });
+    for (let i = 1; i < S.length; i++) this.events.push({ t: S[i].t0 + 0.05, k: 'tower', x: S[i].cx, y: towerH * 0.6, z: S[i].cz, s: 4.6 }, { t: S[i].t0 + 0.12, k: 'burst', x: S[i].cx, y: towerH + 1, z: S[i].cz, s: 2.4 });
     for (let t = 0.15; t < 1.4; t += 0.09) this.events.push({ t, k: 'column', x: (rng() - 0.5) * 8, y: keepH * (0.4 + rng() * 0.5), z: KEEP_Z + (rng() - 0.5) * 8, s: 2.2 + rng() * 1.6, n: 6 });
     this.events.push({ t: 0.95, k: 'ignite' });
     this.events.sort((a, b) => a.t - b.t);
@@ -421,7 +426,7 @@ export class Collapse {
       }
     };
     burn(S[0], 7);
-    for (let i = 1; i < 5; i++) burn(S[i], 2);
+    for (let i = 1; i < S.length; i++) burn(S[i], 2);
     for (const [x, z] of [[-4.6, KEEP_Z + 7.4], [5.2, KEEP_Z + 7.4], [0.4, KEEP_Z + 9.2]]) fires.push([0, x, 0.7, z, 1.3], [1, x, 0.8, z, 3.4], [2, x, 1, z, 1.6, rng()]);   // burning heaps on the ground round the foot
     return { fires, spots };
   }

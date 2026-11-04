@@ -48,6 +48,7 @@ export function avoidCastles(game, pos, goal, mem = null) {
   if (mem && mem.goal && Math.hypot(goal.x - mem.goal.x, goal.z - mem.goal.z) > 6) { mem.corner = null; mem.left = null; }
   if (mem) { if (mem.goal) { mem.goal.x = goal.x; mem.goal.z = goal.z; } else mem.goal = { x: goal.x, z: goal.z }; }   // (kept, not made anew at every step)
   for (const c of game.castles) {
+    if (c.sealsGorge) continue;   // (Stonecleft's hold: nobody goes round a wall that runs from cliff to cliff, holdcastle.js)
     const cx = c.center.x, cz = c.center.z;
     const dx = pos.x - cx, dz = pos.z - cz;
     if (Math.abs(dx) < H && Math.abs(dz) < H) continue; // inside / on the walls: entries handle it
@@ -185,7 +186,8 @@ export function keepSpot(keep, unit, out) {
 export function navigate(game, unit, goal) {
   const wp = route(game, unit, goal);
   const c = game.castleAt(unit.pos);
-  return c ? skirtKeep(c, unit.pos, wp, unit.radius || 0.5) : wp;
+  // (a keep up on a rock shelf, Stonecleft's: the way up to it, and down from it, is the ramp: holdcastle.js climb)
+  return c ? skirtKeep(c, unit.pos, c.climb ? c.climb(unit.pos, wp) : wp, unit.radius || 0.5) : wp;
 }
 
 function route(game, unit, goal) {

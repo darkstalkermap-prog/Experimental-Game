@@ -34,6 +34,7 @@ function frame(seg) {
 }
 // the merlon positions along a segment (none on the corner squares: the towers stand there)
 function atCorner(seg, t) {
+  if (seg.corners === false) return false;   // (a stretch from one tower's face to the next: the hold's wings, castle.js addWall)
   const { lx: cx, lz: cz, alongX } = seg;
   return Math.abs(alongX ? cx + t : cx) > H - T - 0.1 && Math.abs(alongX ? cz : cz + t) > H - T - 0.1;
 }

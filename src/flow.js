@@ -11,6 +11,7 @@ import { standBlock } from './comeback.js';
 import { DIFFICULTY, OBJECTIVES, MAP_SIZES, LENGTHS } from './config.js';
 import { CLASSES } from './classes.js';
 import { HERO } from './herogame.js';
+import { SPECIALTY, SPECIALTY_IDS, isSpecialty } from './specialty.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -24,7 +25,7 @@ export const flow = {
 
 // ---------------------------------------------------------------- what the last match was set up with
 const LAST_KEY = 'cw-last';
-const MODES = ['conquest', 'koth', 'hero', 'war'];
+const MODES = ['conquest', 'koth', 'hero', 'war', ...SPECIALTY_IDS];   // (a Specialty Battle's id is a mode of its own: Quick Play repeats it)
 export function loadLast() {
   let o = null;
   try { o = JSON.parse(localStorage.getItem(LAST_KEY)); } catch (e) { /* storage unavailable or garbage */ }
@@ -39,6 +40,8 @@ export function saveLast(diff, mode) {
 export function setupLine({ cls, mode, heroWin, map, diff, length }) {
   const hero = mode === 'hero';
   const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  // "Knight · Stonecleft Hold · Normal": a Specialty Battle has its own map and its own clock
+  if (isSpecialty(mode)) return [CLASSES[cls] ? CLASSES[cls].name : 'Knight', SPECIALTY[mode].name, cap(diff)].join(' · ');
   const parts = [CLASSES[cls] ? CLASSES[cls].name : 'Knight', hero ? `Hero Mode: ${HERO.modes[heroWin] ? HERO.modes[heroWin].name : 'Hero kills'}` : mode === 'war' ? 'War Mode' : (OBJECTIVES[mode] || OBJECTIVES.conquest).name,
     (MAP_SIZES[map] || MAP_SIZES.medium).name, cap(diff)];
   if (!hero && mode !== 'war' && length === 'short') parts.push('Short');

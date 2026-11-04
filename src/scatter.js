@@ -6,6 +6,7 @@ import { WORLD, CASTLE, PRACTICE } from './config.js';
 import { CASTLE_SITES } from './physics.js';
 import { roadDist } from './roads.js';
 import { fieldPropOk } from './warmap.js';
+import { holdPropOk } from './stonecleft.js';
 import { forestDensity } from './landscape.js';
 import { active, landRng } from './biomes.js';
 
@@ -15,6 +16,7 @@ export function okForProp(x, z, physics) {
   }
   if (roadDist(x, z) < 7) return false;
   if (!fieldPropOk(x, z)) return false;   // (War Mode: the field, the hills and their slopes stay open)
+  if (physics.hold) return holdPropOk(physics.noise, x, z);   // (Stonecleft: not in the gorge, on the cliffs or before the mouth; there is no hill in the middle)
   if (Math.hypot(x, z) < 44) return false;
   if (physics.practice && Math.abs(x - physics.practice.x) < PRACTICE.hw + 16 && Math.abs(z - physics.practice.z) < PRACTICE.hd + 16) return false;   // the practice yard
   return true;

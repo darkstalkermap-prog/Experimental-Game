@@ -46,7 +46,7 @@ export class Castle {
     this.group.position.copy(this.center);
     this.group.rotation.y = this.rot;
     game.scene.add(this.group);
-    this.bucket = game.physics.addBucket(site.x, site.z, H + 8);
+    this.bucket = game.physics.addBucket(site.x, site.z, site.reach || H + 8);   // (a fortress of another shape says how far its colliders reach: holdcastle.js)
     this.mats = materials();
     this.clothMat = clothMaterial(this.mats.banners[team].map);   // (its own: the fallen keep scorches it)
     this.flagMat = this.mats.banners[team];   // the cloth of the levy standards (see setBanner)
@@ -136,9 +136,6 @@ export class Castle {
   }
 
   build() {
-    const M = this.mats;
-    const g = this.group;
-
     // ---- curtain wall segments ----
     // [x0,x1,z0,z1, normal x, normal z, destructible]
     const segDefs = [];
@@ -153,62 +150,10 @@ export class Castle {
     segDefs.push([GW, H, H - T, H, 0, 1, false]);
 
     this.walls = [];
-    for (const [x0, x1, z0, z1, nx, nz, breakable] of segDefs) {
-      const w = x1 - x0, d = z1 - z0;
-      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
-      const alongX = w > d;
-      const len = alongX ? w : d;
-      const outer = alongX ? nz * (T / 2 - 0.25) : nx * (T / 2 - 0.25);
-      // the corner towers stand on the corner squares of the front and back walls: no merlons there
-      const atCorner = (t) => Math.abs(alongX ? cx + t : cx) > H - T - 0.1 && Math.abs(alongX ? cz : cz + t) > H - T - 0.1;
-      const seg = {
-        kind: 'wall', isStructure: true, castle: this, team: this.team, breakable,
-        hp: CASTLE.wallHp, maxHp: CASTLE.wallHp, alive: true,
-        vis: 'full',   // what is drawn: 'full', 'damaged' or 'gone' (see applyWallVisual)
-        lx: cx, lz: cz, nx, nz, len, alongX,
-        pos: this.toWorld(cx, cz, wallH * 0.5),
-        radius: Math.max(w, d) / 2,
-        outPt: this.toWorld(cx + nx * 6, cz + nz * 6),
-        inPt: this.toWorld(cx - nx * 5.5, cz - nz * 5.5),
-        posts: [],
-        box: { x0, x1, z0, z1 },   // its footprint in castle coordinates (the collider grows outward with Thicken Walls)
-      };
-      seg.collider = this.addCollider(x0, x1, z0, z1, wallH, { kind: 'wall', ref: seg });
-      // the battlements: an invisible rail along the outer edge keeps soldiers from stepping off the wall walk,
-      // and every merlon stops arrows and spells. The gaps between the merlons are the firing slots.
-      const PT = 0.55; // rail thickness
-      // (the rail stops at the inner face of the side walls: the tower takes over from there)
-      const px0 = alongX ? Math.max(x0, -(H - T)) : nx > 0 ? x1 - PT : x0, px1 = alongX ? Math.min(x1, H - T) : nx > 0 ? x1 : x0 + PT;
-      const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
-      seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(-nx, -nz) });
-      seg.merlons = this.addMerlons(cx, cz, len, alongX, outer, seg, atCorner);
-      seg.takeDamage = (amt, attacker, cause) => this.damageWall(seg, amt, attacker, cause);
-      this.walls.push(seg);
-      // archer posts along the wall walk, each one standing behind a gap between two merlons
-      const nMerlons = Math.floor(len / 2);
-      const gaps = Math.max(1, nMerlons - 1);
-      const n = Math.max(1, Math.floor(len / 4.5));
-      for (let i = 0; i < n; i++) {
-        const gap = Math.min(gaps - 1, Math.max(0, Math.round((i + 0.5) * gaps / n - 0.5)));
-        const t = -len / 2 + 2 + 2 * gap;
-        const lx = alongX ? cx + t : cx, lz = alongX ? cz : cz + t;
-        seg.posts.push({
-          seg, occupant: null,
-          pos: this.toWorld(lx, lz, wallH),
-          base: this.toWorld(lx - nx * 4, lz - nz * 4),
-          lean: this.dirToWorld(nx, nz).multiplyScalar(POST_LEAN),
-          front: nz === 1,
-        });
-      }
-    }
+    for (const [x0, x1, z0, z1, nx, nz, breakable] of segDefs) this.addWall(x0, x1, z0, z1, nx, nz, breakable);
 
-    // ---- gate lintel ----
-    this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
-    this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(0, -1) });
-    this.addMerlons(0, H - T / 2, gateW, true, T / 2 - 0.25, null);
-
-    // ---- gate ----
-    this.buildGate();
+    // ---- gate lintel and gate ----
+    this.buildGateway();
 
     // ---- corner towers ----
     this.buildTowers();
@@ -252,6 +197,47 @@ export class Castle {
     }
 
     // ---- the gate lever and the bar that locks the gate ----
+    this.buildLever();
+
+    // ---- defend positions and key points ----
+    this.gatePos = this.toWorld(0, H - T / 2, gateH / 2);
+    this.gateOut = this.toWorld(0, H + 5);
+    this.gateIn = this.toWorld(0, H - T - 7);
+    this.spawnPoint = this.toWorld(0, 2.5);
+    this.defendPts = [];
+    for (let row = 0; row < 3; row++) {
+      for (let i = -3; i <= 3; i++) this.defendPts.push(this.toWorld(i * 2.3, 11 - row * 2.6));
+    }
+    for (let i = 0; i < 16; i++) this.defendPts.push(this.toWorld(-9 + (i % 8) * 2.6, -15 + Math.floor(i / 8) * 2.2));
+    this.buildPosts();
+    this.buildVisuals();
+    this.barracksLevel = 0;
+    this.levies = 0;
+    this.upg = new Upgrades(this);
+  }
+
+  // the gate in the middle of the front wall: the lintel over it (soldiers pass under), its battlements, and the gate itself
+  buildGateway() {
+    this.addCollider(-GW, GW, H - T, H, wallH, { bottom: this.center.y + gateH, kind: 'lintel' });
+    this.addCollider(-GW, GW, H - 0.55, H, wallH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(0, -1) });
+    this.addMerlons(0, H - T / 2, gateW, true, T / 2 - 0.25, null);
+    this.buildGate();
+  }
+
+  // the archers' posts on the walls (the front ones first, and the two over the gate before all)
+  buildPosts() {
+    this.posts = this.walls.flatMap((w) => w.posts);
+    // front posts first
+    this.posts.sort((a, b) => (b.front ? 1 : 0) - (a.front ? 1 : 0));
+    // lintel posts
+    for (const x of [-1, 1]) {
+      this.posts.unshift({ seg: null, occupant: null, pos: this.toWorld(x, H - T / 2, wallH), base: this.toWorld(x * 4.5, H - T - 6), lean: this.dirToWorld(0, 1).multiplyScalar(POST_LEAN), front: true });
+    }
+  }
+
+  // the lever inside the gate that bars it, and the bar itself (shown while the gate is barred)
+  buildLever() {
+    const M = this.mats, g = this.group, IN = H - T;
     this.leverLocal = { x: 5.8, z: IN - 5 };
     const lever = new THREE.Group();
     lever.position.set(this.leverLocal.x, 0, this.leverLocal.z);
@@ -274,28 +260,57 @@ export class Castle {
     g.add(shadowed(bar));
     this.gateBar = bar;
     this.gateLocked = false;
+  }
 
-    // ---- defend positions and key points ----
-    this.gatePos = this.toWorld(0, H - T / 2, gateH / 2);
-    this.gateOut = this.toWorld(0, H + 5);
-    this.gateIn = this.toWorld(0, H - T - 7);
-    this.spawnPoint = this.toWorld(0, 2.5);
-    this.defendPts = [];
-    for (let row = 0; row < 3; row++) {
-      for (let i = -3; i <= 3; i++) this.defendPts.push(this.toWorld(i * 2.3, 11 - row * 2.6));
+  // One stretch of curtain wall (castle-local footprint, outward normal nx, nz): its collider, the battlements on it (an invisible rail along the outer edge
+  // keeps soldiers from stepping off the wall walk, and every merlon stops arrows and spells; the gaps between the merlons are the firing slots), the archer
+  // posts behind the gaps, and what it takes in damage. `corners`: a castle's corner towers stand on the corner squares of its walls (no merlons there, and
+  // the rail stops at the inner face of the side walls, where the tower takes over); a stretch that runs from the face of one tower to the next (the wings of
+  // the hold's curtain wall, holdcastle.js) has neither.
+  addWall(x0, x1, z0, z1, nx, nz, breakable, corners = true) {
+    const w = x1 - x0, d = z1 - z0;
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const alongX = w > d;
+    const len = alongX ? w : d;
+    const outer = alongX ? nz * (T / 2 - 0.25) : nx * (T / 2 - 0.25);
+    const atCorner = corners ? (t) => Math.abs(alongX ? cx + t : cx) > H - T - 0.1 && Math.abs(alongX ? cz : cz + t) > H - T - 0.1 : null;
+    const seg = {
+      kind: 'wall', isStructure: true, castle: this, team: this.team, breakable,
+      hp: CASTLE.wallHp, maxHp: CASTLE.wallHp, alive: true,
+      vis: 'full',   // what is drawn: 'full', 'damaged' or 'gone' (see applyWallVisual)
+      lx: cx, lz: cz, nx, nz, len, alongX, corners,
+      pos: this.toWorld(cx, cz, wallH * 0.5),
+      radius: Math.max(w, d) / 2,
+      outPt: this.toWorld(cx + nx * 6, cz + nz * 6),
+      inPt: this.toWorld(cx - nx * 5.5, cz - nz * 5.5),
+      posts: [],
+      box: { x0, x1, z0, z1 },   // its footprint in castle coordinates (the collider grows outward with Thicken Walls)
+    };
+    seg.collider = this.addCollider(x0, x1, z0, z1, wallH, { kind: 'wall', ref: seg });
+    const PT = 0.55; // rail thickness
+    const px0 = alongX ? (corners ? Math.max(x0, -(H - T)) : x0) : nx > 0 ? x1 - PT : x0, px1 = alongX ? (corners ? Math.min(x1, H - T) : x1) : nx > 0 ? x1 : x0 + PT;
+    const pz0 = alongX ? (nz > 0 ? z1 - PT : z0) : z0, pz1 = alongX ? (nz > 0 ? z1 : z0 + PT) : z1;
+    seg.parapet = this.addCollider(px0, px1, pz0, pz1, wallH + MERLON_H, { kind: 'parapet', ref: seg, noWalk: true, noProjectile: true, bottom: this.center.y + wallH - 0.05, ...this.inward(-nx, -nz) });
+    seg.merlons = this.addMerlons(cx, cz, len, alongX, outer, seg, atCorner);
+    seg.takeDamage = (amt, attacker, cause) => this.damageWall(seg, amt, attacker, cause);
+    this.walls.push(seg);
+    // archer posts along the wall walk, each one standing behind a gap between two merlons
+    const nMerlons = Math.floor(len / 2);
+    const gaps = Math.max(1, nMerlons - 1);
+    const n = Math.max(1, Math.floor(len / 4.5));
+    for (let i = 0; i < n; i++) {
+      const gap = Math.min(gaps - 1, Math.max(0, Math.round((i + 0.5) * gaps / n - 0.5)));
+      const t = -len / 2 + 2 + 2 * gap;
+      const lx = alongX ? cx + t : cx, lz = alongX ? cz : cz + t;
+      seg.posts.push({
+        seg, occupant: null,
+        pos: this.toWorld(lx, lz, wallH),
+        base: this.toWorld(lx - nx * 4, lz - nz * 4),
+        lean: this.dirToWorld(nx, nz).multiplyScalar(POST_LEAN),
+        front: nz === 1,
+      });
     }
-    for (let i = 0; i < 16; i++) this.defendPts.push(this.toWorld(-9 + (i % 8) * 2.6, -15 + Math.floor(i / 8) * 2.2));
-    this.posts = this.walls.flatMap((w) => w.posts);
-    // front posts first
-    this.posts.sort((a, b) => (b.front ? 1 : 0) - (a.front ? 1 : 0));
-    // lintel posts
-    for (const x of [-1, 1]) {
-      this.posts.unshift({ seg: null, occupant: null, pos: this.toWorld(x, H - T / 2, wallH), base: this.toWorld(x * 4.5, H - T - 6), lean: this.dirToWorld(0, 1).multiplyScalar(POST_LEAN), front: true });
-    }
-    this.buildVisuals();
-    this.barracksLevel = 0;
-    this.levies = 0;
-    this.upg = new Upgrades(this);
+    return seg;
   }
 
   // ---------------------------------------------------------------- what the castle looks like
@@ -441,10 +456,10 @@ export class Castle {
       levies: `Elite levies at level ${this.levies}`, training: `Drill sergeants at level ${f ? f.training : 0}: your soldiers are better equipped`,
     };
     for (const k of changed) {
-      if (k === 'wall') for (const [x, z] of [[0, -H], [-H, 0], [H, 0], [0, H]]) burst(x, z, 3);
+      if (k === 'wall') for (const [x, z] of this.wallFx || [[0, -H], [-H, 0], [H, 0], [0, H]]) burst(x, z, 3);   // (wallFx, yardFx: a fortress of another shape says where)
       else if (k === 'gate') burst(0, H + 1.5, 2.5, 3);
-      else if (k === 'tower') for (const t of this.towers) burst(t.sx * TC, t.sz * TC, towerH, 3);
-      else if (k === 'barracks') for (const [x, z] of [[0, -16], [-16, 0], [16, 0]]) burst(x, z, 1.5);
+      else if (k === 'tower') for (const t of this.towers) burst(t.sx * TC + t.ox, t.sz * TC + t.oz, towerH, 3);
+      else if (k === 'barracks') for (const [x, z] of this.yardFx || [[0, -16], [-16, 0], [16, 0]]) burst(x, z, 1.5);
       else if (k === 'levies') burst(0, 2, 1, 4);
       else if (k === 'training') burst(0, 8, 1, 5);
       if (says[k] && f && f.isPlayer && f.player && g.mode !== 'client') f.player.notify(says[k]);   // (a guest hears it from the host)
@@ -460,6 +475,12 @@ export class Castle {
   //   stairs A run east along the south wall (x 20 to 24.5, then a landing), stairs B north along the east wall
   //   (z 21.5 to 26); the roof deck covers the rest of the room; the stairwell above the stairs stays open.
   buildTowers() {
+    this.towers = [];
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.buildTower(sx, sz);
+  }
+  // One of them: the (+,+) tower's layout mirrored into corner (sx, sz), and moved (ox, oz) castle-local metres from there (a tower that stands somewhere
+  // else on a wall: the hold's end towers, holdcastle.js; every castle's corner towers stand where they are, 0, 0).
+  buildTower(sx, sz, ox = 0, oz = 0) {
     const cy = this.center.y;
     const F0 = H - T, F1 = TC + towerR;      // the tower's inner and outer faces
     const W = 1;                             // wall thickness
@@ -469,55 +490,52 @@ export class Castle {
     const B0 = 21.5, B1 = F1 - W;            // stairs B: z range of the slope
     const SA = [19, 21.5];                   // stairs A / landing: z range
     const SB = [F1 - W - 2, F1 - W];         // stairs B: x range
-    this.towers = [];
-    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-      const col = (x0, x1, z0, z1, top, extra = {}) => this.addCollider(sx * x0, sx * x1, sz * z0, sz * z1, top, extra);
-      // merlons round the roof edge (each one also stops enemy arrows, like the ones on the walls)
-      const mer = (cx, cz, len, alongX, outer) => {
-        const n = Math.floor(len / 2);
-        for (let i = 0; i < n; i++) {
-          const t = -len / 2 + 1 + i * 2;
-          const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
-          const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
-          const a = this.toWorld(sx * (lx - hx), sz * (lz - hz)), b = this.toWorld(sx * (lx + hx), sz * (lz + hz));
-          this.game.physics.addMerlon({
-            minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
-            top: cy + towerH + MERLON_H, bottom: cy + towerH - 0.05, kind: 'merlon', team: this.team, ref: null,
-          }, this.bucket);
-        }
-      };
-      const edges = [
-        [F1 - W / 2, (F0 + F1) / 2, F1 - F0, false, W / 2 - 0.25],           // east
-        [(F0 + F1) / 2, F1 - W / 2, F1 - F0, true, W / 2 - 0.25],            // north
-        [F0 + W / 2, (H + F1) / 2, F1 - H, false, -(W / 2 - 0.25)],          // west
-        [(H + F1) / 2, F0 + W / 2, F1 - H, true, -(W / 2 - 0.25)],           // south
-      ];
-      for (const e of edges) mer(...e);
+    const col = (x0, x1, z0, z1, top, extra = {}) => this.addCollider(sx * x0 + ox, sx * x1 + ox, sz * z0 + oz, sz * z1 + oz, top, extra);
+    // merlons round the roof edge (each one also stops enemy arrows, like the ones on the walls)
+    const mer = (cx, cz, len, alongX, outer) => {
+      const n = Math.floor(len / 2);
+      for (let i = 0; i < n; i++) {
+        const t = -len / 2 + 1 + i * 2;
+        const lx = alongX ? cx + t : cx + outer, lz = alongX ? cz + outer : cz + t;
+        const hx = alongX ? 0.55 : 0.25, hz = alongX ? 0.25 : 0.55;
+        const a = this.toWorld(sx * (lx - hx) + ox, sz * (lz - hz) + oz), b = this.toWorld(sx * (lx + hx) + ox, sz * (lz + hz) + oz);
+        this.game.physics.addMerlon({
+          minX: Math.min(a.x, b.x), maxX: Math.max(a.x, b.x), minZ: Math.min(a.z, b.z), maxZ: Math.max(a.z, b.z),
+          top: cy + towerH + MERLON_H, bottom: cy + towerH - 0.05, kind: 'merlon', team: this.team, ref: null,
+        }, this.bucket);
+      }
+    };
+    const edges = [
+      [F1 - W / 2, (F0 + F1) / 2, F1 - F0, false, W / 2 - 0.25],           // east
+      [(F0 + F1) / 2, F1 - W / 2, F1 - F0, true, W / 2 - 0.25],            // north
+      [F0 + W / 2, (H + F1) / 2, F1 - H, false, -(W / 2 - 0.25)],          // west
+      [(H + F1) / 2, F0 + W / 2, F1 - H, true, -(W / 2 - 0.25)],           // south
+    ];
+    for (const e of edges) mer(...e);
 
-      // ---- what you bump into ----
-      col(F0, F1, F0, F1, FLOOR, { kind: 'tower' });                         // the solid base, and the floor inside it
-      col(F1 - W, F1, F0, F1, towerH, { kind: 'tower' });
-      col(F0, F1, F1 - W, F1, towerH, { kind: 'tower' });
-      col(F0, F0 + W, H, F1, towerH, { kind: 'tower' });
-      col(H, F1, F0, F0 + W, towerH, { kind: 'tower' });
-      col(F0 + W, F1 - W - 2, B0, F1 - W, towerH, { kind: 'walk', bottom: cy + towerH - 0.4, noProjectile: true, team: this.team });   // the roof deck
-      const rail = (x0, x1, z0, z1, ix, iz) => col(x0, x1, z0, z1, towerH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: cy + towerH - 0.05, ...this.inward(sx * ix, sz * iz) });
-      rail(F1 - 0.55, F1, F0, F1, -1, 0);                                    // keeps you on the roof
-      rail(F0, F1, F1 - 0.55, F1, 0, -1);
-      rail(F0, F0 + 0.55, H, F1, 1, 0);
-      rail(H, F1, F0, F0 + 0.55, 0, 1);
-      // the two flights
-      const climb = (lo, hi, along) => (x, z) => {
-        const l = this.toLocal(x, z);
-        const u = Math.min(1, Math.max(0, ((along === 'x' ? sx * l.x : sz * l.z) - lo) / (hi - lo)));
-        return u;
-      };
-      const uA = climb(A0, A1, 'x'), uB = climb(B0, B1, 'z');
-      col(A0, F1 - W, SA[0], SA[1], towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE * uA(x, z) });
-      col(SB[0], SB[1], B0, B1, towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE + RISE * uB(x, z) });
+    // ---- what you bump into ----
+    col(F0, F1, F0, F1, FLOOR, { kind: 'tower' });                         // the solid base, and the floor inside it
+    col(F1 - W, F1, F0, F1, towerH, { kind: 'tower' });
+    col(F0, F1, F1 - W, F1, towerH, { kind: 'tower' });
+    col(F0, F0 + W, H, F1, towerH, { kind: 'tower' });
+    col(H, F1, F0, F0 + W, towerH, { kind: 'tower' });
+    col(F0 + W, F1 - W - 2, B0, F1 - W, towerH, { kind: 'walk', bottom: cy + towerH - 0.4, noProjectile: true, team: this.team });   // the roof deck
+    const rail = (x0, x1, z0, z1, ix, iz) => col(x0, x1, z0, z1, towerH + MERLON_H, { kind: 'parapet', noWalk: true, noProjectile: true, bottom: cy + towerH - 0.05, ...this.inward(sx * ix, sz * iz) });
+    rail(F1 - 0.55, F1, F0, F1, -1, 0);                                    // keeps you on the roof
+    rail(F0, F1, F1 - 0.55, F1, 0, -1);
+    rail(F0, F0 + 0.55, H, F1, 1, 0);
+    rail(H, F1, F0, F0 + 0.55, 0, 1);
+    // the two flights
+    const climb = (lo, hi, along) => (x, z) => {
+      const l = this.toLocal(x, z);
+      const u = Math.min(1, Math.max(0, ((along === 'x' ? sx * (l.x - ox) : sz * (l.z - oz)) - lo) / (hi - lo)));
+      return u;
+    };
+    const uA = climb(A0, A1, 'x'), uB = climb(B0, B1, 'z');
+    col(A0, F1 - W, SA[0], SA[1], towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE * uA(x, z) });
+    col(SB[0], SB[1], B0, B1, towerH, { kind: 'ramp', heightFn: (x, z) => cy + FLOOR + RISE + RISE * uB(x, z) });
 
-      this.towers.push({ top: this.toWorld(sx * (F1 - 1.2), sz * (F1 - 1.2), towerH + 1.6), sx, sz });   // (where the tower archers' arrows leave: the roof's outer corner)
-    }
+    this.towers.push({ top: this.toWorld(sx * (F1 - 1.2) + ox, sz * (F1 - 1.2) + oz, towerH + 1.6), sx, sz, ox, oz });   // (where the tower archers' arrows leave: the roof's outer corner)
   }
 
   buildGate() {
@@ -716,7 +734,7 @@ export class Castle {
   repairWalls() {
     for (const seg of this.walls) {
       if (!seg.breakable) continue;
-      seg.maxHp = CASTLE.wallHp * (1 + 0.35 * this.wallLevel);
+      seg.maxHp = CASTLE.wallHp * (this.wallMul || 1) * (1 + 0.35 * this.wallLevel);   // (wallMul, gateMul: a fortress built stronger, holdgame.js)
       seg.hp = seg.maxHp;
       seg.alive = true;
       seg.hl = null;
@@ -746,7 +764,7 @@ export class Castle {
 
   repairGate() {
     const gate = this.gate;
-    gate.maxHp = CASTLE.gateHp * (1 + 0.4 * this.gateLevel);
+    gate.maxHp = CASTLE.gateHp * (this.gateMul || 1) * (1 + 0.4 * this.gateLevel);
     gate.hp = gate.maxHp;
     gate.hl = null;
     if (!gate.alive) {

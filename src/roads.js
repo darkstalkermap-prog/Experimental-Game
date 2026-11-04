@@ -1,12 +1,15 @@
 // Roads run from each castle gate to the centre of the map, with a ring road round the centre: the lines the ground is painted with (terrainmat.js) and
 // the things that must stay clear of them (trees, rocks, ponds, grass) are measured from. (world.js and the modules that need them import from here.)
+// Stonecleft Hold has roads of its own: from the lords' gates to the field before the gorge, and up the gorge to the hold (stonecleft.js), and no ring.
 import { CASTLE, WAR_WORLD } from './config.js';
 import { CASTLE_SITES } from './physics.js';
+import { holdWorld, holdRoads } from './stonecleft.js';
 
 export const ROADS = [];
 export function layoutRoads() {
   ROADS.length = 0;
   if (WAR_WORLD.on) return;   // (War Mode's bowl has no roads)
+  if (holdWorld()) { ROADS.push(...holdRoads()); return; }
   for (const s of CASTLE_SITES) {
     const len = Math.hypot(s.x, s.z);
     const gx = s.x - (s.x / len) * (CASTLE.H + 4), gz = s.z - (s.z / len) * (CASTLE.H + 4);
@@ -25,6 +28,6 @@ export function roadDist(x, z) {
   let d = Infinity;
   for (const r of ROADS) d = Math.min(d, distToSeg(x, z, r));
   // ring road around the centre
-  d = Math.min(d, Math.abs(Math.hypot(x, z) - 34));
+  if (!holdWorld()) d = Math.min(d, Math.abs(Math.hypot(x, z) - 34));
   return d;
 }

@@ -30,6 +30,8 @@ import { freshSlots, freshSeats, cleanSlots, cleanSeats, heroSize, HERO_SIZES, n
 import { drawLobby, drawSolo } from './lobbyui.js';
 import { initWarMenu, showWarRow, warSetup, hearWar, WAR_DESC } from './warui.js';
 import { sanitizeWar, warHills, menuPlan, planOf } from './warmode.js';
+import { SPECIALTY, isSpecialty, setSpecialWorld } from './specialty.js';
+import { initSpecialMenu, showSpecialPick } from './specialui.js';
 import { FramePacer } from './framepace.js';
 
 const $ = (id) => document.getElementById(id);
@@ -87,19 +89,22 @@ let palette = soloPalette();
 
 // the key of a world: its map size, the practice yard, War Mode's bowl and the land it is dressed as (a different land is another world, built again; so are
 // other colours, kept beside it in game.paletteBuilt)
-// (War Mode's key is the plan of its hills, '+war22': a bowl laid out for other sides is another world)
-const worldKey = (size, practice, o, war = false) => size + (practice ? '+practice' : '') + (war && !practice ? '+war' + warPlanOf(war) : '') + (practice ? '' : landKey(o.biome, o.seed));
+// (War Mode's key is the plan of its hills, '+war22': a bowl laid out for other sides is another world; a Specialty Battle's is its id, '+stonecleft')
+const specialOf = (practice, war, special) => (!practice && !war && isSpecialty(special) ? special : '');
+const worldKey = (size, practice, o, war = false, special = '') => size + (practice ? '+practice' : '') + (war && !practice ? '+war' + warPlanOf(war) : '')
+  + (specialOf(practice, war, special) ? '+' + special : '') + (practice ? '' : landKey(o.biome, o.seed));
 
-function buildGame(size, practice = false, landOpts = null, war = false) {
+function buildGame(size, practice = false, landOpts = null, war = false, special = '') {
   const o = sanitizeOptions(landOpts);
   setMapSize(size);
   setPalette(palette);   // (before anything of the world is made: castles, banners, soldiers and heroes take their colours as they are built)
   setPracticeWorld(practice);   // the practice courtyard is part of the world itself: its ground is flat and free of trees
   setWarWorld(war && !practice ? war : 0);   // War Mode's world: a hill for each army, no castles (warmap.js; `war` is the number of hills)
+  setSpecialWorld(specialOf(practice, war, special));   // a Specialty Battle's world: its own map and fortress (specialty.js; Stonecleft Hold: stonecleft.js)
   setWorldLand(practice ? 'meadow' : o.biome, practice ? 0 : o.seed);   // (the courtyard is always the meadow)
   game = new Game(renderer, ui, audio, input, { practice });
   game.state = 'menu';
-  game.mapBuiltFor = worldKey(size, practice, o, war);
+  game.mapBuiltFor = worldKey(size, practice, o, war, special);
   game.paletteBuilt = paletteKey(palette);
   ui.mapBg = ui.bigBg = null;
   ui.cmdFoesOf = null; ui.heroSeen = undefined; ui.castleBar.reset();   // (the command bar's houses, the Hero Mode the HUD was set for and the castle panel's castle were the last world's: held, they kept that whole finished world alive)
@@ -114,8 +119,12 @@ loadLand(loadOptions());
   const m = /^([a-z]+)(?::(\d{1,6}))?$/.exec(new URLSearchParams(location.search).get('land') || '');
   if (m) { const o = sanitizeOptions({ biome: m[1], seed: Number(m[2] || 0) }); land.mode = 'fixed'; land.biome = o.biome; land.seed = o.seed; }
 }
+// Quick Play's battle when it is a Specialty Battle (the last one played: the page opens on its world, so that Quick Play starts at once); '' when Quick Play
+// starts the battle of the setup below
+let quickSpecial = isSpecialty(loadLast().mode) ? loadLast().mode : '';
+const menuSize = () => (quickSpecial ? SPECIALTY[quickSpecial].map : mapSize);
 try {
-  buildGame(mapSize, false, land);
+  buildGame(menuSize(), false, land, false, quickSpecial);
 } catch (e) {
   console.error(e);
   $('loading').textContent = 'Failed to start: ' + e.message;
@@ -220,10 +229,12 @@ for (const [id, m] of Object.entries(HERO.modes)) {
   $('heroWin').insertBefore(b, $('heroWinDesc'));
 }
 showHeroWin(heroWin);
-function selectObjective(o) {
+// (keep: the page opens on the last match's setup and Quick Play stays on the Specialty Battle it played; a click on a mode makes that mode Quick Play's again)
+function selectObjective(o, keep = false) {
   const hero = o === 'hero', war = o === 'war';
   if (!hero && !war && !OBJECTIVES[o]) return;
-  const rebuild = war !== warOn && game.state === 'menu';
+  const rebuild = (war !== warOn || (!!quickSpecial && !keep)) && game.state === 'menu';
+  if (quickSpecial && !keep) { quickSpecial = ''; showSpecialPick(''); }
   heroOn = hero;
   warOn = war;
   if (!hero && !war) objective = o;
@@ -231,7 +242,7 @@ function selectObjective(o) {
   $('objDesc').textContent = hero ? heroDesc() : war ? WAR_DESC : OBJECTIVES[o].desc;
   $('lobbyObjDesc').textContent = war ? WAR_DESC : OBJECTIVES[objective].desc;   // (the lobby's Mode row itself is drawn by lobbyui.js)
   showWarRow(war);
-  if (rebuild) { clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') { palette = soloPalette(); ensureMap(mapSize, false, land, menuWar()); } }, 350); }   // (the menu shows the bowl behind it)
+  if (rebuild) { clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') { palette = soloPalette(); ensureMap(menuSize(), false, land, menuWar(), quickSpecial); } }, 350); }   // (the menu shows the bowl behind it)
   $('heroWin').classList.toggle('hidden', !hero);
   $('menu').classList.toggle('hero', hero);
   showLength();   // (the length row is for the war modes: in Hero Mode it says so)
@@ -240,20 +251,20 @@ function selectObjective(o) {
 initWarMenu(() => {
   if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();
   refreshQuick();
-  clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, menuWar()); }, 350);   // (two hills or four)
+  clearTimeout(previewTimer); previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(menuSize(), false, land, menuWar(), quickSpecial); }, 350);   // (two hills or four)
 });   // (adds War Mode to the Mode rows before they are wired)
 document.querySelectorAll('#objective button').forEach((b) => b.addEventListener('click', () => { selectObjective(b.dataset.o); rememberLast(); }));
-const rememberLast = () => saveLast(difficulty, heroOn ? 'hero' : warOn ? 'war' : objective);
+const rememberLast = () => saveLast(difficulty, quickSpecial || (heroOn ? 'hero' : warOn ? 'war' : objective));
 
 
 // Rebuild the world if the chosen map size or land differs from the one on screen, or if a match has been played in it: a world is for ONE match (castles, units,
 // engines and upgrades are all dirty afterwards), so the next one is built as soon as a match ends (freshWorldSoon) and starting it is then instant.
-function ensureMap(size, practice = false, landOpts = null, war = false) {
+function ensureMap(size, practice = false, landOpts = null, war = false, special = '') {
   const o = sanitizeOptions(landOpts);
-  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o, war) && game.paletteBuilt === paletteKey(palette)) return;
+  if (game.state === 'menu' && WORLD.size === size && game.mapBuiltFor === worldKey(size, practice, o, war, special) && game.paletteBuilt === paletteKey(palette)) return;
   const net0 = game.net;
   game.dispose();
-  buildGame(size, practice, o, war);
+  buildGame(size, practice, o, war, special);
   game.net = net0;
   game.setQuality(quality);
   resize();
@@ -265,14 +276,14 @@ initLandMenu({
   onChange: () => {
     if (lobbyBroadcast && !$('lobby').classList.contains('hidden')) lobbyBroadcast();   // (the guests hear of it while they wait in the lobby)
     clearTimeout(previewTimer);
-    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(mapSize, false, land, menuWar()); }, 350);
+    previewTimer = setTimeout(() => { if (game.state === 'menu') ensureMap(menuSize(), false, land, menuWar(), quickSpecial); }, 350);
   },
 });
 
 function begin(diff, setup = null, map = mapSize) {
   clearTimeout(freshTimer);
   palette = setup && setup.colors ? sanitizeColors(setup.colors) : soloPalette();
-  ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false);   // (War Mode: a hill for each side)
+  ensureMap(map, !!(setup && setup.practice), setup && setup.options, setup && setup.war ? warHills(setup) : false, setup && setup.special);   // (War Mode: a hill for each side; a Specialty Battle: its own world)
   if (net) game.net = net;
   audio.init();
   audio.startMusic();
@@ -311,7 +322,7 @@ function freshWorldSoon() {
     seen = endScreenUp() ? seen + 250 : 0;   // (the screen may be built before a finishing show has ended: wait until it is in view)
     if (seen < FRESH_DELAY) { freshTimer = setTimeout(tick, 250); return; }
     const size = WORLD.size, practice = !!game.practice;   // (the world's key also carries the land now: do not parse it)
-    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? planOf(game.war.sideList) : false);   // (the next battle's land: the end screen's row may have rolled it; War Mode: the hills of this match's sides, which a Play Again repeats)
+    ensureMap(size, practice, practice ? null : { biome: land.biome, seed: land.seed }, game.war ? planOf(game.war.sideList) : false, game.special ? game.special.id : '');   // (the next battle's land: the end screen's row may have rolled it; War Mode: the hills of this match's sides, which a Play Again repeats; a Specialty Battle: its own world again)
     // (a disposed world takes the shader programs of its own materials with it: compile the effect shaders of the new one now, a moment after the build as a task of
     // its own, while the end screen is still, instead of in the click that starts the match)
     const fresh = game;
@@ -372,32 +383,37 @@ function afterSolo() {
   showSolo();
   refreshQuick();
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(mapSize, false, land, menuWar()); } }, 350);
+  previewTimer = setTimeout(() => { if (game.state === 'menu' && $('lobby').classList.contains('hidden')) { palette = soloPalette(); ensureMap(menuSize(), false, land, menuWar(), quickSpecial); } }, 350);
 }
 
 // the line under Quick Play (and under Play Again): what a click will start
-const currentSetupLine = () => setupLine({ cls: heroClass, mode: heroOn ? 'hero' : warOn ? 'war' : objective, heroWin, map: mapSize, diff: difficulty, length: options.length });
+const currentSetupLine = () => setupLine({ cls: heroClass, mode: quickSpecial || (heroOn ? 'hero' : warOn ? 'war' : objective), heroWin, map: menuSize(), diff: difficulty, length: options.length });
 function refreshQuick() {
   if (quickReady) $('quickInfo').textContent = currentSetupLine();
 }
+// the Specialty Battles card (specialui.js): a battle starts at a click, with the hero and the difficulty chosen here; its Watch button watches it instead
+initSpecialMenu({ start: (id) => startSpecial(id), watch: (id) => startSpecial(id, true) });
 // everything the line reads exists now: show the remembered difficulty and mode (the page opens on the last match's setup)
 quickReady = true;
 selectDifficulty(difficulty);
-selectObjective(last.mode);
+selectObjective(quickSpecial ? 'conquest' : last.mode, true);
+showSpecialPick(quickSpecial);
+refreshQuick();
 $('quickPlay').focus();   // (Enter or Space on the main menu is then Quick Play)
 
 // ---------------- between matches (the end screen's actions, see flow.js) ----------------
 // Play Again: no reload. The world for it was built while the end screen was up (freshWorldSoon), so this only starts the match.
 function playAgain() {
   refreshOptions();   // (the end screen may have rolled the next battle into the stored options)
-  if (game.spectator) startSpectate(); else startSolo();   // (a battle that was watched: watch the next one)
+  if (game.special) startSpecial(game.special.id, !!game.spectator);   // (a Specialty Battle again, played or watched as it was)
+  else if (game.spectator) startSpectate(); else startSolo();   // (a battle that was watched: watch the next one)
 }
 function toMenu() {
   if (net) { location.reload(); return; }   // an online game is left by starting the page afresh
   clearTimeout(freshTimer);
   refreshOptions();
   palette = soloPalette();
-  ensureMap(mapSize, false, land, menuWar());   // (the menu shows the picked land behind it, as a bowl for War Mode, in the single player's colours)
+  ensureMap(menuSize(), false, land, menuWar(), quickSpecial);   // (the menu shows the picked land behind it, as a bowl for War Mode, in the single player's colours)
   ui.reset();
   ui.hideHud();
   showLength();
@@ -424,6 +440,7 @@ flow.bind({
 // Single Player, Quick Play and Play Again all start this: a match of one lord against the others, with what the menu says (which the last match left
 // there): your castle and colour, the castles left empty, or your side and the size of the sides in the Hero Game Mode
 function startSolo() {
+  if (quickSpecial) { quickSpecial = ''; showSpecialPick(''); }   // (the battle of the setup below is Quick Play's again)
   rememberLast();
   if (heroOn) {
     const me = { team: soloSide, hs: soloSide * 4 + Math.floor((heroCount - 1) / 2), name: 'You', cls: heroClass, col: myColor, me: true };
@@ -447,8 +464,21 @@ function startSpectate() {
   const empty = emptyTeams(soloSlots.map((s, t) => (t === soloSlot ? 'open' : s)), []);
   begin(difficulty, { mode: 'single', spectator: true, localTeam: 0, players: [], objective, war: warOn ? warSetup() : undefined, empty, colors, options: matchOptions(empty) });
 }
-$('spectateBtn').addEventListener('click', startSpectate);
-$('quickPlay').addEventListener('click', startSolo);
+$('spectateBtn').addEventListener('click', () => { if (quickSpecial) { quickSpecial = ''; showSpecialPick(''); } startSpectate(); });
+// A Specialty Battle (specialty.js): you hold castle 0 in your colour against the three other houses, each led by an AI lord, on the battle's own map and on
+// the land chosen on the menu; `watch`: every house an AI lord, watched (spectate.js). Single player only. Quick Play and Play Again repeat it.
+function startSpecial(id, watch = false) {
+  if (!isSpecialty(id)) return;
+  quickSpecial = id;
+  showSpecialPick(id);
+  rememberLast();
+  refreshQuick();
+  const me = { team: 0, name: 'You', cls: heroClass, col: myColor, me: true };
+  const colors = assignColors(watch ? [null, null, null, null] : colorWants([me], false));
+  begin(difficulty, { mode: 'single', special: id, spectator: watch, localTeam: 0, players: watch ? [] : [me], objective: 'conquest', empty: [], colors, options: matchOptions(watch ? [] : [0]) }, SPECIALTY[id].map);
+}
+// Quick Play: the last battle again (a Specialty Battle, or the one the setup below describes)
+$('quickPlay').addEventListener('click', () => { if (quickSpecial) startSpecial(quickSpecial); else startSolo(); });
 // the practice courtyard: a walled yard with training dummies, on the small map (it is built into the world, so the world is rebuilt)
 $('practiceBtn').addEventListener('click', () => begin(difficulty, { mode: 'single', localTeam: 0, players: [{ team: 0, name: 'You', cls: heroClass, me: true }], practice: true, colors: assignColors([myColor, null, null, null]) }, 'small'));
 

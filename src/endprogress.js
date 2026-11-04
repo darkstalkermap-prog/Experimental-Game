@@ -11,6 +11,7 @@ import { CLASSES } from './classes.js';
 import { STAT_KEYS, LOG_NAME } from './stats.js';
 import { previewCanvas } from './cosmetics.js';
 import { refreshRenownButton, refreshBadges } from './wardrobe.js';
+import { SPECIALTY } from './specialty.js';
 
 const CSS = `
 .cwe { text-align: left; padding: 7px 13px 9px; border: 1px solid rgba(90,60,20,0.4); border-radius: 5px; background: rgba(255,248,226,0.38); }
@@ -134,7 +135,7 @@ onMatchEnd((s) => {
   const c = herosCounters(s), war = isWar(s);
   // (War Mode counts towards the same bests and Renown: its kills, damage, streak, army kills, time and wins; it has no waves and earns no gold)
   const m = {
-    time: s.time, waves: war ? 0 : s.waves, kills: s.kills, won: s.won, difficulty: s.difficulty, cls: s.cls, events: s.events,
+    time: s.time, waves: war ? 0 : s.waves, kills: s.kills, won: s.won, difficulty: s.difficulty, cls: s.cls, events: s.events, special: s.special || '',   // (a Specialty Battle keeps bests of its own: progress.js)
     stats: { streak: c.streak, dmg: c.dmg, armyKills: s.hero ? 0 : s.armyKills, gold: s.hero || war ? 0 : s.goldEarned, breaches: c.breaches },
   };
   const { account, result } = applyMatch(loadAccount(), m);
@@ -167,7 +168,7 @@ function battleSection(s) {
   if (!r) return null;
   const c = herosCounters(s), hero = !!s.hero, war = isWar(s);
   const box = el('div', 'cwe cwe-battle');
-  const h = el('h4', '', 'Your battle');
+  const h = el('h4', '', s.special && SPECIALTY[s.special] ? `Your battle at ${SPECIALTY[s.special].name}` : 'Your battle');   // (a Specialty Battle's bests are its own: progress.js)
   box.append(h);
   const cls = CLASSES[s.cls];
   const sub = el('small', '', cls ? `${cls.name}, level ${s.level}` : '');

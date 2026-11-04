@@ -101,7 +101,7 @@ export class Upgrades {
         else bx(list, seg.lx + seg.nx * (half + o0), seg.lx + seg.nx * (half + o1), y0, y1, seg.lz + u0, seg.lz + u1);
       };
       let u0 = -len / 2, u1 = len / 2;
-      if (seg.nz === 1) { if (seg.lx > 0) u0 += 0.9; else u1 -= 0.9; }   // leave the gate's arch clear
+      if (seg.nz === 1 && seg.corners) { if (seg.lx > 0) u0 += 0.9; else u1 -= 0.9; }   // leave the gate's arch clear (the stretches beside it: a wing between two towers is not one)
       const span = u1 - u0, nb = Math.max(1, Math.round(span / 4.6));
       const ub = (k) => u0 + (k + 0.5) * span / nb;
       if (L === 1) {
@@ -223,15 +223,15 @@ export class Upgrades {
     if (!L) return;
     const wood = [], iron = [], plank = [], disc = [], rim = [];
     for (const t of c.towers) {
-      const { sx, sz } = t;
-      // a box given in the (+,+) frame, mirrored into this corner
-      const tb = (list, x0, x1, y0, y1, z0, z1, tex = 2) => bx(list, sx * x0, sx * x1, y0, y1, sz * z0, sz * z1, tex);
+      const { sx, sz, ox, oz } = t;
+      // a box given in the (+,+) frame, mirrored into this corner (and moved where the tower stands: castle.js buildTower)
+      const tb = (list, x0, x1, y0, y1, z0, z1, tex = 2) => bx(list, sx * x0 + ox, sx * x1 + ox, y0, y1, sz * z0 + oz, sz * z1 + oz, tex);
       // shields on the outer faces, just under the roof edge
       const shield = (north, a) => {
         const d = new THREE.CylinderGeometry(0.72, 0.72, 0.1, 18);
         const r = new THREE.TorusGeometry(0.72, 0.065, 6, 20);
         if (north) { d.rotateX(Math.PI / 2); } else { d.rotateZ(Math.PI / 2); r.rotateY(Math.PI / 2); }
-        const x = north ? sx * a : sx * (F1 + 0.06), z = north ? sz * (F1 + 0.06) : sz * a;
+        const x = (north ? sx * a : sx * (F1 + 0.06)) + ox, z = (north ? sz * (F1 + 0.06) : sz * a) + oz;
         d.translate(x, towerH - 1.7, z); r.translate(x, towerH - 1.7, z);
         disc.push(d); if (L >= 3) rim.push(r);
       };
@@ -242,7 +242,7 @@ export class Upgrades {
       // them stand there is decided in rebuildArchers)
       for (const [ax, az, east] of ARCHER_SPOTS) {
         const m = new THREE.Object3D();
-        m.position.set(sx * ax, towerH, sz * az);
+        m.position.set(sx * ax + ox, towerH, sz * az + oz);
         m.rotation.y = east ? (sx > 0 ? Math.PI / 2 : -Math.PI / 2) : (sz > 0 ? 0 : Math.PI);
         m.updateMatrix();
         this.spots.push(m);
@@ -263,10 +263,11 @@ export class Upgrades {
           tb(iron, fx - 0.3, fx + 0.3, towerH + 0.7, towerH + 0.85, fz - 0.3, fz + 0.3);
           for (const [dx, dz] of [[-0.25, -0.25], [0.25, -0.25], [-0.25, 0.25], [0.25, 0.25]]) tb(iron, fx + dx - 0.04, fx + dx + 0.04, towerH, towerH + 0.75, fz + dz - 0.04, fz + dz + 0.04);
           const bowl = new THREE.CylinderGeometry(0.42, 0.28, 0.3, 10);
-          bowl.translate(sx * fx, towerH + 0.95, sz * fz);
+          const wx = sx * fx + ox, wz = sz * fz + oz;
+          bowl.translate(wx, towerH + 0.95, wz);
           iron.push(bowl);
-          fire.push([0, sx * fx, towerH + 1.75, sz * fz, 1.3], [1, sx * fx, towerH + 1.6, sz * fz, 2.6]);   // (flame and glow: see FireSet)
-          this.flames.push({ pos: c.toWorld(sx * fx, sz * fz, towerH + 1.5) });
+          fire.push([0, wx, towerH + 1.75, wz, 1.3], [1, wx, towerH + 1.6, wz, 2.6]);   // (flame and glow: see FireSet)
+          this.flames.push({ pos: c.toWorld(wx, wz, towerH + 1.5) });
         }
         // wooden hoardings overhanging the north and east faces
         tb(plank, 18, F1 + 0.95, towerH - 1.35, towerH - 0.95, F1, F1 + 0.95);
@@ -333,11 +334,12 @@ export class Upgrades {
     const wood = [], iron = [], disc = [], pennant = [];
     // [wall: the inner face it stands against (+x, -x, +z, -z), span]
     const sides = [[0, -1], [-1, 0], [1, 0], [0, 1]].slice(0, L);   // back, left, right, then the front
-    const spans = [];
+    let spans = [];
     for (const [nx, nz] of sides) {
       if (nz > 0) spans.push([nx, nz, -13, -4.8], [nx, nz, 4.8, 13]);   // the front wall leaves the gateway clear
       else spans.push([nx, nz, nz ? -13 : -11, nz ? 13 : 11]);
     }
+    if (c.rackSpans) spans = c.rackSpans(L);   // (a fortress with walls of another shape says where its racks go: holdcastle.js)
     for (const [nx, nz, from, to] of spans) {
       const alongX = nz !== 0;
       // everything in the wall's own frame, then placed against its inner face
@@ -386,28 +388,29 @@ export class Upgrades {
     this.clear(this.standardMeshes);
     if (!L) return;
     const wood = [], iron = [], gold = [], cloth = [];
-    const z = 0.9;
+    // (the door of a keep that stands elsewhere, on a rock shelf say, moves them with it: holdcastle.js keepShift)
+    const sh = c.keepShift, z = 0.9 + (sh ? sh.z : 0), y = sh ? sh.y : 0;
     for (let k = 0; k < L; k++) {
       for (const s of [-1, 1]) {
         const x = s * (3.7 + k * 2.4);
         const pole = new THREE.CylinderGeometry(0.07, 0.09, 6.4, 6);
-        pole.translate(x, 3.2, z);
+        pole.translate(x, 3.2 + y, z);
         wood.push(pole);
-        bx(wood, x - 0.3, x + 0.3, 0, 0.35, z - 0.3, z + 0.3, 1);   // the foot
+        bx(wood, x - 0.3, x + 0.3, y, 0.35 + y, z - 0.3, z + 0.3, 1);   // the foot
         // a long banner hanging from a crossbar
-        bx(wood, x - 0.7, x + 0.7, 5.35, 5.45, z - 0.04, z + 0.04, 1);
+        bx(wood, x - 0.7, x + 0.7, 5.35 + y, 5.45 + y, z - 0.04, z + 0.04, 1);
         const flag = new THREE.BoxGeometry(1.25, 2.6, 0.03);
-        flag.translate(x, 4.1, z);
+        flag.translate(x, 4.1 + y, z);
         cloth.push(flag);
         if (L === 1) {
-          const tip = new THREE.ConeGeometry(0.11, 0.5, 6); tip.translate(x, 6.65, z); iron.push(tip);
+          const tip = new THREE.ConeGeometry(0.11, 0.5, 6); tip.translate(x, 6.65 + y, z); iron.push(tip);
         } else if (L === 2) {
-          const ball = new THREE.SphereGeometry(0.2, 8, 6); ball.translate(x, 6.55, z); gold.push(ball);
+          const ball = new THREE.SphereGeometry(0.2, 8, 6); ball.translate(x, 6.55 + y, z); gold.push(ball);
         } else {
           // a gold eagle: body, wings, head
-          bx(gold, x - 0.1, x + 0.1, 6.45, 6.85, z - 0.1, z + 0.1, 1);
-          bx(gold, x - 0.5, x + 0.5, 6.6, 6.7, z - 0.04, z + 0.04, 1);
-          bx(gold, x - 0.07, x + 0.07, 6.85, 7.0, z + 0.05, z + 0.2, 1);
+          bx(gold, x - 0.1, x + 0.1, 6.45 + y, 6.85 + y, z - 0.1, z + 0.1, 1);
+          bx(gold, x - 0.5, x + 0.5, 6.6 + y, 6.7 + y, z - 0.04, z + 0.04, 1);
+          bx(gold, x - 0.07, x + 0.07, 6.85 + y, 7.0 + y, z + 0.05, z + 0.2, 1);
         }
       }
     }

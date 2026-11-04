@@ -349,11 +349,13 @@ export class SiegeEngine {
     }
     const sp = this.speed * this.crewFactor();
     this.vel.set(ux * sp, 0, uz * sp);
+    const ox = this.pos.x, oz = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
+    if (g.physics.slopeMax) g.physics.slopeStop(this.pos, ox, oz, g.physics.slopeMax);   // (Stonecleft's cliffs: no engine rolls up them, holdphysics.js)
     g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true, this.slipT > 0); // engines roll past trunks (and, wedged, past stones)
     this.turn(Math.atan2(ux, uz), dt);
     return true;
@@ -368,11 +370,13 @@ export class SiegeEngine {
     const sp = inp.f * this.speed * (inp.f < 0 ? 0.55 : 1);
     this.vel.set(Math.sin(this.yaw) * sp, 0, Math.cos(this.yaw) * sp);
     if (inp.f) {
+      const ox = this.pos.x, oz = this.pos.z;
       this.pos.x += this.vel.x * dt;
       this.pos.z += this.vel.z * dt;
       const L = WORLD.playHalf;
       this.pos.x = clamp(this.pos.x, -L, L);
       this.pos.z = clamp(this.pos.z, -L, L);
+      if (g.physics.slopeMax) g.physics.slopeStop(this.pos, ox, oz, g.physics.slopeMax);
       g.physics.resolve(this.pos, 1.6, this.pos.y, 3, this.team, true);
     }
     if (inp.fire && this.timer <= 0) {

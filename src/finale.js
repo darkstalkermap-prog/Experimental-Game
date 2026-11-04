@@ -189,8 +189,8 @@ export class Finale {
 
   // where the camera starts and how it moves: from the side the player was on (or the gate side when the player was in the castle)
   aim(c) {
-    const g = this.g, p = g.player, K = this.K;
-    K.copy(c.toWorld(0, KEEP_Z, 0));
+    const g = this.g, p = g.player, K = this.K, ks = c.keepShift;
+    K.copy(ks ? c.toWorld(ks.x, KEEP_Z + ks.z, ks.y) : c.toWorld(0, KEEP_Z, 0));   // (a keep that stands elsewhere: Stonecleft's, on its shelf)
     // The shot starts far and high (the whole castle) and pushes in over the wall to a spot 47 m from the keep, clear of the towers whichever side it is
     // on (their outer corners are 43 m from it), just above the front wall: the keep is the subject, the towers frame it.
     const falling = !!(c.collapse && !c.collapse.done);   // (a keep that is coming down is framed from a little further: there is more to see)
@@ -208,8 +208,9 @@ export class Finale {
     });
     let dx = p.pos.x - K.x, dz = p.pos.z - K.z;
     if (Math.hypot(dx, dz) < 38) { dx = Math.sin(c.rot); dz = Math.cos(c.rot); }
-    const sides = [Math.atan2(dx, dz), c.rot, Math.atan2(-K.x, -K.z)];
-    this.az0 = sides[2];
+    // (Stonecleft's hold is shut in by cliffs: its keep is seen from the mouth of the gorge, over the wall, and from nowhere else)
+    const sides = c.sealsGorge ? [c.rot] : [Math.atan2(dx, dz), c.rot, Math.atan2(-K.x, -K.z)];
+    this.az0 = sides[sides.length - 1];
     find: for (const side of sides) {
       for (const off of [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42, 0.56, -0.56]) {
         const a = side + off;

@@ -59,6 +59,10 @@ import { WarMode } from './warmode.js';
 import { FIELD } from './warmap.js';
 import { kindGroup } from './wartactics.js';
 import { WarPhysics } from './warphysics.js';
+import { HoldPhysics } from './holdphysics.js';
+import { HoldCastle } from './holdcastle.js';
+import { holdWorld } from './stonecleft.js';
+import { HoldBattle } from './holdgame.js';
 import { Spectate } from './spectate.js';
 import { tickArchers, livingOn } from './towerarchers.js';
 
@@ -140,7 +144,8 @@ export class Game {
     this.paused = false;
     this.diff = DIFFICULTY.normal;
 
-    this.physics = WAR_WORLD.on ? new WarPhysics(11) : new Physics(11);   // (War Mode's world is its hills: warmap.js)
+    // (War Mode's world is its hills: warmap.js; Stonecleft Hold's, its gorge and the range round it: stonecleft.js)
+    this.physics = WAR_WORLD.on ? new WarPhysics(11) : holdWorld() ? new HoldPhysics(11) : new Physics(11);
     createSky(this.scene, renderer);
     this.lights = createLights(this.scene);
     createTerrain(this.scene, this.physics);
@@ -161,7 +166,7 @@ export class Game {
     this.objective = 'conquest';   // 'conquest' (the main mode) or 'koth' (King of the Hill)
     this.hero = null;              // the Hero Game Mode's rules while one is on (see herogame.js)
     this.grid = new Grid(4);
-    this.castles = CASTLE_SITES.map((s, i) => new Castle(this, i, s));
+    this.castles = CASTLE_SITES.map((s, i) => (s.hold ? new HoldCastle(this, i, s) : new Castle(this, i, s)));   // (Stonecleft's fortress is of its own shape: holdcastle.js)
     if (this.physics.war) for (const c of this.castles) c.group.visible = false;   // (War Mode: the houses' castles stand far off the map, unseen)
     this.war = null;               // War Mode's rules while it is on (see warmode.js)
     this.player = new Player(this, this.camera);
@@ -227,14 +232,16 @@ export class Game {
     mods.reset();
     applyBiomeRules(this);   // (the land's small rule twist: biometwist.js)
     // the match length is a source of rule modifiers (the war modes only: the Hero Game Mode and the practice courtyard keep their own pace)
+    // (a Specialty Battle, Stonecleft Hold: its own world and rules, its own clock, no Battle Decrees: holdgame.js)
+    const special = setup.special === 'stonecleft' && this.physics.hold && !setup.hero && !setup.practice && !setup.war;
     const length = LENGTHS[this.options.length];
-    if (length && length.mods && !setup.hero && !setup.practice && !setup.war) mods.set(`length:${this.options.length}`, length.mods);   // ('length:short')
-    this.timeLimit = length && length.limit && !setup.hero && !setup.practice && !setup.war ? length.limit : 0;   // seconds of play after which a Short war is decided on points
+    if (length && length.mods && !setup.hero && !setup.practice && !setup.war && !special) mods.set(`length:${this.options.length}`, length.mods);   // ('length:short')
+    this.timeLimit = length && length.limit && !setup.hero && !setup.practice && !setup.war && !special ? length.limit : 0;   // seconds of play after which a Short war is decided on points
     this.timeWarned = 0;
-    this.objective = OBJECTIVES[setup.objective] ? setup.objective : 'conquest';
+    this.objective = OBJECTIVES[setup.objective] && !special ? setup.objective : 'conquest';
     this.hero = setup.hero ? new HeroMode(this, { ...setup.hero, mirror: setup.mode === 'client' }) : null;   // (a guest's only mirrors the host's: herogame.js)
     this.war = setup.war && this.physics.war && !setup.hero && !setup.practice ? new WarMode(this, setup.war) : null;   // (War Mode: warmode.js)
-    this.decrees = this.hero || this.war || setup.practice ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
+    this.decrees = this.hero || this.war || setup.practice || special ? [] : startDecrees(this);   // (the Battle Decrees of the options: see decrees.js)
     this.hill.reset();
     this.pings.reset();
     // co-op: the human houses fight on one side against the AI lords. With four humans there are no AI lords,
@@ -245,6 +252,7 @@ export class Game {
     setSides(this.sides);
     this.diff = DIFFICULTY[difficulty] || DIFFICULTY.normal;
     this.difficultyName = difficulty;
+    this.special = special ? new HoldBattle(this) : null;   // (its sides and the hold's advantages are set once the houses are made: below)
     this.state = 'playing';
     this.quickEnd = false;      // set when the battle ends early on purpose (a concession, a won war finished, the clock of a Short war): no ending show
     this.readyTeams = new Set();   // houses that pressed Ready in the first preparation (see readyLive)
@@ -300,6 +308,7 @@ export class Game {
     }
     if (this.hero) this.hero.setup(setup);   // (the six heroes, the two sides, houses 2 and 3 switched off)
     if (this.war) this.war.setup(setup);     // (the sides, the places in the bowl, the gold; the AI generals buy their armies)
+    if (this.special) this.special.setup();  // (the three lords allied, the hold's walls, gate, towers and purse)
     for (const f of this.factions) f.gold += Math.round(mods.sum('startGold'));   // (a rule modifier: War Chest)
     startComeback(this);   // (the underdog's wage, the Last Stand: see comeback.js)
 
@@ -346,6 +355,7 @@ export class Game {
       if (twist) this.ui.toast(twist, -1, true);
       return;
     }
+    if (this.special) { this.ui.banner('Stonecleft Hold', this.special.banner(this.phaseT) + twistLine(this)); return; }
     const hillLine = this.objective === 'koth' ? ` Hold the hill in the middle of the map for ${clock(HILL.target)} and you win outright (Y: send your army up there).` : '';
     this.ui.banner(this.objective === 'koth' ? 'King of the Hill' : 'Prepare for battle', `The first armies march in ${clock(this.phaseT)}, so buy and upgrade now. After that a new army leaves every castle every ${Math.round(WAVES.interval * mods.mul('waveGap'))} seconds.${hillLine}${this.timeLimit ? ` A short war: at ${clock(this.timeLimit)} the strongest house wins.` : ''} B: shop and roster · M: map · Q / R: your abilities · Enter: ready, start now.${twistLine(this)}`);
   }
@@ -1041,6 +1051,7 @@ export class Game {
     const f = this.factions[castle.team];
     if (attacker && !allied(attacker.team, castle.team)) { this.credit(attacker.team, BOUNTY.keep); this.heroXp(attacker, XP.keep, castle.keep.pos); }
     this.audio.play('collapse', castle.keep.pos);
+    if (this.special && castle.team === 0) { this.special.keepFell(castle); return; }   // (Stonecleft: the hold's keep falling ends the battle, holdgame.js)
     this.announce((t) => (t === castle.team ? 'YOUR KEEP HAS FALLEN! You can no longer respawn. Survive!' : `${f.name}'s keep has fallen!`), castle.team, castle.team);
     this.finale.keepFell(castle);   // (the last rival keep: a moment of slow motion if the match goes on)
     for (const u of this.units) if (u.alive && u.team === castle.team && u.order === 'defend') u.setOrder('charge');
@@ -1054,6 +1065,7 @@ export class Game {
       const next = this.siegeTarget(o);
       o.player.notify(next ? `${f.name} is finished. Your armies march on ${this.factions[next.team].name}.` : `${f.name} is finished.`);
     }
+    if (this.special) this.special.keepFell(castle);   // (Stonecleft: the last of the three lords' keeps wins it)
   }
 
   // ---------------- army waves ----------------
@@ -1844,6 +1856,7 @@ export class Game {
       for (const f of this.factions) if (f.ai) f.ai.update(dt);
       if (this.hero) this.hero.update(dt);
       else this.updateHeroes(dt);
+      if (this.special) this.special.update(dt);   // (Stonecleft's clock: holdgame.js)
       if (this.timeLimit) this.updateClock();
       // trickle income while the castle stands
       if (!this.hero) {
@@ -1929,8 +1942,11 @@ export class Game {
     const c = this.localFaction.castle;
     this.menuCamT += dt * 0.15;
     const t = this.menuCamT;
-    this.camera.position.set(c.center.x + Math.sin(t) * 48, c.center.y + 30, c.center.z + Math.cos(t) * 48);
-    this.camera.lookAt(c.center.x, c.center.y + 4, c.center.z);
+    if (this.physics.hold && c === this.castles[0]) this.holdCamera(c, Math.sin(t) * 26, 58, 30);   // (Stonecleft's hold: over the wall from the mouth)
+    else {
+      this.camera.position.set(c.center.x + Math.sin(t) * 48, c.center.y + 30, c.center.z + Math.cos(t) * 48);
+      this.camera.lookAt(c.center.x, c.center.y + 4, c.center.z);
+    }
     if (this.camera.fov !== this.player.baseFov) { this.camera.fov = this.player.baseFov; this.camera.updateProjectionMatrix(); }
   }
 
@@ -1945,9 +1961,18 @@ export class Game {
       return;
     }
     const c = this.castles[PLAYER_TEAM];
+    if (this.physics.hold) { this.holdCamera(c, Math.sin(t) * 34, 76 + Math.cos(t * 0.7) * 8, 26); followShadow(this.lights.sun, c.center); return; }   // (Stonecleft: from the field before the mouth, up the gorge)
     this.camera.position.set(c.center.x + Math.sin(t) * 70, 34, c.center.z - 40 + Math.cos(t) * 30);
     this.camera.lookAt(c.center.x, 6, c.center.z);
     followShadow(this.lights.sun, c.center);
+  }
+
+  // Stonecleft's views of its hold (the menu's, the fallen hero's): the camera at castle-local (lx, lz), y metres up, looking up the gorge over the wall at the
+  // keep; the cliffs close the hold in on both sides, so it is never circled (castle-local to world written out: this runs every frame)
+  holdCamera(c, lx, lz, y) {
+    const cs = c.cos, sn = c.sin, cx = c.center.x, cz = c.center.z;
+    this.camera.position.set(cx + lx * cs + lz * sn, c.center.y + y, cz - lx * sn + lz * cs);
+    this.camera.lookAt(cx - 8 * sn, c.center.y + 6, cz - 8 * cs);
   }
 }
 

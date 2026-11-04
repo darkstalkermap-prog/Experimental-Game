@@ -202,6 +202,7 @@ export class Grass {
       if (d < CASTLE.H + 9) return false;
     }
     if (roadDist(x, z) < 3.2) return false;
+    if (this.physics.hold) return !this.physics.inGorge(x, z, -2, 34);   // (Stonecleft: the hold's yard is trodden earth; no hill in the middle)
     if (Math.hypot(x, z) < 17) return false;
     const y = this.physics.practice;   // the practice yard has a bare floor
     if (y && Math.abs(x - y.x) < PRACTICE.hw + PRACTICE.wallT + 1 && Math.abs(z - y.z) < PRACTICE.hd + PRACTICE.wallT + 1) return false;

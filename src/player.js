@@ -835,11 +835,13 @@ export class Player {
       this.stamina -= 8;
     }
 
+    const ox = this.pos.x, oz = this.pos.z;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     const L = WORLD.playHalf;
     this.pos.x = clamp(this.pos.x, -L, L);
     this.pos.z = clamp(this.pos.z, -L, L);
+    if (g.physics.slopeMax) g.physics.slopeStop(this.pos, ox, oz, g.physics.slopeMax);   // (Stonecleft's cliffs hold heroes and horses too: holdphysics.js)
     // (a wedged bot slips past trunks, never through a standing stone or a rock: those are big enough to be walked round, and a hero
     // passing through one was there for everyone to see)
     if (g.physics.resolve(this.pos, this.radius, this.pos.y, this.mounted ? 2.8 : this.height, this.team, this.ghostT > 0, false) && this.mounted) {

@@ -11,7 +11,7 @@ import { patchMaterial } from './shaderhook.js';
 
 const cache = [];
 const U = {
-  uDetail: { value: null }, uNoise: { value: null }, uRoads: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uRoadExt: { value: 1e5 },
+  uDetail: { value: null }, uNoise: { value: null }, uRoads: { value: [0, 1, 2, 3].map(() => new THREE.Vector4()) }, uRoadExt: { value: 1e5 }, uRing: { value: 34 },
   uPal: { value: Array.from({ length: 17 }, () => new THREE.Vector3()) }, uBiomeK: { value: new THREE.Vector2(1, 0) },
 };
 
@@ -23,7 +23,9 @@ export function setBiomeLook(def) {
 }
 
 // the four roads from the castle gates to the middle (the ring road round the middle is built into the shader)
-export function setRoads(roads, none = false) {   // (none: War Mode's bowl has no roads, not even the ring)
+// (ring: the ring road's radius, or 0 for none: Stonecleft's four roads meet before the gorge, with no ring, roads.js)
+export function setRoads(roads, none = false, ring = 34) {   // (none: War Mode's bowl has no roads, not even the ring)
+  U.uRing.value = ring > 0 ? ring : -1e5;
   let ext = 34;
   for (let i = 0; i < 4; i++) {
     const r = roads[i];
@@ -34,7 +36,7 @@ export function setRoads(roads, none = false) {   // (none: War Mode's bowl has 
 
 const VERT_DECL = `attribute vec3 aBase; attribute vec4 aMask; attribute vec2 aAlt;
 varying vec3 vWPos; varying vec3 vWN; varying vec3 vBase; varying vec4 vMask; varying vec2 vAlt;`;
-const FRAG_DECL = `uniform sampler2D uDetail; uniform sampler2D uNoise; uniform vec4 uRoads[4]; uniform float uRoadExt;
+const FRAG_DECL = `uniform sampler2D uDetail; uniform sampler2D uNoise; uniform vec4 uRoads[4]; uniform float uRoadExt; uniform float uRing;
 uniform vec3 uPal[17]; uniform vec2 uBiomeK;   // the biome's palette, and x: how strongly the blade strokes show, y: how wet its ground patches are
 #define P_CROWN_GAP uPal[0]
 #define P_CROWN_TOP uPal[1]
@@ -138,7 +140,7 @@ const FRAG_COLOR = `
       float dd = length(dv);
       if (dd < rd) { rd = dd; rs = dot(dv, vec2(-ab.y, ab.x)) / len; }
     }
-    float rr = length(p) - 34.0;
+    float rr = length(p) - uRing;
     if (abs(rr) < rd) { rd = abs(rr); rs = rr; }
   }
   float edge = rd + (n3.g - 0.5) * 1.8 + (d1.g - 0.5) * 0.6;
@@ -280,7 +282,7 @@ export function terrainMaterial(level) {
     U.uNoise.value = noiseTexture();
     m = new THREE.MeshStandardMaterial({ roughness: 0.97, metalness: 0 });
     patchMaterial(m, 'terrain-splat', (shader) => {
-      shader.uniforms.uDetail = U.uDetail; shader.uniforms.uNoise = U.uNoise; shader.uniforms.uRoads = U.uRoads; shader.uniforms.uRoadExt = U.uRoadExt; shader.uniforms.uPal = U.uPal; shader.uniforms.uBiomeK = U.uBiomeK;
+      shader.uniforms.uDetail = U.uDetail; shader.uniforms.uNoise = U.uNoise; shader.uniforms.uRoads = U.uRoads; shader.uniforms.uRoadExt = U.uRoadExt; shader.uniforms.uRing = U.uRing; shader.uniforms.uPal = U.uPal; shader.uniforms.uBiomeK = U.uBiomeK;
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\n' + VERT_DECL)
         .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vWPos = position; vWN = normal; vBase = aBase; vMask = aMask; vAlt = aAlt;');

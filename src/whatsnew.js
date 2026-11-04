@@ -5,6 +5,14 @@
 
 export const UPDATES = [
   {
+    id: 12,
+    title: 'Specialty Battles: Stonecleft Hold',
+    items: [
+      'A new section on the main menu, Specialty Battles: set pieces with a map and rules of their own. Click one and it starts with the hero and the difficulty you chose; Quick Play and Play Again repeat it.',
+      'Stonecleft Hold: your fortress seals a mountain gorge, one long wall from cliff to cliff with four towers and a single gate, the keep on a rock shelf behind it. Three allied lords march on it together. Break all three of their keeps, or hold your keep until the clock runs out (the HUD counts it down). Single player.',
+    ],
+  },
+  {
     id: 10,
     title: 'Pick your hero in War Mode',
     items: [

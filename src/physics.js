@@ -212,6 +212,19 @@ export class Physics {
     return g;
   }
 
+  // No going up ground steeper than `max` (rise over run) from (ox, oz) to where `pos` has moved: along the slope where one direction is walkable, else
+  // not at all (the soldiers' own rule, units.js SLOPE_MAX). Heroes, horses and engines go up anything on the other maps; a world whose cliffs must hold
+  // everybody (Stonecleft, holdphysics.js) sets `slopeMax`, and they keep to it there.
+  slopeStop(pos, ox, oz, max) {
+    const run = Math.hypot(pos.x - ox, pos.z - oz);
+    if (run < 1e-5) return;
+    const h0 = this.terrainHeight(ox, oz);
+    if (this.terrainHeight(pos.x, pos.z) - h0 <= run * max) return;
+    if (this.terrainHeight(pos.x, oz) - h0 <= Math.abs(pos.x - ox) * max) pos.z = oz;
+    else if (this.terrainHeight(ox, pos.z) - h0 <= Math.abs(pos.z - oz) * max) pos.x = ox;
+    else { pos.x = ox; pos.z = oz; }
+  }
+
   // Bend a walking direction around tree trunks and standing stones ahead, so soldiers flow around them instead
   // of pushing into them. side (+1/-1) picks which way to go round when one is dead ahead. `only` limits it to
   // one obstacle kind (siege engines roll through trunks but must go round stones).

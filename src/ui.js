@@ -21,6 +21,10 @@ import { updateComebackHud } from './comeback.js';
 import { rivalTagHtml, houseRival } from './rivalsui.js';
 import { HillBar } from './hillbar.js';
 import { CastleBar } from './castlebar.js';
+import { HOLD } from './stonecleft.js';
+
+// the yard of Stonecleft's hold for the maps: the gorge from the wall back to its end (castle-local corners, stonecleft.js)
+const HOLD_YARD = [[-HOLD.wing, 18], [HOLD.wing, 18], [HOLD.wing - 2, 2], [27, -18], [24, HOLD.shelf.back + 1], [-24, HOLD.shelf.back + 1], [-27, -18], [-HOLD.wing + 2, 2]];
 
 const $ = (id) => document.getElementById(id);
 const NEUTRAL_CSS = '#8a6a4a';   // for anything without a house colour
@@ -752,7 +756,8 @@ export class UI {
       <div><b>${f.kills}</b><span>army kills</span></div>
       <div><b>${f.earned}</b><span>gold earned</span></div>
       <div><b>${g.player.deaths}</b><span>deaths</span></div>
-      ${g.objective === 'koth' ? `<div><b>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</b><span>on the hill</span></div>` : ''}`;
+      ${g.objective === 'koth' ? `<div><b>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}</b><span>on the hill</span></div>` : ''}
+      ${g.special ? `<div><b>${clock(Math.max(0, g.special.hold - g.special.left))}</b><span>held</span></div><div><b>${[1, 2, 3].filter((t) => g.castles[t].fallen).length} / 3</b><span>keeps broken</span></div>` : ''}`;
     this.endSections(won, winner, reason);
     this.hideHud();
   }
@@ -824,7 +829,7 @@ export class UI {
       setText($('gold'), String(Math.floor(f.gold)));
       updateDecreeHud(this, g);     // (the decrees in force, the underdog's wage, the Last Stand: see decrees.js and comeback.js)
       updateComebackHud(this, g);
-      setText($('round'), `${g.round ? `Wave ${g.round}` : 'Preparation'}${g.timeLimit ? ` · ${clock(g.timeLeft)} left` : ''}`);   // (a Short war has a clock)
+      setText($('round'), `${g.round ? `Wave ${g.round}` : 'Preparation'}${g.timeLimit ? ` · ${clock(g.timeLeft)} left` : ''}${g.special ? ` · ${g.special.line}` : ''}`);   // (a Short war has a clock; Stonecleft's says how long to hold)
       if (g.phase === 'prep') setText($('phase'), `Battle begins in ${clock(g.phaseT)}`);
       else setText($('phase'), `Next wave in ${clock(g.phaseT)}`);
       setText($('war'), f.castle.fallen ? 'Your keep has fallen' : `Your armies march on ${g.targetName(f)}`);
@@ -1185,6 +1190,40 @@ export class UI {
     return c;
   }
 
+  // Stonecleft's hold on a map (holdcastle.js): the yard up the gorge in the house's colour, the wall across it (a breach in red), and on the big map its four
+  // towers and the keep. (Castle-local to the map written out: the minimap is painted several times a second.)
+  paintHold(ctx, c, X, k, big) {
+    const cs = c.cos, sn = c.sin, ox = c.center.x, oz = c.center.z;
+    const mx = (lx, lz) => X(ox + lx * cs + lz * sn), mz = (lx, lz) => X(oz - lx * sn + lz * cs);
+    ctx.fillStyle = c.fallen ? '#333' : TEAM_CSS[c.team];
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath();
+    HOLD_YARD.forEach(([lx, lz], i) => (i ? ctx.lineTo(mx(lx, lz), mz(lx, lz)) : ctx.moveTo(mx(lx, lz), mz(lx, lz))));
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = Math.max(2.5, 2 * k);
+    ctx.strokeStyle = c.fallen ? '#555' : '#e8e2d0';
+    const w = CASTLE.H - CASTLE.wallT / 2;
+    ctx.beginPath(); ctx.moveTo(mx(-HOLD.wing, w), mz(-HOLD.wing, w)); ctx.lineTo(mx(HOLD.wing, w), mz(HOLD.wing, w)); ctx.stroke();
+    ctx.strokeStyle = '#f33';
+    for (const seg of c.walls) {
+      if (seg.alive) continue;
+      const h = seg.len / 2;
+      ctx.beginPath(); ctx.moveTo(mx(seg.lx - h, seg.lz), mz(seg.lx - h, seg.lz)); ctx.lineTo(mx(seg.lx + h, seg.lz), mz(seg.lx + h, seg.lz)); ctx.stroke();
+    }
+    if (!big) return;
+    ctx.fillStyle = '#e8e2d0'; ctx.strokeStyle = '#0008'; ctx.lineWidth = 2;
+    const tr = CASTLE.towerR * k, tc = CASTLE.H + CASTLE.towerOff;
+    for (const t of c.towers) {
+      const lx = t.sx * tc + t.ox, lz = t.sz * tc + t.oz;
+      ctx.fillRect(mx(lx, lz) - tr, mz(lx, lz) - tr, tr * 2, tr * 2);
+      ctx.strokeRect(mx(lx, lz) - tr, mz(lx, lz) - tr, tr * 2, tr * 2);
+    }
+    const kp = c.keep.pos;
+    ctx.fillStyle = c.fallen ? '#555' : '#f4efe0';
+    ctx.fillRect(X(kp.x) - 5, X(kp.z) - 5, 10, 10);
+  }
+
   // One painter for both maps. big: the M map, with house names, the roads armies take and bigger markers.
   paintMap(ctx, S, bg, big) {
     const g = this.game;
@@ -1220,11 +1259,14 @@ export class UI {
     for (const c of g.castles) {
       const s = CASTLE.H * 2 * k;
       const cx = X(c.center.x), cz = X(c.center.z);
-      ctx.fillStyle = c.fallen ? '#333' : TEAM_CSS[c.team];
-      ctx.globalAlpha = 0.85;
-      ctx.fillRect(cx - s / 2, cz - s / 2, s, s);
-      ctx.globalAlpha = 1;
-      if (big) {
+      if (c.sealsGorge) this.paintHold(ctx, c, X, k, big);   // (Stonecleft's hold: a wall across a gorge, not a square)
+      else {
+        ctx.fillStyle = c.fallen ? '#333' : TEAM_CSS[c.team];
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(cx - s / 2, cz - s / 2, s, s);
+        ctx.globalAlpha = 1;
+      }
+      if (big && !c.sealsGorge) {
         ctx.strokeStyle = '#0008'; ctx.lineWidth = 2;
         ctx.strokeRect(cx - s / 2, cz - s / 2, s, s);
         ctx.fillStyle = '#e8e2d0';

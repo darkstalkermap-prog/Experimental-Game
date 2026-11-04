@@ -24,7 +24,7 @@ class TowerArcher {
     this.team = c.team;
     this.isTowerArcher = true;
     this.name = 'Tower archer';
-    this.pos = c.toWorld(t.sx * ax, t.sz * az, CASTLE.towerH);
+    this.pos = c.toWorld(t.sx * ax + t.ox, t.sz * az + t.oz, CASTLE.towerH);   // (ox, oz: a tower that stands off its corner, castle.js buildTower)
     this.radius = TOWER_ARCHER.radius;
     this.height = TOWER_ARCHER.height;
     this.maxHp = TOWER_ARCHER.hp;
@@ -92,7 +92,8 @@ export function archerAt(g, pt, team, pad, skip = null) {
   for (const c of g.castles) {
     if (!c || !c.towerLevel || allied(c.team, team)) continue;
     if (Math.abs(pt.y - c.center.y - CASTLE.towerH) > TOWER_ARCHER.height + 0.2) continue;
-    if (Math.abs(pt.x - c.center.x) > CASTLE.H + 12 || Math.abs(pt.z - c.center.z) > CASTLE.H + 12) continue;
+    const R = c.archerReach || CASTLE.H + 12;   // (how far from its middle a castle's towers stand: further on the hold's long wall, holdcastle.js)
+    if (Math.abs(pt.x - c.center.x) > R || Math.abs(pt.z - c.center.z) > R) continue;
     for (const a of archersOf(c)) {
       if (!a.alive || (skip && skip.has(a))) continue;
       const dx = pt.x - a.pos.x, dz = pt.z - a.pos.z, r = a.radius + pad;
@@ -107,7 +108,8 @@ export function archerAt(g, pt, team, pad, skip = null) {
 export function eachArcher(g, team, x, z, r, y, dy, fn) {
   for (const c of g.castles) {
     if (!c || !c.towerLevel || allied(c.team, team)) continue;
-    if (Math.abs(x - c.center.x) > CASTLE.H + 12 + r || Math.abs(z - c.center.z) > CASTLE.H + 12 + r) continue;
+    const R = (c.archerReach || CASTLE.H + 12) + r;
+    if (Math.abs(x - c.center.x) > R || Math.abs(z - c.center.z) > R) continue;
     for (const a of archersOf(c)) {
       if (!a.alive) continue;
       const d = Math.hypot(a.pos.x - x, a.pos.z - z);
