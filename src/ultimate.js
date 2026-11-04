@@ -1,0 +1,508 @@
+// =====================================================================================================================================
+// THE ULTIMATE: every hero's third ability (key Z: ULT.key in config.js). It does not come round on a timer: it charges from fighting
+// (damage dealt, damage taken, health restored), 0 to 1, and when it is full the icon in the dock glows and one press lets it go.
+// The charge is kept through a fall and lost with a change of class. Its numbers are in config.js (ULT).
+//
+// HOW A CLASS ADDS ITS ULTIMATE (the Knight, Berserker, Cavalier and Ranger have simple stand-ins below, `placeholder: true`, to be
+// replaced the same way the Mage's Meteor and the Cleric's Sanctuary are made):
+//
+// 1. The definition: classes.js, CLASSES.<class>.u, next to q and r:
+//      u: { id, icon, name, desc, kind: 'Ultimate', aimed?, range?, radius?, cast?, ...your numbers }
+//    id      the name of the method that runs it (2.), of its look (3.) and of its bot rule (4.); unique across the classes
+//    aimed   true: holding Z puts a circle on the ground that follows the crosshair (the volley's aiming path, Player.updateAim) out to
+//            `range` m with a ring of `radius` m; letting go casts it there (the method gets the spot as `at`). Not aimed: it goes off
+//            the moment Z is pressed.
+//    cast    the colour of the raised spell hand in the first-person view as it is cast (Player.useAbility: castFlash); omit for none.
+//    The definition is passed to the method as its fifth argument, so its numbers can live on it (see the stand-ins' `burst`).
+// 2. The method: `name(p, cam, dir, at, def)` in your class's section of ULT_METHODS below. It runs only where the battle is
+//    simulated (single player, or the host), mixed into Abilities (classes.js), so `this` is Abilities: this.g (the game),
+//    this.eachFoe / this.eachFriend, this.aimPoint, this.emit, this.gfx, this.active. Abilities.use has already checked and spent the
+//    charge (return false to refuse: the charge comes back). The caster p is a Player (a person, a guest's hero on the host, a hero
+//    bot) or a lord the computer plays as a hero (lordkit.js: a Unit with a kit): use only what both have (pos, yaw, team, alive,
+//    meleeDmg, bowDmg, mods, buffs, heal, chest, eyePos, stagger, game). Damage goes through this.g.damage(o, n, p, { ..., ability: name })
+//    (it fills nobody's Ultimate twice: the charge is worked out there). Something that plays out over time: push
+//    { kind: 'ult', p, t: 0, tick(A, e, dt) } onto this.active; Abilities.update calls tick every frame (also after the caster
+//    falls) until it returns false.
+// 3. The look: ULT_SHOW[id](ctx) runs on EVERY screen when the method calls this.emit(id, pos, dir, targets, sz); the host sends that
+//    to the guests as one small 'abil' event. ctx: { A (Abilities), g, at (Vector3), dir (flat Vector3), targets, sz, who (the caster,
+//    if found near pos), house (his colour), silent, snd(name) }. Use the local effects (fx._dust, fx._sparks, fx.explosion; not
+//    fx.dust / fx.sparks, which the host also sends), ctx.snd for sounds (the host's sound reaches the guests by itself), and
+//    A.ultFx.push({ step(A, e, dt) }) for a look that plays out over time: Abilities.updateFx steps it (with the look's own dice:
+//    modelkit.js quietly) until it returns false. Never damage in a look.
+// 4. The bots: ULT_AI[id](brain, p, def) is asked a few times a second while the charge is full, by the hero bots (herobot.js) and by
+//    the lords the computer plays as heroes (lordkit.js: rival lords, War Mode's generals). brain: foes (with dist: the gap to each),
+//    friends, n ({ c3, c5, c8, c12, heroes8 }: foes within 3, 5, 8, 12 m, rival heroes within 8), hpf (the caster's share of health),
+//    countAt(x, z, r). Return null (not now), {} to cast an instant one, or { at } (a point on the ground) for an aimed one. Use it
+//    when it counts: a knot of foes, a rival hero close, allies in danger; never on a lone soldier.
+// 5. Online: nothing to add. A guest's Z goes to the host as an 'abil' message with s: 'u' (netsync.js); the host checks that it is
+//    that guest's own hero, alive, not staggered, not steering an engine, and fully charged (Abilities.use) before running the
+//    method; the charge reaches the guest in its snapshot (me.ult, 0..100, rounded down so a guest never sees "full" early).
+// 6. The charge: nothing to add (ultGain below, called from Game.damage and from the healing abilities).
+// =====================================================================================================================================
+import * as THREE from 'three';
+import { ULT } from './config.js';
+import { allied } from './teams.js';
+import { SOUNDS } from './audio.js';
+import { FOG_ADD } from './particles.js';
+
+const ZERO = new THREE.Vector3();
+const V1 = new THREE.Vector3();
+const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
+
+// ------------------------------------------------------------------------------------------------------------------ the charge
+export function ultReady(p) { return !!p && p.ult >= 1 - 1e-6; }
+
+// What a point of damage dealt to `target` is worth to the attacker's charge (heroes count most, castle stone least: it has thousands).
+export function dealtWeight(target) {
+  const D = ULT.dealt;
+  if (target.isStructure) return D.structure;
+  if (target.isSiege) return D.siege;
+  if (target.isPlayer || target.kit) return D.hero;
+  return D.soldier;
+}
+
+// Charge hero o's Ultimate by `amount` points of health that changed hands, at `w` a point. Only where the battle is run (a guest's bar
+// comes in the snapshot), and only for those that have one (heroes and the lords that fight as heroes).
+export function ultGain(o, amount, w) {
+  if (!o || o.ult === undefined || !o.alive || !(amount > 0) || !(w > 0)) return;
+  const g = o.game;
+  if (!g || !g.simulating) return;
+  o.ult = Math.min(1, o.ult + amount * w);
+}
+
+// The Cleric's Sanctuary: a blow that would bring someone inside the light below 1 health leaves him on 1 (Player.takeDamage and
+// Unit.takeDamage call this just before the health comes off). Returns what is left of the blow.
+export function spared(o, amount) {
+  const g = o.game;
+  if (!(o.sanctUntil > g.time) || o.hp - amount >= 1) return amount;
+  if (!(g.time - (o.sparedAt || -9) < 0.5)) { o.sparedAt = g.time; g.fx.gold(o.chest(V1)); }   // (a glint: the light held him)
+  return Math.max(0, o.hp - 1);
+}
+
+// ------------------------------------------------------------------------------------------------------------------ the methods
+// (mixed into Abilities.prototype by classes.js; `this` is Abilities)
+const M = ULT.meteor, SANCT = ULT.sanctuary;
+
+export const ULT_METHODS = {
+  // the pooled looks the Ultimates need, made once with the world (so their shaders are compiled before the battle: Game.warmup)
+  ultInit() {
+    this.ultFx = [];
+    this.meteorPool = [];
+    const g = this.g;
+    if (!g.scene || !g.projectiles) return;
+    for (let i = 0; i < 2; i++) this.meteorPool.push(makeMeteorLook(this));
+  },
+
+  // ---------------------------------------------------------------- Mage: Meteor
+  // A circle on the ground (aimed); after ULT.meteor.fall s a burning rock comes down on it out of the sky: heavy damage in a wide
+  // ring (less toward the rim), soldiers knocked down and thrown out, heroes staggered, castle stone, gates and engines broken as by a
+  // heavy siege stone. Then the ground burns for a while and hurts every foe who stands in it.
+  meteor(p, cam, dir, at) {
+    const g = this.g;
+    const c = at ? at.clone() : this.aimPoint(cam, dir, M.range, p.team).pos;
+    const dx = c.x - p.pos.x, dz = c.z - p.pos.z, dist = Math.hypot(dx, dz);
+    if (dist > M.range + 6) {   // (a guest's spot is held to the Mage's reach)
+      const k = (M.range + 6) / dist;
+      c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k;
+    }
+    c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
+    const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
+    this.active.push({ kind: 'ult', p, team: p.team, t: 0, c, dmg: M.dmg * (p.mods.spell || 1), hit: false, burnT: 0, tick: meteorTick });
+    p.swingT = 0.25; p.attackDir = 'over';
+    this.emit('meteor', c, f);
+  },
+
+  // ---------------------------------------------------------------- Cleric: Sanctuary
+  // A circle of golden light round where the Cleric stands, for ULT.sanctuary.time s: nobody of her side inside it (heroes, soldiers,
+  // co-op allies) can be brought below 1 health (spared, above).
+  sanctuary(p) {
+    const c = p.pos.clone();
+    const e = { kind: 'ult', p, team: p.team, t: 0, c, end: this.g.time + SANCT.time, every: 0, tick: sanctuaryTick };
+    this.active.push(e);
+    sanctuaryTick(this, e, 0);   // (at once: a blow in this very frame is held too)
+    this.emit('sanctuary', c, ZERO);
+  },
+
+  // ---------------------------------------------------------------- Knight, Berserker, Cavalier: a stand-in
+  // (placeholder) a slam all around the hero: def.burst { radius, dmg (of his melee damage), edge, stun, knock }. Each of these
+  // classes' own Ultimate takes its place.
+  burst(p, cam, dir, at, def) {
+    const g = this.g, B = def.burst, at0 = p.pos.clone();
+    const dmg = p.meleeDmg * B.dmg;
+    this.eachFoe(p.team, at0.x, at0.z, B.radius, (o, d) => {
+      g.damage(o, dmg * (1 - (1 - B.edge) * Math.min(1, d / B.radius)), p, { melee: true, splash: true, charge: 1, ability: def.name });
+      if (!o.alive) return;
+      if (o.stagger) o.stagger(B.stun, { pos: at0 });
+      if (o.vel && !o.isPlayer && !o.isGiant && !o.isSiege) {
+        const l = d || 1;
+        o.vel.x += ((o.pos.x - at0.x) / l) * B.knock; o.vel.z += ((o.pos.z - at0.z) / l) * B.knock;
+      }
+    }, at0.y, 3);
+    p.swingT = 0.3; p.attackDir = 'over';
+    this.emit('burst', at0, ZERO, null, B.radius / 5);
+  },
+
+  // ---------------------------------------------------------------- Ranger: a stand-in
+  // (placeholder) a storm of arrows on a circle (aimed): the Arrow Volley's machinery with def.storm { arrows, dmg, radius, span }.
+  arrowstorm(p, cam, dir, at, def) {
+    const g = this.g, S = def.storm;
+    const c = at ? at.clone() : this.aimPoint(cam, dir, def.range, p.team).pos;
+    const dx = c.x - p.pos.x, dz = c.z - p.pos.z, dist = Math.hypot(dx, dz);
+    if (dist > def.range + 6) { const k = (def.range + 6) / dist; c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k; c.y = g.physics.groundHeight(c.x, c.z, c.y + 2); }
+    const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
+    const shots = [];
+    for (let i = 0; i < S.arrows; i++) shots.push(0.6 + (i + Math.random()) * S.span / S.arrows);
+    this.active.push({ kind: 'rain', p, t: 0, dur: 0.8 + S.span, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * S.dmg, radius: S.radius, aimed: 0.75, ability: def.name });
+    this.emit('volley', cam, f, [c], S.radius / 6.5);
+  },
+};
+
+// The Meteor's course where the battle is run: the impact when the rock comes down, then the burning ground.
+function meteorTick(A, e, dt) {
+  const g = A.g;
+  if (!e.hit) {
+    if (e.t < M.fall) return true;
+    e.hit = true;
+    meteorImpact(A, e);
+    return true;
+  }
+  if (e.t > M.fall + M.burn) return false;
+  if ((e.burnT -= dt) > 0) return true;
+  e.burnT += M.tick;
+  const c = e.c, n = M.burnDps * M.tick * (e.dmg / M.dmg);
+  A.eachFoe(e.team, c.x, c.z, M.burnR, (o) => {
+    if (!o.isSiege) g.damage(o, n, e.p, { magic: true, splash: true, ability: 'Meteor' });
+  }, c.y, 2.5);
+  return true;
+}
+
+function meteorImpact(A, e) {
+  const g = A.g, c = e.c, R = M.radius;
+  A.eachFoe(e.team, c.x, c.z, R, (o, d) => {
+    const k = 1 - (1 - M.edge) * Math.min(1, d / R);
+    if (o.isSiege) { g.damage(o, M.structure * k, e.p, { magic: true, ability: 'Meteor' }); return; }
+    g.damage(o, e.dmg * k, e.p, { magic: true, splash: true, ability: 'Meteor' });
+    if (!o.alive) return;
+    const hero = o.isPlayer || o.kit;
+    if (o.stagger) o.stagger(hero ? M.hero : M.stagger * (0.6 + 0.4 * k), { pos: c });
+    if (o.vel && !o.isPlayer && !o.isGiant) {
+      const l = d || 1;
+      o.vel.x += ((o.pos.x - c.x) / l) * M.knock * k; o.vel.z += ((o.pos.z - c.z) / l) * M.knock * k;
+    }
+  }, c.y, 6);
+  // castle stone, gates and keeps (a heavy siege stone's worth, less toward the rim)
+  for (const castle of g.castles || []) {
+    if (!castle || allied(castle.team, e.team) || !castle.walls) continue;
+    for (const part of [castle.gate, castle.keep, ...castle.walls]) {
+      if (!part || !part.alive || !part.takeDamage) continue;
+      const b = part.collider;
+      const d = b ? Math.hypot(Math.max(b.minX - c.x, 0, c.x - b.maxX), Math.max(b.minZ - c.z, 0, c.z - b.maxZ)) : Math.max(0, Math.hypot(part.pos.x - c.x, part.pos.z - c.z) - (part.radius || 0));
+      if (d > R) continue;
+      g.damage(part, M.structure * (1 - (1 - M.edge) * d / R), e.p, { ability: 'Meteor' });
+    }
+  }
+}
+
+function sanctuaryTick(A, e, dt) {
+  const g = A.g;
+  if (g.time >= e.end) return false;
+  if ((e.every -= dt) > 0) return true;
+  e.every = 0.1;
+  const until = Math.min(e.end, g.time + 0.25), c = e.c;
+  A.eachFriend(e.team, c.x, c.z, SANCT.radius, (o) => { if (Math.abs(o.pos.y - c.y) < 6) o.sanctUntil = until; });
+  return true;
+}
+
+// ------------------------------------------------------------------------------------------------------------------ the looks
+// (every screen; `this` is not used: ctx.A is Abilities)
+export const ULT_SHOW = {
+  meteor(ctx) {
+    const { A, at, dir, house } = ctx;
+    // the spot is marked at once, a red circle that turns until the rock lands
+    A.gfx.glyph('rune', at.x, at.y, at.z, M.radius, 0xff5a20, M.fall + 0.15, { arms: 7, team: house, strength: 1.7 });
+    A.gfx.glyph('pulse', at.x, at.y, at.z, M.radius * 0.6, 0xff7a30, M.fall, { strength: 1.2 });
+    ctx.snd('meteorfall');
+    const look = A.meteorPool.find((m) => !m.on) || null;
+    // it comes in from high up behind the caster's line, steep and fast
+    const from = new THREE.Vector3(at.x - dir.x * 46, at.y + 92, at.z - dir.z * 46);
+    if (look) startMeteorLook(A, look, at);
+    A.ultFx.push({ t: 0, at: at.clone(), from, u: from.clone().sub(at).normalize(), look, acc: 0, silent: ctx.silent, house, step: meteorLookStep });
+  },
+
+  sanctuary(ctx) {
+    const { A, g, at, house } = ctx, gf = A.gfx, fx = g.fx, R = SANCT.radius, T = SANCT.time;
+    gf.dome(0xffe2a0, T, R, null, { strength: 1.0, x: at.x, y: at.y, z: at.z });
+    gf.glyph('rune', at.x, at.y, at.z, R, 0xffd870, T, { arms: 8, team: house, strength: 1.6 });
+    gf.glyph('shock', at.x, at.y, at.z, R * 1.15, 0xfff0c0, 0.9, { team: house, strength: 1.6 });
+    gf.pillar(at.x, at.y, at.z, 0xffe9a0, T, 1.4, 18, 1.4);
+    fx.ring(at, R * 0.9, A.col.set(0xffe08a), 40, { up: 1.6, size: 0.36, life: 1.2 });
+    fx.flash(V1.copy(at).setY(at.y + 1.4), A.col.set(0xfff0c0), 6, 0.4, 0.8);
+    ctx.snd('sanctuary');
+    A.ultFx.push({ t: 0, at: at.clone(), acc: 0, silent: ctx.silent, step: sanctuaryLookStep });
+  },
+
+  burst(ctx) {   // (the stand-in: a slam all around)
+    const { A, g, at, house, sz } = ctx, gf = A.gfx, fx = g.fx, r = 5 * sz;
+    gf.glyph('shock', at.x, at.y, at.z, r * 1.25, 0xffe0b0, 0.7, { team: house, strength: 2 });
+    gf.glyph('pulse', at.x, at.y, at.z, r, 0xffa040, 0.8, { strength: 1.8 });
+    gf.pillar(at.x, at.y, at.z, 0xffd0a0, 0.6, 1.2, 10, 1.5);
+    fx._dust(V1.copy(at).setY(at.y + 0.2), 30, r * 0.7, '');
+    fx.ring(at, r * 0.45, A.col.set(0xffb070), 32, { up: 1.0, size: 0.42, speed: 9 });
+    fx.crater(at, 2.2 * sz);
+    if (g.camfx) g.camfx.boom(at, 0.9);
+    ctx.snd('slam');
+  },
+};
+
+// the rock's course on screen: the fall (the streak of fire and smoke, its shadow growing on the ground), the impact, the burning
+function meteorLookStep(A, e, dt) {
+  const g = A.g, fx = g.fx, at = e.at;
+  e.t += dt;
+  if (e.t < M.fall) {
+    const s = e.t / M.fall, k = s * s * (0.6 + 0.4 * s);   // (it gathers speed as it falls)
+    const x = e.from.x + (at.x - e.from.x) * k, y = e.from.y + (at.y + 1.2 - e.from.y) * k, z = e.from.z + (at.z - e.from.z) * k;
+    if (e.look) placeMeteorLook(e.look, x, y, z, s, e.t);
+    e.acc += dt;
+    while (e.acc > 0.016) {   // (a dense trail of flame behind it: a puff every 16 ms, along the stretch it covered)
+      e.acc -= 0.016;
+      const b = 0.5 + Math.random() * 6, u = e.u;   // (0.5 to 6.5 m behind the rock, along the way it came)
+      V1.set(x + u.x * b + (Math.random() - 0.5) * 1.3, y + u.y * b + (Math.random() - 0.5) * 1.3, z + u.z * b + (Math.random() - 0.5) * 1.3);
+      fx.fireTrail(V1);
+      if (Math.random() < 0.5) fx.smokeTrail(V1, ZERO);
+    }
+    if (Math.random() < 0.35) fx.flash(V1.set(x, y, z), A.col.set(0xffa040), 7, 0.12, 0.9);
+    return true;
+  }
+  if (!e.landed) {
+    e.landed = true;
+    if (e.look) hideMeteorLook(e.look);
+    const R = M.radius;
+    fx.explosion(V1.copy(at).setY(at.y + 0.6), 6.5);
+    fx.crater(at, 4.6);
+    fx.scorch(at, R * 0.9);
+    fx._dust(V1.copy(at).setY(at.y + 0.3), 40, R * 0.8, '');
+    fx._sparks(V1.copy(at).setY(at.y + 1.2), 40);
+    fx.ring(at, R * 0.5, A.col.set(0xffa060), 40, { up: 1.2, size: 0.5, speed: 12 });
+    A.gfx.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xffc080, 0.8, { team: e.house, strength: 2 });
+    A.gfx.glyph('pulse', at.x, at.y, at.z, R, 0xff4a1a, 1.0, { strength: 2 });
+    A.gfx.glyph('rune', at.x, at.y, at.z, M.burnR, 0xff3a10, M.burn, { arms: 9, strength: 1.2 });   // (the burning ground, glowing until it goes out)
+    if (g.magic) g.magic.flash(V1.copy(at).setY(at.y + 2), 0xff8a30, 22);
+    if (g.camfx) g.camfx.boom(at, 1);
+    if (!e.silent) g.audio.play('meteor', at);
+    return true;
+  }
+  // the ground burns: tongues of flame here and there in the circle, thinner as it dies down
+  if (e.t > M.fall + M.burn) return false;
+  const left = 1 - (e.t - M.fall) / M.burn;
+  e.acc += dt;
+  const every = 0.03 / Math.max(0.3, left);
+  while (e.acc > every) {
+    e.acc -= every;
+    const a = Math.random() * Math.PI * 2, r = M.burnR * Math.sqrt(Math.random()) * 0.95;
+    const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
+    V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.15, z);
+    fx.fireTrail(V1);
+    if (Math.random() < 0.06) fx.smoke(V1);
+  }
+  e.crackle = (e.crackle || 0) - dt;
+  if (e.crackle <= 0) { e.crackle = 1.1; if (!e.silent) g.audio.play('burning', at); }
+  return true;
+}
+
+// the light's course on screen: motes rising inside the circle, and the end
+function sanctuaryLookStep(A, e, dt) {
+  const g = A.g, fx = g.fx, at = e.at, R = SANCT.radius;
+  e.t += dt;
+  if (e.t >= SANCT.time) {
+    fx.ring(at, R * 0.95, A.col.set(0xfff0c0), 36, { up: 2.2, size: 0.3, life: 0.9 });
+    A.gfx.glyph('shock', at.x, at.y, at.z, R, 0xfff0c0, 0.7, { strength: 1.3 });
+    if (!e.silent) g.audio.play('sanctend', at);
+    return false;
+  }
+  e.acc += dt;
+  while (e.acc > 0.12) {
+    e.acc -= 0.12;
+    const a = Math.random() * Math.PI * 2, r = R * Math.sqrt(Math.random()) * 0.95;
+    const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
+    fx.gold(V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.4 + Math.random() * 1.5, z));
+  }
+  return true;
+}
+
+// ------------------------------------------------------------------------------------------------------------------ the rock and its shadow
+// The rock is the catapult stone's mesh and material, scaled up (no new shader); the shadow is a dark disc that lies on the land (a polar
+// grid laid on the ground where the rock will land) and grows as it comes down. Two of each are made with the world.
+const SH_RINGS = 10, SH_SEGS = 40;
+const SHADOW_V = `
+attribute vec2 aPolar;
+varying vec2 vPolar;
+#include <fog_pars_vertex>
+void main() {
+  vPolar = aPolar;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mvPosition;
+  #include <fog_vertex>
+}`;
+// (the darkness fades with the fog as the land behind it does: the fog's own reckoning, as FOG_ADD finds it for the additive looks)
+const SHADOW_F = `
+uniform float uR;
+uniform float uA;
+varying vec2 vPolar;
+#include <fog_pars_fragment>
+void main() {
+  float r = vPolar.x / max(uR, 0.01);
+  float a = uA * (1.0 - smoothstep(0.35, 1.0, r));
+  gl_FragColor = vec4(1.0);
+  ${FOG_ADD}
+  gl_FragColor = vec4(0.0, 0.0, 0.0, a * clamp(gl_FragColor.r, 0.0, 1.0));
+}`;
+
+function makeMeteorLook(A) {
+  const g = A.g, P = g.projectiles;
+  const rock = new THREE.Mesh(P.rockGeo, P.rockMat);
+  rock.frustumCulled = false;
+  rock.scale.setScalar(0.0001);
+  g.scene.add(rock);
+  const nv = (SH_RINGS + 1) * (SH_SEGS + 1);
+  const polar = new Float32Array(nv * 2), idx = [];
+  for (let j = 0; j <= SH_RINGS; j++) for (let i = 0; i <= SH_SEGS; i++) { const v = j * (SH_SEGS + 1) + i; polar[v * 2] = j / SH_RINGS; polar[v * 2 + 1] = (i / SH_SEGS) * Math.PI * 2; }
+  for (let j = 0; j < SH_RINGS; j++) for (let i = 0; i < SH_SEGS; i++) { const a = j * (SH_SEGS + 1) + i, b = a + 1, c = a + SH_SEGS + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(nv * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  geo.setAttribute('aPolar', new THREE.BufferAttribute(polar, 2));
+  geo.setIndex(idx);
+  geo.setDrawRange(0, 0);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    uniforms: { uR: { value: 1 }, uA: { value: 0 }, ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog) },
+    vertexShader: SHADOW_V, fragmentShader: SHADOW_F,
+  });
+  mat.name = 'meteorShadow';
+  const shadow = new THREE.Mesh(geo, mat);
+  shadow.frustumCulled = false; shadow.matrixAutoUpdate = false; shadow.renderOrder = 4;
+  g.scene.add(shadow);
+  return { on: false, rock, shadow, geo, mat, nv, polar, spin: new THREE.Vector3() };
+}
+
+function startMeteorLook(A, m, at) {
+  const phys = A.g.physics, pos = m.geo.attributes.position, R = M.radius * 1.05;
+  for (let v = 0; v < m.nv; v++) {
+    const rad = m.polar[v * 2] * R, th = m.polar[v * 2 + 1];
+    const x = at.x + Math.cos(th) * rad, z = at.z + Math.sin(th) * rad;
+    pos.setXYZ(v, x, phys.groundHeight(x, z, at.y + 1.5) + 0.08, z);
+  }
+  pos.needsUpdate = true;
+  m.geo.setDrawRange(0, SH_RINGS * SH_SEGS * 6);
+  m.on = true;
+  m.spin.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  m.rock.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+}
+
+function placeMeteorLook(m, x, y, z, s, t) {
+  m.rock.position.set(x, y, z);
+  m.rock.scale.setScalar(3.1);
+  m.rock.rotation.set(m.spin.x * t, m.spin.y * t, m.spin.z * t);
+  m.mat.uniforms.uR.value = 0.3 + 0.7 * s;      // (the shadow spreads and darkens as the rock nears)
+  m.mat.uniforms.uA.value = 0.12 + 0.5 * s * s;
+}
+
+function hideMeteorLook(m) {
+  m.on = false;
+  m.rock.scale.setScalar(0.0001);
+  m.geo.setDrawRange(0, 0);
+}
+
+// ------------------------------------------------------------------------------------------------------------------ the bots
+// (see 4. at the top). b: the bot's brain (HeroBot or LordKit), p: the hero, def: the class's `u`.
+const isHero = (o) => o.isPlayer || !!o.kit;
+
+export const ULT_AI = {
+  // a Meteor on the densest knot of foes 8 m and more away (rival heroes and engines count for more), at least six, or a hero and three
+  meteor(b, p) {
+    const foes = b.foes, step = Math.max(1, Math.ceil(foes.length / 40)), r = M.radius * 0.8;
+    let best = null, bs = 0;
+    for (let i = 0; i < foes.length; i += step) {
+      const o = foes[i], d = b.dist[i];
+      if (d < 8 || d > M.range - 10) continue;
+      let s = 0;
+      for (const f of foes) if (Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < r) s += isHero(f) ? 3 : f.isSiege ? 2 : 1;
+      if (s > bs) { bs = s; best = o; }
+    }
+    if (!best || bs < 6) return null;
+    const v = best.vel, x = best.pos.x + (v ? v.x * M.fall * 0.6 : 0), z = best.pos.z + (v ? v.z * M.fall * 0.6 : 0);
+    return { at: new THREE.Vector3(x, p.game.physics.groundHeight(x, z, best.pos.y + 3), z) };
+  },
+
+  // Sanctuary when lives are at stake: allies inside the circle low on health (a hero counts three), or the Cleric herself nearly
+  // down with foes on her, and a fight going on round her
+  sanctuary(b, p) {
+    if (b.n.c12 < 2) return null;
+    let need = b.hpf < 0.35 && b.n.c8 >= 1 ? 4 : 0;
+    for (const f of b.friends) {
+      if (f === p || !f.alive || Math.hypot(f.pos.x - p.pos.x, f.pos.z - p.pos.z) > SANCT.radius - 1.5) continue;
+      if (f.hp < f.maxHp * 0.45) need += isHero(f) ? 3 : 1;
+    }
+    return need >= 4 ? {} : null;
+  },
+
+  // (stand-in) the slam: four foes within reach, or a rival hero and one more
+  burst(b, p, def) {
+    const r = def.burst.radius - 0.5, n = b.countAt(p.pos.x, p.pos.z, r);
+    return n >= 4 || (b.n.heroes8 && n >= 2) ? {} : null;
+  },
+
+  // (stand-in) the storm of arrows on the densest knot: six foes at least
+  arrowstorm(b, p, def) {
+    const foes = b.foes, step = Math.max(1, Math.ceil(foes.length / 40)), r = def.storm.radius * 0.9;
+    let best = null, bs = 0;
+    for (let i = 0; i < foes.length; i += step) {
+      const o = foes[i], d = b.dist[i];
+      if (o.isSiege || d < 9 || d > def.range - 4) continue;
+      let s = 0;
+      for (const f of foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < r) s += isHero(f) ? 2 : 1;
+      if (s > bs) { bs = s; best = o; }
+    }
+    if (!best || bs < 6) return null;
+    return { at: new THREE.Vector3(best.pos.x, p.game.physics.groundHeight(best.pos.x, best.pos.z, best.pos.y + 3), best.pos.z) };
+  },
+};
+
+// ------------------------------------------------------------------------------------------------------------------ sounds
+// The Ultimate is ready: a rising bright chord.
+SOUNDS.ultready = (a, k) => {
+  a.tone(660, 0.5, 0.12 * k, 'triangle', 1, 0);
+  a.tone(880, 0.5, 0.11 * k, 'triangle', 1, 0.08);
+  a.tone(1320, 0.7, 0.1 * k, 'sine', 1, 0.16);
+  a.noise(0.4, 6000, 1, 0.05 * k, 'highpass', 0.16);
+};
+// Meteor: a roar that falls in pitch as it comes down, then the impact, deep and long
+SOUNDS.meteorfall = (a, k) => {
+  a.noise(1.3, 900, 0.6, 0.32 * k, 'bandpass');
+  a.tone(520, 1.25, 0.08 * k, 'sawtooth', 0.25);
+  a.noise(0.9, 2400, 0.8, 0.12 * k, 'bandpass', 0.35);
+};
+SOUNDS.meteor = (a, k) => {
+  a.tone(42, 1.6, 0.9 * k, 'sine', 0.5);
+  a.tone(75, 0.9, 0.5 * k, 'triangle', 0.4, 0.01);
+  a.noise(1.8, 260, 0.6, 1.0 * k, 'lowpass');
+  a.noise(0.5, 1800, 0.9, 0.4 * k, 'bandpass', 0.02);
+  a.noise(0.25, 5000, 1, 0.2 * k, 'highpass', 0.04);
+};
+SOUNDS.burning = (a, k) => {   // the ground on fire: a low rush and a crackle
+  a.noise(1.2, 420, 0.5, 0.16 * k, 'lowpass');
+  a.noise(0.08, 3800, 2, 0.08 * k, 'highpass', 0.2);
+  a.noise(0.06, 3200, 2, 0.07 * k, 'highpass', 0.65);
+};
+// Sanctuary: a soft hum of two voices that lasts as the light does, and a falling chime when it ends
+SOUNDS.sanctuary = (a, k) => {
+  a.tone(220, SANCT.time, 0.13 * k, 'sine', 1);
+  a.tone(330, SANCT.time, 0.08 * k, 'sine', 1, 0.05);
+  a.tone(440, SANCT.time * 0.8, 0.05 * k, 'triangle', 1, 0.1);
+  a.tone(1320, 1.2, 0.08 * k, 'sine', 1);
+  a.noise(0.8, 5200, 1, 0.06 * k, 'highpass');
+};
+SOUNDS.sanctend = (a, k) => {
+  a.tone(1175, 0.9, 0.1 * k, 'sine', 0.75);
+  a.tone(880, 1.1, 0.08 * k, 'triangle', 0.75, 0.08);
+  a.noise(0.5, 6000, 1, 0.04 * k, 'highpass');
+};

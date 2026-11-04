@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import {
   PLAYER_TEAM, RAIDER_TEAM, TEAM_NAMES, HOUSE_NAMES, HOUSE_LORDS, WAVES, LENGTHS, START_GOLD, TRICKLE, DIFFICULTY, BOUNTY, clock,
-  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON, WAR_WORLD, GATE,
+  UNIT_TYPES, SIEGE_TYPES, TROOP_CAP, PLAYER, CASTLE, FORMATIONS, RANKS, PROMOTIONS, WORLD, OBJECTIVES, HILL, SUMMON, WAR_WORLD, GATE, ULT,
 } from './config.js';
 import { Physics, CASTLE_SITES } from './physics.js';
 import { createSky, createLights, createTerrain, createForest, createCentrePiece, followShadow } from './world.js';
@@ -24,6 +24,7 @@ import { PARRY_WINDOW, BLOCK_STAMINA } from './combat.js';
 import { Grass } from './grass.js';
 import { Magic } from './magic.js';
 import { Abilities } from './classes.js';
+import { ultGain, dealtWeight } from './ultimate.js';
 import { talentBlock, respecBlock, TALENT_BY_ID } from './talents.js';
 import { AimRing } from './aimring.js';
 import { Hill } from './hill.js';
@@ -890,7 +891,9 @@ export class Game {
     let dmg = amount;
     if (target.isStructure) {
       if (attacker && allied(target.team, attacker.team)) return;
+      const s0 = target.hp;
       target.takeDamage(dmg, attacker, info.ability);
+      ultGain(attacker, s0 - target.hp, ULT.dealt.structure);   // (what really came off charges the Ultimate: ultimate.js)
       if (info.melee) this.audio.play('thud', target.pos);
       return;
     }
@@ -899,8 +902,10 @@ export class Game {
     if (attacker && attacker.kit && info.ability && !target.isPlayer && !target.kit) dmg *= attacker.kit.bite;   // (an AI lord's abilities land softer on soldiers than a hero's: lordkit.js BITE)
     if (target.isSiege) {
       this.lastHit = info;   // (what the blow was, for the match log: see onSiegeDestroyed)
+      const s0 = target.hp;
       target.takeDamage(dmg, attacker);
       this.lastHit = null;
+      ultGain(attacker, s0 - Math.max(0, target.hp), ULT.dealt.siege);
       return;
     }
     // soldiers may block with shield or weapon
@@ -956,6 +961,9 @@ export class Game {
     this.lastHit = info;   // (what the blow was, for the match log: see onUnitKilled)
     target.takeDamage(dmg, attacker, info);
     this.lastHit = null;
+    const lost = hp0 - Math.max(0, target.hp);   // the Ultimates of both (heroes, and lords who fight as heroes) charge by what came off
+    if (attacker && attacker !== target) ultGain(attacker, lost, dealtWeight(target));
+    ultGain(target, lost, ULT.taken);
     if (attacker && attacker.st) stats.dealt(attacker, hp0 > 0 ? Math.min(dmg, hp0) : dmg);   // (the end screen's damage dealt)
     if (attacker && attacker.gainXp && !attacker.isPlayer) attacker.gainXp(Math.min(dmg, 60) * 0.05);
     if (attacker && attacker.isPlayer && !info.ranged) {
@@ -1453,7 +1461,7 @@ export class Game {
     if (i.hit('KeyM')) this.ui.toggleMap();
     if (i.hit('KeyU')) this.localSummon();
     if (i.hit('KeyL')) standKey(this);   // (the Last Stand: see comeback.js)
-    if (i.hit('F1') || i.hit('KeyZ')) this.localOrder('follow');
+    if (i.hit('F1')) this.localOrder('follow');   // (Z, once its other key, is the Ultimate: player.js)
     if (i.hit('F2') || i.hit('KeyX')) this.localOrder('hold');
     if (i.hit('F3')) this.localOrder('charge');
     if (i.hit('F4') || i.hit('KeyV')) this.localOrder('defend');

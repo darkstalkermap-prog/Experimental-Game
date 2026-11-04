@@ -13,6 +13,7 @@ import { SWING } from './combat.js';
 import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
+import { ULT_AI } from './ultimate.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
@@ -104,7 +105,7 @@ export class HeroBot {
     this.way = new THREE.Vector3();
     this.hasWay = false;
     this.seen = new Map();   // foe -> when its swing was first seen (a swing is answered once)
-    this.stats = { swings: 0, q: 0, r: 0, shots: 0, potions: 0, unstuck: 0, retreats: 0, blocks: 0 };
+    this.stats = { swings: 0, q: 0, r: 0, u: 0, shots: 0, potions: 0, unstuck: 0, retreats: 0, blocks: 0 };
     this.t = 0;
     this.lastHp = player.hp;
     this.setup();
@@ -433,6 +434,20 @@ export class HeroBot {
     return true;
   }
 
+  // The Ultimate (Z), when its class's rule says the moment is good (ULT_AI in ultimate.js). Returns whether it went off.
+  ultimate() {
+    const p = this.p, def = abilityOf(p, 'u'), ai = def && ULT_AI[def.id];
+    if (!ai || p.drive || p.dash || p.leap || p.power || p.scope) return false;
+    const plan = ai(this, p, def);
+    if (!plan) return false;
+    if (plan.at) { this.faceYaw = p.yaw = Math.atan2(plan.at.x - p.pos.x, plan.at.z - p.pos.z); }
+    p.useAbility('u', this.keys, plan.at || null);
+    if (p.ult >= 1) return false;   // refused
+    this.stats.u = (this.stats.u || 0) + 1;
+    this.castOk = this.t + this.sk.castGap;
+    return true;
+  }
+
   // flick the view to a point, a little off by the bot's skill (as a person aims with the mouse)
   aim(x, y, z, noise = 1) {
     const p = this.p, e = p.eyePos(V1);
@@ -472,6 +487,7 @@ export class HeroBot {
   // Q and R, class by class: on groups and rival heroes, and the defence when it is needed.
   planAbilities() {
     const p = this.p, n = this.n, now = this.t, hpf = this.hpf, t = this.target, need = this.need;
+    if (now >= this.castOk && p.staggerT <= 0 && p.ult >= 1 && this.ultimate()) return;   // (the Ultimate first, when the moment is good)
     if (now < this.castOk || p.staggerT > 0 || (p.abilCd.q > 0 && p.abilCd.r > 0)) return;
     const q = p.abilCd.q <= 0 && now >= this.readyAt.q, r = p.abilCd.r <= 0 && now >= this.readyAt.r;
     if (!q && !r) return;

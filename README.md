@@ -325,6 +325,24 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     Walls, gates, trunks and steep rises stop it short; Q again reins in. Numbers: `RUSH` in `src/classes.js`. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
     (you take 40% less).
 
+  **The Ultimate (Z)**: every class has a third ability, its one huge moment. It does not come round on a timer: a ring round its
+  icon (the round tile beside R) fills as you fight, from the damage you deal (rival heroes count most, castle stone least), the
+  damage you take and the health your abilities restore in you and your allies; a level-1 hero in a Conquest battle fills it in
+  roughly a minute to a minute and a half of steady fighting. When it is full the icon glows, a chime sounds and a line says
+  "Ultimate ready"; press Z (aimed ones: hold Z to place the circle, let go to cast). The charge is kept when you fall and lost
+  when you change class. Online the host checks the charge and runs it; hero bots and the lords the computer plays as heroes
+  (rival lords, War Mode's generals) use theirs too, when it counts. Numbers: `ULT` in `src/config.js`; the code, and how a class
+  adds its own, at the top of `src/ultimate.js`.
+  - **Mage: Meteor**: hold Z and a circle marks a spot up to 135 m away (further than a Fireball flies); let go and 1.25 s later a
+    huge burning rock comes down on it out of the sky, a streak of fire and smoke with its shadow growing on the ground. 260 spell
+    damage (times the Mage's spell bonus) in 9 m, 35% of it at the rim; soldiers knocked flat and thrown out, heroes staggered;
+    castle walls, gates, keeps and engines take 380 (a catapult stone is 140, a gate has 1400). The impact shakes the view nearby
+    and leaves a scorched crater, and the ground burns for 6 s: 22 damage a second to every foe in 6.5 m of it.
+  - **Cleric: Sanctuary**: a dome and circle of golden light 10 m round you for 5 s, with a soft hum: no one of your side inside it,
+    hero or soldier (co-op allies too), can be brought below 1 health. A chime when it ends.
+  - **Knight, Berserker, Ranger, Cavalier**: for now a simple stand-in (Earthbreaker, Rampage, Stampede: a slam all round the hero;
+    Arrow Storm: a wide volley of 45 arrows on a circle up to 70 m away), to be replaced by each class's own.
+
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
   The Knight wears full plate (layered pauldrons, couters, cuisses, greaves, sabatons) under the house's surcoat, with a great helm and
   the kite shield; the Berserker is bare-chested under a ruff of pelt, crossed straps and a studded leather kilt, with a horned cap, a
@@ -1126,6 +1144,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | 1 / 2 / mouse wheel | Sword & shield / bow |
 | Q | Class ability: attack (Ranger: Power Shot draws and looses itself; with the Arrow Volley talent, hold to place the circle, let go to loose it) |
 | R | Class ability: defence |
+| Z | Ultimate, once its ring is full (it charges as you fight; aimed ones: hold to place the circle, let go to cast) |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
 | W / S / A / D, left click, E (inside an engine) | Roll / turn / strike or fire / climb out |
@@ -1144,7 +1163,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | Left / right click, Q / E (spectating) | The previous / next hero or lord to follow (**Spectating**, above) |
 | Space / C / 1 2 3 (spectating) | Free camera (WASD, mouse, Shift) / overview / pick follow, free, overview |
 | Any key or click | At the end of a match: skip the ending (slow motion, the horn, the falling keep) and go straight to the results (see Big finishes) |
-| F1 or Z | Army: follow me |
+| F1 | Army: follow me |
 | F2 or X | Army: hold the position you're looking at |
 | F3 | Army: charge |
 | F4 or V | Army: defend the castle |
@@ -1269,6 +1288,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | --- | --- |
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
+| `src/ultimate.js` | The Ultimate (Z): the charge, the Mage's Meteor, the Cleric's Sanctuary, the stand-ins, their looks and sounds, when the bots use them, and (at the top) how a class adds its own |
 | `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
 | `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
 | `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |

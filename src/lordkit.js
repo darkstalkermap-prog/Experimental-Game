@@ -22,6 +22,7 @@ import { talentPointsFor, MAX_LEVEL } from './heroes.js';
 import { TALENT_PREFS } from './herobot.js';
 import { allied } from './teams.js';
 import { rigSetBow } from './models.js';
+import { ULT_AI } from './ultimate.js';
 
 // the class each style of lord fights as (rivals.js PERSONAS), and the plain lords' by house (Aldmoor, Varr, Elden, Sol)
 export const PERSONA_CLASS = { rusher: 'berserker', turtler: 'knight', breaker: 'mage', raider: 'ranger', merchant: 'cleric', zealot: 'cleric', warlord: 'knight', titan: 'berserker', opportunist: 'ranger' };
@@ -89,7 +90,7 @@ export class LordKit {
     this.bowOn = false;
     this.draw = null;       // a Power Shot or a Sniper Shot being drawn: { slot, t, full, o }
     this.bowT = 0;          // the bow goes back on the shoulder when this runs out
-    this.stats = { q: 0, r: 0, looks: 0 };
+    this.stats = { q: 0, r: 0, u: 0, looks: 0 };
     this.bite = 1;          // (what his abilities do to soldiers, of a hero's: set below by the difficulty)
     u.classId = cls;
     // the Ranger fights with the bow: she shoots from a distance as an archer does (never from a wall post: units.js), her bow always out
@@ -98,6 +99,7 @@ export class LordKit {
     const g = this.g;
     // what the abilities ask of a hero (classes.js Abilities): cooldowns, timed effects, talents and the class numbers
     u.abilCd = { q: 0, r: 0 };   // (set below, once his class numbers are known)
+    u.ult = 0;                   // his Ultimate's charge (ultimate.js): it fills as a hero's does, and he lets it go when it counts (ultimate)
     u.buffs = new Buffs();
     u.talents = {};
     u.talentRev = 0;
@@ -401,11 +403,12 @@ export class LordKit {
   // Q and R, class by class, as the hero bots use them (herobot.js planAbilities): on groups and rival heroes, the defence when it is needed.
   think() {
     const u = this.u, n = this.n;
-    const q = this.ready('q'), r = this.ready('r');
-    if (!q && !r) return;
+    const q = this.ready('q'), r = this.ready('r'), ult = u.ult >= 1;
+    if (!q && !r && !ult) return;
     this.stats.looks++;
     if (Math.random() > this.sk.see) return;
     this.scan();
+    if (ult && this.ultimate()) return;
     const t = u.target && u.target.alive ? u.target : null;
     const foe = t && !t.isStructure && !t.isSiege ? t : null;
     const gap = foe ? Math.hypot(foe.pos.x - u.pos.x, foe.pos.z - u.pos.z) - (foe.radius || 0.4) : Infinity;
@@ -589,6 +592,23 @@ export class LordKit {
     }
     if (!this.use(slot, dir, at)) { u.dash = null; u.leap = null; return false; }
     this.stats[slot]++;
+    return true;
+  }
+
+  // The Ultimate, when the class's rule says the moment is good (ULT_AI in ultimate.js: a knot of foes, a hero near, his men in danger).
+  ultimate() {
+    const u = this.u, def = abilityOf(u, 'u'), ai = def && ULT_AI[def.id];
+    if (!ai || u.staggerT > 0 || u.dash || u.leap) return false;
+    this.hpf = u.hp / u.maxHp;
+    const plan = ai(this, u, def);
+    if (!plan) return false;
+    const to = plan.at || null;
+    const dir = to ? V2.set(to.x - u.pos.x, 0, to.z - u.pos.z) : this.look();
+    if (dir.lengthSq() < 1e-6) dir.set(Math.sin(u.yaw), 0, Math.cos(u.yaw));
+    dir.normalize();
+    u.yaw = Math.atan2(dir.x, dir.z);
+    if (!this.use('u', dir, to)) return false;
+    this.stats.u++;
     return true;
   }
 

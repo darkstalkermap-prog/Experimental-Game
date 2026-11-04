@@ -408,7 +408,7 @@ export class PracticeCourt {
 
   heal() {
     const p = this.g.player;
-    p.hp = p.maxHp; p.stamina = 100; p.abilCd = { q: 0, r: 0 };
+    p.hp = p.maxHp; p.stamina = 100; p.abilCd = { q: 0, r: 0 }; p.ult = 1;   // (the Ultimate charged too, to try it)
     p.arrows = PLAYER.maxArrows; p.potions = 3; p.lastHurt = -99;
     p.buffs.clear();
   }

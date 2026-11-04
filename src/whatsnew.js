@@ -5,6 +5,16 @@
 
 export const UPDATES = [
   {
+    id: 14,
+    title: 'Ultimates',
+    items: [
+      'Every hero has a third ability on Z: the Ultimate. It charges as you fight (damage dealt and taken, health you restore), not on a timer; when the ring round its icon is full it glows and one press lets it go. It is kept when you fall.',
+      'Mage: Meteor. Mark a spot further away than a Fireball flies and a huge burning rock falls on it, knocking soldiers flat, breaking walls and gates, and leaving the ground burning.',
+      'Cleric: Sanctuary. A circle of golden light round you where no ally can die for 5 seconds.',
+      'The other classes have a simple Ultimate for now, with their own on the way. Bots and the computer\'s lords use theirs too. The old Z for "follow me" is now F1 only.',
+    ],
+  },
+  {
     id: 13,
     title: 'Armies of five races',
     items: [

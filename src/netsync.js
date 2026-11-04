@@ -158,8 +158,9 @@ export class HostSync {
         break;
       case 'potion': p.drinkPotion(); break;
       case 'abil':
-        // class ability: the client has already moved itself; the host works out the rest
-        if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r') && !p.drive) {
+        // class ability: the client has already moved itself; the host works out the rest (the Ultimate, 'u': Abilities.use checks the
+        // charge of this guest's own hero on the host, never the guest's word)
+        if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r' || d.s === 'u') && !p.drive) {
           const f = gvec(d.f), dir = gvec(d.d);
           if (f && dir) {
             p.mounted = !!d.m && p.hasHorse;
@@ -284,6 +285,7 @@ export class HostSync {
         hasHorse: h.hasHorse ? 1 : 0, horseHp: Math.round(h.horseHp), seq: h.spawnSeq, kills: h.kills, deaths: h.deaths,
         order: h.lastOrder || 'defend', cls: CLASS_IDS.indexOf(h.classId), xp: Math.floor(h.xp), lvl: h.level,
         tal: Object.keys(h.talents),   // the talents learnt (see talents.js)
+        ult: Math.floor((h.ult || 0) * 100),   // the Ultimate's charge in hundredths, rounded down: "full" only when it is (ultimate.js)
       };
       g.net.toClient(h.netId, { k: 'snap', s: shared, me, pev: this.priv.get(h.netId) || [] });
     }
@@ -555,6 +557,8 @@ export class ClientSync {
       p.hp = me.hp;
       p.arrows = me.arrows;
       p.potions = me.potions;
+      // (just after this guest let its Ultimate go, a snapshot sent before the host heard of it still says full: not believed for a second)
+      if (Number.isFinite(me.ult) && g.time - p.ultSentAt > 1) p.ult = Math.max(0, Math.min(1, me.ult / 100));
       p.kills = me.kills;
       p.deaths = me.deaths;
       p.lastOrder = me.order;

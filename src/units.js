@@ -1,6 +1,7 @@
 // Soldiers: troops, rival lords and raiders. Movement, orders, combat and animation.
 import * as THREE from 'three';
 import { UNIT_TYPES, WORLD, RAIDER_TEAM, FORMATIONS, RANKS, TEAM_COLORS, HILL, SPEAR } from './config.js';
+import { spared } from './ultimate.js';
 import { buildSoldier, poseSoldier, poseDeath, buildHorse, poseHorse, poseHorseDead, SADDLE_Y, rigSetTier, rigSetRank } from './models.js';
 import { navigate, avoidCastles, keepSpot, outOfKeep } from './nav.js';
 import { clamp } from './noise.js';
@@ -183,6 +184,7 @@ export class Unit {
     if (!this.alive) return;
     if (this.kit) { amount = this.kit.soak(amount, attacker, info); if (amount <= 0) return; }   // (a lord's Bulwark or Frost Ward)
     if (this.guardT > 0) amount *= this.guardMul;
+    if (this.sanctUntil) amount = spared(this, amount);   // (inside a Cleric's Sanctuary nobody of her side falls: ultimate.js)
     this.hp -= amount;
     // heavy blows interrupt and knock the soldier back; heroes and riders are harder to shake
     const sturdy = this.isHero || this.mounted || (this.def && this.def.boss);
