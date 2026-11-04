@@ -300,7 +300,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     cliff); an enemy's walls are never leapt over, whatever the arc. Your own wall walk is fine. Landing slams the ground: 2.2x
     your sword damage at the centre (half that at the rim of 5 m), a 1 s stagger (0.7 s for a hero) and soldiers thrown back. Not on
     horseback. Numbers: `LEAP` in `src/classes.js`.
-  - **Ranger** (140% bow damage, draws 20% faster, quick, frail), a sharpshooter: her bow makes the most of **headshots**
+  - **Ranger** (150% bow damage, draws 20% faster, quick, frail), a sharpshooter: her bow makes the most of **headshots**
     (any hero's arrow in the top sixth of a body deals double damage, 1.5x into a hero, with its own sharp sound and a
     skull over the cross: every class's bow does it, but the Ranger hits hardest and Eagle Eye adds more). **Piercing
     Shots**: a fully drawn arrow goes on through the first body into up to two more behind it (70%, then 50%). Ranger
@@ -436,7 +436,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   class's), armour, a little speed, faster healing out of combat, abilities that recharge sooner and more damage with
   the sword, the bow and spells, mends 30% of your health and gives you a **talent point** (see **Talents**, above). The damage is sized so that **at level 5 a hero's
   best weapon hits a little harder than the best veteran soldier** (a rank-5 Lancer hits for 42): a Knight's sword
-  goes from 34 to about 46, a Berserker's from 44 to 50 and a Ranger's arrow from 42 to 47 (the classes that already
+  goes from 34 to about 46, a Berserker's from 44 to 50 and a Ranger's arrow from 45 to about 50 (the classes that already
   hit hard grow less in damage), while the casters' spells grow by a third. Your level stays through death and when
   you change class, and begins again in a new match. The bar under your health shows the way to the next level
   (purple, gold at level 5), `+XP` floats up under the crosshair, a banner and a flare mark each level-up, and your

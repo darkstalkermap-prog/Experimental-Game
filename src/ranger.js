@@ -213,6 +213,7 @@ export const RANGER_SHOW = {
     const R = HAWK.radius * sz, T = hawkTime(at, c);
     A.gfx.glyph('rune', c.x, c.y, c.z, R, 0xffc860, T + 0.4, { arms: 4, team: ctx.house, strength: 1.2 });
     ctx.snd('hawk');
+    if (!A.hawks.length) return;   // (a world without a scene has no hawks to show)
     const h = A.hawks.find((x) => !x.on) || A.hawks.reduce((a, b) => (a.t > b.t ? a : b));   // (all three out: the oldest is called back)
     h.on = true; h.t = 0; h.T = T; h.state = 'fly'; h.victim = null; h.silent = ctx.silent; h.team = ctx.who ? ctx.who.team : -1;
     h.from.set(at.x, at.y + 1.6, at.z);
