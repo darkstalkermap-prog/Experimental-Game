@@ -167,7 +167,7 @@ export class LordAI {
 
   // the bought troops that stay at home (wave soldiers march by themselves)
   troops() {
-    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf && !u.lane && !u.hillDuty);   // (the men on the hill stay there)
+    return this.g.units.filter((u) => u.alive && u.team === this.f.team && !u.isHero && !u.isGiant && !u.isCrew && !u.crewOf && !u.summon && !u.lane && !u.hillDuty);   // (the men on the hill stay there)
   }
 
   war() {

@@ -233,7 +233,7 @@ function execTick(A, e) {
   A.emit('execute', p.pos.clone().addScaledVector(f, Math.min(reach, 2.2)), f, struck.length ? struck : null, big);
   if (kills) {
     p.abilCd.q = Math.min(p.abilCd.q, EXEC.reset);
-    if (p.isPlayer) g.deliver(p, { k: 'cd', s: 'q', t: EXEC.reset });   // (a guest's cooldown is its own: the host tells it)
+    if (p.isPlayer) g.deliver(p, { k: 'cd', s: 'q', v: EXEC.reset });   // (a guest's cooldown is its own: the host tells it)
     if (p.isPlayer) g.deliver(p, { k: 'fb', text: kills > 1 ? `Executed ×${kills}!` : 'Executed!', good: true });
     const tithe = talentFx(p, 'tithe', 0);   // Blood Tithe (alternative to Reaper)
     if (tithe) p.heal(p.maxHp * tithe * kills);

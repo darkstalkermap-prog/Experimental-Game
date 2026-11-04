@@ -16,6 +16,28 @@ export const UPDATES = [
     ],
   },
   {
+    id: 18,
+    title: 'The Cavalier rides out',
+    items: [
+      'Momentum, the Cavalier\'s new passive: the faster you ride, the harder your sword, your trampling and your abilities land, up to +60% at a full gallop. A horseshoe gauge low on the screen fills as you gallop (it shows only in the saddle) and drains when you slow down or turn hard, so long runs and wide turns pay.',
+      'Sweeping Strike (Q, every 6 s): for a moment your blade sweeps out to one side as you ride, cutting every soldier you pass. Glance left or right as you press it to pick the side; looking ahead, it goes where the foes are. On foot it is one wide cut in front of you.',
+      'Lance Charge moves to R (hold R to aim it, R again reins in), and hits harder with Momentum behind it.',
+      'The Ultimate, Call the Charge: hold Z to point, let go and blow the horn. Every ally near you is rallied (less damage taken, faster), and six armoured knights of your house ride out behind you in a wedge and charge the spot. They fight on for 15 seconds, then ride off. Bots and online games use it too.',
+      'A new Cavalier talent tree to match: Keen Edge, Wide Sweep and Rider\'s Rhythm for the sweep; Couched Lance, Born to the Saddle and Thundering Hooves for the charge.',
+    ],
+  },
+  {
+    id: 17,
+    title: 'The Berserker reborn',
+    items: [
+      'Rage: a red bar under your stamina. Every blow you land fills it, and so does every blow you take; a few seconds after the fighting stops it ebbs away.',
+      'Whirlwind is held now: with Rage to spend, hold the right mouse button and you spin with your axe out, walking through them and cutting everyone around you about three times a second for as long as your Rage lasts. A crowd around you keeps you spinning longer. With too little Rage, right click still blocks.',
+      'New Q, Execute: a heavy overhead chop. Anyone it leaves below a quarter of their health dies on the spot, heroes too, and a kill gives it straight back, so you can chain it through a wounded crowd. EXECUTE shows under your crosshair when the foe in front would die of it.',
+      'New Ultimate, Unstoppable: a roar that throws back the soldiers near you, and for 8 seconds you are twice your size. Nothing can slow, stagger or knock you back, and every soldier you hit goes flying. Everyone sees you grow.',
+      'Leap stays on R. The talent tree has new Execute and Rage talents; bots and the computer\'s Berserker lords use all of it.',
+    ],
+  },
+  {
     id: 15,
     title: 'Better-looking weapons',
     items: [

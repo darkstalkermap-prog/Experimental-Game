@@ -334,11 +334,22 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     aim, as far as a Fireball flies (120 m), blasting everyone near where it strikes; a crackle as it leaves the hand, thunder where it
     lands. Chain Smite (talent) arcs it on to two more foes. **R Healing Light**: heal yourself for 45% and
     every ally within 14 m for 40%.
-  - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you and tramples harder).
-    **Q Lance Charge** (14 s): hold Q for where the charge ends, up to 120 m away (as far as a Fireball flies), let go and gallop
-    there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in your path and going on through them.
-    Walls, gates, trunks and steep rises stop it short; Q again reins in. Numbers: `RUSH` in `src/classes.js`. **R Rally Cry**: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
-    (you take 40% less).
+  - **Cavalier** (starts with a warhorse and armour; mounted, the horse shields you, 30% less damage, and tramples 25% harder): the
+    horse is the star. **Momentum** (passive): the faster you ride, the harder your sword blows, your trampling, Sweeping Strike and
+    Lance Charge land, up to +60% at a full gallop. It counts from 6 m/s and is full at a full gallop (13.5 m/s); it rises 0.55 a
+    second toward what the speed gives (about 2 s from a canter to full), falls 1.4 a second when you slow down, and a turn faster than
+    1.3 rad/s above a walk gains nothing and bleeds 0.6 a second: long straight runs and wide curves keep it high. A horseshoe gauge low
+    in the middle of the screen (only in the saddle) fills with gold as it builds, a thin inner arc shows the speed of the moment, and
+    the bonus is written in it. **Q Sweeping Strike** (6 s): for 1.2 s the blade sweeps out to one side as you ride (a crescent of
+    light that sweeps from across the horse's head round to behind you, three times, and a band of light on the ground), cutting every
+    foe you ride past within 3.6 m on that side once for your sword's damage times Momentum (soldiers staggered and thrown out). The
+    side is chosen as you press Q: glance left or right of where the horse runs (more than about 11°) and it goes that way; looking
+    straight ahead it goes to the side with more foes, and to the sword side (right) when that is even. On foot it is one wide cut
+    (100° either side, 3.2 m) in front of you. **R Lance Charge** (14 s): hold R for where the charge ends, up to 120 m away (as far
+    as a Fireball flies), let go and gallop there with the lance couched (27 m/s; on foot a rush at 17 m/s), flattening everyone in
+    your path and going on through them; its blows carry Momentum (it builds during the gallop). Q during the charge sweeps as you go.
+    Walls, gates, trunks and steep rises stop it short; R again reins in. Numbers: `RUSH` in `src/classes.js`, `CAV` in
+    `src/cavalier.js`.
 
   **The Ultimate (Z)**: every class has a third ability, its one huge moment. It does not come round on a timer: a ring round its
   icon (the round tile beside R) fills as you fight, from the damage you deal (rival heroes count most, castle stone least), the
@@ -360,7 +371,16 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     still well under a gate's 6 m arch). Nothing can slow, stagger or knock you back, your reach is 45% longer, Rage does not ebb,
     and every soldier you hit, with the axe, the Whirlwind or Execute, is sent flying in an arc (alive or dead; heroes, riders,
     giants, engine crews and men on the walls stand). Embers rise off you while it lasts.
-  - **Knight, Ranger, Cavalier**: for now a simple stand-in (Earthbreaker, Stampede: a slam all round the hero;
+  - **Cavalier: Call the Charge**: hold Z to point at a spot up to 60 m away, let go and blow the horn (a brass call, then the
+    thunder of hooves). The old Rally Cry goes out with it: every ally within 28 m takes 30% less damage and moves 25% faster for 8 s
+    (you take 40% less). Six armoured lancers of your house and race ride out in a wedge behind you (two by two, each pair further back
+    and wider), each in a puff of dust, and charge through the spot at 15 m/s in that wedge (drawn in to half its width, the leading
+    pair 9 m beyond it), each riding down every foe within 2.3 m of him once: 1.4 times your sword's damage (a hero 60% of that),
+    staggered and thrown on. Then they fight there as any riders do, and after 15 s from the horn they ride off in a cloud of dust
+    (the fallen stay where they lie). They are no part of your army: they count to no garrison, army or War Mode limit, take no
+    orders and are worth no gold to whoever kills them. On foot the horn calls them all the same. Online the host runs them; every
+    screen has them as soldiers and plays the horn, the cry and the dust.
+  - **Knight, Ranger**: for now a simple stand-in (Earthbreaker: a slam all round the hero;
     Arrow Storm: a wide volley of 45 arrows on a circle up to 70 m away), to be replaced by each class's own.
 
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
@@ -385,12 +405,12 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   short) spends it on your own class's tree: seven talents in four tiers, a branch for each ability, and a capstone.
   A talent needs the level shown beside its row (level 2 for the first tier, 5 for the capstone) and the talent above
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
-  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Execute finishes
+  speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's Sweeping Strike reaches further and his charge goes faster (Wide Sweep, Thundering Hooves), the Berserker's Execute finishes
   foes below 32% (Headsman), his Rage fills faster and lasts longer (Seething Blood), his Whirlwind costs less and reaches further
   (Dervish), and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
   hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
   Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
-  to more foes, the Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
+  to more foes, the Cavalier's Momentum builds faster and climbs higher (Born to the Saddle) and every foe his sweep cuts takes time off his Lance Charge (Rider's Rhythm). A gold hint, "Talent point available", pulses on the HUD while you have a point
   to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
   own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
   level, parent, free point, castle) and says why it refused one. Every number is in the table at the top of
@@ -411,7 +431,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   | Every wave you live through | 10 |
   | Breaking an enemy gate / opening a breach / breaking a keep | 40 / 15 / 250 |
   | Taking the hill (King of the Hill) while standing on it | 25 |
-  | A Healing Light that really mends others / a Rally Cry | 5% of the health restored (at most 40) / 3 for each ally reached (at most 24) |
+  | A Healing Light that really mends others / the Cavalier's Call the Charge | 5% of the health restored (at most 40) / 3 for each ally its cry reaches (at most 24) |
 
   It takes 120, 320, 640 and 1100 experience in all to reach levels 2 to 5. **Every level** adds health (+7% of the
   class's), armour, a little speed, faster healing out of combat, abilities that recharge sooner and more damage with
@@ -866,7 +886,7 @@ a rider, then a lancer); rams and catapults roll out as in the war modes. Both h
 a soldier has about 3.4 times the health and damage of a round-one soldier and a wave is five times as big.
 
 **The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
-alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
+alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target and wheels round for another pass (never standing still beside it: his Momentum), sweeps when two foes or a rival hero are about to go past, Lance Charges at a knot of foes and Calls the Charge on a knot of seven or more (five when his own men are in the thick of it), a wounded
 rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
 looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
 close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall, holds the Whirlwind in a knot of foes
@@ -1241,7 +1261,7 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow. Berserker: with 20 Rage or more, hold to Whirlwind instead (spin and cut all round you while Rage lasts) |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
 | Q | Class ability: attack (Ranger: Power Shot draws and looses itself; with the Arrow Volley talent, hold to place the circle, let go to loose it) |
-| R | Class ability: defence |
+| R | Class ability: defence (the Berserker's Leap, the Ranger's Sniper Shot and the Cavalier's Lance Charge are attacks on R: hold to aim, let go; R again reins the Cavalier in) |
 | Z | Ultimate, once its ring is full (it charges as you fight; aimed ones: hold to place the circle, let go to cast) |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
@@ -1406,6 +1426,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
+| `src/cavalier.js` | The Cavalier's own: Momentum and its horseshoe gauge, Sweeping Strike and its blade of light, Call the Charge (the horn, the cry, the knights' ride), when the bots use them; numbers in `CAV` |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |

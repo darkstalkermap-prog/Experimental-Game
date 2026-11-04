@@ -77,15 +77,14 @@ export const TUNE = {
     mercy: { below: 0.4, more: 0.6 },  // Mercy (alternative to Second Dawn): allies below this share of their health are healed this much more
   },
   cavalier: {
+    sweepDmg: 0.25,        // Keen Edge: Sweeping Strike cuts harder
+    sweepReach: 0.8,       // Wide Sweep: metres added to its reach ...
+    sweepTime: 0.4,        //   ... and seconds to how long it lasts
+    rhythm: { per: 0.5, max: 3 },   // Rider's Rhythm: seconds off Lance Charge's recharge for every foe a Sweeping Strike cuts, at most this much a strike
     chargeDmg: 0.2,        // Couched Lance: harder charges
-    chargeReach: 0.3,      // Wide Sweep: a wider path
+    momentum: 0.15, momRise: 0.5,   // Born to the Saddle: Momentum's top bonus is this much higher, and it builds this much faster
     chargeSpeed: 0.2,      // Thundering Hooves: a faster charge
     rush: { radius: 20, time: 5, speed: 1.25 },   // Vanguard!: allies this near ride with you, this much faster, for this long
-    rider: 0.12, trample: 0.15,    // Barded Charger: the horse shields better and tramples harder
-    rallyReach: 0.3,       // War Horn: a wider cry ...
-    rallyTime: 3,          //   ... that lasts longer
-    rallyAlly: 0.1,        // Banner of Valour: more damage allies do not take ...
-    rallySelf: 0.1,        //   ... and you
     shieldwall: { radius: 20, time: 5, cut: 0.2 },   // Shieldwall Charge (alternative to Vanguard!): allies this near, and you, take this much less damage for this long
   },
 };
@@ -180,21 +179,21 @@ export const TALENTS = [
   { id: 'cl_bloom', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', icon: '🌅', name: 'Second Dawn',
     desc: `Healing Light pulses again ${C.pulse.delay} s later at ${pc(C.pulse.scale)} strength.`, fx: { healPulse: C.pulse } },
 
-  // ---------- Cavalier: Lance Charge | Rally Cry (the capstone is under Thundering Hooves) ----------
-  { id: 'cv_lance', cls: 'cavalier', br: 'q', tier: 1, needs: null, icon: '🔱', name: 'Couched Lance',
+  // ---------- Cavalier: Sweeping Strike | Lance Charge (the capstone is under Thundering Hooves) ----------
+  { id: 'cv_edge', cls: 'cavalier', br: 'q', tier: 1, needs: null, icon: '🗡', name: 'Keen Edge',
+    desc: `Sweeping Strike cuts ${pc(V.sweepDmg)} harder.`, fx: { sweepDmg: 1 + V.sweepDmg } },
+  { id: 'cv_sweep', cls: 'cavalier', br: 'q', tier: 2, needs: 'cv_edge', icon: '🌊', name: 'Wide Sweep',
+    desc: `Sweeping Strike reaches ${V.sweepReach} m further and lasts ${V.sweepTime} s longer.`, fx: { sweepReach: V.sweepReach, sweepTime: V.sweepTime } },
+  { id: 'cv_rhythm', cls: 'cavalier', br: 'q', tier: 3, needs: 'cv_sweep', icon: '🥁', name: "Rider's Rhythm",
+    desc: `Every foe a Sweeping Strike cuts takes ${V.rhythm.per} s off Lance Charge's recharge (up to ${V.rhythm.max} s a strike).`, fx: { sweepRhythm: V.rhythm } },
+  { id: 'cv_lance', cls: 'cavalier', br: 'r', tier: 1, needs: null, icon: '🔱', name: 'Couched Lance',
     desc: `Lance Charge hits ${pc(V.chargeDmg)} harder.`, fx: { chargeDmg: 1 + V.chargeDmg } },
-  { id: 'cv_sweep', cls: 'cavalier', br: 'q', tier: 2, needs: 'cv_lance', icon: '🌊', name: 'Wide Sweep',
-    desc: `The charge cuts a ${pc(V.chargeReach)} wider path.`, fx: { chargeReach: 1 + V.chargeReach } },
-  { id: 'cv_thunder', cls: 'cavalier', br: 'q', tier: 3, needs: 'cv_sweep', icon: '🐎', name: 'Thundering Hooves',
+  { id: 'cv_saddle', cls: 'cavalier', br: 'r', tier: 2, needs: 'cv_lance', icon: '🐴', name: 'Born to the Saddle',
+    desc: `Momentum builds ${pc(V.momRise)} faster and its bonus at a full gallop is ${pc(V.momentum)} higher.`, fx: { momRise: 1 + V.momRise }, mods: { add: { momentum: V.momentum } } },
+  { id: 'cv_thunder', cls: 'cavalier', br: 'r', tier: 3, needs: 'cv_saddle', icon: '🐎', name: 'Thundering Hooves',
     desc: `Lance Charge goes ${pc(V.chargeSpeed)} faster.`, fx: { chargeSpeed: 1 + V.chargeSpeed } },
-  { id: 'cv_vanguard', cls: 'cavalier', br: 'q', tier: 4, needs: 'cv_thunder', icon: '🚩', name: 'Vanguard!',
+  { id: 'cv_vanguard', cls: 'cavalier', br: 'r', tier: 4, needs: 'cv_thunder', icon: '🚩', name: 'Vanguard!',
     desc: `Allies within ${V.rush.radius} m ride with you: ${pc(V.rush.speed - 1)} faster for ${V.rush.time} s when you charge.`, fx: { chargeRush: V.rush } },
-  { id: 'cv_barding', cls: 'cavalier', br: 'r', tier: 1, needs: null, icon: '🛡', name: 'Barded Charger',
-    desc: `Your horse shields you ${pc(V.rider)} better and tramples ${pc(V.trample)} harder.`, mods: { mul: { rider: 1 - V.rider, trample: 1 + V.trample } } },
-  { id: 'cv_horn', cls: 'cavalier', br: 'r', tier: 2, needs: 'cv_barding', icon: '📯', name: 'War Horn',
-    desc: `Rally Cry reaches ${pc(V.rallyReach)} further and lasts ${V.rallyTime} s longer.`, fx: { rallyReach: 1 + V.rallyReach, rallyTime: V.rallyTime } },
-  { id: 'cv_banner', cls: 'cavalier', br: 'r', tier: 3, needs: 'cv_horn', icon: '🏴', name: 'Banner of Valour',
-    desc: `Rally Cry shields allies ${pc(V.rallyAlly)} more, and you ${pc(V.rallySelf)} more.`, fx: { rallyAlly: V.rallyAlly, rallySelf: V.rallySelf } },
 ];
 
 // Alternate capstones: Renown unlocks (unlocks.js), one for each class. Each stands in the capstone's own place in the tree (same level, same talent above
@@ -212,7 +211,7 @@ export const ALT_TALENTS = {
     desc: `When the ward breaks, your next Fireball within ${M.snap.time} s hits ${pc(M.snap.dmg - 1)} harder.`, fx: { snap: M.snap } },
   cl_mercy: { id: 'cl_mercy', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', alt: 'cl_bloom', icon: '🙏', name: 'Mercy',
     desc: `Healing Light heals those below ${pc(C.mercy.below)} health ${pc(C.mercy.more)} more.`, fx: { mercy: C.mercy } },
-  cv_aegis: { id: 'cv_aegis', cls: 'cavalier', br: 'q', tier: 4, needs: 'cv_thunder', alt: 'cv_vanguard', icon: '🐴', name: 'Shieldwall Charge',
+  cv_aegis: { id: 'cv_aegis', cls: 'cavalier', br: 'r', tier: 4, needs: 'cv_thunder', alt: 'cv_vanguard', icon: '🐴', name: 'Shieldwall Charge',
     desc: `Allies within ${V.shieldwall.radius} m, and you, take ${pc(V.shieldwall.cut)} less damage for ${V.shieldwall.time} s when you charge.`, fx: { chargeGuard: V.shieldwall } },
 };
 export const altsOf = (cls) => Object.values(ALT_TALENTS).filter((t) => t.cls === cls);

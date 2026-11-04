@@ -12,6 +12,7 @@ import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './her
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
 import { ultReady, spared } from './ultimate.js';
+import { stepMomentum, momentumMul } from './cavalier.js';
 import { mods as rules } from './mods.js';
 import { rules as biomeRules } from './biometwist.js';
 import { ViewModel } from './viewmodel.js';
@@ -682,14 +683,15 @@ export class Player {
     // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
     if (input.hit('KeyQ')) {
       this.endScope();
-      if (this.dash && this.dash.rush) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (Q again: the Knight bashes where he is, the Cavalier reins in: Abilities.rushOver)
+      if (this.dash && this.dash.rush && this.dash.rush === abilityOf(this, 'q').id) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (Q again: the Knight bashes where he is: Abilities.rushOver)
       else if (this.aiming) this.cancelAim();   // (Q calls off a Leap being aimed with R)
       else if (abilityOf(this, 'q').aimed) this.beginAim('q'); else this.useAbility('q', input);
     }
     if (input.hit('KeyR')) {
       const r = abilityOf(this, 'r');
       this.cancelAim();
-      if (r.aimed) this.beginAim('r'); else if (r.id === 'snipe') this.beginScope(); else this.useAbility('r', input);
+      if (this.dash && this.dash.rush === r.id) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (R again: the Cavalier reins in)
+      else if (r.aimed) this.beginAim('r'); else if (r.id === 'snipe') this.beginScope(); else this.useAbility('r', input);
     }
     // Z: the Ultimate (ultimate.js), once it is charged; an aimed one is placed with a circle as the volley is
     if (input.hit(ULT.key)) {
@@ -1409,7 +1411,7 @@ export class Player {
     this.attackDir = DIRS.includes(dir) ? dir : 'right';
     const reach = (this.sword.len + (this.mounted ? 2.2 : 1.6) + S.reach) * (this.bigK ? 1 + (UNSTOP.reach - 1) * this.bigK : 1);   // (an Unstoppable Berserker reaches further)
     const charge = this.mounted ? 1 + Math.max(0, Math.abs(this.rideSpeed) - 3) / 8 : 1;
-    const dmg = this.sword.dmg * this.dmgMult * charge * S.mult * (0.9 + Math.random() * 0.2);
+    const dmg = this.sword.dmg * this.dmgMult * charge * momentumMul(this) * S.mult * (0.9 + Math.random() * 0.2);   // (the Cavalier's Momentum: cavalier.js)
     const info = { melee: true, charge: charge > 1.6 ? 1 : 0, dir: new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw)) };   // (a blow at the gallop counts as heavy)
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const hits = [];
@@ -1482,6 +1484,7 @@ export class Player {
   trample(dt) {
     const g = this.game;
     const sp = Math.abs(this.rideSpeed);
+    stepMomentum(this, dt);   // (the Cavalier's Momentum follows the gallop: cavalier.js)
     for (const [u, t] of this.trampled) { if (t - dt <= 0) this.trampled.delete(u); else this.trampled.set(u, t - dt); }
     if (sp < 6) return;
     const fx = Math.sin(this.heading), fz = Math.cos(this.heading);
@@ -1491,7 +1494,7 @@ export class Player {
       const d = Math.hypot(dx, dz);
       if (d > 1.6 || (dx * fx + dz * fz) / (d || 1) < 0.3) return;
       this.trampled.set(u, 0.8);
-      g.damage(u, (6 + sp * 1.6) * (this.mods.trample || 1), this, { melee: true });
+      g.damage(u, (6 + sp * 1.6) * (this.mods.trample || 1) * momentumMul(this), this, { melee: true });
       u.vel.x += fx * 6; u.vel.z += fz * 6;
       this.rideSpeed *= 0.85;
     });
