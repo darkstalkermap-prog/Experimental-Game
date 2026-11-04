@@ -93,7 +93,7 @@ export const ULT_METHODS = {
     const g = this.g;
     if (!g.scene || !g.projectiles) return;
     // (the rock's material: the catapult stone's, darker and glowing from within; its colours are uniforms, so it is the same shader)
-    if (!this.meteorMat) this.meteorMat = new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 1, flatShading: true, emissive: 0xff3a08, emissiveIntensity: 0.22 });
+    if (!this.meteorMat) this.meteorMat = new THREE.MeshStandardMaterial({ color: 0x4a3a30, roughness: 1, flatShading: true, emissive: 0xff5a18, emissiveIntensity: 0.14 });
     for (let i = 0; i < 2; i++) this.meteorPool.push(makeMeteorLook(this));
   },
 
