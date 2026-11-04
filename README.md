@@ -64,7 +64,7 @@ The **Practice Courtyard** button in the main menu takes you to a walled yard on
 rival lords, nobody wins or loses. It is for trying things out on **training dummies**. A dummy cannot be beaten: it only counts what it
 takes, and shows it above its head (the damage per second over the last 5 seconds, the last blow, the best, the total), and the HUD keeps
 your own damage per second in the top left. Dummies come in five armour tiers (Straw 0, Mail 3, Plate 7, Champion 11, Fortress 15), so you
-can see what armour does to a blow. The floor has chalk lines every 10 m and distance boards on the walls, for the bow, the spells and the volley.
+can see what armour does to a blow. The floor has chalk lines every 10 m and distance boards on the walls, for the bow, the spells and the hawk.
 
 Press **P** for the practice panel (the mouse is free while it is up, and the yard carries on behind it):
 
@@ -76,8 +76,8 @@ Press **P** for the practice panel (the mouse is free while it is up, and the ya
   ten or twenty at a time (40 in the yard at most). They stand behind you and charge the nearest dummy by themselves. They keep the rank and tier they
   were sent in with, and the panel tells how many damage per second each group does, each and in all, so kinds, ranks and tiers can be compared.
 - **Dummies**: the armour of the row, the crowd and the far targets, and which stands are filled: a **ladder** (one of each armour, side by side),
-  a **row of five** (alike: the fair test for soldiers, who choose the nearest dummy), a **crowd of twelve** (for the Whirlwind, fireballs and the
-  volley), **far targets** (46 and 56 m) and three **on the far wall** (63 m up on its top: heads over the stone for the Ranger's Sniper Shot, and
+  a **row of five** (alike: the fair test for soldiers, who choose the nearest dummy), a **crowd of twelve** (for the Whirlwind, fireballs, the
+  Explosive Arrow and the Ultimates), **far targets** (46 and 56 m) and three **on the far wall** (63 m up on its top: heads over the stone for the Ranger's Sniper Shot, and
   a wall walk the Berserker's Leap can reach). **Reset counters** starts the counting again.
 
 The yard is part of the world, so entering and leaving it rebuilds the map (the small one); it is single player only.
@@ -281,7 +281,7 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     grips (`SPEAR` in `src/config.js`). War Mode's AI generals put their spearmen in the front rank when riders come at the line.
 - **Hero classes**: pick one in the main menu (online, in the lobby, where everyone sees each other's choice).
   Each class changes your health, armour, speed and damage, and gives you two abilities on cooldowns: **Q** is an
-  attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Sniper Shot are not). The numbers are in `src/classes.js`.
+  attack and **R** mostly a defence (the Berserker's Leap and the Ranger's Hunting Hawk are not). The numbers are in `src/classes.js`.
   - **Knight** (130% health, +5 armour, slower; your shield blocks 10% more). He carries a tall kite shield (so do knight
     soldiers and the AI lords), painted with your arms; in first person it is carried low and turned aside, and on guard its top
     sits just under your eyes. It blocks exactly as any shield does. **Q Shield Bash** (12 s): hold Q and a
@@ -305,14 +305,22 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     skull over the cross: every class's bow does it, but the Ranger hits hardest and Eagle Eye adds more). **Piercing
     Shots**: a fully drawn arrow goes on through the first body into up to two more behind it (70%, then 50%). Ranger
     arrows hit engineers, siege crews and engines 50% harder, and an arrow comes back to the quiver every 4 s.
-    **Q Power Shot**: the bow is drawn to the full and held (half a second, walking slowly), then a heavy arrow flies
-    flat and fast through every soldier in its line, throwing them back and staggering them; a hero it hits is
-    staggered. Shields don't stop it; walls do. **R Sniper Shot** (13 s): hold R and the bow comes up to your eye: the view
-    zooms in to an 11 degree field (about 7 times) behind a spyglass ring, the string is drawn in 0.6 s, and the aim sways, then
-    settles to a quarter of the sway after 1.2 s (held past 5 s it starts to waver again, and it looses itself at 9 s). Let go of R,
-    or click, and one heavy arrow flies flat at 150 m/s out to 120 m (as far as a Fireball), then falls like any arrow: 3.2 full
-    arrows of damage, and a headshot multiplies it as usual. Let go before it is drawn and nothing is spent. Not on horseback. The
-    old **Arrow Volley** is the tree's tier-4 talent. Numbers: `RANGER` in `src/classes.js`.
+    **Q Explosive Arrow** (8 s): a short held draw (0.4 s), then a glowing arrow trailing fire flies at 60 m/s (it falls a little
+    slower than an arrow) and bursts where it strikes, a body, an engine, a wall or the ground: the body it hits takes the arrow, then
+    everyone within 3.8 m takes 2.1 arrows of damage (40% at the rim; splash, so armour counts half; walls shelter), soldiers are thrown
+    back and staggered, a hero staggered a moment, engines take 1.6 times the blast and a gate 1.2 times. The ground under it burns for
+    4 s (3.4 m round, 0.4 arrows a second to every foe in it, engines too): the Mage's Meteor's own fire (`burnGround` and `burnLook` in
+    `src/ultimate.js`). It must fly 7 m before it will burst: loosed into a foe at arm's length it is only an arrow, so a Ranger caught
+    in melee cannot blast her way out. Not on horseback.
+    **R Hunting Hawk** (16 s): hold R and a circle (9 m) follows the crosshair out to 75 m; let go and a hawk leaves your arm and flies
+    there (32 m/s), over walls and all. Every foe in the circle when it arrives is **marked** for 6 s: your side sees a gold marker over
+    each, through walls and trees, and every blow on him, from anyone, deals 25% more (a hero sees "Marked" in his effects). Then it
+    circles a moment and dives on the nearest enemy hero within 15 m of the spot: 1.3 arrows of damage, slowed to 60% of his pace for
+    2.5 s (a horse too; a soldier or a lord walks at half pace), and marked as well. The hawk is an original bird of a few flat-shaded
+    pieces in the catapult stone's material (no new shader), three of them pooled; the markers are one point sprite each, drawn in one
+    call. Numbers: `XARROW` and `HAWK` in `src/ranger.js`.
+    **Sniper Shot** is now the tree's capstone (below), and the old Power Shot is retired: Piercing Shots already sends a full draw
+    through a line of men, and the Explosive Arrow breaks a rank better than a flat heavy arrow could.
   - **Mage** (125% spell damage, abilities recharge 15% faster, very frail). **Q Fireball**: a ball of fire that
     flies where you aim and explodes on impact, burning gates and engines too. Stone walls shelter anyone behind
     them. **R Frost Ward**: a shell of ice that soaks up the next 170 damage for 8 s, and chills and staggers
@@ -343,8 +351,13 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
     and leaves a scorched crater, and the ground burns for 6 s: 22 damage a second to every foe in 6.5 m of it.
   - **Cleric: Sanctuary**: a dome and circle of golden light 10 m round you for 5 s, with a soft hum: no one of your side inside it,
     hero or soldier (co-op allies too), can be brought below 1 health. A chime when it ends.
-  - **Knight, Berserker, Ranger, Cavalier**: for now a simple stand-in (Earthbreaker, Rampage, Stampede: a slam all round the hero;
-    Arrow Storm: a wide volley of 45 arrows on a circle up to 70 m away), to be replaced by each class's own.
+  - **Ranger: Rain of Fire**: hold Z for a great circle (12 m) up to 85 m away, let go and a flight of burning arrows climbs from the
+    bow; from 0.7 s they come down on the circle for 2.6 s, 72 of them, each 0.9 of her arrow's damage, most of them each on a foe
+    inside it (the one picked least so far, and no more than five on any one: a lone hero is scorched, not shot to pieces). They trail
+    fire and flare where they land, and from 1.1 s the ground catches: 11 m of it burns for 5 s, 0.6 of her arrow's damage a second to
+    every foe in it, half that to engines (`RAIN` in `src/ultimate.js`).
+  - **Knight, Berserker, Cavalier**: for now a simple stand-in (Earthbreaker, Rampage, Stampede: a slam all round the hero), to be
+    replaced by each class's own.
 
   **How the classes look** to the others (and to you in spectate): each a silhouette of its own, with the house's colour on each.
   The Knight wears full plate (layered pauldrons, couters, cuisses, greaves, sabatons) under the house's surcoat, with a great helm and
@@ -370,8 +383,12 @@ the same button twice, or Enter and the button, is one press (`connect` in `src/
   it, so the four points of a level 5 hero never buy a whole tree. Some talents are plain numbers (health, armour,
   speed, draw time); most change an ability: the Knight's Shield Bash stuns longer, the Cavalier's charge goes faster (Thundering Hooves), the Berserker's Whirlwind strikes
   once more and his Leap slams wider and harder (Earthshaker, Death from Above), the Ranger's headshots and Piercing Shots
-  hit harder and her Sniper Shot zooms further, steadies sooner and hits harder (Hawk's Scope, Deadeye) (and her capstone trades
-  Power Shot for the Arrow Volley), the Mage's fireballs burn and fork, the Cleric's Smite chains on
+  hit harder, her Explosive Arrow bursts wider and burns longer (Wildfire) and her hawk marks wider and longer and strikes harder
+  (Keen Eyes, Raking Talons); her capstone, **Sniper Shot**, is a third shot on the right mouse button: with it ready, holding the
+  right button with the bow out raises the bow to your eye (an 8 degree view behind a spyglass ring; the aim sways and settles in
+  0.8 s), and a click looses one heavy arrow that flies flat at 150 m/s out to 120 m: 3.4 full arrows of damage (a headshot
+  multiplies it), on through the first body into one more (70%); 12 s to recharge, and while it does the right button is the plain
+  zoom. Let go of the button and the bow comes down, nothing spent. The Mage's fireballs burn and fork, the Cleric's Smite chains on
   to more foes, the Cavalier's Rally Cry reaches further. A gold hint, "Talent point available", pulses on the HUD while you have a point
   to spend, and the icons of what you have learnt sit beside Q and R. **Respec** gives every point back, free, at your
   own castle. Talents stay through death; a new class starts a new tree. Online the host checks every request (class,
@@ -678,7 +695,8 @@ AI generals) is a hero of a class: he wears its look under a lord's long cape an
 Reckless and the Giantsworn are Berserkers (Whirlwind in a crowd, Leap into a knot of foes or at a rival hero), the Patient and the Ironclad Knights
 (Shield Bash at hand or a run of up to 40 m at a knot or a hero, Bulwark when pressed), the Breaker a Mage (Fireball, also at a gate he is breaking; Frost
 Ward when foes close in), the Gilded and the Vengeful Clerics (Smite; Healing Light for himself and his hurt men), the Swift and the Cunning Rangers (she
-fights with the bow from 34 m, never from a wall post; Power Shot down a line of foes, Sniper Shot at a far hero, giant or siege crew). The plain lords:
+fights with the bow from 34 m, never from a wall post; Hunting Hawk on a hero or a knot of five, Explosive Arrow at a hero, an engine or a knot, Rain
+of Fire on a crowd, and with the capstone the Sniper Shot at a far hero, giant or siege crew). The plain lords:
 Aldmoor a Knight, Varr a Berserker, Elden a Cleric, Sol a Mage; a War Mode general draws a class. No lord is a Cavalier (a lord has no horse). The
 abilities are the heroes' own: the same runs and leaps (never through a wall, never onto enemy battlements) and the same effects on every screen. A
 lord's health and blows are what they always were. A lord who defends his castle or holds a place only runs or leaps at foes near it. He rises a level
@@ -823,8 +841,9 @@ a soldier has about 3.4 times the health and damage of a round-one soldier and a
 **The bot heroes** (`src/herobot.js`) play like a careful human: they walk the road behind their own soldiers and never run ahead
 alone, melee classes close in, the Ranger and the casters keep their distance, the Cavalier rides through its target, a wounded
 rival is picked first and the guard goes up against blows and arrows they can see coming. Q and R have rules per class (a Ranger
-looses Power Shot down the line with the most men in it and a Sniper Shot at a far rival hero, giant or siege crew when nobody is
-close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
+sends her hawk at a rival hero or a knot of foes first, so that what follows hurts more, then an Explosive Arrow at a hero, an engine
+or a knot 8.5 m and more off (at a lone foe once Q has waited ready a few seconds), and with the capstone a Sniper Shot at a far
+rival hero, giant or siege crew when nobody is close; a Berserker Leaps into a rival hero or a knot of foes 9 to 45 m off, never into a wall), they retreat
 to the keep below 30% health, drink their draught, come back at 70 to 85%, hit the enemy gate and keep when no one is left to
 fight (to a sword, foes in an enemy courtyard behind a gate that will not open for them, with no breach, are out of reach), and spend
 their talents from a list for each class. Their stamina drains and returns as a person's does. Reaction time, aim and how often they decide scale with the difficulty; an Easy bot
@@ -1080,8 +1099,8 @@ Wolf banner 500, Crimson Mantle 450, Stag banner 500, and so on up to 900, 11,25
   Knight, *Bastion Strike* (instead of Avenging Wall): 30% of every melee blow taken under Bulwark is stored, and when Bulwark ends
   the shield slams down and the store strikes the foes around (about what Avenging Wall hands back during it, at once and to
   the one who struck, here shared out and with a stagger). Berserker, *Blood Tithe* (instead of Reaper): the last strike of a Whirlwind heals 8% of your health if it hits
-  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Arrow Volley): zoomed in, the bow draws
-  25% faster and the arrow flies 25% faster, and Power Shot stays your Q. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
+  anything (Reaper gives 1.5% for each foe, each strike). Ranger, *Steady Aim* (instead of Sniper Shot): zoomed in, the bow draws
+  25% faster and the arrow flies 25% faster, and the right button stays the plain zoom. Mage, *Cold Snap* (instead of Shatter): when the ward breaks, the next Fireball within 6 s hits 50%
   harder. Cleric, *Mercy* (instead of Second Dawn): Healing Light heals those below 40% health 60% more. Cavalier, *Shieldwall
   Charge* (instead of Vanguard!): allies within 20 m, and you, take 20% less damage for 5 s after a charge. They show in the talent
   tree, under the capstone, only for an account that has earned them (and in the practice yard, where anybody may try them), and
@@ -1172,10 +1191,10 @@ Cinzel for names and buttons, Garamond for what you read. Long explanations sit 
 | C (hold) | Duck: your head and hitbox drop (arrows fly over you, a merlon covers you), you move at half pace, and you can't sprint or jump |
 | Mouse | Look |
 | Left click | Swing your sword (hold to keep swinging); with the bow, hold and release to shoot |
-| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow |
+| Right click | Block with your shield (stops blows from in front; just as a blow lands, it parries); zoom with the bow (a Ranger with the Sniper Shot talent, when it is ready: the scope; click to loose) |
 | 1 / 2 / mouse wheel | Sword & shield / bow |
-| Q | Class ability: attack (Ranger: Power Shot draws and looses itself; with the Arrow Volley talent, hold to place the circle, let go to loose it) |
-| R | Class ability: defence |
+| Q | Class ability: attack (the Ranger's Explosive Arrow draws and looses itself) |
+| R | Class ability: mostly a defence (aimed ones, the Berserker's Leap and the Ranger's Hunting Hawk: hold to place the circle, let go) |
 | Z | Ultimate, once its ring is full (it charges as you fight; aimed ones: hold to place the circle, let go to cast) |
 | H | Drink a healing draught |
 | E | Use the gate lever when next to it; take over an abandoned siege engine (or one of yours) beside you; otherwise mount, dismount or call your horse |
@@ -1321,7 +1340,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/config.js` | All balance numbers: unit stats, prices, waves, difficulty |
 | `src/game.js` | Game state, army waves and lanes, economy, kills, respawns, win and loss |
 | `src/ultimate.js` | The Ultimate (Z): the charge, the Mage's Meteor, the Cleric's Sanctuary, the stand-ins, their looks and sounds, when the bots use them, and (at the top) how a class adds its own |
-| `src/aimring.js` | The circle on the ground that shows where the Ranger's volley will fall (and stays marked while it lands) |
+| `src/aimring.js` | The circle on the ground that shows where an aimed ability will land (the hawk, the Leap, the aimed Ultimates; it stays marked while a rain comes down) |
 | `src/practice.js` | The practice courtyard: the walled yard, the training dummies and what they count, the soldiers sent in by kind, rank and tier |
 | `src/practiceui.js` | The practice panel (P), its readout and the HUD box, and the floating damage numbers |
 | `src/specialty.js`, `src/specialui.js`, `src/stonecleft.js`, `src/holdphysics.js`, `src/holdcastle.js`, `src/holdgame.js` | Specialty Battles: the list and the menu card; Stonecleft Hold's map, ground, fortress and rules (see **Specialty Battles**) |
@@ -1340,6 +1359,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/nav.js` | Routing around castles, through gates and breaches, and round the keep inside a courtyard; where soldiers stand to strike a keep |
 | `src/siege.js` | Battering rams and catapults: crews, abandoned engines, takeovers, driving |
 | `src/classes.js` | The six hero classes: stats, abilities, buffs; the Ranger's numbers (`RANGER`) |
+| `src/ranger.js` | The Ranger's Explosive Arrow and Hunting Hawk (their numbers, what they do, their looks), the hawk model, the markers over marked foes, and the bots' aim for both |
 | `src/heroes.js` | What makes a hero strong: class, level (experience, per-level growth) and talents, merged by `heroMods` |
 | `src/talents.js` | The talent trees (every number and effect in one table) and the rules for learning and respeccing |
 | `src/talentui.js` | The shop's Talents tab, the "Talent point available" hint and the learnt icons beside Q and R |
@@ -1360,7 +1380,7 @@ The giant keeps the old cycle under its own heavy layer (`poseGiantBase`, `src/g
 | `src/biomes.js`, `src/landui.js`, `src/scatter.js`, `src/roads.js`, `src/biometwist.js`, `src/biomedust.js`, `src/weather.js` | Biomes and seeds: the table of what a biome changes and the land state, the menu row and the end-screen preview of the next land, where the solid trees and rocks stand (a pure function of the land), the roads, the twists, the dusting of the castles, the flakes and the dust |
 | `src/foliage.js`, `src/foliagegeo.js`, `src/treecards.js`, `src/scenery.js`, `src/grass.js` | Trees and rocks as instanced models in three levels of detail with wind, the forest on the mountains (its far trees are painted cards that stand on the slope: treecards.js), the grass that grows around the camera |
 | `src/castlegeo.js`, `src/castletex.js`, `src/castlefx.js`, `src/parts.js`, `src/props.js`, `src/materials.js`, `src/siegegeo.js` | How castles and siege engines look: static geometry merged by material, relief stone and timber, torches, banners in the wind, props, the engines' few meshes |
-| `src/viewmodel.js`, `src/vmkit.js`, `src/vmgeo.js`, `src/vmweapons.js`, `src/vmmat.js`, `src/vmtex.js` | The first-person kit: arms, hands, weapons and shields of the six classes, their motion, the swing trail. The hands hold things as real hands do: a hilt crosses the palm diagonally with its edge (an axe's bit) in line with the knuckles, and each forearm follows its hand within a real wrist's range. The bow is drawn like a bow: the bow arm straight at the mark, the string drawn along the arrow to an anchor under the jaw (so the arrow points where the cross does), the bow bending, a loose with follow-through; the volley lifts the whole draw. The weapons are modelled like the real thing, inside the kit's one mesh per part (no extra draw calls):
+| `src/viewmodel.js`, `src/vmkit.js`, `src/vmgeo.js`, `src/vmweapons.js`, `src/vmmat.js`, `src/vmtex.js` | The first-person kit: arms, hands, weapons and shields of the six classes, their motion, the swing trail. The hands hold things as real hands do: a hilt crosses the palm diagonally with its edge (an axe's bit) in line with the knuckles, and each forearm follows its hand within a real wrist's range. The bow is drawn like a bow: the bow arm straight at the mark, the string drawn along the arrow to an anchor under the jaw (so the arrow points where the cross does), the bow bending, a loose with follow-through; Rain of Fire's flight lifts the whole draw. The weapons are modelled like the real thing, inside the kit's one mesh per part (no extra draw calls):
 blades with a squared ricasso, fullers and a polished edge bevel against darker flats, crossguards on a riveted quillon block, grips of
 leather bound in wire with a ferrule at each end and a peened pommel; the mace's flanges filed bright on the edge; the Berserker's war
 axe a long two-hand haft wrapped at both grips, iron langets and rivets, a bearded head with an unevenly honed edge (a back spike at
@@ -1451,7 +1471,7 @@ mock room API; testing the claude.ai integration itself requires an authenticate
 
 - Online play is host-run. Everyone's view of the battle comes from the host's browser, so a slow host
   connection means laggy enemies for everyone. There's no protection against a modified client.
-- On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players. (The room keeps only the newest snapshot, so the looks seen once, an ability's effect, a spell, a bolt, a Power or Sniper Shot's arrow, ride along in the next two snapshots as well: `HostSync.redo`.)
+- On the claude.ai link, online play runs through claude.ai's live room, which carries less data than the server. In very big battles, some cosmetic effects (blood, sparks, distant arrows) may not show for joined players. (The room keeps only the newest snapshot, so the looks seen once, an ability's effect, a spell, a bolt, an Explosive or Sniper Shot's arrow, ride along in the next two snapshots as well: `HostSync.redo`.)
 - Graphics quality (Auto / Low / Medium / High / Ultra) is in Options, on the main menu and the game menu. Auto
   picks a level for the machine (and steps down if even the lowest resolution cannot keep the frame rate); Low turns
   off shadows, grass and the post passes for slower computers. Whatever the level, the render resolution drops by
