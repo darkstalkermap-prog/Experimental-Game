@@ -274,7 +274,7 @@ function meteorLookStep(A, e, dt) {
       const b = 1 + Math.random() * 14;   // (1 to 15 m behind the rock, along the way it came)
       V1.set(x + u.x * b + (Math.random() - 0.5) * 1.6, y + u.y * b + (Math.random() - 0.5) * 1.6, z + u.z * b + (Math.random() - 0.5) * 1.6);
       fx.blaze(V1, 1.6 - b * 0.06);
-      if (Math.random() < 0.6) fx.smokeTrail(V1, ZERO);
+      if (Math.random() < 0.35) fx.smoke(V1);   // (a dark plume left hanging in the sky: the fire alone is lost against a bright sky)
     }
     if (Math.random() < 0.35) fx.flash(V1.set(x, y, z), A.col.set(0xffa040), 7, 0.12, 0.9);
     return true;

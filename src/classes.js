@@ -35,7 +35,7 @@ export const CLASSES = {
     passive: 'Below half health you hit 15% harder.',
     q: { id: 'whirl', icon: '🌀', name: 'Whirlwind', cd: 9, desc: 'Spin with your blade for a second, cutting everyone around you three times.' },
     r: { id: 'leap', icon: '⤴', name: 'Leap', cd: 11, aimed: true, kind: 'Attack', desc: `Hold R to mark where you will land (as far as a Mage's Fireball flies, ${FIREBALL_RANGE} m), let go and leap there in a high arc over the soldiers, landing with a slam that hurts, staggers and throws back everyone around you. Walls stop the leap, and it never lands on enemy battlements.` },
-    u: { id: 'burst', icon: '💢', name: 'Rampage', kind: 'Ultimate', placeholder: true, burst: { radius: 7.5, dmg: 3.4, edge: 0.5, stun: 1.2, knock: 14 }, desc: 'A furious blow on the ground that cuts down and throws back everyone within 7.5 m.' },
+    u: { id: 'burst', icon: '💢', name: 'Rampage', kind: 'Ultimate', placeholder: true, burst: { radius: 7.5, dmg: 3.4, edge: 0.5, stun: 1.2, knock: 6 }, desc: 'A furious blow on the ground that cuts down and throws back everyone within 7.5 m.' },
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
