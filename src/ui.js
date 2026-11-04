@@ -89,7 +89,7 @@ const AIM_HINTS = {
   bash: 'Release Q to charge behind the shield · R or Esc: cancel',
   charge: 'Release Q to charge · R or Esc: cancel',
   leap: 'Release R to leap · Q or Esc: cancel',
-  scope: 'Click to loose the Sniper Shot · let go of the right button to lower the bow',
+  scope: 'Click to loose · let go to lower the bow',
   ult: `Release ${ULT.keyName} to cast your Ultimate · Q or Esc: cancel`,
 };
 
