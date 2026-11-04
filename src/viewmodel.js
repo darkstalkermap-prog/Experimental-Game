@@ -543,8 +543,10 @@ export class ViewModel {
       }
       this.stagAmt = smooth(this.stagAmt, p.staggerT > 0 ? Math.min(1, p.staggerT * 3) : 0, 26, dt);
       if (this.stagAmt > 0.001) { const k = this.stagAmt; ay -= 0.1 * k; arx -= 0.4 * k; }
-      // sprinting carries the blade low across the body
-      ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt;
+      // sprinting carries the blade low across the body (the long war axe low at the side instead, its head leaning away: across the
+      // body it would swing its head up into the view)
+      if (cls === 'berserker') { ax += 0.02 * this.sprintAmt; ay -= 0.06 * this.sprintAmt; arx -= 0.3 * this.sprintAmt; arz -= 0.1 * this.sprintAmt; }
+      else { ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt; }
       const la = this.lanceAmt, base = cls === 'berserker' ? AXE_REST : REST;
       const bx = lerp(base.x, LANCE_REST.x, la), by = lerp(base.y, LANCE_REST.y, la), bz = lerp(base.z, LANCE_REST.z, la);
       const brx = lerp(base.rx, LANCE_REST.rx, la), bry = lerp(base.ry, LANCE_REST.ry, la), brz = lerp(base.rz, LANCE_REST.rz, la);
