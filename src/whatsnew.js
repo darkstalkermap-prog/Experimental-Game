@@ -5,6 +5,14 @@
 
 export const UPDATES = [
   {
+    id: 11,
+    title: 'A clear shot with the bow',
+    items: [
+      'The bow no longer hides what you aim at: it is held low and to the left, canted over the way horse archers hold it, with the arrow running in at the crosshair. The bow hand, the arms and the limbs stay clear of the crosshair at full draw, zoomed in, in a Power Shot and in a volley.',
+      'Smoother bow handling: no jolt when an arrow or a volley is loosed, and a draw you call off is let down gently.',
+    ],
+  },
+  {
     id: 10,
     title: 'Pick your hero in War Mode',
     items: [
