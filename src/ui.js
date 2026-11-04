@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { TEAM_CSS, TEAM_COLORS, PLAYER_TEAM, WORLD, CASTLE, WAVES, PLAYER, UNIT_TYPES, FORMATIONS, OBJECTIVES, HILL, SUMMON, ULT, clock } from './config.js';
 import { armsChip } from './heraldry.js';
+import { raceOf } from './races.js';
 import { SHOP, SHOP_BY_ID } from './economy.js';
 import { allied, colorName } from './teams.js';
 import { CLASSES, CLASS_IDS, BUFF_NAMES, SWITCH, abilityOf } from './classes.js';
@@ -21,6 +22,7 @@ import { updateComebackHud } from './comeback.js';
 import { rivalTagHtml, houseRival } from './rivalsui.js';
 import { HillBar } from './hillbar.js';
 import { CastleBar } from './castlebar.js';
+import { updateMomentumHud } from './cavalier.js';
 import { HOLD } from './stonecleft.js';
 
 // the yard of Stonecleft's hold for the maps: the gorge from the wall back to its end (castle-local corners, stonecleft.js)
@@ -483,7 +485,7 @@ export class UI {
     const r = this.roster;
     if (!r) return;
     const g = this.game, f = g.localFaction;
-    const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant && !u.isCrew).sort((a, b) => a.id - b.id);
+    const mine = g.units.filter((u) => u.alive && u.team === g.localTeam && !u.isHero && !u.isGiant && !u.isCrew && !u.summon).sort((a, b) => a.id - b.id);
     const c = g.roleCounts(g.localTeam);
     const counts = `⚔ Army ${c.army}/${g.roleCap(f, 'army')} · 🏰 Garrison ${c.garrison}/${f.troopCap} · ➤ Lane ${c.lane}`;
     if (r.counts.textContent !== counts) r.counts.textContent = counts;
@@ -815,6 +817,7 @@ export class UI {
     $('vignette').style.opacity = Math.min(0.8, p.hurtFlash * 0.7 + (p.alive && p.hp < p.maxHp * 0.3 ? 0.25 : 0));
     $('hpFill').style.width = `${(p.hp / p.maxHp) * 100}%`;
     $('stFill').style.width = `${p.stamina}%`;
+    updateMomentumHud(p);   // (the Cavalier's horseshoe gauge, while he rides: cavalier.js)
     this.updateAbilities(dt);
     updateTalentHud(this, p);
     $('crosshair').classList.toggle('block', p.blocking);
@@ -980,7 +983,7 @@ export class UI {
       const c = f.castle;
       const rc = g.roleCounts(f.team);
       const cls = f.isPlayer && f.player && f.player.classId ? ` (${esc(f.player.cls.name)} Lv ${f.player.level})` : '';
-      rows += `<tr style="color:${TEAM_CSS[f.team]}"><td><img class="arms" style="${CHIP}" src="${armsChip(f.player ? f.player.cos : null, TEAM_COLORS[f.team], f.team)}" alt="">${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
+      rows += `<tr style="color:${TEAM_CSS[f.team]}"><td><img class="arms" style="${CHIP}" src="${armsChip(f.player ? f.player.cos : { banner: (g.aiSigils || [])[f.team] }, TEAM_COLORS[f.team], f.team, raceOf(f.team))}" alt="">${esc(f.name)}</td><td>${esc(f.lord)}${cls}</td><td>${Math.floor(f.gold)}</td>
         <td>${rc.army}/${g.roleCap(f, 'army')} · ${rc.garrison}/${f.troopCap} · ${rc.lane}</td><td>${f.kills}</td><td>${f.heroDeaths}</td>
         ${g.objective === 'koth' ? `<td>${clock(Math.floor(g.hill.held[[0, 1, 2, 3].find((t) => allied(t, f.team))]))}${g.hill.owner === f.team ? ' ★' : ''}</td>` : ''}<td>${c.fallen ? 'Fallen' : Math.round(c.keep.hp) + ' / ' + c.keep.maxHp}</td><td>${f.eliminated ? 'Eliminated' : 'Alive'}</td></tr>`;
     }
@@ -1091,7 +1094,7 @@ export class UI {
     return rows.map((r) => {
       const c = CLASSES[r.cls] || { icon: '', name: String(r.cls || '') };
       const side = sideName(this.game.hero, r.team);
-      return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${r.isBot || !r.player ? '' : `<img class="arms" style="${CHIP}" src="${armsChip(r.player.cos, TEAM_COLORS[r.team] ?? TEAM_COLORS[0], r.team)}" alt="">`}${esc(r.name)}${r.mine && r.name !== 'You' ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
+      return `<tr class="${r.mine ? 'me' : ''}${r.alive || !withStatus ? '' : ' down'}"><td><i class="sw" style="background:${TEAM_CSS[r.team] || NEUTRAL_CSS}"></i>${side}</td><td>${r.isBot || !r.player ? '' : `<img class="arms" style="${CHIP}" src="${armsChip(r.player.cos, TEAM_COLORS[r.team] ?? TEAM_COLORS[0], r.team, raceOf(r.team))}" alt="">`}${esc(r.name)}${r.mine && r.name !== 'You' ? ' (you)' : ''}</td><td>${esc(c.icon)} ${esc(c.name)}</td><td>${r.level}</td><td>${r.kills}</td><td>${r.deaths}</td>${withStatus ? `<td>${r.alive ? 'Alive' : `Respawn in ${Math.ceil(r.respawnIn || 0)} s`}</td>` : ''}</tr>`;
     }).join('');
   }
 

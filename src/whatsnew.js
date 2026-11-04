@@ -5,6 +5,17 @@
 
 export const UPDATES = [
   {
+    id: 20,
+    title: 'Armour and arms of each race',
+    items: [
+      'Every race now has armour of its own build, not only its own colours: Elves in leaf-shaped lamellar with pauldrons swept up in curves and slim gilt greaves; Dwarves in massive banded pauldrons, chain skirts to the knee and heavy bronze-bound boots; Orcs in scavenged plates and spikes strapped over war-painted skin, hung with tusks and bone; the Undead bare bone under corroded plate, with shrouds in strips and a cold light set in the iron.',
+      'Each race has six sigils of its own, painted in its own hand: daubed and dripping for the Orcs, engraved and gilt for the Elves and Dwarves, faded and flaking for the Undead. Choose one under Renown, Your arms: your army\'s race comes first, the common sigils are still there.',
+      'Banners in the cut of their race: the Elves\' long swallow-tailed silk, the Dwarves\' iron-framed squares, the Orcs\' ragged hides and war rags, the Undead\' tattered shrouds and palls. Two to choose from for each race (or the classic swallowtail), on your castle, your levy standards with their own pole-tops, and your chip in the lobby.',
+      'AI lords of a race bear one of its sigils, drawn at random each match; online every player sees the same arms.',
+      'Every race is its own size now: Dwarves stand about three quarters of a man, broad and stocky; Elves a head taller and slender; Orcs big, bulky and hunched; the Undead gaunt. What you see is what you hit: an arrow over a dwarf misses, a shot at an elf\'s head is a headshot. Riders sit on their race\'s mount: a fine tall elven horse, a stout dwarf pony, a heavy orc beast. Health, damage and speed stay the same for all.',
+    ],
+  },
+  {
     id: 19,
     title: 'The Ranger: fire and the hawk',
     items: [
@@ -12,6 +23,17 @@ export const UPDATES = [
       'R is now Hunting Hawk: hold R to pick a spot and your hawk flies there. Every enemy in the circle is marked for 6 seconds: your side sees them through walls, and they take 25% more damage from everyone. Then it dives on the nearest enemy hero.',
       'Her Ultimate is Rain of Fire: a huge circle where 72 burning arrows come down, and the ground burns after them, siege engines too.',
       'Sniper Shot is now the top talent of her tree, on the right mouse button: with it ready, holding the right button raises the scope. Power Shot is gone; Piercing Shots stays.',
+    ],
+  },
+  {
+    id: 18,
+    title: 'The Cavalier rides out',
+    items: [
+      'Momentum, the Cavalier\'s new passive: the faster you ride, the harder your sword, your trampling and your abilities land, up to +60% at a full gallop. A horseshoe gauge low on the screen fills as you gallop (it shows only in the saddle) and drains when you slow down or turn hard, so long runs and wide turns pay.',
+      'Sweeping Strike (Q, every 6 s): for a moment your blade sweeps out to one side as you ride, cutting every soldier you pass. Glance left or right as you press it to pick the side; looking ahead, it goes where the foes are. On foot it is one wide cut in front of you.',
+      'Lance Charge moves to R (hold R to aim it, R again reins in), and hits harder with Momentum behind it.',
+      'The Ultimate, Call the Charge: hold Z to point, let go and blow the horn. Every ally near you is rallied (less damage taken, faster), and six armoured knights of your house ride out behind you in a wedge and charge the spot. They fight on for 15 seconds, then ride off. Bots and online games use it too.',
+      'A new Cavalier talent tree to match: Keen Edge, Wide Sweep and Rider\'s Rhythm for the sweep; Couched Lance, Born to the Saddle and Thundering Hooves for the charge.',
     ],
   },
   {

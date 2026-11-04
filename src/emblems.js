@@ -2,6 +2,8 @@
 // inside a circle of radius R, in `fill` (cream on the banners) with the details cut out in `ink` (the colour of the field behind it). They are used
 // wherever the emblem shows: the cloth of the castle, the plaque on the first-person shield, the cards of the Renown menu and the end screen.
 // Also here: the little back view of a hero in a cloak that the Wardrobe shows (the cloaks themselves are 3D shapes, see shapes.js).
+import { RACE_PAINT, paintInHand } from './racesigils.js';
+import { sigilRace, HANDS } from './unlocks.js';
 
 const TAU = Math.PI * 2;
 
@@ -246,6 +248,7 @@ const PAINT = {
   },
 };
 
+Object.assign(PAINT, RACE_PAINT);   // (the races' own sigils: racesigils.js)
 export const EMBLEM_IDS = Object.keys(PAINT);
 // the emblem each house flies when its lord bears no arms of their own (the same ones its soldiers wear, unittex.js), by castle
 export const HOUSE_SIGILS = ['tower', 'swords', 'oak', 'sun', 'skull'];
@@ -254,6 +257,8 @@ export const HOUSE_SIGILS = ['tower', 'swords', 'oak', 'sun', 'skull'];
 export function paintEmblem(ctx, id, R, fill = '#efe2b3', ink = '#2a1f14') {
   const f = PAINT[id];
   if (!f) return false;
+  const race = sigilRace(id);
+  if (race) { paintInHand(ctx, f, id, R, fill, ink, HANDS[race]); return true; }   // (a race's sigil, in its own hand)
   ctx.save();
   ctx.scale(R / 50, R / 50);
   ctx.fillStyle = fill; ctx.strokeStyle = fill;

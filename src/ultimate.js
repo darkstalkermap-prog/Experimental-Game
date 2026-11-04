@@ -156,7 +156,7 @@ export const ULT_METHODS = {
   // A wide circle on the ground (aimed, as far as RAIN.range): a flight of burning arrows goes up from the bow, and from RAIN.delay s
   // they come down on the circle for RAIN.span s, most of them each on a foe inside it (the one picked least so far, and no more than
   // RAIN.cap on any one: a lone hero is scorched, not shot to pieces); where they land the ground catches and burns (burnGround), wooden
-  // engines too. The Arrow Volley's machinery (Abilities.rain, classes.js), far bigger and on fire.
+  // engines too. The old Arrow Volley's machinery (Abilities.rain, classes.js), far bigger and on fire.
   rainfire(p, cam, dir, at) {
     const g = this.g, R = RAIN;
     const c = at ? at.clone() : this.aimPoint(cam, dir, R.range, p.team).pos;

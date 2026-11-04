@@ -388,7 +388,7 @@ export class Upgrades {
     const c = this.c, L = c.levies || 0, M = this.M;
     this.clear(this.standardMeshes);
     if (!L) return;
-    const wood = [], iron = [], gold = [], cloth = [];
+    const wood = [], iron = [], gold = [], cloth = [], bone = [], race = raceOf(c.team);
     // (the door of a keep that stands elsewhere, on a rock shelf say, moves them with it: holdcastle.js keepShift)
     const sh = c.keepShift, z = 0.9 + (sh ? sh.z : 0), y = sh ? sh.y : 0;
     for (let k = 0; k < L; k++) {
@@ -403,7 +403,8 @@ export class Upgrades {
         const flag = new THREE.BoxGeometry(1.25, 2.6, 0.03);
         flag.translate(x, 4.1 + y, z);
         cloth.push(flag);
-        if (L === 1) {
+        if (race !== 'human') standardTop(race, L, x, y, z, { wood, iron, gold, bone }, bx);   // (a race's own furniture: raceStandardTop)
+        else if (L === 1) {
           const tip = new THREE.ConeGeometry(0.11, 0.5, 6); tip.translate(x, 6.65 + y, z); iron.push(tip);
         } else if (L === 2) {
           const ball = new THREE.SphereGeometry(0.2, 8, 6); ball.translate(x, 6.55 + y, z); gold.push(ball);
@@ -415,10 +416,46 @@ export class Upgrades {
         }
       }
     }
+    if (bone.length) this.add(this.standardMeshes, bone, boneMaterial());
     this.add(this.standardMeshes, wood, M.wood);
     this.add(this.standardMeshes, iron, M.iron);
     this.add(this.standardMeshes, gold, M.gold);
     const flagMat = c.flagMat || M.banners[c.team];   // (the lord's own emblem, if the account wears one: see Castle.setBanner)
     this.add(this.standardMeshes, cloth, flagMat, c.group, false);
+  }
+}
+
+// ---------------------------------------------------------------- the races' standards (the cloth's cut is the banner's: bannercut.js)
+// What a race's levy standard carries on its pole, by level (1 to 3, richer each time): the elves a leaf blade, gilt from level 2, and a
+// crescent of gold at 3; the dwarves a squared iron frame round the cloth and a hammer head, bronze-capped from 2; the orcs spikes and, from 2,
+// a skull, at 3 a ring of horns; the undead a crossbar of bone with a skull, at 3 a crown on it. Geometry into the given lists (merged per material).
+let boneMat = null;
+const boneMaterial = () => boneMat || (boneMat = new THREE.MeshStandardMaterial({ color: 0xd8ccae, roughness: 0.6 }));
+function standardTop(race, L, x, y, z, { wood, iron, gold, bone }, bx) {
+  const put = (list, g, px, py, pz, rx = 0, rz = 0) => { if (rx) g.rotateX(rx); if (rz) g.rotateZ(rz); g.translate(px, py + y, pz); list.push(g); };
+  const skull = (list, py) => {
+    put(list, new THREE.SphereGeometry(0.2, 8, 6), x, py, z);
+    put(list, new THREE.BoxGeometry(0.22, 0.12, 0.2), x, py - 0.17, z + 0.02);
+  };
+  if (race === 'elf') {
+    const leaf = new THREE.SphereGeometry(0.16, 8, 6); leaf.scale(0.7, 3.2, 0.25);
+    put(L >= 2 ? gold : iron, leaf, x, 6.85, z);
+    if (L >= 3) { const moon = new THREE.TorusGeometry(0.34, 0.05, 4, 12, Math.PI); moon.rotateZ(Math.PI); put(gold, moon, x, 6.6, z); }
+  } else if (race === 'dwarf') {
+    bx(iron, x - 0.7, x + 0.7, 2.7 + y, 2.8 + y, z - 0.05, z + 0.05, 1);   // the frame: a bar below the cloth, and the sides
+    bx(iron, x - 0.7, x - 0.62, 2.7 + y, 5.45 + y, z - 0.05, z + 0.05, 1);
+    bx(iron, x + 0.62, x + 0.7, 2.7 + y, 5.45 + y, z - 0.05, z + 0.05, 1);
+    bx(L >= 2 ? gold : iron, x - 0.32, x + 0.32, 6.45 + y, 6.75 + y, z - 0.16, z + 0.16, 1);   // the hammer head
+    if (L >= 3) bx(gold, x - 0.1, x + 0.1, 6.75 + y, 7.05 + y, z - 0.1, z + 0.1, 1);
+  } else if (race === 'orc') {
+    put(iron, new THREE.ConeGeometry(0.1, 0.7, 4), x, 6.75, z);
+    for (const s of [-1, 1]) put(iron, new THREE.ConeGeometry(0.06, 0.5, 4), x + s * 0.32, 5.6, z, 0, -s * 1.1);   // spikes out from the crossbar's ends
+    if (L >= 2) skull(bone, 6.1);
+    if (L >= 3) for (const s of [-1, 1]) put(bone, new THREE.ConeGeometry(0.06, 0.55, 5), x + s * 0.2, 6.45, z, 0, -s * 0.6);
+  } else {
+    bx(bone, x - 0.55, x + 0.55, 5.62 + y, 5.72 + y, z - 0.05, z + 0.05, 1);   // a crossbar of bone above the cloth's
+    skull(bone, 6.6);
+    if (L >= 2) for (const s of [-1, 1]) put(bone, new THREE.SphereGeometry(0.09, 6, 4), x + s * 0.58, 5.67, z);
+    if (L >= 3) for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2; put(gold, new THREE.ConeGeometry(0.04, 0.16, 4), x + Math.cos(a) * 0.15, 6.86, z + Math.sin(a) * 0.15); }
   }
 }
