@@ -87,9 +87,10 @@ export class HostSync {
       fire(from, vel, team, dmg, owner, big, ability, opts);
       const ev = { k: 'arrow', p: v3(from), v: v3(vel), t: team };
       if (big) ev.b = 1;
-      if (opts && opts.power) ev.pw = 1;                          // (a Power Shot flies flat and through everyone ...
-      else if (opts && opts.pierce) ev.pc = opts.pierce.length;   // ... a Ranger's full draw through a few: the guests' copies do the same)
+      if (opts && opts.pierce) ev.pc = opts.pierce.length;        // (a Ranger's full draw goes through a few: the guests' copies do the same)
       if (opts && opts.snipe) ev.sn = 1;                          // (a Sniper Shot flies flat out to the Fireball's reach)
+      if (opts && opts.boom) { ev.xb = 1; ev.g = opts.grav; }     // (an Explosive Arrow glows and falls slower; its blast comes as its own look)
+      if (opts && opts.fire) ev.fi = 1;                           // (a burning arrow of a Rain of Fire)
       this.shared.push(ev);
     };
     const spell = g.projectiles.fireSpell.bind(g.projectiles);
@@ -160,7 +161,7 @@ export class HostSync {
       case 'abil':
         // class ability: the client has already moved itself; the host works out the rest (the Ultimate, 'u': Abilities.use checks the
         // charge of this guest's own hero on the host, never the guest's word)
-        if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r' || d.s === 'u') && !p.drive) {
+        if (p.alive && p.staggerT <= 0 && (d.s === 'q' || d.s === 'r' || d.s === 'u' || d.s === 's') && !p.drive) {   // ('s': the Ranger's Sniper Shot, a talent)
           const f = gvec(d.f), dir = gvec(d.d);
           if (f && dir) {
             p.mounted = !!d.m && p.hasHorse;
@@ -598,8 +599,8 @@ export class ClientSync {
       case 'fx': if (g.fx[ev.f]) g.fx[ev.f](vec(ev.p), ...(ev.a || [])); break;
       case 'snd': g.audio.play(ev.n, ev.p ? vec(ev.p) : null); break;
       case 'arrow': {
-        const opts = ev.pw ? { power: 1 } : ev.pc > 0 ? { pierce: new Array(Math.min(4, ev.pc | 0)).fill(1) } : null;
-        g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null, !!ev.b, '', ev.sn ? { ...opts, snipe: 1 } : opts);
+        const opts = { pierce: ev.pc > 0 ? new Array(Math.min(4, ev.pc | 0)).fill(1) : null, snipe: ev.sn ? 1 : 0, boom: ev.xb ? 1 : 0, grav: Number(ev.g) || 0, fire: !!ev.fi };
+        g.projectiles.fireArrow(vec(ev.p), vec(ev.v), ev.t, 0, null, !!ev.b, '', opts);
         break;
       }
       case 'rock': g.projectiles.throwBoulder(vec(ev.p), vec(ev.to), ev.t, 0, null, ev.tm); break;

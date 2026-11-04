@@ -48,7 +48,7 @@ import { SOUNDS } from './audio.js';
 import { FOG_ADD } from './particles.js';
 
 const ZERO = new THREE.Vector3();
-const V1 = new THREE.Vector3();
+const V1 = new THREE.Vector3(), V2 = new THREE.Vector3();
 const flat = (d) => { const l = Math.hypot(d.x, d.z) || 1; return new THREE.Vector3(d.x / l, 0, d.z / l); };
 
 // ------------------------------------------------------------------------------------------------------------------ the charge
@@ -85,6 +85,12 @@ export function spared(o, amount) {
 // (mixed into Abilities.prototype by classes.js; `this` is Abilities)
 const M = ULT.meteor, SANCT = ULT.sanctuary;
 
+// The Ranger's Rain of Fire (its card's text reads these too): aimed as far as `range` m, a circle of `radius` m. `arrows` burning arrows,
+// each `dmg` of her bow's damage, come down from `delay` s after the cast over `span` s, `aimed` of them each on a foe in the circle (at
+// most `cap` on any one), the rest at random. From `burnAt` s the ground burns for `burn` s in `burnR` m: `burnDps` of her bow's damage a
+// second to every foe in it, `siege` of that to engines.
+export const RAIN = { range: 85, radius: 12, arrows: 72, dmg: 0.9, delay: 0.7, span: 2.6, aimed: 0.75, cap: 5, burnAt: 1.1, burn: 5, burnR: 11, burnDps: 0.6, siege: 0.5 };
+
 export const ULT_METHODS = {
   // the pooled looks the Ultimates need, made once with the world (so their shaders are compiled before the battle: Game.warmup)
   ultInit() {
@@ -111,7 +117,7 @@ export const ULT_METHODS = {
     }
     c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
     const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
-    this.active.push({ kind: 'ult', p, team: p.team, t: 0, c, dmg: M.dmg * (p.mods.spell || 1), hit: false, burnT: 0, tick: meteorTick });
+    this.active.push({ kind: 'ult', p, team: p.team, t: 0, c, dmg: M.dmg * (p.mods.spell || 1), tick: meteorTick });
     p.swingT = 0.25; p.attackDir = 'over';
     this.emit('meteor', c, f);
   },
@@ -146,36 +152,55 @@ export const ULT_METHODS = {
     this.emit('burst', at0, ZERO, null, B.radius / 5);
   },
 
-  // ---------------------------------------------------------------- Ranger: a stand-in
-  // (placeholder) a storm of arrows on a circle (aimed): the Arrow Volley's machinery with def.storm { arrows, dmg, radius, span }.
-  arrowstorm(p, cam, dir, at, def) {
-    const g = this.g, S = def.storm;
-    const c = at ? at.clone() : this.aimPoint(cam, dir, def.range, p.team).pos;
+  // ---------------------------------------------------------------- Ranger: Rain of Fire
+  // A wide circle on the ground (aimed, as far as RAIN.range): a flight of burning arrows goes up from the bow, and from RAIN.delay s
+  // they come down on the circle for RAIN.span s, most of them each on a foe inside it (the one picked least so far, and no more than
+  // RAIN.cap on any one: a lone hero is scorched, not shot to pieces); where they land the ground catches and burns (burnGround), wooden
+  // engines too. The Arrow Volley's machinery (Abilities.rain, classes.js), far bigger and on fire.
+  rainfire(p, cam, dir, at) {
+    const g = this.g, R = RAIN;
+    const c = at ? at.clone() : this.aimPoint(cam, dir, R.range, p.team).pos;
     const dx = c.x - p.pos.x, dz = c.z - p.pos.z, dist = Math.hypot(dx, dz);
-    if (dist > def.range + 6) { const k = (def.range + 6) / dist; c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k; c.y = g.physics.groundHeight(c.x, c.z, c.y + 2); }
+    if (dist > R.range + 6) {   // (a guest's spot is held to the Ranger's reach)
+      const k = (R.range + 6) / dist;
+      c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k;
+    }
+    c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
     const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
     const shots = [];
-    for (let i = 0; i < S.arrows; i++) shots.push(0.6 + (i + Math.random()) * S.span / S.arrows);
-    this.active.push({ kind: 'rain', p, t: 0, dur: 0.8 + S.span, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * S.dmg, radius: S.radius, aimed: 0.75, ability: def.name });
-    this.emit('volley', cam, f, [c], S.radius / 6.5);
+    for (let i = 0; i < R.arrows; i++) shots.push(R.delay + (i + Math.random()) * R.span / R.arrows);
+    this.active.push({ kind: 'rain', p, t: 0, c, f, shots, n: 0, picked: new Map(), dmg: p.bowDmg * R.dmg, radius: R.radius, aimed: R.aimed, cap: R.cap, fire: true, ability: 'Rain of Fire' });
+    burnGround(this, { c, team: p.team, p, r: R.burnR, dps: p.bowDmg * R.burnDps, time: R.burn, delay: R.burnAt, ability: 'Rain of Fire', siege: R.siege });
+    p.swingT = 0.6; p.attackDir = 'over';
+    this.emit('rainfire', cam, f, [c]);
   },
 };
 
 // The Meteor's course where the battle is run: the impact when the rock comes down, then the burning ground.
-function meteorTick(A, e, dt) {
-  const g = A.g;
-  if (!e.hit) {
-    if (e.t < M.fall) return true;
-    e.hit = true;
-    meteorImpact(A, e);
-    return true;
-  }
-  if (e.t > M.fall + M.burn) return false;
-  if ((e.burnT -= dt) > 0) return true;
-  e.burnT += M.tick;
-  const c = e.c, n = M.burnDps * M.tick * (e.dmg / M.dmg);
-  A.eachFoe(e.team, c.x, c.z, M.burnR, (o) => {
-    if (!o.isSiege) g.damage(o, n, e.p, { magic: true, splash: true, ability: 'Meteor' });
+function meteorTick(A, e) {
+  if (e.t < M.fall) return true;
+  meteorImpact(A, e);
+  burnGround(A, { c: e.c, team: e.team, p: e.p, r: M.burnR, dps: M.burnDps * (e.dmg / M.dmg), time: M.burn, ability: 'Meteor' });
+  return false;
+}
+
+// ------------------------------------------------------------------------------------------------------------------ burning ground
+// Ground set on fire (the Meteor's crater; the Ranger's Explosive Arrow and Rain of Fire: ranger.js and below): for `time` s from
+// `delay`, every foe standing within `r` m of c takes `dps` a second (in ticks of ULT.meteor.tick s); engines `siege` of it (0: none,
+// they are too big to catch from a patch of flames). Where the battle is run; the look is burnLook below.
+export function burnGround(A, { c, team, p, r, dps, time, delay = 0, ability, siege = 0 }) {
+  A.active.push({ kind: 'ult', p, team, t: 0, c, r, dps, time, delay, ability, siege, every: 0, tick: burnTick });
+}
+
+function burnTick(A, e, dt) {
+  if (e.t < e.delay) return true;
+  if (e.t > e.delay + e.time) return false;
+  if ((e.every -= dt) > 0) return true;
+  e.every += M.tick;
+  const g = A.g, c = e.c, n = e.dps * M.tick;
+  A.eachFoe(e.team, c.x, c.z, e.r, (o) => {
+    if (!o.isSiege) g.damage(o, n, e.p, { magic: true, splash: true, ability: e.ability });
+    else if (e.siege) g.damage(o, n * e.siege, e.p, { magic: true, ability: e.ability });
   }, c.y, 2.5);
   return true;
 }
@@ -245,6 +270,24 @@ export const ULT_SHOW = {
     A.ultFx.push({ t: 0, at: at.clone(), acc: 0, silent: ctx.silent, step: sanctuaryLookStep });
   },
 
+  // Rain of Fire: a flight of burning arrows climbs from the bow, the circle glows red until they have all come down (each one is an arrow
+  // every screen gets, burning: projectiles.js), and the ground catches as they land (burnLook)
+  rainfire(ctx) {
+    const { A, g, at, dir, targets, house } = ctx, fx = g.fx, c = targets && targets[0], R = RAIN;
+    ctx.snd('rainfire');
+    fx.flash(V1.copy(at).addScaledVector(dir, 0.6), A.col.set(0xffa050), 2.4, 0.2, 0.9);
+    for (let i = 0; i < 14; i++) {
+      V1.copy(at).addScaledVector(dir, 0.6);
+      g.projectiles.showArrow(V1, V2.set(dir.x * 9 + (Math.random() - 0.5) * 6, 46 + Math.random() * 8, dir.z * 9 + (Math.random() - 0.5) * 6), 0.9, who(ctx), true);
+    }
+    if (!c) return;
+    const T = R.delay + R.span;
+    if (g.aimRing) g.aimRing.flash(c, R.radius, T);
+    A.gfx.glyph('rune', c.x, c.y, c.z, R.radius, 0xff6a28, T, { arms: 8, team: house, strength: 1.5 });
+    A.gfx.glyph('pulse', c.x, c.y, c.z, R.radius * 0.7, 0xff8a40, R.delay + 0.3, { strength: 1.2 });
+    A.ultFx.push({ t: 0, c: c.clone(), silent: ctx.silent, step: rainLookStep });
+  },
+
   burst(ctx) {   // (the stand-in: a slam all around)
     const { A, g, at, house, sz } = ctx, gf = A.gfx, fx = g.fx, r = 5 * sz;
     gf.glyph('shock', at.x, at.y, at.z, r * 1.25, 0xffe0b0, 0.7, { team: house, strength: 2 });
@@ -258,7 +301,7 @@ export const ULT_SHOW = {
   },
 };
 
-// the rock's course on screen: the fall (the streak of fire and smoke, its shadow growing on the ground), the impact, the burning
+// the rock's course on screen: the fall (the streak of fire and smoke, its shadow growing on the ground), the impact
 function meteorLookStep(A, e, dt) {
   const g = A.g, fx = g.fx, at = e.at;
   e.t += dt;
@@ -279,8 +322,8 @@ function meteorLookStep(A, e, dt) {
     if (Math.random() < 0.35) fx.flash(V1.set(x, y, z), A.col.set(0xffa040), 7, 0.12, 0.9);
     return true;
   }
-  if (!e.landed) {
-    e.landed = true;
+  // it lands: the blast, then the burning ground (burnLook) carries on as a look of its own
+  {
     if (e.look) hideMeteorLook(e.look);
     const R = M.radius;
     fx.explosion(V1.copy(at).setY(at.y + 0.6), 7);
@@ -302,29 +345,51 @@ function meteorLookStep(A, e, dt) {
     fx.ring(at, R * 0.5, A.col.set(0xffa060), 40, { up: 1.2, size: 0.5, speed: 12 });
     A.gfx.glyph('shock', at.x, at.y, at.z, R * 1.5, 0xffc080, 0.8, { team: e.house, strength: 2 });
     A.gfx.glyph('pulse', at.x, at.y, at.z, R, 0xff4a1a, 1.0, { strength: 2 });
-    A.gfx.glyph('rune', at.x, at.y, at.z, M.burnR, 0xff3a10, M.burn, { arms: 9, strength: 1.6 });   // (the burning ground, glowing until it goes out)
     if (g.magic) g.magic.flash(V1.copy(at).setY(at.y + 2), 0xff8a30, 22);
     if (g.camfx) g.camfx.boom(at, 1);
     if (!e.silent) g.audio.play('meteor', at);
-    return true;
+    burnLook(A, at, M.burnR, M.burn, e.silent);   // (then the ground burns, glowing until it goes out)
   }
-  // the ground burns: tongues of flame here and there in the circle, thinner as it dies down
-  if (e.t > M.fall + M.burn) return false;
-  const left = 1 - (e.t - M.fall) / M.burn;
+  return false;
+}
+
+// The look of burning ground (burnGround above), on every screen: a glowing circle, tongues of flame here and there in it (thinner as it
+// dies down: about 0.6 a square metre each second, as the Meteor's crater; a small patch more thickly, so it still reads as a fire from
+// afar), their glow on everything near, and a crackle.
+export function burnLook(A, at, r, time, silent = false) {
+  A.gfx.glyph('rune', at.x, at.y, at.z, r, 0xff3a10, time, { arms: r > 5 ? 9 : 6, strength: 1.6 });
+  A.ultFx.push({ t: 0, at: at.clone(), r, time, acc: 0, crackle: 0, silent, every: Math.max(0.004, Math.min(0.025, 1 / (0.6 * Math.PI * r * r))), big: Math.min(1, (r / M.burnR) ** 0.25), step: burnLookStep });
+}
+
+function burnLookStep(A, e, dt) {
+  const g = A.g, fx = g.fx, at = e.at;
+  e.t += dt;
+  if (e.t > e.time) return false;
+  const left = 1 - e.t / e.time;
   e.acc += dt;
-  const every = 0.012 / Math.max(0.25, left);   // (about 80 flames a second at first, fewer and lower as it dies down)
+  const every = e.every / Math.max(0.25, left);   // (fewer and lower flames as it dies down)
   while (e.acc > every) {
     e.acc -= every;
-    const a = Math.random() * Math.PI * 2, r = M.burnR * Math.sqrt(Math.random()) * 0.95;
+    const a = Math.random() * Math.PI * 2, r = e.r * Math.sqrt(Math.random()) * 0.95;
     const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
     V1.set(x, g.physics.groundHeight(x, z, at.y + 2) + 0.1, z);
-    fx.blaze(V1, (1.1 + Math.random() * 1.1) * (0.45 + 0.55 * left));
+    fx.blaze(V1, (1.1 + Math.random() * 1.1) * (0.45 + 0.55 * left) * e.big);
     if (Math.random() < 0.04) fx.smoke(V1);
   }
-  if (Math.random() < 0.25) fx.flash(V1.set(at.x, at.y + 1.2, at.z), A.col.set(0xff7a30), M.burnR * 1.6 * (0.4 + 0.6 * left), 0.3, 0.5);   // (the glow of it on everything near)
-  e.crackle = (e.crackle || 0) - dt;
+  if (Math.random() < 0.25) fx.flash(V1.set(at.x, at.y + 1.2, at.z), A.col.set(0xff7a30), e.r * 1.6 * (0.4 + 0.6 * left), 0.3, 0.5);   // (the glow of it on everything near)
+  e.crackle -= dt;
   if (e.crackle <= 0) { e.crackle = 1.1; if (!e.silent) g.audio.play('burning', at); }
   return true;
+}
+
+const who = (ctx) => (ctx.who ? ctx.who.team : -1);
+
+// Rain of Fire's circle once the arrows begin to land: the ground catches (and burns on: burnLook)
+function rainLookStep(A, e, dt) {
+  e.t += dt;
+  if (e.t < RAIN.burnAt) return true;
+  burnLook(A, e.c, RAIN.burnR, RAIN.burn, e.silent);
+  return false;
 }
 
 // the light's course on screen: motes rising inside the circle, and the end
@@ -470,19 +535,21 @@ export const ULT_AI = {
     return n >= 4 || (b.n.heroes8 && n >= 2) ? {} : null;
   },
 
-  // (stand-in) the storm of arrows on the densest knot: six foes at least
-  arrowstorm(b, p, def) {
-    const foes = b.foes, step = Math.max(1, Math.ceil(foes.length / 40)), r = def.storm.radius * 0.9;
+  // Rain of Fire on the densest knot of foes 10 m and more away (rival heroes count three, engines two; a little lead on where they are
+  // walking, as the arrows take a while): six at least (a rival hero and three more will do)
+  rainfire(b, p) {
+    const R = RAIN, foes = b.foes, step = Math.max(1, Math.ceil(foes.length / 40)), r = R.radius * 0.8;
     let best = null, bs = 0;
     for (let i = 0; i < foes.length; i += step) {
       const o = foes[i], d = b.dist[i];
-      if (o.isSiege || d < 9 || d > def.range - 4) continue;
+      if (d < 10 || d > R.range - 6) continue;
       let s = 0;
-      for (const f of foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < r) s += isHero(f) ? 2 : 1;
+      for (const f of foes) if (Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < r) s += isHero(f) ? 3 : f.isSiege ? 2 : 1;
       if (s > bs) { bs = s; best = o; }
     }
     if (!best || bs < 6) return null;
-    return { at: new THREE.Vector3(best.pos.x, p.game.physics.groundHeight(best.pos.x, best.pos.z, best.pos.y + 3), best.pos.z) };
+    const v = best.vel, lead = (R.delay + R.span * 0.3) * 0.5, x = best.pos.x + (v ? v.x * lead : 0), z = best.pos.z + (v ? v.z * lead : 0);
+    return { at: new THREE.Vector3(x, p.game.physics.groundHeight(x, z, best.pos.y + 3), z) };
   },
 };
 
@@ -506,6 +573,13 @@ SOUNDS.meteor = (a, k) => {
   a.noise(1.8, 260, 0.6, 1.0 * k, 'lowpass');
   a.noise(0.5, 1800, 0.9, 0.4 * k, 'bandpass', 0.02);
   a.noise(0.25, 5000, 1, 0.2 * k, 'highpass', 0.04);
+};
+// Rain of Fire: a deep twang of many strings and the rush of a flight going up, with fire in it
+SOUNDS.rainfire = (a, k) => {
+  a.tone(120, 0.4, 0.3 * k, 'triangle', 0.5);
+  a.noise(0.9, 1400, 0.6, 0.3 * k, 'bandpass');
+  a.noise(1.2, 420, 0.5, 0.18 * k, 'lowpass', 0.15);
+  a.noise(0.4, 4200, 1, 0.1 * k, 'highpass', 0.05);
 };
 SOUNDS.burning = (a, k) => {   // the ground on fire: a low rush and a crackle
   a.noise(1.2, 420, 0.5, 0.16 * k, 'lowpass');

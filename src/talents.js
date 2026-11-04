@@ -42,12 +42,12 @@ export const TUNE = {
     headshot: 0.5,         // Eagle Eye: added to the headshot's double damage ...
     headshotHero: 0.35,    //   ... and to its 1.5x into a hero
     pierce: [0.85, 0.7, 0.5],   // Bodkin Points: what a fully drawn arrow deals to the second, third and fourth body it goes into (70% and 50% without it, and no fourth)
-    qDmg: 0.25, qCd: 0.25, // Heavy Draw: Power Shot (or the Volley) hits harder and recharges sooner
+    xRadius: 0.25, xBurn: 2, xHot: 0.3, xCd: 0.2,   // Wildfire: Explosive Arrow bursts wider (and its fire spreads as far), the ground burns longer and hotter, and it recharges sooner
     speed: 0.06, draw: 0.1,        // Fleet-Footed: faster on foot, and the bow draws quicker
-    scope: { fov: 0.65, settle: 0.5, sway: 0.6 },   // Hawk's Scope: Sniper Shot zooms in to this share of the field of view, steadies in this share of the time and sways this much
-    snipeDmg: 0.3, snipeCd: 0.25,  // Deadeye: Sniper Shot hits harder and recharges sooner ...
-    snipePierce: [0.7],    //   ... and goes on through the first body into one more, for this share of the damage
-    aim: { draw: 0.75, speed: 1.25 },   // Steady Aim (alternative to Arrow Volley): zoomed in (right mouse), the bow draws in this share of the time and the arrow flies this much faster
+    hawkRadius: 0.3, hawkMark: 3,  // Keen Eyes: the hawk marks a wider circle, for longer
+    hawkDmg: 0.6, hawkSlow: 1.5, hawkCd: 0.25,   // Raking Talons: the swoop hits harder and slows for longer, and Hunting Hawk recharges sooner
+    sniper: { dmg: 3.4, cd: 12 },  // Sniper Shot (the capstone): its arrow's damage in full arrows, and its recharge (classes.js reads them: SNIPE, RANGER.snipe)
+    aim: { draw: 0.75, speed: 1.25 },   // Steady Aim (alternative to Sniper Shot): zoomed in (right mouse), the bow draws in this share of the time and the arrow flies this much faster
   },
   mage: {
     fireRadius: 0.2,       // Greater Blast: wider explosions
@@ -127,23 +127,24 @@ export const TALENTS = [
   { id: 'bz_meteor', cls: 'berserker', br: 'r', tier: 3, needs: 'bz_scars', icon: '☄', name: 'Death from Above',
     desc: `A Leap's slam hits ${pc(Z.leapDmg)} harder, and Leap recharges ${pc(Z.leapCd)} sooner.`, fx: { leapDmg: 1 + Z.leapDmg, cd_leap: 1 - Z.leapCd } },
 
-  // ---------- Ranger: headshots, piercing and Power Shot | Sniper Shot (the capstone, Arrow Volley in Power Shot's place, is under Heavy Draw) ----------
+  // ---------- Ranger: headshots, piercing and Explosive Arrow | Hunting Hawk (the capstone, Sniper Shot on the right mouse button, is under Wildfire) ----------
   { id: 'rg_eagle', cls: 'ranger', br: 'q', tier: 1, needs: null, icon: '👁', name: 'Eagle Eye',
     desc: `Headshots deal ${R.headshot + 2}x damage instead of 2x (${R.headshotHero + 1.5}x into a hero instead of 1.5x).`, fx: { headshot: R.headshot, headshotHero: R.headshotHero } },
   { id: 'rg_bodkin', cls: 'ranger', br: 'q', tier: 2, needs: 'rg_eagle', icon: '🗡', name: 'Bodkin Points',
     desc: `A fully drawn arrow goes on into ${R.pierce.length} bodies behind the first instead of two, at ${R.pierce.map(pc).join(', ')} of its damage.`, fx: { pierce: R.pierce } },
-  { id: 'rg_heavy', cls: 'ranger', br: 'q', tier: 3, needs: 'rg_bodkin', icon: '💪', name: 'Heavy Draw',
-    desc: `Power Shot (or Arrow Volley) hits ${pc(R.qDmg)} harder and recharges ${pc(R.qCd)} sooner.`,
-    fx: { powerDmg: 1 + R.qDmg, volleyDmg: 1 + R.qDmg, cd_powershot: 1 - R.qCd, cd_volley: 1 - R.qCd } },
-  { id: 'rg_volley', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_heavy', icon: '🌧', name: 'Arrow Volley',
-    desc: 'Q becomes Arrow Volley instead of Power Shot: hold Q to put a circle on the ground, let go and a volley of arrows rains down on it.', fx: { volleyQ: true } },
+  { id: 'rg_wildfire', cls: 'ranger', br: 'q', tier: 3, needs: 'rg_bodkin', icon: '🔥', name: 'Wildfire',
+    desc: `Explosive Arrow bursts ${pc(R.xRadius)} wider, its fire burns ${R.xBurn} s longer and ${pc(R.xHot)} hotter, and it recharges ${pc(R.xCd)} sooner.`,
+    fx: { xRadius: 1 + R.xRadius, xBurn: R.xBurn, xBurnDps: 1 + R.xHot, cd_xarrow: 1 - R.xCd } },
+  { id: 'rg_sniper', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_wildfire', icon: '🔭', name: 'Sniper Shot',
+    desc: `A third shot, on the right mouse button: hold it with the bow out to raise the bow to your eye (the view zooms in far and steadies), click to loose one heavy arrow for ${R.sniper.dmg}x a full arrow's damage that flies flat as far as a Fireball and on through the first body (${R.sniper.cd} s to recharge).`,
+    fx: { sniper: true } },
   { id: 'rg_light', cls: 'ranger', br: 'r', tier: 1, needs: null, icon: '👢', name: 'Fleet-Footed',
     desc: `+${pc(R.speed)} speed, and the bow draws ${pc(R.draw)} faster.`, mods: { mul: { speed: 1 + R.speed, draw: 1 - R.draw } } },
-  { id: 'rg_hawk', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '🦅', name: "Hawk's Scope",
-    desc: `Sniper Shot zooms in ${pc(1 - R.scope.fov)} further, steadies ${pc(1 - R.scope.settle)} sooner and sways ${pc(1 - R.scope.sway)} less.`, fx: { scope: R.scope } },
-  { id: 'rg_deadeye', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_hawk', icon: '🎯', name: 'Deadeye',
-    desc: `Sniper Shot hits ${pc(R.snipeDmg)} harder, recharges ${pc(R.snipeCd)} sooner and goes on through the first body into one more (${pc(R.snipePierce[0])}).`,
-    fx: { snipeDmg: 1 + R.snipeDmg, cd_snipe: 1 - R.snipeCd, snipePierce: R.snipePierce } },
+  { id: 'rg_keen', cls: 'ranger', br: 'r', tier: 2, needs: 'rg_light', icon: '👁', name: 'Keen Eyes',
+    desc: `Hunting Hawk marks a circle ${pc(R.hawkRadius)} wider, and its marks last ${R.hawkMark} s longer.`, fx: { hawkRadius: 1 + R.hawkRadius, hawkMark: R.hawkMark } },
+  { id: 'rg_talons', cls: 'ranger', br: 'r', tier: 3, needs: 'rg_keen', icon: '🦅', name: 'Raking Talons',
+    desc: `The hawk's dive hits ${pc(R.hawkDmg)} harder and slows ${R.hawkSlow} s longer, and Hunting Hawk recharges ${pc(R.hawkCd)} sooner.`,
+    fx: { hawkDmg: 1 + R.hawkDmg, hawkSlow: R.hawkSlow, cd_hawk: 1 - R.hawkCd } },
 
   // ---------- Mage: Fireball | Frost Ward (the capstone is under Glacial Burst) ----------
   { id: 'mg_blast', cls: 'mage', br: 'q', tier: 1, needs: null, icon: '💥', name: 'Greater Blast',
@@ -204,8 +205,8 @@ export const ALT_TALENTS = {
     desc: `While Bulwark stands ${pc(K.bastion.share)} of every melee blow you take is stored. When it ends the shield slams down and the store strikes the foes within ${K.bastion.radius} m, staggering them for ${K.bastion.stun} s.`, fx: { bulwarkWave: K.bastion } },
   bz_tithe: { id: 'bz_tithe', cls: 'berserker', br: 'q', tier: 4, needs: 'bz_dervish', alt: 'bz_reaper', icon: '🍷', name: 'Blood Tithe',
     desc: `The last strike of a Whirlwind heals you for ${pc(Z.tithe)} of your health if it hits any foe.`, fx: { tithe: Z.tithe } },
-  rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_heavy', alt: 'rg_volley', icon: '🔭', name: 'Steady Aim',
-    desc: `Zoomed in (right mouse), your bow draws ${pc(1 - R.aim.draw)} faster and your arrows fly ${pc(R.aim.speed - 1)} faster. Power Shot stays your Q.`, fx: { zoomDraw: R.aim.draw, zoomSpeed: R.aim.speed } },
+  rg_aim: { id: 'rg_aim', cls: 'ranger', br: 'q', tier: 4, needs: 'rg_wildfire', alt: 'rg_sniper', icon: '🎯', name: 'Steady Aim',
+    desc: `Zoomed in (right mouse), your bow draws ${pc(1 - R.aim.draw)} faster and your arrows fly ${pc(R.aim.speed - 1)} faster. The right button stays the plain zoom.`, fx: { zoomDraw: R.aim.draw, zoomSpeed: R.aim.speed } },
   mg_snap: { id: 'mg_snap', cls: 'mage', br: 'r', tier: 4, needs: 'mg_glacier', alt: 'mg_shatter', icon: '💠', name: 'Cold Snap',
     desc: `When the ward breaks, your next Fireball within ${M.snap.time} s hits ${pc(M.snap.dmg - 1)} harder.`, fx: { snap: M.snap } },
   cl_mercy: { id: 'cl_mercy', cls: 'cleric', br: 'r', tier: 4, needs: 'cl_aegis', alt: 'cl_bloom', icon: '🙏', name: 'Mercy',

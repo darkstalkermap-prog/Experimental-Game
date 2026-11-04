@@ -910,6 +910,7 @@ export class Game {
     // no friendly fire between houses on the same side (own troops and co-op allies)
     if (attacker && attacker !== target && attacker.team !== undefined && allied(target.team, attacker.team)) return;
     if (attacker && attacker.kit && info.ability && !target.isPlayer && !target.kit) dmg *= attacker.kit.bite;   // (an AI lord's abilities land softer on soldiers than a hero's: lordkit.js BITE)
+    if (target.markUntil > this.time) dmg *= target.markK;   // (marked by a Ranger's hawk: every blow hurts more, ranger.js)
     if (target.isSiege) {
       this.lastHit = info;   // (what the blow was, for the match log: see onSiegeDestroyed)
       const s0 = target.hp;
@@ -919,7 +920,7 @@ export class Game {
       return;
     }
     // soldiers may block with shield or weapon
-    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && !info.power && target.tryBlock(attacker, info)) {   // (a Power Shot goes through shields)
+    if (!target.isPlayer && target.tryBlock && !info.splash && !info.magic && target.tryBlock(attacker, info)) {
       const toward = attacker.pos.clone().sub(target.pos).setY(0).normalize();
       this.fx.sparks(target.chest(new THREE.Vector3()).addScaledVector(toward, 0.5), 10);
       this.audio.play('block', target.pos);

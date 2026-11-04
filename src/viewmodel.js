@@ -610,7 +610,7 @@ export class ViewModel {
       // after a loose (recoil runs 1 -> 0 over half a second): the string snaps home at once; the hand flies on back along the jaw and
       // opens (ft), the bow hand lets the top of the bow fall forward; then the hand comes forward to the string with the next arrow (rt)
       const rec = this.recoil = Math.max(0, this.recoil - dt * 2), u = 1 - rec;
-      // Power Shot: the draw goes on past the anchor, the string a hand further back, held hard (it trembles)
+      // Explosive Arrow: the draw goes on past the anchor, the string a hand further back, held hard (it trembles)
       this.powerAmt = smooth(this.powerAmt, p.power ? 1 : 0, p.power ? 5 : 30, dt);
       const pw = easeInOut(clamp(this.powerAmt, 0, 1)), sc = easeInOut(clamp(this.scopeAmt, 0, 1));
       if (rec > 0.95) { this.looseZ = lerp(info0(this.bowInfo), DRAW_Z, easeInOut(this.drawAmt)) + 0.04 * pw; this.drawAmt = 0; }
@@ -639,7 +639,7 @@ export class ViewModel {
       if (sc > 0) { BOW_P.x += 0.05 * sc; BOW_P.y += 0.06 * sc; BOW_P.z += 0.06 * sc; }   // (the Sniper Shot: in to the eye, along the arrow)
       const still = 1 - 0.7 * zoom;
       BOW_P.x += ox * still; BOW_P.y += oy * still - swapDip; BOW_P.z += oz;
-      if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * (0.0008 + 0.0022 * pw);   // (a long hold at full draw trembles; a Power Shot's more)
+      if (dr > 0.98 && !zoom) BOW_P.x += Math.sin(t * 70) * (0.0008 + 0.0022 * pw);   // (a long hold at full draw trembles; an Explosive Arrow's more)
       if (pw > 0) {   // (and canted over, round the nock at the anchor, as an archer lays a heavy bow over for a long hold)
         BOW_P.y += Math.sin(t * 53) * 0.0012 * pw; BOW_P.z += 0.012 * pw;
         BOW_Q2.setFromAxisAngle(AXIS_Z, 0.3 * pw);

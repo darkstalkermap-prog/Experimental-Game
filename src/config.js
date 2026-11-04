@@ -211,16 +211,10 @@ export const BODY = {
   climbCooldown: 0.7,
 };
 
-// The Ranger's Arrow Volley: hold Q to put a circle on the ground, let go and the arrows fall on it.
+// A rain of arrows out of the sky (the Ranger's Rain of Fire: ultimate.js, Abilities.rain): where each arrow starts, above and behind the spot
+// it falls on (its own numbers are in ultimate.js RAIN)
 export const VOLLEY = {
-  range: 62,          // how far away the circle can be put
-  radius: 6.5,
-  arrows: 18,
-  dmg: 0.6,           // of the Ranger's bow damage, per arrow
-  delay: 0.6,         // from letting go until the first arrow comes down out of the sky
-  span: 0.8,          // over how many seconds the arrows keep coming
-  fallH: 34, fallBack: 14,   // where the arrows start above and behind the target
-  aimed: 0.7,         // share of the arrows that pick a foe inside the circle (the rest fall at random)
+  fallH: 34, fallBack: 14,
 };
 
 // Game modes. Conquest is the main one: break the other houses' castles, last castle standing wins. King of the Hill is

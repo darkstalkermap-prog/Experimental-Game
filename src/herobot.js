@@ -14,13 +14,14 @@ import { allied } from './teams.js';
 import { talentBlock, talentsOf } from './talents.js';
 import { abilityOf, RANGER, LEAP } from './classes.js';
 import { ULT_AI } from './ultimate.js';
+import { XARROW, xarrowAim, xarrowMark, hawkSpot } from './ranger.js';
 
 // What a bot learns, in this order, as its levels bring points (a mix of damage and survival). A talent whose level or
 // parent is missing is skipped for now and taken when it can be; four points never buy a whole tree.
 export const TALENT_PREFS = {
   knight: ['kn_plate', 'kn_boss', 'kn_hold', 'kn_rattle', 'kn_ram', 'kn_phalanx', 'kn_avenge'],
   berserker: ['bz_quake', 'bz_cyclone', 'bz_scars', 'bz_storm', 'bz_meteor', 'bz_dervish', 'bz_reaper'],
-  ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_hawk', 'rg_heavy', 'rg_deadeye', 'rg_volley'],
+  ranger: ['rg_eagle', 'rg_light', 'rg_bodkin', 'rg_keen', 'rg_wildfire', 'rg_talons', 'rg_sniper'],
   mage: ['mg_robes', 'mg_blast', 'mg_rime', 'mg_sear', 'mg_fork', 'mg_glacier', 'mg_shatter'],
   cleric: ['cl_grace', 'cl_wrath', 'cl_radiance', 'cl_chain', 'cl_aegis', 'cl_judge', 'cl_bloom'],
   cavalier: ['cv_barding', 'cv_lance', 'cv_horn', 'cv_sweep', 'cv_banner', 'cv_thunder', 'cv_vanguard'],
@@ -61,6 +62,7 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const angDiff = (a, b) => { let d = b - a; while (d > Math.PI) d -= TAU; while (d < -Math.PI) d += TAU; return d; };
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
+const AIM = { yaw: 0, pitch: 0 };
 
 // The keys and mouse a bot "presses" for Player.move, useAbility and swordInput.
 class BotKeys {
@@ -119,7 +121,7 @@ export class HeroBot {
     this.skill = s;
     this.sk = {};
     for (const k in SKILL) this.sk[k] = lerp(SKILL[k][0], SKILL[k][1], EASY_ONLY.has(k) ? Math.min(1, s * 2) : s);
-    this.need = s < 0.34 ? 1 : 0;   // (Easy wants one more foe in a knot before a run, a leap, a volley or a Power Shot)
+    this.need = s < 0.34 ? 1 : 0;   // (Easy wants one more foe in a knot before a run, a leap, a hawk or an Explosive Arrow)
     this.bold = Math.random();
     this.retreatAt = lerp(0.36, 0.22, this.bold);
     this.returnAt = lerp(0.85, 0.7, this.bold);
@@ -360,7 +362,7 @@ export class HeroBot {
 
   chooseWeapon() {
     const p = this.p, st = this.style, t = this.target;
-    if (!t || this.t < this.weaponOk || p.mounted || p.power) return;   // (not in the middle of a Power Shot's draw)
+    if (!t || this.t < this.weaponOk || p.mounted || p.power || p.scope) return;   // (not in the middle of an Explosive Arrow's draw or with the scope up)
     let want = 'sword';
     const reserve = st.kind === 'ranged' ? 2 : 8;
     if (st.bow && !t.isStructure && p.arrows > reserve && this.t >= this.meleeUntil) {
@@ -488,6 +490,7 @@ export class HeroBot {
   planAbilities() {
     const p = this.p, n = this.n, now = this.t, hpf = this.hpf, t = this.target, need = this.need;
     if (now >= this.castOk && p.staggerT <= 0 && p.ult >= 1 && this.ultimate()) return;   // (the Ultimate first, when the moment is good)
+    if (now >= this.castOk && p.staggerT <= 0 && p.abilCd.s <= 0 && abilityOf(p, 's') && n.c8 === 0 && this.recent < p.maxHp * 0.12 && this.sniperShot()) return;   // (the Ranger's Sniper Shot, a talent: its own recharge)
     if (now < this.castOk || p.staggerT > 0 || (p.abilCd.q > 0 && p.abilCd.r > 0)) return;
     const q = p.abilCd.q <= 0 && now >= this.readyAt.q, r = p.abilCd.r <= 0 && now >= this.readyAt.r;
     if (!q && !r) return;
@@ -507,9 +510,10 @@ export class HeroBot {
         if (q && hpf > 0.2 && (n.c3 >= 2 + need || (n.heroes8 && this.heroGap < 3.5) || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q');
         break;
       case 'ranger': {
-        // the Sniper Shot at a far rival hero, giant or siege crew; Power Shot (or the Volley) at the ranks
-        if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
-        if (q) { if (abilityOf(p, 'q').id === 'volley') this.volley(3 + need); else this.powerShot(3 + need); }
+        // the hawk first (on a rival hero, or a knot of foes: they are marked, and the arrows that follow hurt more), then the
+        // Explosive Arrow at a hero, an engine or a knot (at hand too: a blast at her feet throws back a foe who has caught her)
+        if (r && this.hawk(4 + need)) break;
+        if (q) this.explosive(2 + need);
         break;
       }
       case 'mage':
@@ -546,30 +550,6 @@ export class HeroBot {
     if (!best) return;
     this.aimAtFoe(best, slot === 'q' && p.classId === 'mage' ? 40 : 1e3);
     this.cast(slot);
-  }
-
-  // The densest knot of foes in the Ranger's reach, with a little lead on where they are going.
-  volley(need = 3) {
-    const p = this.p;
-    let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
-      const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d < 9 || d > 55) continue;
-      let s = 0;
-      for (const f of this.foes) if (!f.isSiege && Math.hypot(f.pos.x - o.pos.x, f.pos.z - o.pos.z) < 6) s += f.isPlayer ? 2 : 1;
-      if (s > bs) { bs = s; best = o; }
-    }
-    if (!best || bs < need) return;
-    let cx = 0, cz = 0, c = 0;
-    for (const f of this.foes) {
-      if (f.isSiege || Math.hypot(f.pos.x - best.pos.x, f.pos.z - best.pos.z) >= 6) continue;
-      cx += f.pos.x + (f.vel ? f.vel.x * 0.9 : 0); cz += f.pos.z + (f.vel ? f.vel.z * 0.9 : 0); c++;
-    }
-    cx /= c; cz /= c;
-    const at = new THREE.Vector3(cx, this.g.physics.groundHeight(cx, cz, best.pos.y + 3), cz);
-    this.faceYaw = Math.atan2(cx - p.pos.x, cz - p.pos.z);
-    p.yaw = this.faceYaw;
-    this.cast('q', at);
   }
 
   // The long charges: a run (Shield Bash) or a gallop (Lance Charge, on through them: the end of the run 8 m beyond) at a rival hero or
@@ -615,8 +595,8 @@ export class HeroBot {
     return this.cast('r', plan.to.clone());
   }
 
-  // Sniper Shot: a far target worth an arrow that hits like three: a rival hero above all, else a giant, a boss or a siege engine's
-  // crew; with a clear line, beyond the reach of her ordinary shots (22 m) and within the arrow's flat flight
+  // Sniper Shot (a Ranger talent, slot 's'): a far target worth an arrow that hits like three: a rival hero above all, else a giant, a boss
+  // or a siege engine's crew; with a clear line, beyond the reach of her ordinary shots (22 m) and within the arrow's flat flight
   sniperShot() {
     const p = this.p, g = this.g, S = RANGER.snipe, me = p.pos;
     if (p.weapon !== 'bow' && this.nearGap < 12) return false;
@@ -636,35 +616,35 @@ export class HeroBot {
     this.aimAtFoe(best, S.speed);
     p.beginScope();
     if (!p.scope) return false;
-    this.stats.r++;
+    this.stats.s = (this.stats.s || 0) + 1;
     this.castOk = this.t + this.sk.castGap;
     return true;
   }
 
-  // Power Shot: along the line with the most foes in it (a rival hero is worth three), from the bow
-  powerShot(need = 3) {
+  // Hunting Hawk: on a rival hero or a knot of foes (hawkSpot: ranger.js)
+  hawk(need) {
     const p = this.p;
-    if (p.weapon !== 'bow' || p.power || p.mounted) return;
-    const e = p.eyePos(V1);
-    let best = null, bs = 0;
-    for (let i = 0; i < this.foes.length; i++) {
-      const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d < 4 || d > 60 || !this.clearShot(o)) continue;
-      const dx = o.pos.x - e.x, dz = o.pos.z - e.z, l = Math.hypot(dx, dz) || 1;
-      let s = 0;
-      for (const f of this.foes) {   // who else stands within a metre of that line, beyond us
-        if (f.isSiege) continue;
-        const fx = f.pos.x - e.x, fz = f.pos.z - e.z, along = (fx * dx + fz * dz) / l;
-        if (along < 2 || along > 70 || Math.abs((fx * dz - fz * dx) / l) > 1) continue;
-        s += f.isPlayer ? 3 : 1;
-      }
-      if (s > bs) { bs = s; best = o; }
-    }
-    if (!best || bs < need) return;
-    this.powerAt = best;
-    this.aimAtFoe(best, 95);
+    if (p.power || p.scope || p.mounted) return false;
+    const at = hawkSpot(this.g, p.pos, this.foes, this.dist, need, new THREE.Vector3());
+    if (!at) return false;
+    this.faceYaw = p.yaw = Math.atan2(at.x - p.pos.x, at.z - p.pos.z);
+    return this.cast('r', at);
+  }
+
+  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js); the draw is held on the mark
+  // (act) and looses itself
+  explosive(need) {
+    const p = this.p;
+    if (p.power || p.scope || p.mounted || p.climb) return false;
+    const m = xarrowMark(this.foes, this.dist, need, (o) => this.clearShot(o));
+    if (!m) return false;
+    this.powerAt = m.o; this.powerGround = m.ground;
+    this.aimXarrow(m.o, m.ground);
     p.useAbility('q', this.keys);
-    if (p.power) { this.stats.q++; this.castOk = this.t + this.sk.castGap; }
+    if (!p.power) return false;
+    this.stats.q++;
+    this.castOk = this.t + this.sk.castGap;
+    return true;
   }
 
   // ===================================================================================================== planning
@@ -918,9 +898,9 @@ export class HeroBot {
     } else {
       p.blocking = false;
       const tg = this.target;
-      if (p.power) {   // a Power Shot being drawn: keep it on the line, and it looses itself
+      if (p.power) {   // an Explosive Arrow being drawn: keep it on the mark, and it looses itself
         const pt = this.powerAt && this.powerAt.alive ? this.powerAt : tg;
-        if (pt && pt.alive) this.aimAtFoe(pt, 95);
+        if (pt && pt.alive) this.aimXarrow(pt, pt === this.powerAt && this.powerGround);
         p.tickPower(dt);
       } else if (p.scope) {   // the scope at the eye: keep it on the mark, wait for the sway to settle, then loose
         const st = this.snipeAt;
@@ -941,6 +921,17 @@ export class HeroBot {
         }
       } else p.drawT = 0;
     }
+  }
+
+  // Aim an Explosive Arrow: lofted onto o's chest (a hero) or the ground at his feet (a knot), leading him, a little off by skill.
+  aimXarrow(o, ground) {
+    const p = this.p, e = p.eyePos(V1), t = ground ? V2.set(o.pos.x, o.pos.y + 0.1, o.pos.z) : o.chest(V2);
+    const a = xarrowAim(e, t, o.vel, AIM);
+    if (!a) { this.aimAtFoe(o, XARROW.speed); return; }
+    const err = this.sk.aim;
+    p.yaw = a.yaw + gauss() * err;
+    p.pitch = clamp(a.pitch + gauss() * err * 0.5, -1.2, 1.2);
+    this.faceYaw = p.yaw;
   }
 
   // Aim the bow: lead the target and loft the arrow to land on it.

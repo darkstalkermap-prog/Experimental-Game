@@ -80,11 +80,11 @@ export function renderClassPicker(root, info, selected, onPick) {
 }
 
 const AIM_HINTS = {
-  volley: 'Release Q to loose the volley · R or Esc: cancel',
+  hawk: 'Release R to send the hawk · Q or Esc: cancel',
   bash: 'Release Q to charge behind the shield · R or Esc: cancel',
   charge: 'Release Q to charge · R or Esc: cancel',
   leap: 'Release R to leap · Q or Esc: cancel',
-  scope: 'Let go of R or click to loose · let go early to lower the bow',
+  scope: 'Click to loose the Sniper Shot · let go of the right button to lower the bow',
   ult: `Release ${ULT.keyName} to cast your Ultimate · Q or Esc: cancel`,
 };
 
@@ -912,12 +912,12 @@ export class UI {
       const sec = cd > 0 ? String(Math.ceil(cd)) : '';
       if (e.sec.textContent !== sec) e.sec.textContent = sec;
       e.r.classList.toggle('ready', cd <= 0 && p.alive && !p.drive);
-      e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power) || (slot === 'r' && !!p.scope));   // (a circle being placed, Power Shot being drawn, the scope up)
+      e.r.classList.toggle('aiming', (!!p.aiming && p.aiming.slot === slot) || (slot === 'q' && !!p.power));   // (a circle being placed, an Explosive Arrow being drawn)
     }
     this.updateUlt(p);
-    // the hint under the crosshair: which key lets it go (the volley's Q, the Leap's R, the Sniper Shot's R, the Ultimate's Z) and how to call it off
+    // the hint under the crosshair: which key lets it go (the hawk's R, the Leap's R, the Sniper Shot's click, the Ultimate's Z) and how to call it off
     const aimId = p.aiming ? abilityOf(p, p.aiming.slot).id : '';
-    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'volley' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
+    const aim = p.aiming ? (p.aiming.slot === 'u' ? 'ult' : aimId === 'leap' || aimId === 'hawk' ? aimId : aimId === 'bash' ? 'bash' : 'charge') : p.scope ? 'scope' : '';
     if (aim !== this.aimShown) {
       this.aimShown = aim;
       const el = $('aimhint');

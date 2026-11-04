@@ -1,5 +1,5 @@
 // Hero classes. Every hero picks one of six classes before the battle; each has its own strengths and two abilities:
-// Q is an attack, R a second ability (mostly a defence; the Berserker's Leap and the Ranger's Sniper Shot are not), and u the Ultimate (Z),
+// Q is an attack, R a second ability (mostly a defence; the Berserker's Leap and the Ranger's Hunting Hawk are not), and u the Ultimate (Z),
 // which charges from fighting instead of a timer (how a class adds one: the comment at the top of ultimate.js). The abilities are simulated where the world is (single player or host);
 // their look and sound is replayed on every screen.
 import * as THREE from 'three';
@@ -7,13 +7,14 @@ import { SPELLS, VOLLEY, TEAM_COLORS, FIREBALL_RANGE, WORLD, ULT } from './confi
 import { GroundFX } from './groundfx.js';
 import { ARROW_SPEED, G_ARROW } from './projectiles.js';
 import { allied } from './teams.js';
-import { talentFx } from './talents.js';
+import { talentFx, TUNE } from './talents.js';
 import { SOUNDS } from './audio.js';
 import { eachArcher } from './towerarchers.js';
-import { ULT_METHODS, ULT_SHOW, ultReady, ultGain } from './ultimate.js';
+import { ULT_METHODS, ULT_SHOW, ultReady, ultGain, RAIN } from './ultimate.js';
+import { RANGER_METHODS, RANGER_SHOW, rangerFx, XARROW, HAWK } from './ranger.js';
 import { quietly } from './modelkit.js';
 
-const RANGER_SNIPE_DMG = 3.2;   // (Sniper Shot's damage in full arrows: in RANGER.snipe, and in the card's text)
+const RANGER_SNIPE_DMG = TUNE.ranger.sniper.dmg;   // (Sniper Shot's damage in full arrows: a talent's, talents.js)
 
 export const CLASS_IDS = ['knight', 'berserker', 'ranger', 'mage', 'cleric', 'cavalier'];
 
@@ -39,12 +40,12 @@ export const CLASSES = {
   },
   ranger: {
     name: 'Ranger', icon: '🏹', color: '#7fc47a', role: 'Marksman',
-    blurb: 'A sharpshooter: arrows in the head, through whole ranks and into siege crews. Fragile when caught in melee.',
+    blurb: 'A sharpshooter: arrows in the head, through whole ranks, and arrows that burst into flame. Fragile when caught in melee.',
     mods: { hp: 0.85, armor: 0, speed: 1.1, melee: 0.8, bow: 1.4, spell: 1, draw: 0.8, marksman: 1 },
     passive: 'Piercing Shots: a fully drawn arrow goes through the first enemy and on into up to two more (70%, then 50%). Her arrows hit engineers and siege engines 50% harder, and an arrow comes back to the quiver every 4 s.',
-    q: { id: 'powershot', icon: '🎯', name: 'Power Shot', cd: 9, desc: 'Draw the bow to the full and loose a heavy arrow that flies flat through every soldier in its line, throwing them back and staggering a hero.' },
-    r: { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: 13, kind: 'Attack', desc: `Hold R to raise the bow to your eye: the view zooms in far and steadies after a moment. Let go (or click) to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts).` },
-    u: { id: 'arrowstorm', icon: '🌧', name: 'Arrow Storm', kind: 'Ultimate', placeholder: true, aimed: true, range: 70, radius: 9, storm: { arrows: 45, dmg: 0.75, radius: 9, span: 1.6 }, lasts: 3.5, desc: 'Hold Z to put a wide circle on the ground (up to 70 m), let go and 45 arrows rain down on it.' },
+    q: { id: 'xarrow', icon: '💥', name: 'Explosive Arrow', cd: 8, desc: `Draw and loose a glowing arrow that bursts where it strikes: ${Math.round(XARROW.dmg * 100)}% of an arrow's damage to everyone within ${XARROW.radius} m (walls shelter), soldiers thrown back and staggered, gates and engines burnt. The ground there burns for ${XARROW.burn} s.` },
+    r: { id: 'hawk', icon: '🦅', name: 'Hunting Hawk', cd: 16, aimed: true, range: HAWK.range, radius: HAWK.radius, kind: 'Attack', desc: `Hold R to mark a spot (up to ${HAWK.range} m), let go and your hawk flies there. Every enemy in the circle is marked for ${HAWK.mark} s: your side sees him through walls, and he takes ${Math.round(HAWK.amp * 100)}% more damage from everyone. Then it dives on the nearest enemy hero: talons, and a brief slow.` },
+    u: { id: 'rainfire', icon: '🌧', name: 'Rain of Fire', kind: 'Ultimate', aimed: true, range: RAIN.range, radius: RAIN.radius, lasts: RAIN.burnAt + RAIN.burn, desc: `Hold Z to put a great circle on the ground (${RAIN.radius} m round, up to ${RAIN.range} m away), let go and ${RAIN.arrows} burning arrows rain down on it over ${RAIN.span} s. The ground catches and burns for ${RAIN.burn} s, siege engines too.` },
   },
   mage: {
     name: 'Mage', icon: '🔥', color: '#ff9a4a', role: 'Battle mage',
@@ -75,7 +76,8 @@ export const CLASSES = {
   },
 };
 
-// The Ranger's numbers (the talents that change them are in talents.js; the arrows themselves fly in projectiles.js).
+// The Ranger's numbers (Explosive Arrow and Hunting Hawk: ranger.js; Rain of Fire: ultimate.js; the talents that change them: talents.js; the
+// arrows themselves fly in projectiles.js).
 export const RANGER = {
   headshot: 2, headshotHero: 1.5,   // a hero's arrow in the head deals this much (into a hero's, the second): every class's bow, not only the Ranger's
   headZone: 0.17,                   // the top share of a body's height that is its head
@@ -83,15 +85,13 @@ export const RANGER = {
   pierceDraw: 0.97,                 // how full a draw that takes
   siege: 1.5,                       // against engineers, siege crews and the engines themselves
   arrowEvery: 4,                    // seconds for one arrow to come back to the quiver
-  // Power Shot: drawn for `draw` seconds (the hero turns but walks slowly), then loosed flat and fast (gravity times `grav`). It goes
-  // through every soldier in its line, each taking `dmg` full arrows, thrown back `knock` m/s and staggered `stagger` s; a hero is
-  // staggered `hero` s
-  power: { draw: 0.55, speed: 95, grav: 0.3, dmg: 1.6, knock: 9, stagger: 0.6, hero: 0.8 },
-  // Sniper Shot: hold R and the bow comes up to the eye; the view narrows to `fov` degrees over `zoomT` s and the arrow is drawn in `draw` s.
+  // Sniper Shot (the Ranger's capstone talent): with it ready, the right mouse button brings the bow up to the eye (the scope) in place of the
+  // plain zoom; the view narrows to `fov` degrees over `zoomT` s and the arrow is drawn in `draw` s.
   // The aim sways by `sway` radians at first and settles to `steady` of that over `settle` s; held past `tire` s it grows again (and is
   // loosed at `hold` s at the latest). The arrow flies at `speed` m/s with `grav` of an arrow's gravity, flat out to `range` m (the
-  // Fireball's: Projectiles.FIREBALL_RANGE), then falls as any arrow does; it deals `dmg` fully drawn arrows (a headshot multiplies it)
-  snipe: { fov: 11, zoomT: 0.3, draw: 0.6, sway: 0.006, steady: 0.25, settle: 1.2, tire: 5, hold: 9, speed: 150, grav: 0.1, range: FIREBALL_RANGE, dmg: RANGER_SNIPE_DMG },
+  // Fireball's: Projectiles.FIREBALL_RANGE), then falls as any arrow does; it deals `dmg` fully drawn arrows (a headshot multiplies it) and
+  // goes on through the first body into the next for `pierce` of it
+  snipe: { fov: 8, zoomT: 0.3, draw: 0.6, sway: 0.0045, steady: 0.25, settle: 0.8, tire: 5, hold: 9, speed: 150, grav: 0.1, range: FIREBALL_RANGE, dmg: RANGER_SNIPE_DMG, pierce: [0.7] },
 };
 
 // The Berserker's Leap: hold R for a circle where he will land (up to `range` m: as far as a Fireball flies), let go and he leaps there.
@@ -112,13 +112,13 @@ export const RUSH = {
 
 export const LEAP = { range: FIREBALL_RANGE, min: 3, up: 6, apexMin: 2, apexK: 0.055, apexMax: 7, grav: 11, dmg: 2.2, edge: 0.5, radius: 5, stagger: 1, hero: 0.7, knock: 10 };
 
-// Arrow Volley, the Ranger's old Q: a tier-4 talent (talents.js) puts it back in Power Shot's place.
-export const VOLLEY_Q = { id: 'volley', icon: '🏹', name: 'Arrow Volley', cd: 10, aimed: true, desc: 'Hold Q to put a circle on the ground, let go and a volley of arrows rains down on it, for free. Good against packed ranks and men behind walls.' };
+// Sniper Shot: the Ranger's capstone talent (talents.js) gives her a third shot, on the right mouse button rather than a key (slot 's').
+export const SNIPE = { id: 'snipe', icon: '🔭', name: 'Sniper Shot', cd: TUNE.ranger.sniper.cd, kind: 'Talent', desc: `With the bow out and the shot ready, hold the right mouse button to raise the bow to your eye: the view zooms in far and steadies after a moment. Click to loose one heavy arrow that flies flat and fast as far as a Mage's Fireball (${FIREBALL_RANGE} m), for ${RANGER_SNIPE_DMG}x a full arrow's damage (a headshot counts), on through the first body into one more. Let go to lower the bow.` };
 
-// The ability a hero has in a slot: the class's, or the one a talent puts in its place.
+// The ability a hero has in a slot: the class's ('s': the Ranger's Sniper Shot, for those who learnt it).
 export function abilityOf(p, slot) {
-  const swap = slot === 'q' && talentFx(p, 'volleyQ', false);
-  return swap ? VOLLEY_Q : classOf(p.classId)[slot];
+  if (slot === 's') return talentFx(p, 'sniper', false) ? SNIPE : null;
+  return classOf(p.classId)[slot];
 }
 
 export function classOf(id) { return isClassId(id) ? CLASSES[id] : CLASSES.knight; }
@@ -130,11 +130,6 @@ SOUNDS.headshot = (a, k) => {
   a.tone(2100, 0.09, 0.2 * k, 'square', 0.5);
   a.tone(3150, 0.32, 0.09 * k, 'sine', 0.92, 0.02);
   a.noise(0.05, 2600, 3, 0.35 * k, 'bandpass');
-};
-SOUNDS.powershot = (a, k) => {   // a heavy string and the arrow tearing the air
-  a.tone(150, 0.3, 0.3 * k, 'triangle', 0.5);
-  a.noise(0.35, 1800, 0.7, 0.3 * k, 'bandpass');
-  a.noise(0.2, 5000, 1, 0.12 * k, 'highpass', 0.05);
 };
 SOUNDS.snipe = (a, k) => {   // a heavy string, and a thin high whistle as the arrow goes far
   a.tone(130, 0.32, 0.32 * k, 'triangle', 0.45);
@@ -169,7 +164,7 @@ export const SWITCH = {
 
 // Timed effects on a hero. Each has a remaining time and a value (the damage multiplier for 'guard', the
 // damage still to absorb for 'ward', ...). Weaker effects never replace stronger ones.
-const LOWER_IS_STRONGER = new Set(['guard']);
+const LOWER_IS_STRONGER = new Set(['guard', 'slowed']);
 export class Buffs {
   constructor() { this.b = {}; }
   add(id, t, v = 1) {
@@ -204,10 +199,11 @@ export class Buffs {
 export const BUFF_NAMES = {
   guard: 'Guarded', steady: 'Unshakable', whirl: 'Whirlwind', lifesteal: 'Bloodthirst', rage: 'Fury', ghost: 'Evading',
   ward: 'Frost Ward', haste: 'Hastened', charging: 'Charging', reflect: 'Avenging', snap: 'Cold Snap',
-  leaping: 'Leaping',
+  leaping: 'Leaping', marked: 'Marked', slowed: 'Slowed',
 };
 
 const ZERO = new THREE.Vector3();
+const FIRE_ARROW = { fire: 1 };   // (a burning arrow of a Rain of Fire: projectiles.js)
 const UP = new THREE.Vector3(0, 1, 0);
 const SEE_THROUGH = new Set(['tree']);   // a trunk does not stop you putting a volley on the ground behind it
 const LAND_H = [0.3, 1, 1.7];   // (the heights a landing Berserker's body is tested at, and the ring round his middle)
@@ -228,14 +224,14 @@ const C = {
 export class Abilities {
   constructor(game) {
     this.g = game;
-    this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a volley coming down
-    this.rising = [];   // a record of each climbing arrow of a volley while it is in the air (the arrows are drawn by Projectiles.showArrow)
+    this.active = [];   // effects that carry on for a moment: whirlwind, lance charge, a rain of arrows coming down
     this.burning = [];  // foes a fireball set alight (Mage talent)
     this.trails = [];   // looks that follow a hero for a moment (the dust of a charge, a Berserker in the air)
     this.gfx = new GroundFX(game);   // the glyphs, shells and columns of light the abilities draw (see groundfx.js)
     this.col = new THREE.Color();
     this.tmpv = new THREE.Vector3();
     this.ultInit();   // (the Ultimates' pooled looks and their list: ultimate.js)
+    this.rangerInit();   // (the hawks and the markers: ranger.js)
   }
 
   // Use an ability. cam: the hero's eye position, dir: where they look, at: a point they chose on the ground (the
@@ -301,7 +297,7 @@ export class Abilities {
   updateFx(dt) {
     this.gfx.update(dt);
     if (this.ultFx.length) quietly(stepUltFx, this, dt);   // (the Ultimates' looks that play out over time, with the looks' own dice)
-    for (let i = this.rising.length - 1; i >= 0; i--) { this.rising[i].t += dt; if (this.rising[i].t > 0.9) this.rising.splice(i, 1); }
+    rangerFx(this);
     for (let i = this.trails.length - 1; i >= 0; i--) {
       const e = this.trails[i];
       e.t += dt;
@@ -627,27 +623,10 @@ export class Abilities {
   }
 
   // ---------- Ranger ----------
-  // Arrow Volley (a Ranger talent puts it in Power Shot's place): the volley falls on the circle the Ranger placed: arrows go up from the bow, and a moment later they come down
-  // out of the sky over about a second, most of them picking a foe standing inside the circle.
-  volley(p, cam, dir, at) {
-    const g = this.g, V = VOLLEY;
-    const c = at ? at.clone() : this.aimPoint(cam, dir, V.range, p.team).pos;
-    const dx = c.x - p.pos.x, dz = c.z - p.pos.z, dist = Math.hypot(dx, dz);
-    if (dist > V.range + 6) {   // a guest's request is held to the Ranger's reach
-      const k = (V.range + 6) / dist;
-      c.x = p.pos.x + dx * k; c.z = p.pos.z + dz * k;
-      c.y = g.physics.groundHeight(c.x, c.z, c.y + 2);
-    }
-    const f = flat(new THREE.Vector3(c.x - p.pos.x, 0, c.z - p.pos.z));
-    const shots = [];
-    for (let i = 0; i < V.arrows; i++) shots.push(V.delay + (i + Math.random()) * V.span / V.arrows);
-    const dmg = p.bowDmg * V.dmg * talentFx(p, 'volleyDmg', 1);   // (Heavy Draw, a Ranger talent)
-    this.active.push({ kind: 'rain', p, t: 0, dur: V.delay + V.span + 0.2, c, f, shots, n: 0, picked: new Map(), dmg, radius: V.radius, aimed: V.aimed });
-    this.emit('volley', cam, f, [c]);
-  }
-
-  // The arrows that are due: each one falls steeply from above and behind the target onto a foe in the circle (a
-  // little ahead of where it is walking), or onto a random spot in the circle.
+  // (Explosive Arrow and Hunting Hawk: ranger.js, mixed in below; Rain of Fire: ultimate.js)
+  // A rain of arrows (Rain of Fire) on the circle e.c: the arrows that are due each fall steeply from above and behind onto a foe in the
+  // circle (a little ahead of where it is walking: the one picked least so far, and no more than e.cap on any one), or onto a random spot.
+  // e.fire: burning arrows (projectiles.js).
   rain(e) {
     const g = this.g, V = VOLLEY;
     while (e.n < e.shots.length && e.t >= e.shots[e.n]) {
@@ -656,10 +635,11 @@ export class Abilities {
       const T = Math.hypot(V.fallBack, V.fallH) / ARROW_SPEED;   // every arrow takes about the same time to come down
       let L = null;
       if (Math.random() < e.aimed) {
-        // the foe the volley has picked least so far, so the arrows spread over everyone in the circle
         let o = null, least = Infinity;
         this.eachFoe(e.p.team, e.c.x, e.c.z, e.radius, (f) => {
-          const k = (e.picked.get(f) || 0) + Math.random() * 0.5;
+          const n = e.picked.get(f) || 0;
+          if (e.cap && n >= e.cap) return;
+          const k = n + Math.random() * 0.5;
           if (k < least) { least = k; o = f; }
         }, e.c.y, 12);
         if (o) {
@@ -676,7 +656,7 @@ export class Abilities {
       }
       from.set(L.x - e.f.x * V.fallBack, L.y + V.fallH, L.z - e.f.z * V.fallBack);
       const v = new THREE.Vector3((L.x - from.x) / T, (L.y - from.y) / T + 0.5 * G_ARROW * T, (L.z - from.z) / T);
-      g.projectiles.fireArrow(from, v, e.p.team, e.dmg, e.p, true, 'Arrow Volley');
+      g.projectiles.fireArrow(from, v, e.p.team, e.dmg, e.p, true, e.ability, e.fire ? FIRE_ARROW : null);
     }
   }
 
@@ -703,27 +683,14 @@ export class Abilities {
     return { pos: new THREE.Vector3(x, phys.groundHeight(x, z, from.y), z), far: true };
   }
 
-  // Power Shot: the hero has already held the full draw (Player.tickPower); this looses the arrow. It flies flat and fast and goes
-  // through every soldier in its line (Projectiles: opts.power).
-  powershot(p, cam, dir) {
-    const P = RANGER.power;
-    const from = cam.clone().addScaledVector(dir, 0.6);
-    from.y -= 0.08;
-    const dmg = p.bowDmg * P.dmg * talentFx(p, 'powerDmg', 1);
-    this.g.projectiles.fireArrow(from, dir.clone().multiplyScalar(P.speed), p.team, dmg, p, true, 'Power Shot', { power: 1 });
-    p.swingT = 0.6; p.attackDir = 'over';   // (the loose on the body the others see)
-    this.emit('power', from, dir);
-  }
-
-  // Sniper Shot: the hero has already held the bow to the eye (Player.tickScope); this looses the one heavy arrow, along where the
-  // scope was (the sway and all). It flies flat and fast out to the Fireball's reach (Projectiles: opts.snipe), then falls as any arrow.
+  // Sniper Shot (a talent, slot 's'): the hero has already held the bow to the eye (Player.tickScope); this looses the one heavy arrow,
+  // along where the scope was (the sway and all). It flies flat and fast out to the Fireball's reach (Projectiles: opts.snipe), then
+  // falls as any arrow, on through the first body into one more.
   snipe(p, cam, dir) {
     const S = RANGER.snipe;
     const from = cam.clone().addScaledVector(dir, 0.6);
     from.y -= 0.05;
-    const dmg = p.bowDmg * S.dmg * talentFx(p, 'snipeDmg', 1);
-    const pierce = talentFx(p, 'snipePierce', null);   // Deadeye (Ranger talent): on through the first body into one more
-    this.g.projectiles.fireArrow(from, dir.clone().multiplyScalar(S.speed), p.team, dmg, p, false, 'Sniper Shot', pierce ? { snipe: 1, pierce } : { snipe: 1 });
+    this.g.projectiles.fireArrow(from, dir.clone().multiplyScalar(S.speed), p.team, p.bowDmg * S.dmg, p, false, 'Sniper Shot', { snipe: 1, pierce: S.pierce });
     p.swingT = 0.6; p.attackDir = 'over';
     this.emit('snipe', from, dir);
   }
@@ -1042,37 +1009,12 @@ export class Abilities {
         snd('slam');
         break;
       }
-      case 'power': {
-        // the heavy arrow leaves the bow with a crack and a burst of air; its flight is drawn by Projectiles (every screen gets the arrow)
-        const f = this.tmpv.copy(dir).normalize();
-        fx.flash(at.clone().addScaledVector(f, 0.5), this.col.set(0xd8f0b8), 2.2, 0.15, 0.6);
-        fx.ring(at.clone().addScaledVector(f, 0.8), 0.25, this.col.set(0xe8f6d0), 14, { up: 0.3, size: 0.18, speed: 5 });
-        snd('powershot');
-        break;
-      }
       case 'snipe': {
         // a sharp crack and a puff of air at the bow; the arrow itself, with its long bright streak, is drawn by Projectiles on every screen
         const f = this.tmpv.copy(dir).normalize();
         fx.flash(at.clone().addScaledVector(f, 0.5), this.col.set(0xe8f6d0), 1.8, 0.12, 0.6);
         fx.ring(at.clone().addScaledVector(f, 0.7), 0.2, this.col.set(0xf0f8e0), 12, { up: 0.2, size: 0.15, speed: 6 });
         snd('snipe');
-        break;
-      }
-      case 'volley': {
-        // a flight of arrows leaves the bow and climbs out of sight; the circle stays marked on the ground until they land
-        snd('bow');
-        const c = targets && targets[0];
-        if (c) {
-          g.aimRing.flash(c, VOLLEY.radius * sz, 1.9);
-          gf.glyph('rune', c.x, c.y, c.z, VOLLEY.radius * sz * 1.02, 0x9af08a, 1.9, { arms: 5, team: house, strength: 1.3 });
-        }
-        fx.flash(at.clone().addScaledVector(dir, 0.6), this.col.set(0xcfe8b0), 1.1, 0.15, 0.5);
-        for (let i = 0; i < 9; i++) {
-          const from = at.clone().addScaledVector(dir, 0.6);
-          const vel = new THREE.Vector3(dir.x * 9 + (Math.random() - 0.5) * 5, 44 + Math.random() * 8, dir.z * 9 + (Math.random() - 0.5) * 5);
-          g.projectiles.showArrow(from, vel, 0.9, who ? who.team : -1);
-          this.rising.push({ t: 0 });   // (a record of each climbing arrow for as long as it is in the air)
-        }
         break;
       }
       case 'ward': {
@@ -1148,14 +1090,14 @@ export class Abilities {
         break;
       }
       default:
-        if (ULT_SHOW[id]) ULT_SHOW[id]({ A: this, g, at, dir: flat(dir), targets, sz, who, house, silent, snd });   // (the Ultimates' looks: ultimate.js)
+        { const look = ULT_SHOW[id] || RANGER_SHOW[id]; if (look) look({ A: this, g, at, dir: flat(dir), targets, sz, who, house, silent, snd }); }   // (the Ultimates' looks: ultimate.js; the Ranger's: ranger.js)
         break;
     }
   }
 }
 
-// the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js
-Object.assign(Abilities.prototype, ULT_METHODS);
+// the Ultimates' methods (Meteor, Sanctuary, the stand-ins) are Abilities' own: see the top of ultimate.js; and the Ranger's (ranger.js)
+Object.assign(Abilities.prototype, ULT_METHODS, RANGER_METHODS);
 
 function stepUltFx(A, dt) {
   for (let i = A.ultFx.length - 1; i >= 0; i--) if (A.ultFx[i].step(A, A.ultFx[i], dt) === false) A.ultFx.splice(i, 1);

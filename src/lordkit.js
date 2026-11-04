@@ -7,7 +7,7 @@
 // The class: the lord's style (rivals.js: the Reckless is a Berserker, the Patient a Knight, ...), else his house's; War Mode's generals draw
 // one. He wears its look (models.js HERO_DESC) with a lord's long cape. No Cavalier: a lord has no horse.
 // The difficulty: on Easy a lord looks for an opening less often, waits longer once an ability is ready, aims worse and wants a bigger knot of
-// foes before a run, a leap or a Power Shot; on Hard he is quick to use them. (The lord's own health and damage are the AI's as before.)
+// foes before a run, a leap or an Explosive Arrow; on Hard he is quick to use them. (The lord's own health and damage are the AI's as before.)
 // A lord is a commander, not a raid boss (BITE): his abilities do less to soldiers than a hero's do (a hero takes them in full), heal less of
 // his own wounds, come round more slowly than a hero's, and more slowly again while nobody threatens his castle; Easy gentler, Hard nearly a
 // hero's. (A Fireball or Smite wants two foes in its blast, or a hero: a lone soldier is left to his men.)
@@ -16,7 +16,8 @@
 // Online: the host runs the kit; a guest's copy only shows it (the class, the bow out and drawn: `net` in the lord's snapshot entry, netsync.js).
 import * as THREE from 'three';
 import { PLAYER, UNIT_TYPES, WORLD } from './config.js';
-import { Buffs, CLASS_IDS, RANGER, RUSH, LEAP, VOLLEY_Q, abilityOf, classOf, isClassId } from './classes.js';
+import { Buffs, CLASS_IDS, RANGER, RUSH, LEAP, abilityOf, classOf, isClassId } from './classes.js';
+import { XARROW, xarrowAim, xarrowMark, hawkSpot } from './ranger.js';
 import { talentFx, talentBlock, talentsOf, treeMods } from './talents.js';
 import { talentPointsFor, MAX_LEVEL } from './heroes.js';
 import { TALENT_PREFS } from './herobot.js';
@@ -48,6 +49,7 @@ const SCAN = 50;        // how far he looks around him (metres)
 const RANGER_LORD = { range: 34, cd: 1.5 };   // a Ranger lord's ordinary shots: reach and seconds between two (a lord's damage each)
 const LIFT_MAX = 12;    // (metres above the ground the snapshot can tell: a leap's arc)
 const V1 = new THREE.Vector3(), V2 = new THREE.Vector3(), V3 = new THREE.Vector3();
+const AIM = { yaw: 0, pitch: 0 }, SLOTS = ['q', 'r', 's'];   // (an Explosive Arrow's aim, worked out in place; the slots whose recharge runs down)
 const lerp = (a, b, t) => a + (b - a) * t;
 const by3 = (v, t) => (t < 0.5 ? lerp(v[0], v[1], t * 2) : lerp(v[1], v[2], t * 2 - 1));   // (easy, normal, hard at skill 0, 0.5, 1)
 const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.8;
@@ -88,7 +90,7 @@ export class LordKit {
     this.g = u.game;
     this.view = !!opts.view;
     this.bowOn = false;
-    this.draw = null;       // a Power Shot or a Sniper Shot being drawn: { slot, t, full, o }
+    this.draw = null;       // an Explosive Arrow or a Sniper Shot being drawn: { slot, t, full, o, ground }
     this.bowT = 0;          // the bow goes back on the shoulder when this runs out
     this.stats = { q: 0, r: 0, u: 0, looks: 0 };
     this.bite = 1;          // (what his abilities do to soldiers, of a hero's: set below by the difficulty)
@@ -98,7 +100,7 @@ export class LordKit {
     if (this.view) return;
     const g = this.g;
     // what the abilities ask of a hero (classes.js Abilities): cooldowns, timed effects, talents and the class numbers
-    u.abilCd = { q: 0, r: 0 };   // (set below, once his class numbers are known)
+    u.abilCd = { q: 0, r: 0, s: 0 };   // (set below, once his class numbers are known; 's': the Ranger's Sniper Shot, a talent)
     u.ult = 0;                   // his Ultimate's charge (ultimate.js): it fills as a hero's does, and he lets it go when it counts (ultimate)
     u.buffs = new Buffs();
     u.talents = {};
@@ -123,7 +125,7 @@ export class LordKit {
     this.need = this.skill < 0.34 ? 1 : 0;   // (Easy wants one more foe in a knot)
     this.next = 1 + Math.random();
     this.round = g.round;
-    this.readyAt = { q: -1, r: -1 };
+    this.readyAt = { q: -1, r: -1, s: -1 };
     this.lastHp = u.hp; this.recent = 0;
     this.foes = []; this.dist = []; this.friends = [];
     this.n = { c3: 0, c5: 0, c8: 0, c12: 0, heroes8: 0, near: 1e9, heroNear: 1e9 };
@@ -168,7 +170,7 @@ export class LordKit {
   // a bow being drawn): the soldier's own thinking, walking and swinging wait.
   update(dt) {
     const u = this.u, g = this.g;
-    for (const s of ['q', 'r']) {
+    for (const s of SLOTS) {
       if (u.abilCd[s] > 0) { u.abilCd[s] = Math.max(0, u.abilCd[s] - dt); this.readyAt[s] = -1; }
       else if (this.readyAt[s] < 0) this.readyAt[s] = g.time + this.sk.slack * Math.random();
     }
@@ -262,8 +264,8 @@ export class LordKit {
     return hit;
   }
 
-  // The Ranger's draw: the bow comes up and the string back, held on the mark, then loosed (Power Shot by itself when drawn, the Sniper Shot
-  // once the aim has settled).
+  // The Ranger's draw: the bow comes up and the string back, held on the mark, then loosed (the Explosive Arrow by itself when drawn, the
+  // Sniper Shot once the aim has settled).
   drawing(dt) {
     const u = this.u, D = this.draw, o = D.o;
     if (!o || !o.alive || u.staggerT > 0 || !this.armed()) { this.draw = null; this.bowT = 0.4; u.swingT = -1; u.attackTimer = Math.max(u.attackTimer, 0.3); this.body(dt, false); return; }
@@ -278,8 +280,8 @@ export class LordKit {
     u.vel.multiplyScalar(0.5);
     if (D.t >= D.full) {
       this.draw = null;
-      const speed = D.slot === 'r' ? RANGER.snipe.speed : RANGER.power.speed;
-      this.aimAt(o, speed, D.slot === 'r' ? 0.25 : 1, V2);   // (the Sniper Shot: steadied, as through a scope)
+      if (D.slot === 's') this.aimAt(o, RANGER.snipe.speed, 0.25, V2);   // (the Sniper Shot: steadied, as through a scope)
+      else this.aimXarrow(o, D.ground, V2);
       if (this.use(D.slot, V2, null)) this.stats[D.slot]++;
       this.bowT = 1.1;
       u.attackTimer = Math.max(u.attackTimer, 0.8);
@@ -403,8 +405,8 @@ export class LordKit {
   // Q and R, class by class, as the hero bots use them (herobot.js planAbilities): on groups and rival heroes, the defence when it is needed.
   think() {
     const u = this.u, n = this.n;
-    const q = this.ready('q'), r = this.ready('r'), ult = u.ult >= 1;
-    if (!q && !r && !ult) return;
+    const q = this.ready('q'), r = this.ready('r'), ult = u.ult >= 1, s = u.classId === 'ranger' && !!abilityOf(u, 's') && this.ready('s');
+    if (!q && !r && !ult && !s) return;
     this.stats.looks++;
     if (Math.random() > this.sk.see) return;
     this.scan();
@@ -426,8 +428,11 @@ export class LordKit {
         if (q && hpf > 0.2 && (n.c3 >= 2 + need || n.heroNear < 3.5 || (foe && gap < 3 && foe.maxHp > 200))) this.cast('q', this.look());
         break;
       case 'ranger':
-        if (r && !heavy && n.c8 === 0 && this.sniperShot()) break;
-        if (q) { if (abilityOf(u, 'q').id === VOLLEY_Q.id) this.volley(3 + need); else this.powerShot(3 + need); }
+        // the Sniper Shot (a talent) at a far rival hero; the hawk on a hero or a knot (marked, they take more from his men's arrows too);
+        // the Explosive Arrow at a hero, an engine or a knot
+        if (s && !heavy && n.c8 === 0 && this.sniperShot()) break;
+        if (r && this.hawk(5 + need)) break;
+        if (q) this.explosive(2 + need);
         break;
       case 'mage':
         if (r && ((n.c8 >= 1 && (hpf < 0.85 || n.c8 >= 2)) || (heavy && hpf < 0.7))) { this.cast('r', this.look()); break; }
@@ -506,7 +511,7 @@ export class LordKit {
     return this.cast('r', this.look(), plan.to.clone());
   }
 
-  // Sniper Shot: a far rival hero above all, else a giant, a boss or an engine's crew, 22 m off and more, with a clear line
+  // Sniper Shot (a talent): a far rival hero above all, else a giant, a boss or an engine's crew, 22 m off and more, with a clear line
   sniperShot() {
     const u = this.u, g = this.g, S = RANGER.snipe, me = u.pos;
     let best = null, bs = 0;
@@ -521,50 +526,37 @@ export class LordKit {
     for (const f of g.factions) if (f && f.hero && f.hero.kit) consider(f.hero);
     if (!best) g.grid.query(me.x, me.z, S.range, (o) => { if (!o.isPlayer && (o.isGiant || o.isCrew || o.crewOf || (o.def && o.def.boss))) consider(o); });
     if (!best) return false;
-    return this.beginDraw('r', best, S.draw + S.settle * (1.1 + (1 - this.skill) * 0.6));
+    return this.beginDraw('s', best, S.draw + S.settle * (1.1 + (1 - this.skill) * 0.6));
   }
 
-  // Power Shot: along the line with the most foes in it (a rival hero is worth three)
-  powerShot(need) {
-    const u = this.u, ex = u.pos.x, ez = u.pos.z;
-    let best = null, bs = 0;
-    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
-      const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d < 4 || d > 60) continue;
-      const dx = o.pos.x - ex, dz = o.pos.z - ez, l = Math.hypot(dx, dz) || 1;
-      let s = 0;
-      for (const f of this.foes) {
-        if (f.isSiege) continue;
-        const fx = f.pos.x - ex, fz = f.pos.z - ez, along = (fx * dx + fz * dz) / l;
-        if (along < 2 || along > 70 || Math.abs((fx * dz - fz * dx) / l) > 1) continue;
-        s += f.isPlayer || f.kit ? 3 : 1;
-      }
-      if (s > bs && s >= need && this.clearShot(o)) { bs = s; best = o; }
-    }
-    if (!best) return false;
-    return this.beginDraw('q', best, RANGER.power.draw * talentFx(u, 'powerDraw', 1));
+  // Explosive Arrow: at a rival hero, an engine or a knot of foes with a clear line (xarrowMark: ranger.js), drawn and loosed by drawing()
+  explosive(need) {
+    const m = xarrowMark(this.foes, this.dist, need, (o) => this.clearShot(o));
+    return !!m && this.beginDraw('q', m.o, XARROW.draw, m.ground);
   }
 
-  // Arrow Volley (a Ranger talent puts it in Power Shot's place): on the densest knot of foes in reach
-  volley(need) {
-    const u = this.u;
-    let best = null, bs = 0;
-    for (let i = 0, step = this.step(); i < this.foes.length; i += step) {
-      const o = this.foes[i], d = this.dist[i];
-      if (o.isSiege || d < 9 || d > 55) continue;
-      const s = this.countAt(o.pos.x, o.pos.z, 6);
-      if (s > bs) { bs = s; best = o; }
-    }
-    if (!best || bs < need) return false;
-    const at = new THREE.Vector3(best.pos.x, this.g.physics.groundHeight(best.pos.x, best.pos.z, best.pos.y + 3), best.pos.z);
-    this.bow(true);
-    return this.cast('q', this.aimAt(best, 1e3, 1, V2), at);
+  // Hunting Hawk: on a rival hero or a knot of foes (hawkSpot: ranger.js)
+  hawk(need) {
+    const u = this.u, at = hawkSpot(this.g, u.pos, this.foes, this.dist, need, new THREE.Vector3());
+    if (!at) return false;
+    u.yaw = Math.atan2(at.x - u.pos.x, at.z - u.pos.z);
+    return this.cast('r', this.look(), at);
   }
 
-  beginDraw(slot, o, full) {
+  // the direction that lofts an Explosive Arrow onto o (his chest, or the ground at his feet), off by his skill
+  aimXarrow(o, ground, out) {
+    const u = this.u, e = u.eyePos(V1), t = ground ? V3.set(o.pos.x, o.pos.y + 0.1, o.pos.z) : o.chest(V3);
+    const a = xarrowAim(e, t, o.vel, AIM);
+    if (!a) return this.aimAt(o, XARROW.speed, 1, out);
+    const err = this.sk.aim, yaw = a.yaw + gauss() * err, pitch = a.pitch + gauss() * err * 0.6;
+    u.yaw = yaw;
+    return out.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+  }
+
+  beginDraw(slot, o, full, ground = false) {
     const u = this.u;
     if (u.abilCd[slot] > 0) return false;
-    this.draw = { slot, t: 0, full, o };
+    this.draw = { slot, t: 0, full, o, ground };
     this.bow(true);
     u.swingT = 0; u.struck = true;
     this.g.audio.play('bow', u.pos);

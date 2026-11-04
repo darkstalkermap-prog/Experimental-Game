@@ -10,6 +10,7 @@ import { F, R } from './fxtex.js';
 import { RANGER } from './classes.js';
 import { talentFx } from './talents.js';
 import { archerAt, eachArcher } from './towerarchers.js';
+import { quietly } from './modelkit.js';
 
 export const ARROW_SPEED = 52;
 export const G_ARROW = 9.8;
@@ -21,6 +22,8 @@ const STUCK_FADE = 2;      // ...and the last of them it shrinks away
 
 const WOOD_KINDS = new Set(['gate', 'tree', 'post']);
 const _c = new THREE.Color();
+const FIRE_STREAK = new THREE.Color(1, 0.62, 0.28);   // (the streak behind an Explosive Arrow or a burning arrow)
+const trail = (fx, p) => fx.fireTrail(p), flare = (fx, p) => fx.blaze(p, 0.7);
 
 function coloured(g, hex) {
   g = g.index ? g.toNonIndexed() : g;
@@ -159,26 +162,28 @@ export class Projectiles {
 
   // big: a volley arrow, drawn chunkier so a falling flight of them can be seen, and it kicks up a puff where it lands.
   // opts (the Ranger's arrows): pierce: the shares of the damage for the bodies after the first that it goes on into (Piercing
-  // Shots); power: a Power Shot, flying flat through everyone in its line, throwing soldiers back and staggering heroes; snipe: a
-  // Sniper Shot, flat and very fast out to the Fireball's reach (then it falls as any arrow does), with a long bright streak.
+  // Shots); snipe: a Sniper Shot, flat and very fast out to the Fireball's reach (then it falls as any arrow does), with a long bright
+  // streak; boom: an Explosive Arrow, glowing as it flies, that bursts for this much where it strikes (Abilities.xboom: ranger.js), and
+  // grav, its own share of an arrow's fall; fire: a burning arrow of a Rain of Fire, that trails flame and flares where it lands.
   fireArrow(from, vel, team, dmg, owner, big = false, ability = '', opts = null) {
-    const power = !!(opts && opts.power), snipe = !!(opts && opts.snipe), S = RANGER.snipe;
+    const snipe = !!(opts && opts.snipe), S = RANGER.snipe, boom = (opts && opts.boom) || 0, fire = !!(opts && opts.fire);
     const flatT = snipe ? S.range / S.speed : 0;   // (how long a Sniper Shot flies flat)
     const e = { kind: 'arrow', pos: from.clone(), vel: vel.clone(), team, dmg, owner, mesh: null, life: snipe ? flatT + 2.5 : 6, big, tr: -1, trb: 0, ability,
-      grav: power ? RANGER.power.grav : snipe ? S.grav : 1, power, flatT, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null };
+      grav: snipe ? S.grav : (opts && opts.grav) || 1, flatT, pierce: opts && opts.pierce ? opts.pierce : null, through: 0, hitSet: null, boom, fire, fl: 0 };
     const fx = this.game.fx;
     if (snipe) fx.tracer(from, vel, flatT, this.tracerColor(team), 0.55, 0.06, 0.035, G_ARROW * S.grav);   // (long and bright, while it flies flat)
+    else if (boom || fire) fx.tracer(from, vel, 6, FIRE_STREAK, 0.55, boom ? 0.1 : 0.14, 0.09, G_ARROW * e.grav);   // (a streak of fire)
     else fx.tracer(from, vel, 6, this.tracerColor(team), big ? 0.4 : 0.36, big ? 0.12 : 0.07, big ? 0.1 : 0.075, G_ARROW * e.grav);
     e.tr = fx._to; e.trb = fx._tb;
     this.list.push(e);
   }
 
   // a climbing arrow that is only for show (the volley's first half): flies on its own and is gone after `life` seconds
-  showArrow(from, vel, life, team = -1) {
+  showArrow(from, vel, life, team = -1, fire = false) {   // (fire: a burning arrow of a Rain of Fire, trailing flame)
     if (this.vis.length >= 120) return;
     const fx = this.game.fx;
-    fx.tracer(from, vel, life, this.tracerColor(team), 0.3, 0.08, 0.1);
-    this.vis.push({ pos: from.clone(), vel: vel.clone(), t: life });
+    fx.tracer(from, vel, life, fire ? FIRE_STREAK : this.tracerColor(team), 0.3, 0.08, 0.1);
+    this.vis.push({ pos: from.clone(), vel: vel.clone(), t: life, fire });
   }
 
   // Boulder that lands on `to` after `time` seconds.
@@ -231,20 +236,21 @@ export class Projectiles {
         // stone first: nobody can be hit through a wall or battlement
         if (p.kind === 'arrow') {
           const wall = phys.pointHit(next.x, next.y, next.z, p.team);
-          if (wall) { this.stick(i, p, next, wall.kind); done = true; break; }
+          if (wall) { this.burst(p, p.pos); this.stick(i, p, next, wall.kind); done = true; break; }   // (an Explosive Arrow bursts on the near side)
         }
         // characters
         if (p.kind === 'arrow') {
           const hit = this.hitCharacter(next, p.team, 0.15, p.hitSet);
           if (hit) {
             this.arrowHit(p, hit, next);
-            // a Power Shot goes on through everyone; a Ranger's full draw through up to two more (Piercing Shots)
-            if (p.power || (p.pierce && p.through < p.pierce.length)) {
+            // a Ranger's full draw goes on through up to two more (Piercing Shots); an Explosive Arrow bursts in the first
+            if (!p.boom && p.pierce && p.through < p.pierce.length) {
               (p.hitSet || (p.hitSet = new Set())).add(hit);
               p.through++;
               p.pos.copy(next);
               continue;
             }
+            this.burst(p, next);
             this.kill(i, p);
             done = true;
             break;
@@ -252,7 +258,8 @@ export class Projectiles {
           const siege = g.siegeAt(next, p.team);
           if (siege) {
             const k = p.owner && p.owner.mods && p.owner.mods.marksman ? RANGER.siege : 1;   // (the Ranger: siege hunter)
-            g.damage(siege, p.dmg * 0.3 * k * (p.power ? 2 : 1), p.owner, { ranged: true, ability: p.ability });
+            g.damage(siege, p.dmg * 0.3 * k, p.owner, { ranged: true, ability: p.ability });
+            this.burst(p, p.pos);
             this.stick(i, p, next, 'wood'); done = true; break;
           }
         }
@@ -260,7 +267,7 @@ export class Projectiles {
         const col = phys.pointHit(next.x, next.y, next.z, p.team);
         if (col) {
           if (p.kind === 'rock') this.rockImpact(p, next, col);
-          else this.stick(i, p, next, col.kind);
+          else { this.burst(p, p.pos); this.stick(i, p, next, col.kind); }
           if (p.kind === 'rock') this.kill(i, p);
           done = true;
           break;
@@ -268,7 +275,7 @@ export class Projectiles {
         // ground
         if (next.y <= phys.terrainHeight(next.x, next.z)) {
           if (p.kind === 'rock') { this.rockImpact(p, next, null); this.kill(i, p); }
-          else this.stick(i, p, next, 'earth');
+          else { this.burst(p, next); this.stick(i, p, next, 'earth'); }
           done = true;
           break;
         }
@@ -286,6 +293,7 @@ export class Projectiles {
         if (p.trail > 1.0) p.trail = 0;
       }
       if (p.kind === 'fireball') { g.fx.fireTrail(p.pos); g.fx.fireTrail(p.pos); }
+      else if (p.boom || (p.fire && (p.fl ^= 1))) quietly(trail, g.fx, p.pos);   // (an Explosive Arrow glows and smokes as it flies; a burning arrow every other frame: the looks' own dice)
     }
     this.draw(dt);
   }
@@ -310,6 +318,7 @@ export class Projectiles {
       if (v.t <= 0) { this.vis.splice(i, 1); continue; }
       v.vel.y -= G_ARROW * dt;
       v.pos.addScaledVector(v.vel, dt);
+      if (v.fire) quietly(trail, this.game.fx, v.pos);
       if (n >= MAX_FLY) continue;
       tmp.copy(v.vel).normalize();
       q.setFromUnitVectors(this.fwd, tmp);
@@ -348,27 +357,27 @@ export class Projectiles {
   }
 
   // An arrow strikes a body. Any hero's arrow (every class can take up the bow) does double in the head (less in a hero's); the
-  // Ranger's do more into siege crews (and Eagle Eye adds to her headshots). A Power Shot throws a soldier back and staggers a hero.
+  // Ranger's do more into siege crews (and Eagle Eye adds to her headshots).
   arrowHit(p, hit, at) {
     const g = this.game, o = p.owner, marks = !!(o && o.mods && o.mods.marksman);
     g.audio.play('arrowHit', at);
     if (!g.simulating) return;   // (a guest's copy of the arrow only shows the flight)
     let dmg = p.dmg;
-    if (p.through > 0 && !p.power) dmg *= p.pierce[p.through - 1];
-    const head = !!(o && o.isHero) && p.ability !== 'Arrow Volley' && at.y > hit.pos.y + hit.height * (1 - RANGER.headZone);
+    if (p.through > 0) dmg *= p.pierce[p.through - 1];
+    const head = !!(o && o.isHero) && !p.big && at.y > hit.pos.y + hit.height * (1 - RANGER.headZone);   // (not an arrow of a rain out of the sky)
     if (head) {
       const big = hit.isPlayer || hit.isHero || hit.isGiant || (hit.def && hit.def.boss);
       dmg *= (big ? RANGER.headshotHero : RANGER.headshot) + talentFx(o, big ? 'headshotHero' : 'headshot', 0);
     }
     if (marks && (hit.isCrew || hit.crewOf)) dmg *= RANGER.siege;
-    g.damage(hit, dmg, o, { ranged: true, dir: p.vel, ability: p.ability, head, power: p.power });
-    if (!p.power || !hit.alive) return;
-    const P = RANGER.power, l = Math.hypot(p.vel.x, p.vel.z) || 1;
-    if (hit.isPlayer) hit.stagger(P.hero);
-    else {
-      if (hit.stagger) hit.stagger(P.stagger, o);
-      if (hit.vel && !hit.isGiant) { hit.vel.x += (p.vel.x / l) * P.knock; hit.vel.z += (p.vel.z / l) * P.knock; }
-    }
+    g.damage(hit, dmg, o, { ranged: true, dir: p.vel, ability: p.ability, head });
+  }
+
+  // where an arrow ends (a body, an engine, stone, the ground): an Explosive Arrow bursts there (where the battle is run: the guests see the
+  // blast it sends), and a burning arrow flares up
+  burst(p, at) {
+    if (p.fire) quietly(flare, this.game.fx, at);
+    if (p.boom && this.game.simulating) this.game.abilities.xboom(p, at);
   }
 
   // the first one the point is in, in the grid's order (its fine cells walked here, not through grid.query with a callback: this is asked for

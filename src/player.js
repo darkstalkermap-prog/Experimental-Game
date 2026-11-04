@@ -1,6 +1,6 @@
 // The hero: first-person movement, sword & shield, bow, class abilities, potions, and the view-model.
 import * as THREE from 'three';
-import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, VOLLEY, ULT } from './config.js';
+import { PLAYER, WORLD, TEAM_COLORS, PLAYER_TEAM, ENGINE_TURN, BODY, ULT } from './config.js';
 import { STEP } from './physics.js';
 import { clamp } from './noise.js';
 import { buildHorse, poseHorse, buildHeroBody, poseSoldier, rigSetBow, SADDLE_Y } from './models.js';
@@ -8,6 +8,7 @@ import { navigate } from './nav.js';
 import { SWING, SWING_CYCLE, DIRS, DIR_IDX } from './combat.js';
 import { allied } from './teams.js';
 import { CLASSES, classOf, Buffs, SWITCH, RANGER, LEAP, RUSH, abilityOf } from './classes.js';
+import { XARROW } from './ranger.js';
 import { heroMods, talentPointsFor, MAX_LEVEL, XP_FOR_LEVEL, LEVEL } from './heroes.js';
 import { talentFx } from './talents.js';
 import { HeroBot } from './herobot.js';
@@ -71,9 +72,9 @@ export class Player {
     this.climbTop = false;     // ...and it is the top of the battlements (a mantle from the wall walk), not the wall walk
     this.hintT = 0;
     this.vmDown = 0;           // how far the weapons are lowered (while climbing)
-    this.aiming = null;        // holding a key to place an ability on the ground (the Ranger's volley, the Berserker's Leap): { slot, t, at, far }
-    this.power = null;         // the Ranger's Power Shot being drawn: { t } (it looses itself when the draw is full: tickPower)
-    this.scope = null;         // the Ranger's Sniper Shot: the bow at the eye while R is held, { t } (tickScope)
+    this.aiming = null;        // holding a key to place an ability on the ground (the Ranger's hawk, the Berserker's Leap): { slot, t, at, far }
+    this.power = null;         // the Ranger's Explosive Arrow being drawn: { t } (it looses itself when the draw is full: tickPower)
+    this.scope = null;         // the Ranger's Sniper Shot (a talent): the bow at the eye while the right button is held, { t } (tickScope)
     this.swayX = 0; this.swayY = 0;   // ... and how far the scope has swayed off where the hero looks (radians: yaw, pitch)
     this.leap = null;          // the Berserker in the air: the plan of his Leap (Abilities.leapPlan) and its clock t
     this.arrowT = 0;           // the Ranger's quiver filling again (RANGER.arrowEvery)
@@ -92,7 +93,7 @@ export class Player {
     this.talents = {};         // { talentId: true }: what has been learnt this life of the class
     this.talentRev = 0;        // bumped whenever the talents change, so the cached mods are rebuilt
     this.buffs = new Buffs();
-    this.abilCd = { q: 0, r: 0 };
+    this.abilCd = { q: 0, r: 0, s: 0 };
     this.ult = 0;              // the Ultimate's charge, 0..1 (ultimate.js): kept through a fall, lost with a change of class
     this.ultSentAt = -99;      // (a guest: when it last sent its Ultimate, so the snapshot's old charge does not light the icon again)
     this.classAt = -99;        // when this hero last changed class
@@ -344,7 +345,7 @@ export class Player {
   get meleeDmg() { return this.sword.dmg * this.dmgMult; }
   get bowDmg() { return this.bow.dmg * this.mods.bow; }
   // walking pace: the class, a rallying cry, and being caught mid-whirlwind
-  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
+  get speedMult() { return walkMul() * this.mods.speed * (this.buffs.get('haste') || 1) * (this.buffs.get('slowed') || 1) * (this.buffs.has('whirl') ? 1 - 0.3 * talentFx(this, 'whirlSlow', 1) : 1); }
   // seconds an ability takes to recharge: the class passive and the talents shorten it
   abilityCd(slot) { const d = abilityOf(this, slot); return d.cd * (this.mods.cd || 1) * talentFx(this, 'cd_' + d.id, 1); }
   // is the ability in this slot not ready yet (Q and R: the cooldown; the Ultimate: the charge)?
@@ -359,7 +360,7 @@ export class Player {
     this.clearTalents();
     this.maxHp = Math.round(PLAYER.hp * this.mods.hp);
     this.hp = this.maxHp;
-    this.abilCd = { q: 0, r: 0 };
+    this.abilCd = { q: 0, r: 0, s: 0 };
     this.ult = 0;
     this.buffs.clear();
     if (this.cls.mods.horse && !this.hasHorse) this.giveHorse();
@@ -397,7 +398,7 @@ export class Player {
     this.classId = id;
     this.bwave = null;
     this.clearTalents();
-    this.abilCd = { q: SWITCH.ready, r: SWITCH.ready };
+    this.abilCd = { q: SWITCH.ready, r: SWITCH.ready, s: SWITCH.ready };
     this.ult = 0;   // (a new class starts its Ultimate from nothing)
     this.dash = null; this.leap = null;
     this.castFlash = 0;
@@ -477,13 +478,13 @@ export class Player {
     this.alive = true;
     this.swingT = -1;
     this.buffs.clear();
-    this.abilCd = { q: 0, r: 0 };
+    this.abilCd = { q: 0, r: 0, s: 0 };
     this.dash = null; this.leap = null;
     this.drive = null;
     this.climb = null; this.climbing = false; this.climbCd = 0;
     this.duck = 0; this.ducking = false; this.height = BODY.height; this.eye = BODY.eye;
     this.cancelAim(); this.endScope();
-    // whatever the fall cut short ends with it: a stagger, a swing or a Power Shot being drawn (it would loose itself at the keep), a
+    // whatever the fall cut short ends with it: a stagger, a swing or an Explosive Arrow being drawn (it would loose itself at the keep), a
     // guard; and a guest's run (its end must not be reported to the host after the rise, where it would end the next run at once)
     this.staggerT = 0; this.atk = null; this.blocking = false; this.drawT = 0; this.power = null; this.zoomed = false; this.castFlash = 0;
     this.rushEnd = false; this.wasRush = false;
@@ -674,8 +675,8 @@ export class Player {
     if (!warKeys && input.hit('Digit2')) this.setWeapon('bow');
     if (m.wheel || (warKeys && input.hit('KeyX'))) this.setWeapon(this.weapon === 'sword' ? 'bow' : 'sword');
     if (input.hit('KeyH')) this.drinkPotion();
-    // Q and R: most abilities go off at once; the Ranger's volley and the Berserker's Leap are aimed with a circle (hold the key, let
-    // go to loose it), and the Ranger's Sniper Shot is a scope held on R (let go, or click, to loose)
+    // Q and R: most abilities go off at once; the Ranger's Hunting Hawk and the Berserker's Leap are aimed with a circle (hold the key,
+    // let go to loose it). (The Ranger's Sniper Shot, a talent, is the scope on the right button: see the bow below.)
     if (input.hit('KeyQ')) {
       this.endScope();
       if (this.dash && this.dash.rush) { this.dash = null; if (this.mounted) this.rideSpeed = Math.min(this.rideSpeed, HORSE.walk); }   // (Q again: the Knight bashes where he is, the Cavalier reins in: Abilities.rushOver)
@@ -685,9 +686,9 @@ export class Player {
     if (input.hit('KeyR')) {
       const r = abilityOf(this, 'r');
       this.cancelAim();
-      if (r.aimed) this.beginAim('r'); else if (r.id === 'snipe') this.beginScope(); else this.useAbility('r', input);
+      if (r.aimed) this.beginAim('r'); else this.useAbility('r', input);
     }
-    // Z: the Ultimate (ultimate.js), once it is charged; an aimed one is placed with a circle as the volley is
+    // Z: the Ultimate (ultimate.js), once it is charged; an aimed one is placed with a circle as the hawk is
     if (input.hit(ULT.key)) {
       const u = abilityOf(this, 'u');
       if (this.aiming && this.aiming.slot === 'u') this.cancelAim();
@@ -742,11 +743,13 @@ export class Player {
       else this.swordInput(dt, m);
       this.zoomed = false;
     } else if (this.power) {
-      this.blocking = false;   // (Power Shot: the bow is held at full draw until it looses itself, tickPower)
+      this.blocking = false;   // (Explosive Arrow: the bow is held at full draw until it looses itself, tickPower)
     } else if (this.scope) {
       this.blocking = false; this.zoomed = false;   // (Sniper Shot: the bow is at the eye, drawn and loosed by tickScope)
     } else {
       this.blocking = false;
+      // the Sniper Shot (a Ranger talent), when it is ready: the right button raises the bow to the eye instead of the plain zoom
+      if (m.rightPressed && !this.aiming && abilityOf(this, 's') && this.abilCd.s <= 0) this.beginScope();
       if (m.left && this.arrows > 0 && !this.aiming) this.drawT += dt;
       if (m.leftReleased && this.drawT > 0) {
         if (this.drawT > 0.15 && this.arrows > 0) this.shoot();
@@ -757,7 +760,7 @@ export class Player {
     }
     this.shake = Math.max(0, this.shake - dt);
     this.tickPower(dt);
-    if (this.scope) this.tickScope(dt, input.down('KeyR'), m.leftPressed);
+    if (this.scope) this.tickScope(dt, m.right, m.leftPressed);
 
     // regen when out of combat (the host decides this in online games)
     if (g.mode !== 'client' && g.time - this.lastHurt > 8 && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + dt * 4 * (this.mods.regen || 1));
@@ -789,7 +792,7 @@ export class Player {
       // the horse has momentum and turns toward where you look
       let target = 0;
       sprint = input.down('ShiftLeft') && this.stamina > 5;
-      const haste = this.buffs.get('haste') || 1;
+      const haste = (this.buffs.get('haste') || 1) * (this.buffs.get('slowed') || 1);   // (the Ranger's hawk slows a horse too)
       if (input.down('KeyW')) target = (sprint ? HORSE.gallop : HORSE.walk) * haste;
       if (input.down('KeyS')) target = -HORSE.back;
       const dv = target - this.rideSpeed;
@@ -1043,15 +1046,15 @@ export class Player {
     }
   }
 
-  // ---------- abilities placed on the ground: the Ranger's volley, the Berserker's Leap ----------
+  // ---------- abilities placed on the ground: the Ranger's Hunting Hawk, the Berserker's Leap, the aimed Ultimates ----------
   // Hold the key: a circle on the ground follows the crosshair (for the Leap, where he would really land: short of a wall in the way,
   // and in the warning colour when the leap is cut short). Let go and it goes off there.
   beginAim(slot) {
     const g = this.game, def = abilityOf(this, slot);
     if (!this.alive || this.drive || this.climb || this.aiming || this.leap) return;
     if (this.staggerT > 0 || this.slotWaits(slot) || (def.id === 'leap' && this.mounted)) { g.audio.play('deny'); if (slot === 'u' && this.isLocal) this.notify('Your Ultimate is still charging: fight to fill it.'); return; }
-    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0, volley: def.id === 'volley' };
-    if (def.id === 'volley') this.setWeapon('bow');
+    this.aiming = { slot, t: 0, at: new THREE.Vector3(), far: false, plan: null, re: 0, volley: def.id === 'rainfire' };   // (the bow up: viewmodel.js)
+    if (def.id === 'rainfire') this.setWeapon('bow');
   }
 
   updateAim(dt, input) {
@@ -1076,15 +1079,15 @@ export class Player {
       }
       if (a.plan) g.aimRing.show(a.at, LEAP.radius * talentFx(this, 'leapRadius', 1), a.far, a.t); else g.aimRing.hide();
     } else {
-      // the volley and the aimed Ultimates (their own reach and circle: def.range, def.radius); a long reach is looked along 20 times a
+      // the Hunting Hawk and the aimed Ultimates (their own reach and circle: def.range, def.radius); a long reach is looked along 20 times a
       // second, not every frame
       if ((a.re -= dt) <= 0) {
         a.re = def.range > 80 ? 0.05 : 0;
-        const r = g.abilities.aimPoint(eyePos, this.lookDir(), def.range || VOLLEY.range, this.team);
+        const r = g.abilities.aimPoint(eyePos, this.lookDir(), def.range, this.team);
         a.at.copy(r.pos);
         a.far = r.far;
       }
-      g.aimRing.show(a.at, def.radius || VOLLEY.radius, a.far, a.t);
+      g.aimRing.show(a.at, def.radius, a.far, a.t);
     }
     const key = a.slot === 'q' ? 'KeyQ' : a.slot === 'u' ? ULT.key : 'KeyR';
     if (input.release(key)) {
@@ -1140,16 +1143,17 @@ export class Player {
     if (this.isLocal) this.shake = Math.max(this.shake, 0.4);
   }
 
-  // ---------- the Ranger's Sniper Shot ----------
-  // Hold R: the bow comes up to the eye and the view narrows (the scope); the string is drawn as it comes up. The aim sways, settles
-  // after a moment and, held too long, starts to waver again. Let go of R (or click) once it is drawn and the arrow is loosed where the
-  // scope points; let go before that and nothing is spent. The hero's own screen runs it (a bot's, where the battle is: HeroBot.act).
-  get scopeFov() { const t = talentFx(this, 'scope', null); return RANGER.snipe.fov * (t ? t.fov : 1); }
+  // ---------- the Ranger's Sniper Shot (a talent: slot 's') ----------
+  // Hold the right button: the bow comes up to the eye and the view narrows (the scope); the string is drawn as it comes up. The aim sways,
+  // settles after a moment and, held too long, starts to waver again. Click once it is drawn and the arrow is loosed where the scope points
+  // (held to the end, it looses itself); let go of the button and the bow comes down, nothing spent. The hero's own screen runs it (a bot's,
+  // where the battle is: HeroBot.act).
+  get scopeFov() { return RANGER.snipe.fov; }
 
   beginScope() {
     const g = this.game;
     if (!this.alive || this.drive || this.climb || this.scope || this.power) return;
-    if (this.staggerT > 0 || this.abilCd.r > 0 || this.mounted) {
+    if (this.staggerT > 0 || this.abilCd.s > 0 || this.mounted || !abilityOf(this, 's')) {
       g.audio.play('deny');
       if (this.mounted && this.isLocal) this.notify('Get down from the horse to use the scope.');
       return;
@@ -1159,28 +1163,28 @@ export class Player {
     g.audio.play('bow', this.isBot ? this.pos : null);
   }
 
-  // held: R is still down; fire: a click to loose now
+  // held: the button is still down; fire: a click to loose now
   tickScope(dt, held, fire) {
     const sc = this.scope;
     if (!sc) return;
-    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.mounted || this.abilCd.r > 0 || this.weapon !== 'bow' || abilityOf(this, 'r').id !== 'snipe') { this.endScope(); return; }
-    const S = RANGER.snipe, tal = talentFx(this, 'scope', null);
+    if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.mounted || this.abilCd.s > 0 || this.weapon !== 'bow' || !abilityOf(this, 's')) { this.endScope(); return; }
+    const S = RANGER.snipe;
     sc.t += dt;
     this.drawT = this.drawTime * Math.min(1, sc.t / S.draw);
     // the sway: two slow waves on each axis (never quite a loop), shrinking as the aim settles and growing again when held too long
-    const settle = S.settle * (tal ? tal.settle : 1), t = sc.t;
+    const settle = S.settle, t = sc.t;
     let k = t < settle ? 1 - (1 - S.steady) * (t / settle) : S.steady * (1 + Math.max(0, t - S.tire) * 0.6);
-    k *= S.sway * (tal ? tal.sway : 1);
+    k *= S.sway;
     const w = this.game.time;
     this.swayX = k * (Math.sin(w * 1.3) + 0.5 * Math.sin(w * 2.9 + 1)) / 1.5;
     this.swayY = k * (Math.sin(w * 1.7 + 0.6) + 0.4 * Math.sin(w * 3.3)) / 1.4;
     const ready = t >= S.draw;
-    if (ready && (!held || fire || t >= S.hold)) {
+    if (ready && (fire || t >= S.hold)) {
       const dir = this.scopeDir();
       this.endScope();
       if (this.vm) this.vm.recoil = 1;
-      this.castAbility('r', dir);
-    } else if (!held) this.endScope();   // let go too soon: the arrow is eased back and nothing is spent
+      this.castAbility('s', dir);
+    } else if (!held) this.endScope();   // let go: the arrow is eased back and nothing is spent
   }
 
   // where the scope points: the hero's aim and the sway
@@ -1208,6 +1212,7 @@ export class Player {
   tickAbilities(dt) {
     this.abilCd.q = Math.max(0, this.abilCd.q - dt);
     this.abilCd.r = Math.max(0, this.abilCd.r - dt);
+    this.abilCd.s = Math.max(0, (this.abilCd.s || 0) - dt);
     this.buffs.update(dt);
     // the Ranger's quiver fills again, an arrow at a time (where the battle is run: a guest's count comes with the snapshot)
     if (this.mods.marksman && this.game.mode !== 'client' && this.alive) {
@@ -1216,7 +1221,7 @@ export class Player {
     }
   }
 
-  // Power Shot: Q starts a full, held draw (useAbility); when it is drawn the arrow looses itself along the hero's aim. A stagger, a
+  // Explosive Arrow: Q starts a short, held draw (useAbility); when it is drawn the arrow looses itself along the hero's aim. A stagger, a
   // climb or a fall drops it, and nothing is spent. The hero's own screen draws it (a bot's runs where the battle is: HeroBot.act).
   tickPower(dt) {
     const pw = this.power;
@@ -1224,7 +1229,7 @@ export class Player {
     if (!this.alive || this.drive || this.climb || this.staggerT > 0 || this.mounted) { this.power = null; this.drawT = 0; return; }
     if (this.weapon !== 'bow') this.setWeapon('bow');
     pw.t += dt;
-    const P = RANGER.power, full = P.draw * talentFx(this, 'powerDraw', 1);
+    const full = XARROW.draw;
     this.drawT = this.drawTime * Math.min(1, pw.t / (full * 0.75));   // (the string comes back in three quarters of the time, and is held)
     if (pw.t < full) return;
     this.power = null;
@@ -1263,7 +1268,7 @@ export class Player {
         at = plan.to;
         break;
       }
-      case 'powershot':
+      case 'xarrow':
         // the draw first (tickPower looses it); not on horseback or halfway up a wall
         if (this.mounted || this.climb) { g.audio.play('deny'); return; }
         this.cancelAim();
