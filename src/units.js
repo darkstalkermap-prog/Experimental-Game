@@ -153,6 +153,9 @@ export class Unit {
     this.bought = -0;                       // (War Mode: when it was bought, warmode.js)
     this.interp = null; this.kitNet = 0;    // (a guest's copy: netsync.js)
     this.fling = null;                      // (flung by an Unstoppable Berserker: berserker.js)
+    // (the round-13 kits' marks on a soldier: a Knight's Challenge, a Ranger's hawk, a Cleric's Sanctuary; set at a fight's first cast, they
+    // gave War Mode's soldiers a second shape mid-battle: r8/S5/optstat.js)
+    this.taunt = null; this.tauntUntil = -1; this.markUntil = -1; this.markK = 1; this.sanctUntil = -0; this.sparedAt = -9;
     this.fixedTier = false; this.noXp = false; this.practiceKey = null;   // (the practice yard: practice.js)
     this.summon = null;     // (a knight the Cavalier's horn called: his ride and his charge, cavalier.js; no part of the army)
 
