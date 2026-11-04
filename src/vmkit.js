@@ -149,34 +149,46 @@ export function swordGeometry(o) {
   const sides = sidesFor(o.detail);
   const gilt = ls >= 2;
   const metal = PAINT.steel, trimP = ls >= 1 ? PAINT.gold : PAINT.steelDull;
-  // grip (wrapped leather) and pommel
-  const gp = [[0.0095, -0.098, 'h'], [0.0128, -0.092]];
-  for (let i = 0; i <= 8; i++) gp.push([0.0128 + (i % 2 ? 0.0012 : 0), -0.092 + i * 0.0235]);
+  // grip: leather over a swelling core, bound in twisted wire (iron, gilt by level 1) between the turns, a ferrule at each end
+  const wire = ls >= 1 ? PAINT.goldDark : PAINT.steelDull;
+  const gp = [[0.0095, -0.098, 'h'], [0.0124, -0.092]];
+  const turns = o.detail > 0 ? 14 : 8;
+  for (let i = 0; i <= turns; i++) { const y = -0.092 + i * (0.188 / turns), sw = 0.0012 * Math.sin((i / turns) * Math.PI); gp.push([0.0124 + sw + (i % 2 ? 0.0011 : 0), y]); }
   gp.push([0.0105, 0.1, 'h']);
-  m.lathe([[0, -0.098], ...gp, [0, 0.1]], sides + 2, { mat: PAINT.leather });
+  m.lathe([[0, -0.098], ...gp, [0, 0.1]], sides + 2, { mat: (t, k) => (k >= 3 && k <= turns + 3 && (k - 3) % 2 === 0 ? wire : PAINT.leather) });
+  for (const y of [-0.094, 0.096]) { m.at(0, y, 0); m.cyl(0.0142, 0.0142, -0.004, 0.004, sides + 2, trimP); m.pop(); }
+  // the pommel: a wheel with a raised boss on each face, and the tang peened over a little button under it
   m.at(0, -0.113, 0); m.lathe([[0, -0.016], [0.021, -0.014, 'h'], [0.032, -0.006], [0.034, 0.003], [0.03, 0.011], [0.016, 0.016, 'h'], [0.011, 0.02], [0, 0.021]], sides + 4, { mat: trimP }); m.pop();
+  m.at(0, -0.131, 0); m.lathe([[0, -0.006], [0.006, -0.005, 'h'], [0.0075, 0.0], [0.006, 0.003, 'h'], [0, 0.003]], sides, { mat: metal }); m.pop();
   if (ls >= 2) { m.at(0, -0.113, 0.0); m.sphere(0.009, 8, paint(0xb02030, 0.2, 0.2, 0, 0.35), [1, 1, 1]); m.at(0, 0, 0); m.pop(); m.pop(); }
-  // crossguard
-  const gw = 0.115 + 0.012 * ls;
+  // crossguard: square-section quillons that thicken to round terminals, on a quillon block riveted through the tang
+  const gw = 0.115 + 0.012 * ls, guardP = ls >= 2 ? PAINT.gold : metal;
   m.at(0, 0.108, 0);
-  m.tube([[-gw, -0.006, 0], [-gw * 0.55, 0.001, 0], [0, 0.003, 0], [gw * 0.55, 0.001, 0], [gw, -0.006, 0]], [0.0085, 0.0095, 0.011, 0.0095, 0.0085], sides, { mat: ls >= 2 ? PAINT.gold : metal, cap: 'round', up: [0, 0, 1], scale: [1, 0.8] });
+  m.tube([[-gw, -0.006, 0], [-gw * 0.55, 0.001, 0], [0, 0.003, 0], [gw * 0.55, 0.001, 0], [gw, -0.006, 0]], [0.0085, 0.0078, 0.011, 0.0078, 0.0085], o.detail > 0 ? 6 : 4, { mat: guardP, cap: 'round', up: [0, 0, 1], scale: [1, 0.8], phase: Math.PI / 4 });
   for (const sx of [-1, 1]) { m.at(sx * gw, -0.006, 0); m.sphere(0.0125, sides + 1, trimP); m.pop(); }
-  m.chamfer(0.03, 0.03, 0.03, 0.006, ls >= 1 ? PAINT.gold : metal);
+  m.chamfer(0.034, 0.03, 0.032, 0.007, ls >= 1 ? PAINT.gold : metal);
+  m.at(0, 0.017, 0); m.chamfer(0.026, 0.006, 0.022, 0.003, ls >= 1 ? PAINT.goldDark : PAINT.steelDull); m.pop();   // (the langet over the blade's shoulder)
+  if (o.detail > 0) for (const sz of [-1, 1]) { m.at(0, 0, sz * 0.016); m.sphere(0.0042, 6, ls >= 1 ? PAINT.steelBright : PAINT.iron, [1, 1, 0.5]); m.pop(); }
   m.pop();
   // blade: hexagonal section with a fuller, tapering to a point
   const y0 = 0.126, w0 = 0.027 + 0.0045 * ls, w1 = 0.0095, t0 = 0.0058, t1 = 0.0028;
-  const steps = 16;
+  // (a short ricasso first: a squared, unsharpened shoulder of darker steel ground off in a short step, then the bevelled edges and the
+  // fuller begin)
+  const steps = 18, ric = 0.045 / len, sh = 0.008 / len;
   const fr = [];
-  for (let i = 0; i <= steps; i++) { const t = i / steps; fr.push({ p: new THREE.Vector3(0, y0 + t * len, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, -1) }); }
-  const edge = paint(0xeef1f6, 1, 0.2, PAT.steel), face = PAINT.steel;
+  for (let i = 0; i <= steps; i++) { const t = i === 0 ? 0 : i === 1 ? ric : i === 2 ? ric + sh : ric + sh + ((i - 2) / (steps - 2)) * (1 - ric - sh); fr.push({ p: new THREE.Vector3(0, y0 + t * len, 0), u: new THREE.Vector3(1, 0, 0), v: new THREE.Vector3(0, 0, -1) }); }
+  const edge = paint(0xeef1f6, 1, 0.16, PAT.steel), face = PAINT.steel, flat = tone(PAINT.steelDull, 0.92);
   const inlay = ls >= 2 ? PAINT.gold : ls >= 1 ? paint(0x2d3039, 0.6, 0.5) : PAINT.steelDull;
-  m.sweep(fr, (i, t) => {
+  const rings = fr.map((f, i) => {
+    const t = (f.p.y - y0) / len;
     const taper = lerp(w0, w1, Math.pow(t, 0.9)), hw = taper * (t > 0.9 ? 1 - smoothstep(0.9, 1, t) * 0.97 : 1);
     const ht = lerp(t0, t1, t) * (t > 0.93 ? 1 - smoothstep(0.93, 1, t) : 1);
-    const g = 0.0023 * smoothstep(0.02, 0.07, t) * (1 - smoothstep(0.72, 0.86, t));
-    return [[hw, 0], [hw * 0.45, ht], [hw * 0.15, ht], [hw * 0.1, ht - g], [-hw * 0.1, ht - g], [-hw * 0.15, ht], [-hw * 0.45, ht],
-      [-hw, 0], [-hw * 0.45, -ht], [-hw * 0.15, -ht], [-hw * 0.1, -(ht - g)], [hw * 0.1, -(ht - g)], [hw * 0.15, -ht], [hw * 0.45, -ht]];
-  }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 2 || j === 3 || j === 4 || j === 9 || j === 10 || j === 11 ? inlay : j === 0 || j === 7 || j === 13 || j === 6 ? edge : face) });
+    const g = i < 2 ? 0 : 0.0026 * smoothstep(ric, ric + 0.04, t) * (1 - smoothstep(0.7, 0.84, t));
+    const e = i < 2 ? 0.82 : 1, sq = i < 2 ? 0.8 : 0.45;   // (the ricasso: blunt, its edge squared off)
+    return [[hw * e, 0], [hw * sq, ht], [hw * 0.15, ht], [hw * 0.1, ht - g], [-hw * 0.1, ht - g], [-hw * 0.15, ht], [-hw * sq, ht],
+      [-hw * e, 0], [-hw * sq, -ht], [-hw * 0.15, -ht], [-hw * 0.1, -(ht - g)], [hw * 0.1, -(ht - g)], [hw * 0.15, -ht], [hw * sq, -ht]];
+  });
+  m.sweep(fr, (i) => rings[i], { smooth: false, capStart: true, mat: (t, i, j) => (i < 2 ? flat : j === 2 || j === 3 || j === 4 || j === 9 || j === 10 || j === 11 ? inlay : j === 0 || j === 7 || j === 13 || j === 6 ? edge : face) });
   return { geo: m.build(), tip: new THREE.Vector3(0, y0 + len, 0), base: new THREE.Vector3(0, y0 + len - 0.17, 0), guardY: 0.108 };
 }
 

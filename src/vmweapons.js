@@ -39,12 +39,15 @@ function saberGeometry(o) {
   m.at(0, 0.106, 0); m.chamfer(0.026, 0.026, 0.026, 0.005, gold); m.pop();
   const n = 14, y0 = 0.118, bend = 0.085, pts = [];
   for (let i = 0; i <= n; i++) { const t = i / n; pts.push([-bend * t * t, y0 + t * (len * 0.98), 0]); }
-  const edge = paint(0xeef1f6, 1, 0.2, PAT.steel);
+  m.at(0, 0.098, 0); m.cyl(0.0145, 0.0145, -0.005, 0.004, sides + 2, gold); m.pop();   // the ferrule
+  const edge = paint(0xeef1f6, 1, 0.16, PAT.steel), fuller = ls >= 2 ? PAINT.goldDark : PAINT.steelDull;
+  // the section: a bevelled true edge, a broad fuller on each face, a thick rounded back
   m.sweep(framesAlong(pts, [0, 0, 1]), (i, t) => {
     const hw = lerp(0.0185 + 0.002 * ls, 0.0125, t) * (t > 0.88 ? 1 - smoothstep(0.88, 1, t) * 0.96 : 1);
-    const ht = lerp(0.0033, 0.0022, t) * (t > 0.92 ? 1 - smoothstep(0.92, 1, t) : 1);
-    return [[0, hw], [-ht, hw * 0.55], [-ht * 1.3, -hw * 0.7], [0, -hw], [ht * 1.3, -hw * 0.7], [ht, hw * 0.55]];
-  }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 0 || j === 5 ? edge : metal) });
+    const ht = lerp(0.0036, 0.0022, t) * (t > 0.92 ? 1 - smoothstep(0.92, 1, t) : 1);
+    const f = 1 - 0.3 * smoothstep(0.03, 0.1, t) * (1 - smoothstep(0.62, 0.78, t));
+    return [[0, hw], [-ht, hw * 0.55], [-ht * f, hw * 0.05], [-ht * 1.3, -hw * 0.6], [-ht * 0.9, -hw * 0.95], [ht * 0.9, -hw * 0.95], [ht * 1.3, -hw * 0.6], [ht * f, hw * 0.05], [ht, hw * 0.55]];
+  }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 0 || j === 8 ? edge : j === 1 || j === 2 || j === 6 || j === 7 ? (t > 0.05 && t < 0.72 ? fuller : metal) : metal) });
   const tipP = pts[n];
   return { geo: m.build(), tip: V(tipP[0], tipP[1], 0), base: V(pts[12][0], pts[12][1], 0) };
 }
@@ -57,38 +60,78 @@ function shortSwordGeometry(o) {
   m.tube([[-0.05, 0.088, 0], [-0.025, 0.101, 0], [0.025, 0.101, 0], [0.05, 0.088, 0]], 0.0075, sides, { mat: ls >= 1 ? PAINT.goldDark : PAINT.iron, cap: 'round', up: [0, 0, 1] });
   const y0 = 0.108, fr = [], steps = 12;
   for (let i = 0; i <= steps; i++) fr.push({ p: V(0, y0 + (i / steps) * L, 0), u: V(1, 0, 0), v: V(0, 0, -1) });
-  const edge = paint(0xeef1f6, 1, 0.22, PAT.steel);
+  m.at(0, -0.124, 0); m.lathe([[0, -0.004], [0.006, -0.004, 'h'], [0.0075, 0.002], [0, 0.004]], sides, { mat: PAINT.steelDull }); m.pop();   // the peened tang
+  m.at(0, 0.101, 0); m.chamfer(0.026, 0.02, 0.022, 0.005, ls >= 1 ? PAINT.goldDark : PAINT.iron); m.pop();   // the guard's block
+  const edge = paint(0xeef1f6, 1, 0.18, PAT.steel), groove = ls >= 2 ? PAINT.goldDark : PAINT.steelDull;
+  // a leaf blade: bevelled edges, a short fuller down the middle of each face from the guard
   m.sweep(fr, (i, t) => {
     const hw = (0.015 + 0.0125 * Math.sin(Math.PI * Math.pow(t, 0.62))) * (t > 0.9 ? 1 - smoothstep(0.9, 1, t) * 0.96 : 1);
     const ht = lerp(0.0052, 0.0028, t) * (t > 0.94 ? 1 - smoothstep(0.94, 1, t) : 1);
-    return [[hw, 0], [hw * 0.4, ht], [-hw * 0.4, ht], [-hw, 0], [-hw * 0.4, -ht], [hw * 0.4, -ht]];
-  }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 0 || j === 3 || j === 5 || j === 2 ? edge : PAINT.steel) });
+    const g = 0.0018 * smoothstep(0.0, 0.06, t) * (1 - smoothstep(0.45, 0.6, t));
+    return [[hw, 0], [hw * 0.4, ht], [0, ht - g], [-hw * 0.4, ht], [-hw, 0], [-hw * 0.4, -ht], [0, -(ht - g)], [hw * 0.4, -ht]];
+  }, { smooth: false, capStart: true, mat: (t, i, j) => (j === 0 || j === 3 || j === 4 || j === 7 ? edge : t < 0.55 ? groove : PAINT.steel) });
   return { geo: m.build(), tip: V(0, y0 + L, 0), base: V(0, y0 + L - 0.15, 0) };
 }
 
-// ---------------------------------------------------------------- berserker's bearded axe (a greataxe by level 2)
+// ---------------------------------------------------------------- berserker's war axe: a long two-hand haft, a bearded head (double by level 2)
+// The haft is bound in leather where both hands go and the head is held on by iron langets riveted down the wood; the bit is dark forged
+// iron with a polished, unevenly honed edge, flaring into a beard that hooks back toward the haft. Level 1 adds a longer back spike,
+// level 2 a second, smaller bit behind and gilded bands.
 function axeGeometry(o) {
   const ls = o.ls, m = new Mesher(), sides = sidesFor(o.detail);
-  const top = 0.46 + 0.1 * ls, butt = -0.17;
-  m.tube([[0, butt, 0], [0.002, -0.05, 0], [0, 0.2, 0.004], [0, top, 0]], [0.0155, 0.0165, 0.0155, 0.0145], sides, { mat: (t) => (t < 0.3 ? PAINT.leather : PAINT.wood), cap: 'round' });
-  m.at(0, butt + 0.01, 0); m.cyl(0.0185, 0.0185, -0.025, 0.03, sides, PAINT.iron); m.pop();
-  for (const y of [0.06, 0.2, top - 0.1]) { m.at(0, y, 0); m.cyl(0.018, 0.018, 0, 0.012, sides, PAINT.iron); m.pop(); }
-  const hy = top - 0.075, Lh = 0.15 + 0.035 * ls, H = 0.17 + 0.05 * ls;
-  m.at(0, hy, 0); m.cyl(0.024, 0.024, -0.07, 0.07, sides, PAINT.iron); m.pop();
-  const fr = [], N = 8;
-  for (let i = 0; i <= N; i++) fr.push({ p: V(-0.02 - (i / N) * Lh, hy, 0), u: V(0, 1, 0), v: V(0, 0, -1) });
-  const bright = paint(0xdfe4ea, 1, 0.24, PAT.steel), K = 10;
-  m.sweep(fr, (i, t) => {
-    const hh = lerp(0.05, H / 2, smoothstep(0, 0.8, t)), c = -hh * 0.5 * smoothstep(0.1, 1, t), th = lerp(0.03, 0.0016, Math.pow(t, 0.75));
-    const pts = [];
-    for (let k = 0; k < K; k++) {
-      const a = (k / K) * Math.PI * 2, cy = Math.cos(a), sy = Math.sin(a);
-      pts.push([c + hh * Math.sign(cy) * Math.pow(Math.abs(cy), 0.7), th * Math.sign(sy) * Math.pow(Math.abs(sy), 0.8), 0.05 * t * t * (1 - cy * cy)]);
-    }
-    return pts;
-  }, { smooth: true, capEnd: true, mat: (t) => (t > 0.82 ? bright : PAINT.iron) });
-  m.tube([[0.02, hy, 0], [0.07, hy, 0], [0.11 + 0.02 * ls, hy + 0.01, 0]], [0.021, 0.014, 0.003], sides, { mat: PAINT.iron, cap: 'round' });
-  return { geo: m.build(), tip: V(-0.02 - Lh, hy - H * 0.12, 0), base: V(-0.02 - Lh * 0.5, hy, 0), reachTop: top };
+  const fine = o.detail > 0;
+  const top = 0.6 + 0.07 * ls, butt = -0.24;
+  const band = ls >= 2 ? PAINT.gold : PAINT.iron, dark = paint(0x55585e, 0.4, 0.66, PAT.steel);
+  const ash = paint(0x7a5634, 0, 0.66, PAT.wood);
+  // the haft: ash, a little oval and swelling toward the head, as a hafted axe is
+  m.tube([[0, butt, 0], [0.002, -0.06, 0], [0, 0.22, 0.003], [0, top, 0]], [0.0165, 0.0172, 0.0168, 0.0158], sides + 1, { mat: ash, cap: 'round', scale: [1.06, 0.94] });
+  // grip wraps: the main hand at the origin, the other near the butt; a raised welt at each end of a wrap
+  wrappedGrip(m, -0.105, 0.11, 0.0196, PAINT.leather, sides, fine ? 13 : 7);
+  wrappedGrip(m, butt + 0.035, butt + 0.12, 0.0194, PAINT.leatherLight, sides, fine ? 7 : 5);
+  for (const y of [-0.105, 0.11, butt + 0.035, butt + 0.12]) { m.at(0, y, 0); m.cyl(0.0215, 0.0215, -0.0035, 0.0035, sides, band); m.pop(); }
+  // an iron butt cap, flared
+  m.at(0, butt, 0);
+  m.lathe([[0, -0.016], [0.012, -0.015, 'h'], [0.021, -0.006], [0.021, 0.004, 'h'], [0.0182, 0.022], [0, 0.022]], sides + 2, { mat: PAINT.iron });
+  m.pop();
+  // the head's socket, and the langets down the haft (two flat straps on the faces, riveted through)
+  const hy = top - 0.085, H = 0.235 + 0.055 * ls, Lh = 0.19 + 0.035 * ls;
+  m.at(0, hy, 0); m.chamfer(0.05, 0.085 + 0.01 * ls, 0.044, 0.006, dark); m.pop();
+  for (const y of [hy - 0.046, hy + 0.044]) { m.at(0, y, 0); m.chamfer(0.054, 0.007, 0.048, 0.003, band); m.pop(); }
+  const lanL = 0.15 + 0.02 * ls;
+  for (const s of [-1, 1]) {
+    m.at(0, hy - 0.045 - lanL / 2, s * 0.0165); m.chamfer(0.011, lanL, 0.004, 0.0012, PAINT.iron); m.pop();
+    if (fine) for (let k = 0; k < 3; k++) { m.at(0, hy - 0.07 - k * (lanL - 0.04) / 2, s * 0.0185); m.sphere(0.0032, 6, PAINT.steelDull, [1, 1, 0.6]); m.pop(); }
+  }
+  // a bit swept out along x from the socket; each section runs from the top edge down to the beard, which drops and hooks back
+  const bit = (dirX, len, h, beard) => {
+    const fr = [], N = fine ? 11 : 7, K = fine ? 14 : 10;
+    for (let i = 0; i <= N; i++) fr.push({ p: V(dirX * (0.022 + (i / N) * len), hy, 0), u: V(0, 1, 0), v: V(0, 0, dirX) });
+    const edge = paint(0xe4e8ee, 1, 0.24, PAT.steel), hone = paint(0x8d939b, 0.75, 0.45, PAT.steel);
+    m.sweep(fr, (i, t) => {
+      const topY = lerp(0.03, h * 0.4, smoothstep(0.15, 1, t) * 0.8 + t * 0.2);
+      const botY = -lerp(0.03, h * 0.6, Math.pow(smoothstep(0.08, 1, t), 1.4)) * (beard ? 1 : 0.8);
+      const mid = (topY + botY) / 2, half = (topY - botY) / 2;
+      // thickness: a thick cheek by the socket thinning to the bevel, then the bevel down to the edge
+      const th = t < 0.8 ? lerp(0.024, 0.0075, Math.pow(t / 0.8, 0.8)) : lerp(0.0075, 0.0012, (t - 0.8) / 0.2);
+      const pts = [];
+      for (let k = 0; k < K; k++) {
+        const a = (k / K) * Math.PI * 2, cy = Math.cos(a), sy = Math.sin(a);
+        // the crescent: the middle of the edge bellies out; the beard's point hooks back toward the haft
+        const out = 0.055 * t * t * (1 - cy * cy) - (beard && cy < 0 ? 0.05 * Math.pow(t, 3) * cy * cy : 0);
+        pts.push([mid + half * Math.sign(cy) * Math.pow(Math.abs(cy), 0.7), th * Math.sign(sy) * Math.pow(Math.abs(sy), 0.8), out]);
+      }
+      return pts;
+    }, { smooth: true, capEnd: true, mat: (t, i, j) => {
+      const wave = 0.025 * Math.sin(j * 2.3 + dirX);   // (the hone line wanders: an edge worked by hand, and worn)
+      return t > 0.92 + wave * 0.6 ? edge : t > 0.84 + wave ? hone : ls >= 2 && t > 0.1 && t < 0.15 ? PAINT.goldDark : dark;
+    } });
+  };
+  bit(-1, Lh, H, true);
+  if (ls >= 2) bit(1, Lh * 0.62, H * 0.7, false);
+  else m.tube([[0.024, hy, 0], [0.07, hy, 0], [0.105 + 0.03 * ls, hy + 0.008, 0]], [0.019, 0.013, 0.003], sides, { mat: ls >= 1 ? PAINT.steelDull : PAINT.iron, cap: 'round', up: [0, 0, 1], scale: [1, 0.7] });   // the poll: a spike behind
+  // the haft's end through the socket, capped
+  m.at(0, hy + 0.05, 0); m.lathe([[0, 0], [0.016, 0, 'h'], [0.013, 0.012], [0, 0.018]], sides, { mat: band }); m.pop();
+  return { geo: m.build(), tip: V(-0.02 - Lh, hy - H * 0.15, 0), base: V(-0.02 - Lh * 0.5, hy, 0), reachTop: top };
 }
 
 // ---------------------------------------------------------------- mage's staff with a glowing crystal
@@ -97,6 +140,7 @@ function staffGeometry(o) {
   const top = 0.92 + 0.12 * ls, bottom = -0.34;
   m.tube([[0, bottom, 0], [0.002, 0.2, 0], [0, top - 0.04, 0]], [0.0135, 0.0165, 0.0125], sides, { mat: (t) => (t > 0.3 && t < 0.52 ? PAINT.leather : PAINT.woodDark), cap: 'round' });
   m.at(0, bottom + 0.02, 0); m.cyl(0.0165, 0.0165, -0.03, 0.04, sides, PAINT.iron); m.pop();
+  wrappedGrip(m, -0.1, 0.1, 0.0172, PAINT.leatherLight, sides, o.detail > 0 ? 11 : 7);   // (where the hand holds it, a wrap of cord)
   const rune = paint(0xffcf70, 0.6, 0.3, 0, 0.7);
   for (const y of [0.34, 0.62, top - 0.14]) { m.at(0, y, 0); m.cyl(0.0185, 0.0185, 0, 0.007, sides, rune); m.pop(); }
   const crystalY = top + 0.045;
@@ -115,12 +159,21 @@ function maceGeometry(o) {
   const ls = o.ls, m = new Mesher(), sides = sidesFor(o.detail);
   const top = 0.36 + 0.05 * ls, gold = ls >= 2 ? PAINT.gold : PAINT.goldDark, head = ls >= 1 ? PAINT.steel : PAINT.iron;
   m.tube([[0, -0.16, 0], [0, 0.1, 0], [0, top, 0]], [0.0155, 0.0145, 0.0135], sides, { mat: (t) => (t < 0.42 ? PAINT.leather : PAINT.wood), cap: 'round' });
+  wrappedGrip(m, -0.14, 0.08, 0.0162, PAINT.leather, sides, o.detail > 0 ? 11 : 7);
+  m.at(0, 0.085, 0); m.cyl(0.0175, 0.0165, -0.006, 0.006, sides, gold); m.pop();
   m.at(0, -0.16, 0); m.sphere(0.022, sides, gold); m.pop();
   const hy = top + 0.055;
   m.at(0, hy, 0); m.sphere(0.04, sides + 3, head);
+  // eight flanges, each a wedge whose outline rises straight to a point a little above the middle, its edge filed bright
+  const fl = [], TS = o.detail > 0 ? [0, 0.2, 0.42, 0.62, 0.76, 0.89, 1] : [0, 0.32, 0.62, 1], bright = paint(0xe2e6ec, 1, 0.2, PAT.steel);
+  for (const t of TS) fl.push({ p: V(0.028, -0.052 + t * 0.108, 0), u: V(1, 0, 0), v: V(0, 0, -1) });
   for (let k = 0; k < 8; k++) {
     m.at(0, 0, 0, 0, (k / 8) * Math.PI * 2, 0);
-    m.at(0.052, 0.0, 0); m.chamfer(0.05, 0.1, 0.0085, 0.002, head); m.pop();
+    m.sweep(fl, (i) => {
+      const t = TS[i];
+      const r = t < 0.62 ? lerp(0.012, 0.05, t / 0.62) : lerp(0.05, 0.016, (t - 0.62) / 0.38), th = 0.0055 * (1 - 0.4 * t);
+      return [[0, -th], [r * 0.7, -th * 0.8], [r, -th * 0.25], [r + 0.002, 0], [r, th * 0.25], [r * 0.7, th * 0.8], [0, th]];
+    }, { smooth: false, capStart: true, capEnd: true, mat: (t, i, j) => (j === 2 || j === 3 ? bright : head) });
     m.pop();
   }
   m.at(0, 0.0, 0); m.cyl(0.044, 0.044, -0.01, 0.01, sides + 3, gold); m.pop();

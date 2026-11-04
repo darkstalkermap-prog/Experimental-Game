@@ -270,6 +270,7 @@ def('elf:pelvis.plate', (b) => {
 // ---- arms
 def('elf:weapon.sword', (b) => {   // a long leaf-shaped blade, a slim guard swept toward the point, a long grip and a teardrop pommel
   bladeLoft(b, [[-0.11, 0.019, 0.005], [-0.3, 0.02, 0.0052], [-0.55, 0.025, 0.0052], [-0.78, 0.03, 0.005], [-0.92, 0.024, 0.0042], [-1.02, 0.01, 0.0026], [-1.07, 0.001, 0.001]], S.silver);
+  if (b.level < 2) for (const s of [-1, 1]) b.rbox([0, -0.46, s * 0.005], [0.0055, 0.6, 0.0014], { ...S.elfGold, e: 0.5, seg: [6, 3] });   // (a gold line inlaid down each face)
   b.sweep([[-0.11, -0.13, 0], [-0.06, -0.105, 0], [0, -0.1, 0], [0.06, -0.105, 0], [0.11, -0.13, 0]], 0.008, 0.006, { ...S.elfGold, seg: 6, segs: b.pick(10, 6, 4) });
   b.rod([0, 0.09, 0], [0, -0.1, 0], 0.015, 0.016, { ...S.elfLeather, seg: b.pick(10, 7, 5) });
   b.ell([0, 0.11, 0], [0.018, 0.03, 0.016], { ...S.elfGold, seg: [8, 6] });
@@ -400,7 +401,12 @@ def('dwarf:chest.leather', (b) => {   // a smith's leather apron over a red shir
 def('dwarf:weapon.sword', (b) => {
   b.rod([0, 0.12, 0], [0, -0.86, 0], 0.024, 0.026, { ...S.orcWood, seg: b.pick(10, 7, 5) });
   if (b.level < 2) for (const y of [0.1, -0.1, -0.6]) b.rod([0, y, 0], [0, y - 0.03, 0], 0.029, 0.029, { ...S.bronze, seg: b.pick(10, 7, 5) });
-  b.extrude([[0.0, 0.07], [-0.08, 0.1], [-0.17, 0.15], [-0.22, 0.1], [-0.24, -0.02], [-0.22, -0.14], [-0.15, -0.17], [-0.08, -0.1], [0.0, -0.06]], 0.026, b.level < 2 ? 0.006 : 0, [0, -0.74, 0], { ...S.steel });
+  const bit = [[0.0, 0.07], [-0.08, 0.1], [-0.17, 0.15], [-0.22, 0.1], [-0.24, -0.02], [-0.22, -0.14], [-0.15, -0.17], [-0.08, -0.1], [0.0, -0.06]];
+  b.extrude(bit, 0.026, b.level < 2 ? 0.006 : 0, [0, -0.74, 0], { ...S.steel });
+  // the ground edge, bright along the whole bit
+  const out = bit.slice(2, 7);
+  b.extrude([...out, ...out.map(([x, y], i) => [x + (i === 0 || i === 4 ? 0.012 : 0.026), y * 0.94]).reverse()], b.level < 2 ? 0.039 : 0.027, 0, [0, -0.74, 0], { c: 0xd2d4d6, m: 'steel' });
+  if (b.level < 1) for (const s of [-1, 1]) for (const y of [-0.7, -0.78]) b.ell([0.055, y, s * 0.031], [0.006, 0.006, 0.004], { ...S.bronze, seg: [5, 3] });   // (rivets through the socket)
   b.rbox([0.03, -0.74, 0], [0.09, 0.14, 0.06], { ...S.iron, e: 0.35 });
   if (b.level < 2) b.rbox([0.085, -0.74, 0], [0.04, 0.09, 0.07], { ...S.iron, e: 0.3 });   // the hammer's back
   b.cone([0, -0.86, 0], [0, -0.92, 0], 0.03, { ...S.bronze, seg: 5 });
@@ -538,6 +544,8 @@ def('orc:chest.leather', (b) => {   // a fur vest, the house's rag at the belly
 
 def('orc:weapon.sword', (b) => {   // a cleaver: a broad heavy blade squared at the end, its back thick, notched along the edge (the edge at -x leads)
   b.extrude([[0.02, -0.12], [-0.03, -0.12], [-0.05, -0.4], [-0.075, -0.7], [-0.08, -0.9], [-0.06, -0.97], [0.03, -0.95], [0.035, -0.6], [0.028, -0.3]], 0.012, b.level < 2 ? 0.004 : 0, [0, 0, 0], { ...S.orcIron, rot: [0, 0, 0] });
+  // its edge ground bright in a ragged band (dark notches bitten out of it)
+  b.extrude([[-0.03, -0.13], [-0.05, -0.4], [-0.075, -0.7], [-0.08, -0.9], [-0.06, -0.97], [-0.045, -0.95], [-0.064, -0.88], [-0.058, -0.7], [-0.036, -0.4], [-0.018, -0.14]], b.level < 2 ? 0.0205 : 0.0125, 0, [0, 0, 0], { c: 0xb6b2aa, m: 'steel' });
   if (b.level < 2) for (const y of [-0.45, -0.66]) b.cone([-0.06, y, 0], [-0.04, y - 0.03, 0], 0.02, { ...S.dark, seg: 3 });   // the notches
   b.rbox([0, -0.11, 0], [0.12, 0.025, 0.035], { ...S.rust, e: 0.3, flat: true });
   b.rod([0, 0.08, 0], [0, -0.1, 0], 0.019, 0.02, { ...S.orcLeather, seg: b.pick(8, 6, 5) });

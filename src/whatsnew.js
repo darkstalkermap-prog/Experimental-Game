@@ -5,6 +5,15 @@
 
 export const UPDATES = [
   {
+    id: 15,
+    title: 'Better-looking weapons',
+    items: [
+      'The Berserker now swings a bigger war axe: a long haft wrapped in leather for both hands, iron straps riveted up to a broad bearded head with a bright worn edge. It gets a back spike at level 1, and a second blade and gold bands at level 2.',
+      'Every weapon has more detail in your hands: fullers and polished edges on the blades, riveted crossguards, grips wrapped in wire and leather, and mace flanges with bright edges. Upgrades still look different at each level.',
+      'Other heroes and soldiers carry better-made weapons too, including every race: a gold-inlaid elven blade, a bright-edged dwarf axe and a worn orc cleaver. Soldiers with three or more levels of training get a gilded sword guard. Only the look changes.',
+    ],
+  },
+  {
     id: 13,
     title: 'Armies of five races',
     items: [

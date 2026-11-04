@@ -56,6 +56,9 @@ const TRAIL = { knight: [0.7, 0.82, 1], cavalier: [0.8, 0.85, 1], ranger: [0.75,
 // the weapon hand's grip frame at rest, and where each strike winds up and ends (offsets from rest)
 const REST = { x: 0.25, y: -0.22, z: -0.5, rx: -0.95, ry: 0.2, rz: -0.38 };
 const LANCE_REST = { x: 0.3, y: -0.3, z: -0.34, rx: -1.42, ry: 0.1, rz: -0.14 };
+// the Berserker's long war axe: carried a little lower and more upright (a sword's forward lean would show only the axe's edge), so the
+// bearded head stands to the right of the view with its face turned to the eye (see AXE_ROLL), clear of the crosshair
+const AXE_REST = { x: 0.3, y: -0.26, z: -0.52, rx: -0.8, ry: 0.25, rz: -0.3 };
 const ZERO = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0 };
 const WIND = {
   right: { x: 0.14, y: 0.09, z: 0.04, rx: 0.2, ry: 0, rz: -1.3 },
@@ -111,6 +114,7 @@ const WRIST = { radial: 0.35, ulnar: 0.6, flex: 0.6, ext: 0.55 };
 // A fist closes on a hilt diagonally: from the root of the index finger across to the heel of the palm, so with the wrist straight the blade
 // leans forward of square to the forearm by this much (the hand mesh is turned about its palm's normal by it).
 const GRIP_TILT = 0.38;
+const AXE_ROLL = 0.9;   // how far the war axe's bit is turned left about its haft from where the fingers point (radians)
 
 // two-bone arm: the elbow, given the shoulder s, the wrist w and the side the elbow prefers (the shoulder follows when the wrist is out of reach)
 function solveArm(s, w, pole, elbow, shoulder) {
@@ -267,8 +271,10 @@ export class ViewModel {
     const wpn = this.wpn = weaponGeometry(cls, { len: p.sword.len, ls: p.lv.sword, team, detail });
     // (the weapons are built with their edges along x; a fist holds a blade with its edges in line with the knuckles, the true edge (and
     // an axe's bit) toward where the fingers point, -z in the grip frame: turned a quarter about the grip to sit that way)
-    wpn.geo.rotateY(-Math.PI / 2);
-    for (const k of ['tip', 'base', 'focus']) if (wpn[k]) wpn[k].applyAxisAngle(YAXIS, -Math.PI / 2);
+    // (the Berserker's war axe sits rolled a little in the fist, its bit turned left of where the fingers point, so its broad bearded face shows, not just its edge)
+    const roll = -Math.PI / 2 + (cls === 'berserker' ? AXE_ROLL : 0);
+    wpn.geo.rotateY(roll);
+    for (const k of ['tip', 'base', 'focus']) if (wpn[k]) wpn[k].applyAxisAngle(YAXIS, roll);
     R.weapon = this.mk(wpn.geo, this.kitMat);
     R.grp.add(R.hand, R.weapon);
     if (cls === 'cavalier') {   // a lance for riding
@@ -537,9 +543,11 @@ export class ViewModel {
       }
       this.stagAmt = smooth(this.stagAmt, p.staggerT > 0 ? Math.min(1, p.staggerT * 3) : 0, 26, dt);
       if (this.stagAmt > 0.001) { const k = this.stagAmt; ay -= 0.1 * k; arx -= 0.4 * k; }
-      // sprinting carries the blade low across the body
-      ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt;
-      const la = this.lanceAmt, base = REST;
+      // sprinting carries the blade low across the body (the long war axe low at the side instead, its head leaning away: across the
+      // body it would swing its head up into the view)
+      if (cls === 'berserker') { ax += 0.02 * this.sprintAmt; ay -= 0.06 * this.sprintAmt; arx -= 0.3 * this.sprintAmt; arz -= 0.1 * this.sprintAmt; }
+      else { ax -= 0.05 * this.sprintAmt; ay -= 0.03 * this.sprintAmt; arx += 0.25 * this.sprintAmt; arz += 0.18 * this.sprintAmt; }
+      const la = this.lanceAmt, base = cls === 'berserker' ? AXE_REST : REST;
       const bx = lerp(base.x, LANCE_REST.x, la), by = lerp(base.y, LANCE_REST.y, la), bz = lerp(base.z, LANCE_REST.z, la);
       const brx = lerp(base.rx, LANCE_REST.rx, la), bry = lerp(base.ry, LANCE_REST.ry, la), brz = lerp(base.rz, LANCE_REST.rz, la);
       // a spell raises the caster's weapon; a draught brings the flask up; climbing reaches both hands up
