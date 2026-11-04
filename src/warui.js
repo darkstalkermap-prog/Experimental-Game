@@ -4,6 +4,7 @@
 // fallen) and the end screen's section. N opens the Talents panel (the shop with only its Talents tab, as in Hero Mode). The rules are in warmode.js; this file only
 // shows them and passes on clicks.
 import { WAR, TEAM_CSS, UNIT_TYPES, clock } from './config.js';
+import { CLASSES, CLASS_IDS } from './classes.js';
 import { pressReady, readyView, offerFor } from './flow.js';
 import { registerEndSection, onMatchEnd } from './endscreen.js';
 import { warMarks, aimGround, GROUP_CSS } from './warmarks.js';
@@ -81,6 +82,10 @@ body.war-on #toasts { bottom: max(196px, var(--toastlift, 0px)); }   /* (above t
 #warPanel .wp-unit .ds { grid-column: 1 / -1; font-size: 12px; opacity: 0.65; line-height: 1.2; }
 #warPanel button { padding: 3px 7px; font-size: 12px; min-width: 32px; }
 #warPanel .wp-row { display: flex; gap: 5px; flex-wrap: wrap; }
+#warPanel .wp-heroes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+#warPanel .wp-heroes button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 4px; line-height: 1.15; font-size: 14px; }
+#warPanel .wp-heroes .ic { font-size: 18px; }
+#warPanel .wp-heroes small { font-size: 14px; opacity: 0.75; }
 #warPanel .wp-row button { flex: 1; padding: 6px 6px; }
 #warPanel .wp-plan { display: grid; grid-template-columns: 66px repeat(4, 1fr); gap: 4px; align-items: center; margin-bottom: 4px; }
 #warPanel .wp-plan button { padding: 5px 4px; }
@@ -275,12 +280,15 @@ export class WarUI {
         <span class="bt"><button data-sell="${t}" data-n="10" title="Dismiss 10">−10</button><button data-sell="${t}" data-n="1" title="Dismiss 1">−1</button><button data-buy="${t}" data-n="1" title="Buy 1">+1</button><button data-buy="${t}" data-n="10" title="Buy 10">+10</button><button data-buy="${t}" data-n="50" title="Buy 50 (as many as the gold and the caps allow)">+50</button></span>
         <span class="ds">${esc(d.desc)} ${T.hp} health${T.ranged ? `, ${T.range} m` : ''}.</span></div>`;
     }).join('');
+    // your hero: any of the six while the armies muster (Player.classBlock), kept once they march
+    const heroes = CLASS_IDS.map((id) => { const c = CLASSES[id]; return `<button data-cls="${id}" title="${esc(c.blurb || c.role)}"><span class="ic">${esc(c.icon)}</span>${esc(c.name)}<small>${esc(c.role)}</small></button>`; }).join('');
     const presets = Object.entries(WAR.presets).map(([k, v]) => `<button data-preset="${k}" title="${esc(v.desc)}">${esc(v.name)}</button>`).join('');
     const plans = GROUPS.map(([k, n]) => `<div class="wp-plan"><span>${n}</span>${PLAN_ORDERS.map((o) => `<button data-plan="${k}" data-o="${o}" title="${esc(WAR.orders[o].desc)}">${esc(WAR.orders[o].name)}</button>`).join('')}</div>`).join('');
     p.innerHTML = `<header><h3>Muster your army <span id="wpClock"></span></h3>
         <div class="wp-sub">When the timer runs out, or everybody is Ready, the armies fight to the last man.</div>
         <div class="wp-stat"><span><span class="coin">●</span> <span id="wpGold"></span> gold</span><span>⚔ <span id="wpArmy"></span></span></div></header>
       <div class="wp-body">
+        <h4>Your hero</h4><div class="wp-heroes">${heroes}</div><div class="wp-note" id="wpHeroDesc"></div>
         <h4>Soldiers <button class="wp-rep" data-act="repeat" title="Buy the army you led in your last War Mode battle of this kind, as much as the gold and the caps allow">↻ Repeat last army</button></h4>${units}
         <h4>Formation</h4><div class="wp-row">${presets}</div><div class="wp-note" id="wpPresetDesc"></div>
         <h4>Battle plan</h4>${plans}
@@ -293,6 +301,7 @@ export class WarUI {
       panel: p, clock: $('wpClock'), gold: $('wpGold'), army: $('wpArmy'), ready: $('wpReady'), readyN: $('wpReadyN'), presetDesc: $('wpPresetDesc'),
       rows: TYPES.map((t) => { const r = p.querySelector(`.wp-unit[data-t="${t}"]`); return { t, ct: r.querySelector('.ct'), sell: r.querySelectorAll('[data-sell]'), buy: r.querySelectorAll('[data-buy]') }; }),
       presets: [...p.querySelectorAll('[data-preset]')], plans: [...p.querySelectorAll('[data-plan]')],
+      heroes: [...p.querySelectorAll('[data-cls]')], heroDesc: $('wpHeroDesc'),
     };
     // the command bar of the fight
     let bar = $('warCmd');
@@ -467,6 +476,7 @@ export class WarUI {
     if (b.dataset.act === 'repeat') { this.repeat(); return; }
     if (b.dataset.buy) w.local('buy', b.dataset.buy, Number(b.dataset.n));
     else if (b.dataset.sell) w.local('sell', b.dataset.sell, Number(b.dataset.n));
+    else if (b.dataset.cls) g.localSwitchClass(b.dataset.cls);   // (a guest asks the host: Game.localSwitchClass)
     else if (b.dataset.preset) w.local('preset', b.dataset.preset);
     else if (b.dataset.plan) w.local('plan', b.dataset.plan, b.dataset.o);
     this.t = 0;   // (show the change at once)
@@ -581,6 +591,10 @@ export class WarUI {
       for (const b of r.buy) if (b.disabled === canBuy) b.disabled = !canBuy;
       for (const b of r.sell) if (b.disabled === canSell) b.disabled = !canSell;
     }
+    const cls = g.player.classId;
+    for (const b of el.heroes) if (b.classList.contains('active') !== (b.dataset.cls === cls)) b.classList.toggle('active', b.dataset.cls === cls);
+    const hc = CLASSES[cls];
+    set('hd', el.heroDesc, hc ? `${hc.name}: ${hc.q.name} (Q) and ${hc.r.name} (R). ${hc.passive || ''}` : '');
     for (const b of el.presets) b.classList.toggle('active', b.dataset.preset === f.war.preset);
     set('pd', el.presetDesc, WAR.presets[f.war.preset].desc);
     for (const b of el.plans) b.classList.toggle('active', f.war.plan[b.dataset.plan] === b.dataset.o);

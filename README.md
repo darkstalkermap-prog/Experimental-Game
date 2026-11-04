@@ -819,7 +819,8 @@ hill each round the field; allies (Two against two, Co-op) get **neighbouring hi
 saddle between them, so no two armies (and no two heroes) ever start in the same place. Each hero is **there from the first
 moment**, in his own eyes with his arms and weapon in hand: he stands a few metres in front of his army's front rank, facing the
 enemy across the field, his army at his back (the army panel opens over this view; online every other player sees him standing
-there). Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
+there). The panel's **Your hero** row lets you take up any of the six classes while the armies muster (a guest asks the host); once they
+march, your hero keeps his class. Behind the hills the ground climbs into the chosen land's mountains and forest; the field and the hills
 stay open. The hills come from the match's sides (one digit per side, the armies on it: `'22'`, `'1111'`, `'31'`), so they are
 part of the world and of its key (`small+war22`, `src/warmap.js`; the same ground on every screen): a world laid out for other
 sides (the menu's, the last match's for a Play Again or a rematch of another format, a guest's own menu) is always built again,

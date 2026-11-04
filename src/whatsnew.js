@@ -5,6 +5,13 @@
 
 export const UPDATES = [
   {
+    id: 10,
+    title: 'Pick your hero in War Mode',
+    items: [
+      'War Mode: the army panel has a Your hero row: take up any of the six classes while the armies muster (online too). Your hero now faces the enemy from the start.',
+    ],
+  },
+  {
     id: 9,
     title: 'Heroes with weight',
     items: [

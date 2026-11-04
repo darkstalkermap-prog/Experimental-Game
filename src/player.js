@@ -373,6 +373,8 @@ export class Player {
     if (!CLASSES[id]) return 'No such class';
     if (g.hero) return 'Your class is chosen before the match';
     if (id === this.classId) return 'Your class';
+    // War Mode has no castle to go home to: the hero is chosen freely while the armies muster, and kept once they march
+    if (g.war) return g.war.fighting ? 'Your hero keeps his class once the armies march' : null;
     if (!this.alive) return null;
     if (!this.atHome()) return 'Only at your own castle';
     if (g.phase === 'prep' && g.round === 0) return null;
